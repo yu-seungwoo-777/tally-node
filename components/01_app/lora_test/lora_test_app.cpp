@@ -2,14 +2,16 @@
  * @file lora_test_app.cpp
  * @brief LoRa 테스트 앱 구현
  *
- * 200ms마다 "Test" 메시지 송신
- * 10초마다 상태 출력
+ * 버튼으로 제어:
+ * - 단일 클릭: "Test" 메시지 송신
+ * - 롱 프레스: 현재 통계 출력
  */
 
 #include "lora_test_app.h"
 #include "LoRaService.h"
 #include "LoRaConfig.h"
 #include "event_bus.h"
+#include "button_service.h"
 #include "esp_log.h"
 
 #include "freertos/FreeRTOS.h"
@@ -23,7 +25,6 @@ static const char* TAG = "LoRaTestApp";
 // ============================================================================
 
 static bool s_running = false;
-static TaskHandle_t s_task = nullptr;
 
 // ============================================================================
 // 이벤트 핸들러
@@ -79,48 +80,47 @@ static void on_lora_received(const uint8_t* data, size_t length)
              status.rssi);
 }
 
-// ============================================================================
-// 태스크
-// ============================================================================
-
 /**
- * @brief LoRa 테스트 태스크
- * @note 200ms마다 "Test" 메시지 송신, 10초마다 상태 출력
+ * @brief 버튼 이벤트 핸들러
+ *
+ * - 단일 클릭: "Test" 메시지 송신
+ * - 롱 프레스: 현재 통계 출력
  */
-static void lora_test_task(void* param)
+static void on_button_event(button_action_t action)
 {
-    ESP_LOGI(TAG, "LoRa 테스트 태스크 시작");
+    switch (action) {
+        case BUTTON_ACTION_SINGLE:
+            // 단일 클릭 - 메시지 송신
+            {
+                const char* test_msg = "Test";
+                size_t msg_len = strlen(test_msg);
+                esp_err_t ret = lora_service_send((const uint8_t*)test_msg, msg_len);
+                if (ret == ESP_OK) {
+                    ESP_LOGI(TAG, "[버튼] 송신: Test");
+                } else if (ret == ESP_ERR_NO_MEM) {
+                    ESP_LOGW(TAG, "[버튼] 송신 큐 full");
+                } else {
+                    ESP_LOGW(TAG, "[버튼] 송신 실패: %d", ret);
+                }
+            }
+            break;
 
-    uint32_t packet_count = 0;
-    uint32_t last_status_time = xTaskGetTickCount();
+        case BUTTON_ACTION_LONG:
+            // 롱 프레스 - 통계 출력
+            {
+                lora_service_status_t status = lora_service_get_status();
+                ESP_LOGI(TAG, "[버튼] 롱 프레스 - 통계:");
+                ESP_LOGI(TAG, "  송신: %u", status.packets_sent);
+                ESP_LOGI(TAG, "  수신: %u", status.packets_received);
+                ESP_LOGI(TAG, "  RSSI: %d dBm", status.rssi);
+                ESP_LOGI(TAG, "  SNR: %d dB", status.snr);
+            }
+            break;
 
-    const char* test_msg = "Test";
-    size_t msg_len = strlen(test_msg);
-
-    while (s_running) {
-        // 송신
-        esp_err_t ret = lora_service_send((const uint8_t*)test_msg, msg_len);
-        if (ret == ESP_OK) {
-            packet_count++;
-        } else if (ret == ESP_ERR_NOT_SUPPORTED) {
-            // 송신 중 - 다음 시도에 재전송
-            ESP_LOGW(TAG, "송신 중 - 패킷 대기");
-        }
-
-        // 10초마다 상태 출력
-        uint32_t now = xTaskGetTickCount();
-        if (now - last_status_time >= pdMS_TO_TICKS(10000)) {
-            lora_service_status_t status = lora_service_get_status();
-            ESP_LOGI(TAG, "상태: 송신=%u, 수신=%u, RSSI=%d",
-                     status.packets_sent, status.packets_received, status.rssi);
-            last_status_time = now;
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(200));
+        case BUTTON_ACTION_LONG_RELEASE:
+            ESP_LOGI(TAG, "[버튼] 롱 프레스 해제");
+            break;
     }
-
-    ESP_LOGI(TAG, "LoRa 테스트 태스크 종료");
-    vTaskDelete(nullptr);
 }
 
 // ============================================================================
@@ -170,6 +170,17 @@ esp_err_t lora_test_app_init(void)
     // 수신 콜백 등록
     lora_service_set_receive_callback(on_lora_received);
 
+    // 버튼 서비스 초기화
+    ESP_LOGI(TAG, "버튼 서비스 초기화 중...");
+    ret = button_service_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "버튼 서비스 초기화 실패");
+        return ret;
+    }
+    button_service_set_callback(on_button_event);
+    ESP_LOGI(TAG, "버튼 서비스 초기화 완료");
+
+    ESP_LOGI(TAG, "단일 클릭: 송신 | 롱 프레스: 통계");
     ESP_LOGI(TAG, "✓ LoRa 테스트 앱 초기화 완료");
     return ESP_OK;
 }
@@ -190,22 +201,8 @@ esp_err_t lora_test_app_start(void)
         return ret;
     }
 
-    // 태스크 생성
-    BaseType_t task_ret = xTaskCreatePinnedToCore(
-        lora_test_task,
-        "lora_test",
-        4096,
-        nullptr,
-        configMAX_PRIORITIES - 4,
-        &s_task,
-        1
-    );
-
-    if (task_ret != pdPASS) {
-        ESP_LOGE(TAG, "태스크 생성 실패");
-        lora_service_stop();
-        return ESP_FAIL;
-    }
+    // 버튼 서비스 시작
+    button_service_start();
 
     s_running = true;
     ESP_LOGI(TAG, "✓ LoRa 테스트 앱 시작 완료 (%.0f MHz)", LORA_DEFAULT_FREQ);
@@ -226,16 +223,7 @@ void lora_test_app_stop(void)
     ESP_LOGI(TAG, "LoRa 테스트 앱 정지 중...");
     s_running = false;
 
-    // 태스크 종료 대기
-    if (s_task) {
-        int wait_count = 0;
-        while (eTaskGetState(s_task) != eDeleted && wait_count < 20) {
-            vTaskDelay(pdMS_TO_TICKS(100));
-            wait_count++;
-        }
-        s_task = nullptr;
-    }
-
+    button_service_stop();
     lora_service_stop();
     ESP_LOGI(TAG, "✓ LoRa 테스트 앱 정지 완료");
 }
@@ -243,6 +231,7 @@ void lora_test_app_stop(void)
 void lora_test_app_deinit(void)
 {
     lora_test_app_stop();
+    button_service_deinit();
     lora_service_deinit();
     ESP_LOGI(TAG, "✓ LoRa 테스트 앱 해제 완료");
 }

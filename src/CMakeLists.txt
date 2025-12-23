@@ -2,5 +2,5 @@
 
 idf_component_register(
     SRCS "main.cpp"
-    REQUIRES lora_driver nvs_flash
+    REQUIRES lora_test nvs_flash
 )
