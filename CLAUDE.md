@@ -180,3 +180,51 @@ feat: button_service 컴포넌트 추가
 |------|------|------|
 | ARCHITECTURE.md | docs/ | 컴포넌트 구조, 의존성 |
 | claude_project.md | 루트 | 프로젝트 관리, 히스토리 |
+
+---
+
+## 레이어 등록 방법 (CMakeLists.txt)
+
+### 루트 CMakeLists.txt
+
+`/home/prod/tally-node/CMakeLists.txt`에서 레이어를 등록합니다:
+
+```cmake
+# 1. 레이어 폴더 등록
+list(APPEND EXTRA_COMPONENT_DIRS
+    "${CMAKE_SOURCE_DIR}/components/00_common"
+    "${CMAKE_SOURCE_DIR}/components/01_app"
+    "${CMAKE_SOURCE_DIR}/components/02_presentation"
+    "${CMAKE_SOURCE_DIR}/components/03_service"
+    "${CMAKE_SOURCE_DIR}/components/04_driver"
+    "${CMAKE_SOURCE_DIR}/components/05_hal"
+)
+
+# 2. 하위 컴포넌트 자동 등록 (CMakeLists.txt가 있는 하위 폴더)
+register_subcomponents("${CMAKE_SOURCE_DIR}/components/01_app" app_subcomps)
+# ...
+
+# 3. EXTRA_COMPONENT_DIRS에 추가
+list(APPEND EXTRA_COMPONENT_DIRS ${app_subcomps} ...)
+```
+
+### 새 컴포넌트 추가 방법
+
+```
+components/03_service/my_component/
+├── my_component.c      # 소스 (루트에 배치)
+├── include/
+│   └── my_component.h  # 헤더
+└── CMakeLists.txt
+```
+
+```cmake
+# CMakeLists.txt
+idf_component_register(
+    SRCS "my_component.c"
+    INCLUDE_DIRS "include"
+    REQUIRES other_component
+)
+```
+
+**중요:** `src/` 폴더를 사용하지 않고, 소스 파일을 컴포넌트 루트에 배치합니다.
