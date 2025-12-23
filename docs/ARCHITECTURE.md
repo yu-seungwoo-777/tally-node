@@ -26,13 +26,12 @@ ESP32-S3 (EoRa-S3) 기반 LoRa 통신 프로젝트의 5계층 아키텍처입니
                            │
 ┌─────────────────────────────────────────────────────────┐
 │ 03_service (서비스)                                     │
-│ - button_service: 버튼 이벤트 관리                     │
+│ - button_poll: 버튼 폴링 (상태 머신)                   │
 │ - lora_service: LoRa 통신 서비스                       │
 └─────────────────────────────────────────────────────────┘
                            │
 ┌─────────────────────────────────────────────────────────┐
-│ 04_driver (드라이버)                                    │
-│ - button_poll: 버튼 폴링 (GPIO)                        │
+│ 04_driver (드�라이버)                                    │
 │ - lora_driver: RadioLib 래퍼                           │
 └─────────────────────────────────────────────────────────┘
                            │
@@ -105,7 +104,7 @@ X 잘못된 예 (건너뛰기):
 
 | 컴포넌트 | 역할 | 의존성 |
 |---------|------|--------|
-| lora_test | LoRa 테스트 앱 | button_service, lora_service, event_bus |
+| lora_test | LoRa 테스트 앱 | button_poll, lora_service, event_bus |
 
 ### 02_presentation - 프레젠테이션
 
@@ -115,14 +114,13 @@ X 잘못된 예 (건너뛰기):
 
 | 컴포넌트 | 역할 | 의존성 |
 |---------|------|--------|
-| button_service | 버튼 폴링 관리 | button_poll |
+| button_poll | 버튼 폴링 (상태 머신) | driver, esp_timer |
 | lora_service | LoRa 통신 서비스 | lora_driver, event_bus |
 
 ### 04_driver - 드라이버
 
 | 컴포넌트 | 역할 | 의존성 |
 |---------|------|--------|
-| button_poll | GPIO 버튼 폴링 | driver, esp_timer |
 | lora_driver | RadioLib 래퍼 | lora_hal, RadioLib |
 
 ### 05_hal - 하드웨어 추상화
@@ -138,9 +136,8 @@ X 잘못된 예 (건너뛰기):
 ```
 lora_test (01_app)
     │
-    ├─→ button_service (03_service)
-    │       └─→ button_poll (04_driver)
-    │               └─→ driver, esp_timer
+    ├─→ button_poll (03_service)
+    │       └─→ driver, esp_timer
     │
     └─→ lora_service (03_service)
             └─→ lora_driver (04_driver)
