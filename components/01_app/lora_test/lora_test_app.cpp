@@ -11,7 +11,7 @@
 #include "LoRaService.h"
 #include "LoRaConfig.h"
 #include "event_bus.h"
-#include "button_service.h"
+#include "button_poll.h"
 #include "esp_log.h"
 
 #include "freertos/FreeRTOS.h"
@@ -170,15 +170,15 @@ esp_err_t lora_test_app_init(void)
     // 수신 콜백 등록
     lora_service_set_receive_callback(on_lora_received);
 
-    // 버튼 서비스 초기화
-    ESP_LOGI(TAG, "버튼 서비스 초기화 중...");
-    ret = button_service_init();
+    // 버튼 폴링 초기화
+    ESP_LOGI(TAG, "버튼 폴링 초기화 중...");
+    ret = button_poll_init();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "버튼 서비스 초기화 실패");
+        ESP_LOGE(TAG, "버튼 폴링 초기화 실패");
         return ret;
     }
-    button_service_set_callback(on_button_event);
-    ESP_LOGI(TAG, "버튼 서비스 초기화 완료");
+    button_poll_set_callback(on_button_event);
+    ESP_LOGI(TAG, "버튼 폴링 초기화 완료");
 
     ESP_LOGI(TAG, "단일 클릭: 송신 | 롱 프레스: 통계");
     ESP_LOGI(TAG, "✓ LoRa 테스트 앱 초기화 완료");
@@ -201,8 +201,8 @@ esp_err_t lora_test_app_start(void)
         return ret;
     }
 
-    // 버튼 서비스 시작
-    button_service_start();
+    // 버튼 폴링 시작
+    button_poll_start();
 
     s_running = true;
     ESP_LOGI(TAG, "✓ LoRa 테스트 앱 시작 완료 (%.0f MHz)", LORA_DEFAULT_FREQ);
@@ -223,7 +223,7 @@ void lora_test_app_stop(void)
     ESP_LOGI(TAG, "LoRa 테스트 앱 정지 중...");
     s_running = false;
 
-    button_service_stop();
+    button_poll_stop();
     lora_service_stop();
     ESP_LOGI(TAG, "✓ LoRa 테스트 앱 정지 완료");
 }
@@ -231,7 +231,7 @@ void lora_test_app_stop(void)
 void lora_test_app_deinit(void)
 {
     lora_test_app_stop();
-    button_service_deinit();
+    button_poll_deinit();
     lora_service_deinit();
     ESP_LOGI(TAG, "✓ LoRa 테스트 앱 해제 완료");
 }
