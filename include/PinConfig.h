@@ -13,6 +13,17 @@
 // EoRa-S3 핀 맵
 // ============================================================================
 
+// LoRa - SPI2_HOST
+// E22-400MM22S (SX1268, 433MHz) 또는 E22-900MM22S (SX1262, 868MHz) 모듈 지원
+#define EORA_S3_LORA_MISO       GPIO_NUM_3
+#define EORA_S3_LORA_MOSI       GPIO_NUM_6
+#define EORA_S3_LORA_SCK        GPIO_NUM_5
+#define EORA_S3_LORA_CS         GPIO_NUM_7
+#define EORA_S3_LORA_DIO1       GPIO_NUM_33
+#define EORA_S3_LORA_BUSY       GPIO_NUM_34
+#define EORA_S3_LORA_RST        GPIO_NUM_8
+#define EORA_S3_LORA_SPI_HOST   SPI2_HOST
+
 // I2C (OLED - 미사용)
 #define EORA_S3_I2C_SDA         GPIO_NUM_18
 #define EORA_S3_I2C_SCL         GPIO_NUM_17
@@ -25,16 +36,6 @@
 #define EORA_S3_OLED_CS          GPIO_NUM_21  // OLED 전용
 #define EORA_S3_OLED_DC          GPIO_NUM_4   // OLED 전용
 #define EORA_S3_OLED_RST         GPIO_NUM_10  // OLED 전용
-
-// LoRa (SX1268) - SPI2_HOST
-#define EORA_S3_LORA_MISO       GPIO_NUM_3
-#define EORA_S3_LORA_MOSI       GPIO_NUM_6
-#define EORA_S3_LORA_SCK        GPIO_NUM_5
-#define EORA_S3_LORA_CS         GPIO_NUM_7
-#define EORA_S3_LORA_DIO1       GPIO_NUM_33
-#define EORA_S3_LORA_BUSY       GPIO_NUM_34
-#define EORA_S3_LORA_RST        GPIO_NUM_8
-#define EORA_S3_LORA_SPI_HOST   SPI2_HOST
 
 // W5500 Ethernet - SPI3_HOST
 #define EORA_S3_W5500_MISO      GPIO_NUM_15

@@ -29,6 +29,9 @@ REMOTE_PATH="/home/prod/tally-node"
 ENV_TX="eora_s3_tx"
 ENV_RX="eora_s3_rx"
 
+# 가상환경 설정
+VENV_DIR="venv"
+
 # 포트 설정
 PORT_AUTO="/dev/ttyACM0"
 PORT_SPEED="921600"
@@ -112,8 +115,8 @@ sync_from_remote() {
 
     # 다운로드 제외 목록
     EXCLUDE_LIST=(
-        --exclude='.venv'
         --exclude='.pio'
+        --exclude='examples'
         --exclude='*.pyc'
         --exclude='__pycache__'
         --exclude='.DS_Store'
@@ -136,15 +139,15 @@ sync_from_remote() {
 
 # 가상환경 확인 및 설치
 check_venv() {
-    if [ ! -d "$PROJECT_DIR/.venv" ]; then
+    if [ ! -d "$PROJECT_DIR/$VENV_DIR" ]; then
         log_warning "가상환경이 없습니다. 생성합니다..."
-        python3 -m venv .venv
-        source .venv/bin/activate
+        python3 -m venv "$VENV_DIR"
+        source "$VENV_DIR/bin/activate"
         pip install -U platformio
         log_success "가상환경을 생성하고 PlatformIO를 설치했습니다."
     else
         log_info "가상환경을 활성화합니다..."
-        source .venv/bin/activate
+        source "$VENV_DIR/bin/activate"
     fi
 }
 
@@ -155,15 +158,23 @@ clean_build_only() {
     # 프로젝트 폴더로 이동
     cd "$PROJECT_DIR" || exit 1
 
-    # 가상환경 확인
-    check_venv
+    # 가상환경 확인 및 설치
+    if [ ! -d "$PROJECT_DIR/$VENV_DIR" ]; then
+        log_warning "가상환경이 없습니다. 생성합니다..."
+        python3 -m venv "$VENV_DIR"
+        source "$PROJECT_DIR/$VENV_DIR/bin/activate"
+        pip install -U platformio
+        log_success "가상환경을 생성하고 PlatformIO를 설치했습니다."
+    else
+        source "$PROJECT_DIR/$VENV_DIR/bin/activate"
+    fi
 
     # 빌드 캐시 정리
     rm -rf .pio/
 
     # TX 빌드
     log_info "$ENV_TX 환경 빌드 중..."
-    source .venv/bin/activate && pio run -e "$ENV_TX"
+    pio run -e "$ENV_TX"
 
     if [ $? -eq 0 ]; then
         log_success "$ENV_TX 빌드가 완료되었습니다."
@@ -174,7 +185,7 @@ clean_build_only() {
 
     # RX 빌드
     log_info "$ENV_RX 환경 빌드 중..."
-    source .venv/bin/activate && pio run -e "$ENV_RX"
+    pio run -e "$ENV_RX"
 
     if [ $? -eq 0 ]; then
         log_success "$ENV_RX 빌드가 완료되었습니다."
@@ -195,15 +206,23 @@ build_upload() {
     # 프로젝트 폴더로 이동
     cd "$PROJECT_DIR" || exit 1
 
-    # 가상환경 확인
-    check_venv
+    # 가상환경 확인 및 설치
+    if [ ! -d "$PROJECT_DIR/$VENV_DIR" ]; then
+        log_warning "가상환경이 없습니다. 생성합니다..."
+        python3 -m venv "$VENV_DIR"
+        source "$PROJECT_DIR/$VENV_DIR/bin/activate"
+        pip install -U platformio
+        log_success "가상환경을 생성하고 PlatformIO를 설치했습니다."
+    else
+        source "$PROJECT_DIR/$VENV_DIR/bin/activate"
+    fi
 
     # 포트 점유 해제 후 빌드 및 업로드
     log_info "포트 점유 해체..."
     fuser -k $PORT_AUTO 2>/dev/null; sleep 1
 
     # 빌드 및 업로드
-    source .venv/bin/activate && pio run -e "$env" -t upload
+    pio run -e "$env" -t upload
 
     if [ $? -eq 0 ]; then
         log_success "$env_name 빌드 및 업로드가 완료되었습니다."
@@ -220,8 +239,18 @@ device_monitor() {
     log_info "디바이스 모니터를 시작합니다... (종료: Ctrl+A, K)"
 
     cd "$PROJECT_DIR" || exit 1
-    check_venv
-    pio device monitor
+
+    # 가상환경 확인
+    if [ ! -d "$PROJECT_DIR/$VENV_DIR" ]; then
+        log_error "가상환경이 없습니다. 먼저 빌드를 실행하세요."
+        return 1
+    fi
+
+    # 서브셸에서 가상환경 활성화 후 pio 실행
+    (
+        source "$PROJECT_DIR/$VENV_DIR/bin/activate"
+        pio device monitor
+    )
 }
 
 

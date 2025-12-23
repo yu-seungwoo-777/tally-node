@@ -40,7 +40,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 00_common       → 공통 (event_bus)
 ```
 
-**의존성 규칙:** 상위 계층만 하위 계층을 의존 (01 → 02 → 03 → 04 → 05)
+> **상세:** 의존성 규칙, event_bus 역할은 `docs/ARCHITECTURE.md` 참고
 
 ---
 

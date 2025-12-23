@@ -18,17 +18,13 @@
 // App
 #include "lora_test_app.h"
 
-// Log
-#include "log.h"
-#include "log_tags.h"
-
-static const char* TAG = TAG_MAIN;
+static const char* TAG = "MAIN";
 
 extern "C" void app_main(void)
 {
-    LOG_0(TAG, "========================================");
-    LOG_0(TAG, "EoRa-S3 Tally Node");
-    LOG_0(TAG, "========================================");
+    ESP_LOGI(TAG, "========================================");
+    ESP_LOGI(TAG, "EoRa-S3 Tally Node");
+    ESP_LOGI(TAG, "========================================");
 
     // NVS 초기화
     esp_err_t ret = nvs_flash_init();
@@ -41,17 +37,17 @@ extern "C" void app_main(void)
     // LoRa 테스트 앱 초기화 및 시작
     ret = lora_test_app_init();
     if (ret != ESP_OK) {
-        LOG_0(TAG, "앱 초기화 실패");
+        ESP_LOGE(TAG, "앱 초기화 실패");
         return;
     }
 
     ret = lora_test_app_start();
     if (ret != ESP_OK) {
-        LOG_0(TAG, "앱 시작 실패");
+        ESP_LOGE(TAG, "앱 시작 실패");
         return;
     }
 
-    LOG_0(TAG, "✓ 시스템 시작 완료");
+    ESP_LOGI(TAG, "시스템 시작 완료");
 
     // 메인 루프 (유휴 상태)
     while (1) {
