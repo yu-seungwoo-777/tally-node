@@ -4,6 +4,7 @@
  */
 
 #include "ConfigService.h"
+#include "NetworkConfig.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -330,22 +331,22 @@ esp_err_t ConfigServiceClass::loadDefaults(config_all_t* config)
 
     memset(config, 0, sizeof(config_all_t));
 
-    // WiFi AP 기본값
-    strncpy(config->wifi_ap.ssid, "Tally_Node", sizeof(config->wifi_ap.ssid) - 1);
-    strncpy(config->wifi_ap.password, "tally1234", sizeof(config->wifi_ap.password) - 1);
-    config->wifi_ap.channel = 1;
+    // WiFi AP 기본값 (NetworkConfig.h)
+    strncpy(config->wifi_ap.ssid, WIFI_AP_SSID, sizeof(config->wifi_ap.ssid) - 1);
+    strncpy(config->wifi_ap.password, WIFI_AP_PASSWORD, sizeof(config->wifi_ap.password) - 1);
+    config->wifi_ap.channel = (WIFI_AP_CHANNEL > 0) ? WIFI_AP_CHANNEL : 1;
     config->wifi_ap.enabled = true;
 
-    // WiFi STA 기본값
-    config->wifi_sta.ssid[0] = '\0';
-    config->wifi_sta.password[0] = '\0';
-    config->wifi_sta.enabled = false;
+    // WiFi STA 기본값 (NetworkConfig.h, AP+STA 모드)
+    strncpy(config->wifi_sta.ssid, WIFI_STA_SSID, sizeof(config->wifi_sta.ssid) - 1);
+    strncpy(config->wifi_sta.password, WIFI_STA_PASSWORD, sizeof(config->wifi_sta.password) - 1);
+    config->wifi_sta.enabled = true;
 
-    // Ethernet 기본값
-    config->ethernet.dhcp_enabled = true;
-    strncpy(config->ethernet.static_ip, "192.168.0.100", sizeof(config->ethernet.static_ip) - 1);
-    strncpy(config->ethernet.static_netmask, "255.255.255.0", sizeof(config->ethernet.static_netmask) - 1);
-    strncpy(config->ethernet.static_gateway, "192.168.0.1", sizeof(config->ethernet.static_gateway) - 1);
+    // Ethernet 기본값 (NetworkConfig.h)
+    config->ethernet.dhcp_enabled = (DHCP_ENABLED != 0);
+    strncpy(config->ethernet.static_ip, STATIC_IP, sizeof(config->ethernet.static_ip) - 1);
+    strncpy(config->ethernet.static_netmask, STATIC_NETMASK, sizeof(config->ethernet.static_netmask) - 1);
+    strncpy(config->ethernet.static_gateway, STATIC_GATEWAY, sizeof(config->ethernet.static_gateway) - 1);
     config->ethernet.enabled = true;
 
     ESP_LOGI(TAG, "기본값 로드됨");
