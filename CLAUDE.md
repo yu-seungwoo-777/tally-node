@@ -34,8 +34,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 01_app          → 앱 계층 (lora_test)
 02_presentation → 프레젠테이션 계층 (예정)
-03_service      → 서비스 계층 (button_service, lora_service)
-04_driver       → 드라이버 계층 (button_poll, lora_driver)
+03_service      → 서비스 계층 (button_poll, lora_service)
+04_driver       → 드라이버 계층 (lora_driver)
 05_hal          → HAL 계층 (lora_hal)
 00_common       → 공통 (event_bus)
 ```
@@ -171,6 +171,16 @@ feat: button_service 컴포넌트 추가
 1. **빌드 테스트**: `pio run`
 2. **Git 커밋**: 의미 있는 커밋 메시지
 3. **문서 반영**: `docs/ARCHITECTURE.md` 또는 `claude_project.md` 업데이트
+
+### 문서 반영 규칙
+
+| 작업 | 반영 문서 |
+|------|-----------|
+| **컴포넌트 추가/삭제/이동** | `docs/ARCHITECTURE.md` (필수) |
+| **컴포넌트 구조 변경** | `docs/ARCHITECTURE.md` (필수) |
+| **프로젝트 관리** | `claude_project.md` |
+
+> **중요:** 컴포넌트를 수정한 경우 반드시 `docs/ARCHITECTURE.md`를 업데이트하세요.
 
 ---
 
