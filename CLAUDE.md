@@ -44,6 +44,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## 언어 선택 가이드라인
+
+| 계층 | 언어 | 이유 |
+|------|------|------|
+| 05_hal | **C** | ESP-IDF API 직접 호출, 하드웨어 레지스터 접근 |
+| 04_driver | **C++** | 클래스 기반 캡슐화, 싱글톤 패턴, `extern "C"` 인터페이스 |
+| 03_service | **C++** | 클래스 기반 서비스 로직, 상태 관리 |
+| 01_app | **C++** | 앱 로직 |
+
+**구현 패턴 (C++):**
+```cpp
+// 싱글톤 클래스 + extern "C" 인터페이스
+class MyDriver {
+public:
+    static esp_err_t init(...);
+    static Status getStatus(void);
+private:
+    MyDriver() = delete;  // 인스턴스화 방지
+};
+
+extern "C" {
+    esp_err_t my_driver_init(...) {
+        return MyDriver::init(...);
+    }
+}
+```
+
+---
+
 ## 프로젝트 구조
 
 ```
@@ -97,8 +126,10 @@ idf_component_register(
 
 ## 빌드 명령어
 
+> **필수: 모든 빌드 명령어는 가상환경 활성화 후 실행해야 합니다.**
+
 ```bash
-# 가상환경 활성화
+# 가상환경 활성화 (필수)
 source venv/bin/activate
 
 # 빌드
@@ -110,6 +141,8 @@ pio run -t upload
 # 클린 빌드
 pio run -t clean && pio run
 ```
+
+**중요:** PlatformIO 명령어(`pio run`, `pio run -t upload` 등)를 실행할 때는 **반드시 가상환경을 먼저 활성화**해야 합니다.
 
 ---
 
@@ -168,9 +201,10 @@ feat: button_service 컴포넌트 추가
 
 ## 개발 워크플로우
 
-1. **빌드 테스트**: `pio run`
-2. **Git 커밋**: 의미 있는 커밋 메시지
-3. **문서 반영**: `docs/ARCHITECTURE.md` 또는 `claude_project.md` 업데이트
+1. **가상환경 활성화**: `source venv/bin/activate` (필수)
+2. **빌드 테스트**: `pio run`
+3. **Git 커밋**: 의미 있는 커밋 메시지
+4. **문서 반영**: `docs/ARCHITECTURE.md` 또는 `claude_project.md` 업데이트
 
 ### 문서 반영 규칙
 

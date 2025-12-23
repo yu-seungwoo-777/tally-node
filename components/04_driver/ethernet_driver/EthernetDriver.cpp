@@ -1,0 +1,376 @@
+/**
+ * @file EthernetDriver.cpp
+ * @brief Ethernet Driver 구현 (C++)
+ */
+
+#include "EthernetDriver.h"
+#include "EthernetHal.h"
+#include "esp_log.h"
+#include "esp_event.h"
+#include "esp_eth.h"
+#include "esp_netif.h"
+#include <cstring>
+
+static const char* TAG = "EthernetDriver";
+
+// ============================================================================
+// EthernetDriver 클래스 (싱글톤)
+// ============================================================================
+
+class EthernetDriver {
+public:
+    // 상태 구조체
+    struct Status {
+        bool initialized = false;
+        bool link_up = false;
+        bool got_ip = false;
+        bool dhcp_mode = true;
+        char ip[16] = {0};
+        char netmask[16] = {0};
+        char gateway[16] = {0};
+        char mac[18] = {0};
+    };
+
+    // 콜백 타입
+    using StatusCallback = void (*)();
+
+    // 초기화
+    static esp_err_t init(bool dhcp_enabled,
+                          const char* static_ip,
+                          const char* static_netmask,
+                          const char* static_gateway);
+
+    // 정리
+    static esp_err_t deinit(void);
+
+    // 상태 조회
+    static Status getStatus(void);
+    static bool isInitialized(void) { return s_initialized; }
+    static bool isLinkUp(void);
+    static bool hasIP(void);
+
+    // IP 모드 변경
+    static esp_err_t enableDHCP(void);
+    static esp_err_t enableStatic(const char* ip, const char* netmask, const char* gateway);
+
+    // 제어
+    static esp_err_t restart(void);
+
+    // 콜백 설정
+    static void setStatusCallback(StatusCallback callback) { s_status_callback = callback; }
+
+private:
+    EthernetDriver() = delete;
+    ~EthernetDriver() = delete;
+
+    static void eventHandler(void* arg, esp_event_base_t event_base,
+                             int32_t event_id, void* event_data);
+
+    // 정적 멤버
+    static bool s_initialized;
+    static bool s_dhcp_mode;
+    static char s_static_ip[16];
+    static char s_static_netmask[16];
+    static char s_static_gateway[16];
+
+    static StatusCallback s_status_callback;
+};
+
+// ============================================================================
+// 정적 멤버 초기화
+// ============================================================================
+
+bool EthernetDriver::s_initialized = false;
+bool EthernetDriver::s_dhcp_mode = true;
+char EthernetDriver::s_static_ip[16] = {0};
+char EthernetDriver::s_static_netmask[16] = {0};
+char EthernetDriver::s_static_gateway[16] = {0};
+
+EthernetDriver::StatusCallback EthernetDriver::s_status_callback = nullptr;
+
+// ============================================================================
+// 이벤트 핸들러
+// ============================================================================
+
+void EthernetDriver::eventHandler(void* arg, esp_event_base_t event_base,
+                                  int32_t event_id, void* event_data)
+{
+    if (event_base == ETH_EVENT) {
+        if (event_id == ETHERNET_EVENT_CONNECTED) {
+            ESP_LOGI(TAG, "Ethernet 링크 업");
+            if (s_status_callback) {
+                s_status_callback();
+            }
+        } else if (event_id == ETHERNET_EVENT_DISCONNECTED) {
+            ESP_LOGW(TAG, "Ethernet 링크 다운");
+            if (s_status_callback) {
+                s_status_callback();
+            }
+        } else if (event_id == ETHERNET_EVENT_START) {
+            ESP_LOGI(TAG, "Ethernet 시작됨");
+            if (s_status_callback) {
+                s_status_callback();
+            }
+        } else if (event_id == ETHERNET_EVENT_STOP) {
+            ESP_LOGI(TAG, "Ethernet 정지됨");
+            if (s_status_callback) {
+                s_status_callback();
+            }
+        }
+    } else if (event_base == IP_EVENT) {
+        if (event_id == IP_EVENT_ETH_GOT_IP) {
+            ESP_LOGI(TAG, "Ethernet IP 획득");
+            if (s_status_callback) {
+                s_status_callback();
+            }
+        }
+    }
+}
+
+// ============================================================================
+// 초기화/정리
+// ============================================================================
+
+esp_err_t EthernetDriver::init(bool dhcp_enabled,
+                               const char* static_ip,
+                               const char* static_netmask,
+                               const char* static_gateway)
+{
+    if (s_initialized) {
+        ESP_LOGW(TAG, "이미 초기화됨");
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "Ethernet Driver 초기화 중...");
+
+    // 설정 저장
+    s_dhcp_mode = dhcp_enabled;
+    if (static_ip) {
+        strncpy(s_static_ip, static_ip, sizeof(s_static_ip) - 1);
+    }
+    if (static_netmask) {
+        strncpy(s_static_netmask, static_netmask, sizeof(s_static_netmask) - 1);
+    }
+    if (static_gateway) {
+        strncpy(s_static_gateway, static_gateway, sizeof(s_static_gateway) - 1);
+    }
+
+    // Ethernet HAL 초기화
+    esp_err_t ret = ethernet_hal_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Ethernet HAL 초기화 실패");
+        return ret;
+    }
+
+    // 이벤트 핸들러 등록
+    ethernet_hal_register_event_handler(eventHandler);
+
+    // Ethernet 시작
+    ret = ethernet_hal_start();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Ethernet 시작 실패 (하드웨어 미장착 가능성): %s", esp_err_to_name(ret));
+    }
+
+    // IP 모드 설정
+    if (s_dhcp_mode) {
+        ethernet_hal_enable_dhcp();
+    } else {
+        ethernet_hal_enable_static(s_static_ip, s_static_netmask, s_static_gateway);
+    }
+
+    s_initialized = true;
+
+    ESP_LOGI(TAG, "Ethernet Driver 초기화 완료");
+    ESP_LOGI(TAG, "  모드: %s", s_dhcp_mode ? "DHCP" : "Static");
+    if (!s_dhcp_mode) {
+        ESP_LOGI(TAG, "  Static IP: %s", s_static_ip);
+        ESP_LOGI(TAG, "  Netmask: %s", s_static_netmask);
+        ESP_LOGI(TAG, "  Gateway: %s", s_static_gateway);
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t EthernetDriver::deinit(void)
+{
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGI(TAG, "Ethernet Driver 정리 중...");
+
+    ethernet_hal_stop();
+    ethernet_hal_deinit();
+
+    s_initialized = false;
+
+    ESP_LOGI(TAG, "Ethernet Driver 정리 완료");
+    return ESP_OK;
+}
+
+// ============================================================================
+// 상태 조회
+// ============================================================================
+
+EthernetDriver::Status EthernetDriver::getStatus(void)
+{
+    Status status;
+
+    if (!s_initialized) {
+        return status;
+    }
+
+    ethernet_hal_status_t hal_status;
+    if (ethernet_hal_get_status(&hal_status) == ESP_OK) {
+        status.initialized = hal_status.initialized;
+        status.link_up = hal_status.link_up;
+        status.got_ip = hal_status.got_ip;
+        status.dhcp_mode = s_dhcp_mode;
+        strncpy(status.ip, hal_status.ip, sizeof(status.ip));
+        strncpy(status.netmask, hal_status.netmask, sizeof(status.netmask));
+        strncpy(status.gateway, hal_status.gateway, sizeof(status.gateway));
+        strncpy(status.mac, hal_status.mac, sizeof(status.mac));
+    }
+
+    return status;
+}
+
+bool EthernetDriver::isLinkUp(void)
+{
+    if (!s_initialized) {
+        return false;
+    }
+    return ethernet_hal_is_link_up();
+}
+
+bool EthernetDriver::hasIP(void)
+{
+    if (!s_initialized) {
+        return false;
+    }
+    return ethernet_hal_has_ip();
+}
+
+// ============================================================================
+// IP 모드 변경
+// ============================================================================
+
+esp_err_t EthernetDriver::enableDHCP(void)
+{
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGI(TAG, "DHCP 모드로 전환");
+
+    s_dhcp_mode = true;
+    return ethernet_hal_enable_dhcp();
+}
+
+esp_err_t EthernetDriver::enableStatic(const char* ip, const char* netmask, const char* gateway)
+{
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGI(TAG, "Static IP 모드로 전환");
+
+    s_dhcp_mode = false;
+    if (ip) {
+        strncpy(s_static_ip, ip, sizeof(s_static_ip) - 1);
+    }
+    if (netmask) {
+        strncpy(s_static_netmask, netmask, sizeof(s_static_netmask) - 1);
+    }
+    if (gateway) {
+        strncpy(s_static_gateway, gateway, sizeof(s_static_gateway) - 1);
+    }
+
+    return ethernet_hal_enable_static(s_static_ip, s_static_netmask, s_static_gateway);
+}
+
+// ============================================================================
+// 제어
+// ============================================================================
+
+esp_err_t EthernetDriver::restart(void)
+{
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    ESP_LOGI(TAG, "Ethernet 재시작...");
+
+    return ethernet_hal_restart();
+}
+
+// ============================================================================
+// C 인터페이스 (extern "C")
+// ============================================================================
+
+extern "C" {
+
+esp_err_t ethernet_driver_init(bool dhcp_enabled,
+                               const char* static_ip,
+                               const char* static_netmask,
+                               const char* static_gateway)
+{
+    return EthernetDriver::init(dhcp_enabled, static_ip, static_netmask, static_gateway);
+}
+
+esp_err_t ethernet_driver_deinit(void)
+{
+    return EthernetDriver::deinit();
+}
+
+ethernet_driver_status_t ethernet_driver_get_status(void)
+{
+    auto cpp_status = EthernetDriver::getStatus();
+    ethernet_driver_status_t c_status;
+    c_status.initialized = cpp_status.initialized;
+    c_status.link_up = cpp_status.link_up;
+    c_status.got_ip = cpp_status.got_ip;
+    c_status.dhcp_mode = cpp_status.dhcp_mode;
+    strncpy(c_status.ip, cpp_status.ip, sizeof(c_status.ip));
+    strncpy(c_status.netmask, cpp_status.netmask, sizeof(c_status.netmask));
+    strncpy(c_status.gateway, cpp_status.gateway, sizeof(c_status.gateway));
+    strncpy(c_status.mac, cpp_status.mac, sizeof(c_status.mac));
+    return c_status;
+}
+
+bool ethernet_driver_is_initialized(void)
+{
+    return EthernetDriver::isInitialized();
+}
+
+bool ethernet_driver_is_link_up(void)
+{
+    return EthernetDriver::isLinkUp();
+}
+
+bool ethernet_driver_has_ip(void)
+{
+    return EthernetDriver::hasIP();
+}
+
+esp_err_t ethernet_driver_enable_dhcp(void)
+{
+    return EthernetDriver::enableDHCP();
+}
+
+esp_err_t ethernet_driver_enable_static(const char* ip, const char* netmask, const char* gateway)
+{
+    return EthernetDriver::enableStatic(ip, netmask, gateway);
+}
+
+esp_err_t ethernet_driver_restart(void)
+{
+    return EthernetDriver::restart();
+}
+
+void ethernet_driver_set_status_callback(ethernet_driver_status_callback_t callback)
+{
+    EthernetDriver::setStatusCallback(callback);
+}
+
+} // extern "C"
