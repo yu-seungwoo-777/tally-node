@@ -19,13 +19,23 @@ list(APPEND EXTRA_COMPONENT_DIRS
     "${CMAKE_SOURCE_DIR}/components/05_hal"
 )
 
-# 2. 하위 컴포넌트 자동 등록 함수
+# 2. 하위 컴포넌트 자동 등록 함수 (재귀)
 function(register_subcomponents layer_dir result_var)
     file(GLOB subdirs LIST_DIRECTORIES true "${layer_dir}/*")
     set(subcomps "")
     foreach(subdir ${subdirs})
-        if(IS_DIRECTORY "${subdir}" AND EXISTS "${subdir}/CMakeLists.txt")
-            list(APPEND subcomps "${subdir}")
+        if(IS_DIRECTORY "${subdir}")
+            # 현재 디렉토리에 CMakeLists.txt가 있으면 추가
+            if(EXISTS "${subdir}/CMakeLists.txt")
+                list(APPEND subcomps "${subdir}")
+            endif()
+            # 하위 디렉토리도 재귀적으로 검색 (2단계 깊이 지원)
+            file(GLOB subsubdirs LIST_DIRECTORIES true "${subdir}/*")
+            foreach(subsubdir ${subsubdirs})
+                if(IS_DIRECTORY "${subsubdir}" AND EXISTS "${subsubdir}/CMakeLists.txt")
+                    list(APPEND subcomps "${subsubdir}")
+                endif()
+            endforeach()
         endif()
     endforeach()
     set(${result_var} ${subcomps} PARENT_SCOPE)
