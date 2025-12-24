@@ -7,3 +7,4 @@ examples/
 # 로컬 설정 (t_log 등 유지)
 # include/LogConfig.h
 # components/00_common/t_log/
+.pio/
