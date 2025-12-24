@@ -185,6 +185,52 @@ void switcher_service_set_connection_callback(switcher_service_handle_t handle, 
 void switcher_service_set_switcher_change_callback(switcher_service_handle_t handle,
                                                      void (*callback)(switcher_role_t role));
 
+// ============================================================================
+// LoRa 패킷 해석 (수신 측)
+// ============================================================================
+
+/**
+ * @brief LoRa 패킷에서 Tally 데이터 추출
+ * @param handle 서비스 핸들
+ * @param packet 수신 패킷 ([Header][Data...])
+ * @param length 패킷 길이
+ * @param tally 출력: Packed Tally 데이터
+ * @return 성공 여부
+ */
+bool switcher_service_parse_lora_packet(switcher_service_handle_t handle,
+                                        const uint8_t* packet, size_t length,
+                                        packed_data_t* tally);
+
+/**
+ * @brief 채널 Tally 상태 조회
+ * @param tally Packed Tally 데이터
+ * @param channel 채널 번호 (1~20)
+ * @return Tally 상태 (0=OFF, 1=PGM, 2=PVW, 3=BOTH)
+ */
+uint8_t switcher_service_get_tally_state(const packed_data_t* tally, uint8_t channel);
+
+/**
+ * @brief PGM 채널 목록 추출
+ * @param tally Packed Tally 데이터
+ * @param pgm 출력: PGM 채널 배열
+ * @param pgm_count 출력: PGM 채널 수
+ * @param max_count 최대 배열 크기
+ */
+void switcher_service_get_pgm_channels(const packed_data_t* tally,
+                                       uint8_t* pgm, uint8_t* pgm_count,
+                                       uint8_t max_count);
+
+/**
+ * @brief PVW 채널 목록 추출
+ * @param tally Packed Tally 데이터
+ * @param pvw 출력: PVW 채널 배열
+ * @param pvw_count 출력: PVW 채널 수
+ * @param max_count 최대 배열 크기
+ */
+void switcher_service_get_pvw_channels(const packed_data_t* tally,
+                                       uint8_t* pvw, uint8_t* pvw_count,
+                                       uint8_t max_count);
+
 #ifdef __cplusplus
 }
 #endif
@@ -330,15 +376,24 @@ private:
     connection_callback_t connection_callback_;
     SwitcherChangeCallback change_callback_;
 
-    // 결합된 Packed 데이터 캐시
-    mutable packed_data_t combined_packed_;
-
     // ============================================================================
     // 태스크 관련
     // ============================================================================
 
     TaskHandle_t task_handle_;          ///< FreeRTOS 태스크 핸들
     bool task_running_;                 ///< 태스크 실행 중 플래그
+
+    // ============================================================================
+    // 콜백 플래그 (task 내부에서 로그 출력용)
+    // ============================================================================
+
+    mutable volatile bool tally_changed_;
+    mutable volatile bool switcher_changed_;
+    mutable switcher_role_t last_switcher_role_;
+
+    // 결합된 Packed 데이터 캐시
+    mutable packed_data_t combined_packed_;
+
     StaticTask_t task_buffer_;          ///< 정적 태스크 메모리
     StackType_t task_stack_[4096];      ///< 태스크 스택 (4KB)
 

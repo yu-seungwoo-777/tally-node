@@ -7,7 +7,7 @@
 #include "ConfigService.h"
 #include "WiFiDriver.h"
 #include "EthernetDriver.h"
-#include "esp_log.h"
+#include "t_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cstring>
@@ -58,23 +58,23 @@ config_all_t NetworkServiceClass::s_config = {};
 esp_err_t NetworkServiceClass::init(void)
 {
     if (s_initialized) {
-        ESP_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "이미 초기화됨");
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "Network Service 초기화 중...");
+    T_LOGI(TAG, "Network Service 초기화 중...");
 
     // ConfigService 초기화
     esp_err_t ret = config_service_init();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "ConfigService 초기화 실패");
+        T_LOGE(TAG, "ConfigService 초기화 실패");
         return ret;
     }
 
     // 설정 로드
     ret = config_service_load_all(&s_config);
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "설정 로드 실패, 기본값 사용");
+        T_LOGW(TAG, "설정 로드 실패, 기본값 사용");
         config_service_load_defaults(&s_config);
     }
 
@@ -87,7 +87,7 @@ esp_err_t NetworkServiceClass::init(void)
 
         ret = wifi_driver_init(ap_ssid, ap_pass, sta_ssid, sta_pass);
         if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "WiFi Driver 초기화 실패");
+            T_LOGE(TAG, "WiFi Driver 초기화 실패");
             return ret;
         }
     }
@@ -101,14 +101,14 @@ esp_err_t NetworkServiceClass::init(void)
             s_config.ethernet.static_gateway
         );
         if (ret != ESP_OK) {
-            ESP_LOGW(TAG, "Ethernet Driver 초기화 실패 (하드웨어 미장착 가능성)");
+            T_LOGW(TAG, "Ethernet Driver 초기화 실패 (하드웨어 미장착 가능성)");
             // Ethernet은 실패해도 계속 진행
         }
     }
 
     s_initialized = true;
 
-    ESP_LOGI(TAG, "Network Service 초기화 완료");
+    T_LOGI(TAG, "Network Service 초기화 완료");
     return ESP_OK;
 }
 
@@ -118,14 +118,14 @@ esp_err_t NetworkServiceClass::deinit(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "Network Service 정리 중...");
+    T_LOGI(TAG, "Network Service 정리 중...");
 
     wifi_driver_deinit();
     ethernet_driver_deinit();
 
     s_initialized = false;
 
-    ESP_LOGI(TAG, "Network Service 정리 완료");
+    T_LOGI(TAG, "Network Service 정리 완료");
     return ESP_OK;
 }
 
@@ -179,45 +179,45 @@ network_status_t NetworkServiceClass::getStatus(void)
 void NetworkServiceClass::printStatus(void)
 {
     if (!s_initialized) {
-        ESP_LOGI(TAG, "초기화 안됨");
+        T_LOGI(TAG, "초기화 안됨");
         return;
     }
 
     network_status_t status = getStatus();
 
-    ESP_LOGI(TAG, "===== Network Status =====");
+    T_LOGI(TAG, "===== Network Status =====");
 
     // WiFi AP
     if (status.wifi_ap.active) {
-        ESP_LOGI(TAG, "WiFi AP: %s", status.wifi_ap.connected ? "시작됨" : "정지됨");
+        T_LOGI(TAG, "WiFi AP: %s", status.wifi_ap.connected ? "시작됨" : "정지됨");
         if (status.wifi_ap.connected) {
-            ESP_LOGI(TAG, "  IP: %s", status.wifi_ap.ip);
+            T_LOGI(TAG, "  IP: %s", status.wifi_ap.ip);
         }
     } else {
-        ESP_LOGI(TAG, "WiFi AP: 비활성화");
+        T_LOGI(TAG, "WiFi AP: 비활성화");
     }
 
     // WiFi STA
     if (status.wifi_sta.active) {
-        ESP_LOGI(TAG, "WiFi STA: %s", status.wifi_sta.connected ? "연결됨" : "연결 안됨");
+        T_LOGI(TAG, "WiFi STA: %s", status.wifi_sta.connected ? "연결됨" : "연결 안됨");
         if (status.wifi_sta.connected) {
-            ESP_LOGI(TAG, "  IP: %s", status.wifi_sta.ip);
+            T_LOGI(TAG, "  IP: %s", status.wifi_sta.ip);
         }
     } else {
-        ESP_LOGI(TAG, "WiFi STA: 비활성화");
+        T_LOGI(TAG, "WiFi STA: 비활성화");
     }
 
     // Ethernet
     if (status.ethernet.active) {
-        ESP_LOGI(TAG, "Ethernet: %s", status.ethernet.connected ? "연결됨" : "연결 안됨");
+        T_LOGI(TAG, "Ethernet: %s", status.ethernet.connected ? "연결됨" : "연결 안됨");
         if (status.ethernet.connected) {
-            ESP_LOGI(TAG, "  IP: %s", status.ethernet.ip);
+            T_LOGI(TAG, "  IP: %s", status.ethernet.ip);
         }
     } else {
-        ESP_LOGI(TAG, "Ethernet: 비활성화");
+        T_LOGI(TAG, "Ethernet: 비활성화");
     }
 
-    ESP_LOGI(TAG, "=========================");
+    T_LOGI(TAG, "=========================");
 }
 
 // ============================================================================
@@ -230,7 +230,7 @@ esp_err_t NetworkServiceClass::restartWiFi(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "WiFi 재시작 중...");
+    T_LOGI(TAG, "WiFi 재시작 중...");
 
     // WiFi 정리
     wifi_driver_deinit();
@@ -254,7 +254,7 @@ esp_err_t NetworkServiceClass::restartEthernet(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "Ethernet 재시작 중...");
+    T_LOGI(TAG, "Ethernet 재시작 중...");
 
     // Ethernet 정리
     ethernet_driver_deinit();
@@ -278,12 +278,12 @@ esp_err_t NetworkServiceClass::restartAll(void)
 
     ret = restartWiFi();
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "WiFi 재시작 실패");
+        T_LOGW(TAG, "WiFi 재시작 실패");
     }
 
     ret = restartEthernet();
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Ethernet 재시작 실패");
+        T_LOGW(TAG, "Ethernet 재시작 실패");
     }
 
     return ESP_OK;

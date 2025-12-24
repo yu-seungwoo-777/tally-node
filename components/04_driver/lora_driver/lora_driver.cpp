@@ -7,7 +7,7 @@
 #include "lora_hal.h"
 #include "PinConfig.h"
 #include "LoRaConfig.h"
-#include "esp_log.h"
+#include "t_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -63,7 +63,7 @@ static void IRAM_ATTR rx_isr_handler(void) {
 // =============================================================================
 
 static void lora_task(void* param) {
-    ESP_LOGI(TAG, "LoRa 전용 태스크 시작");
+    T_LOGI(TAG, "LoRa 전용 태스크 시작");
 
     while (1) {
         // 시마포로 깨어나면 모든 플래그 처리 (놓치는 이벤트 없음)
@@ -87,7 +87,7 @@ static void lora_task(void* param) {
 
 esp_err_t lora_driver_init(const lora_config_t* config) {
     if (s_initialized) {
-        ESP_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "이미 초기화됨");
         return ESP_OK;
     }
 
@@ -98,21 +98,21 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     int8_t txp = config ? config->tx_power : 22;
     uint8_t sw = config ? config->sync_word : 0x12;
 
-    ESP_LOGI(TAG, "LoRa 드라이버 초기화 중...");
-    ESP_LOGI(TAG, "  SF=%d, BW=%.0fkHz, CR=4/%d, TXP=%ddBm, SW=0x%02X",
+    T_LOGI(TAG, "LoRa 드라이버 초기화 중...");
+    T_LOGI(TAG, "  SF=%d, BW=%.0fkHz, CR=4/%d, TXP=%ddBm, SW=0x%02X",
              sf, bw, cr, txp, sw);
 
     // HAL 초기화
     esp_err_t ret = lora_hal_init();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "HAL 초기화 실패: %d", ret);
+        T_LOGE(TAG, "HAL 초기화 실패: %d", ret);
         return ESP_FAIL;
     }
 
     // HAL 가져오기
     RadioLibHal* hal = lora_hal_get_instance();
     if (hal == nullptr) {
-        ESP_LOGE(TAG, "HAL 가져오기 실패 (초기화되지 않음)");
+        T_LOGE(TAG, "HAL 가져오기 실패 (초기화되지 않음)");
         return ESP_FAIL;
     }
 
@@ -121,7 +121,7 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
                          EORA_S3_LORA_RST, EORA_S3_LORA_BUSY);
 
     // 칩 자동 감지: SX1262 (868MHz) 먼저 시도 (900TB 모듈)
-    ESP_LOGI(TAG, "SX1262 (868MHz) 감지 시도...");
+    T_LOGI(TAG, "SX1262 (868MHz) 감지 시도...");
     SX1262* radio_1262 = new SX1262(s_module);
     int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
 
@@ -129,13 +129,13 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
         s_radio = radio_1262;
         s_chip_type = LORA_CHIP_SX1262_433M;  // 타입명은 유지
         s_frequency = 868.0f;
-        ESP_LOGI(TAG, "✓ SX1262 (868MHz) 감지됨");
+        T_LOGI(TAG, "✓ SX1262 (868MHz) 감지됨");
     } else {
-        ESP_LOGW(TAG, "SX1262 실패: %d, SX1268 시도...", state);
+        T_LOGW(TAG, "SX1262 실패: %d, SX1268 시도...", state);
         delete radio_1262;
 
         // SX1268 (433MHz) 시도 (400TB 모듈)
-        ESP_LOGI(TAG, "SX1268 (433MHz) 감지 시도...");
+        T_LOGI(TAG, "SX1268 (433MHz) 감지 시도...");
         SX1268* radio_1268 = new SX1268(s_module);
         state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
 
@@ -143,9 +143,9 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
             s_radio = radio_1268;
             s_chip_type = LORA_CHIP_SX1268_868M;  // 타입명은 유지
             s_frequency = 433.0f;
-            ESP_LOGI(TAG, "✓ SX1268 (433MHz) 감지됨");
+            T_LOGI(TAG, "✓ SX1268 (433MHz) 감지됨");
         } else {
-            ESP_LOGE(TAG, "LoRa 칩 감지 실패 (모든 칩): %d", state);
+            T_LOGE(TAG, "LoRa 칩 감지 실패 (모든 칩): %d", state);
             delete radio_1268;
             delete s_module;
             s_module = nullptr;
@@ -156,7 +156,7 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     // 인터럽트 등록
     s_radio->setPacketSentAction(tx_isr_handler);
     s_radio->setPacketReceivedAction(rx_isr_handler);
-    ESP_LOGI(TAG, "✓ 인터럽트 등록 완료");
+    T_LOGI(TAG, "✓ 인터럽트 등록 완료");
 
     // 설정 저장
     s_sync_word = sw;
@@ -164,14 +164,14 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     // Semaphore 생성
     s_semaphore = xSemaphoreCreateBinary();
     if (s_semaphore == nullptr) {
-        ESP_LOGE(TAG, "Semaphore 생성 실패");
+        T_LOGE(TAG, "Semaphore 생성 실패");
         return ESP_FAIL;
     }
 
     // SPI Mutex 생성
     s_spi_mutex = xSemaphoreCreateMutex();
     if (s_spi_mutex == nullptr) {
-        ESP_LOGE(TAG, "SPI Mutex 생성 실패");
+        T_LOGE(TAG, "SPI Mutex 생성 실패");
         return ESP_FAIL;
     }
 
@@ -181,27 +181,27 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
         "lora_task",
         4096,
         nullptr,
-        configMAX_PRIORITIES - 2,
+        6,  // 우선순위 (중간)
         &s_task,
         1
     );
 
     if (task_ret != pdPASS) {
-        ESP_LOGE(TAG, "태스크 생성 실패");
+        T_LOGE(TAG, "태스크 생성 실패");
         return ESP_FAIL;
     }
 
     // 초기 수신 모드 시작
     state = s_radio->startReceive();
     if (state != RADIOLIB_ERR_NONE) {
-        ESP_LOGE(TAG, "수신 모드 시작 실패: %d", state);
+        T_LOGE(TAG, "수신 모드 시작 실패: %d", state);
         return ESP_FAIL;
     }
 
     s_initialized = true;
-    ESP_LOGI(TAG, "✓ LoRa 드라이버 초기화 완료");
-    ESP_LOGI(TAG, "  칩: %s", lora_driver_get_chip_name());
-    ESP_LOGI(TAG, "  주파수: %.1f MHz", s_frequency);
+    T_LOGI(TAG, "✓ LoRa 드라이버 초기화 완료");
+    T_LOGI(TAG, "  칩: %s", lora_driver_get_chip_name());
+    T_LOGI(TAG, "  주파수: %.1f MHz", s_frequency);
 
     return ESP_OK;
 }
@@ -275,17 +275,17 @@ esp_err_t lora_driver_transmit(const uint8_t* data, size_t length) {
     }
 
     if (s_is_transmitting) {
-        ESP_LOGW(TAG, "송신 중 - 패킷 무시");
+        T_LOGW(TAG, "송신 중 - 패킷 무시");
         return ESP_ERR_NOT_SUPPORTED;
     }
 
     // SPI 뮤텍스 잠금 (최대 1초 대기)
     if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
-        ESP_LOGE(TAG, "SPI 뮤텍스 획득 타임아웃");
+        T_LOGE(TAG, "SPI 뮤텍스 획득 타임아웃");
         return ESP_ERR_TIMEOUT;
     }
 
-    ESP_LOGI(TAG, "→ 송신: %d bytes", length);
+    T_LOGI(TAG, "→ 송신: %d bytes", length);
 
     // 비동기 송신 시작
     s_is_transmitting = false;
@@ -299,7 +299,7 @@ esp_err_t lora_driver_transmit(const uint8_t* data, size_t length) {
         xSemaphoreGive(s_spi_mutex);  // 송신 시작 후 뮤텍스 해제
         return ESP_OK;
     } else {
-        ESP_LOGE(TAG, "송신 시작 실패: %d", state);
+        T_LOGE(TAG, "송신 시작 실패: %d", state);
         xSemaphoreGive(s_spi_mutex);
         return ESP_FAIL;
     }
@@ -316,7 +316,7 @@ esp_err_t lora_driver_start_receive(void) {
 
     // SPI 뮤텍스 잠금
     if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
-        ESP_LOGW(TAG, "수신 모드 시작 중 뮤텍스 획득 실패");
+        T_LOGW(TAG, "수신 모드 시작 중 뮤텍스 획득 실패");
         return ESP_ERR_TIMEOUT;
     }
 
@@ -340,13 +340,13 @@ void lora_driver_check_received(void) {
 
         // SPI 뮤텍스 잠금
         if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
-            ESP_LOGW(TAG, "수신 처리 중 뮤텍스 획득 실패");
+            T_LOGW(TAG, "수신 처리 중 뮤텍스 획득 실패");
             return;
         }
 
         int num_bytes = s_radio->getPacketLength();
         if (num_bytes <= 0 || num_bytes > 256) {
-            ESP_LOGW(TAG, "잘못된 패킷 길이: %d", num_bytes);
+            T_LOGW(TAG, "잘못된 패킷 길이: %d", num_bytes);
             xSemaphoreGive(s_spi_mutex);
             return;
         }
@@ -361,7 +361,7 @@ void lora_driver_check_received(void) {
             // 콜백 호출 전 뮤텍스 해제 (데드락 방지)
             xSemaphoreGive(s_spi_mutex);
 
-            ESP_LOGI(TAG, "← 수신: %d bytes (RSSI: %.1f dBm, SNR: %.1f dB)",
+            T_LOGI(TAG, "← 수신: %d bytes (RSSI: %.1f dBm, SNR: %.1f dB)",
                      num_bytes, rssi, snr);
 
             if (s_receive_callback) {
@@ -370,7 +370,7 @@ void lora_driver_check_received(void) {
         } else {
             xSemaphoreGive(s_spi_mutex);
             if (state == RADIOLIB_ERR_CRC_MISMATCH) {
-                ESP_LOGW(TAG, "CRC 오류");
+                T_LOGW(TAG, "CRC 오류");
             }
         }
     }
@@ -386,11 +386,11 @@ void lora_driver_check_transmitted(void) {
 
         // SPI 뮤텍스 잠금
         if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
-            ESP_LOGW(TAG, "송신 완료 처리 중 뮤텍스 획득 실패");
+            T_LOGW(TAG, "송신 완료 처리 중 뮤텍스 획득 실패");
             return;
         }
 
-        ESP_LOGI(TAG, "✓ 송신 완료");
+        T_LOGI(TAG, "✓ 송신 완료");
 
         s_radio->finishTransmit();
 
@@ -434,7 +434,7 @@ esp_err_t lora_driver_set_frequency(float freq_mhz) {
 
     if (state == RADIOLIB_ERR_NONE) {
         s_frequency = freq_mhz;
-        ESP_LOGI(TAG, "주파수 변경: %.1f MHz", freq_mhz);
+        T_LOGI(TAG, "주파수 변경: %.1f MHz", freq_mhz);
         return ESP_OK;
     }
     return ESP_FAIL;
@@ -454,7 +454,7 @@ esp_err_t lora_driver_set_sync_word(uint8_t sync_word) {
 
     if (state == RADIOLIB_ERR_NONE) {
         s_sync_word = sync_word;
-        ESP_LOGI(TAG, "Sync Word 변경: 0x%02X", sync_word);
+        T_LOGI(TAG, "Sync Word 변경: 0x%02X", sync_word);
         return ESP_OK;
     }
     return ESP_FAIL;

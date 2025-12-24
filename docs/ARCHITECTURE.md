@@ -1,7 +1,16 @@
+실제 폴더 구조와 문서를 비교하면 다음과 같은 차이가 있습니다:
+
+1. **00_common**: `t_log`, `tally_types` 컴포넌트가 추가됨
+2. **01_app**: `tally_tx_app`, `tally_rx_app` 컴포넌트가 추가됨
+3. **03_service**: `switcher_service` 컴포넌트가 추가됨
+4. **04_driver**: `switcher_driver` (하위에 atem/, obs/, vmix/ 포함) 컴포넌트가 추가됨
+
+문서를 수정합니다:
+
 # 아키텍처
 
 **작성일**: 2025-12-23
-**버전**: 3.2 (5계층 아키텍처 + 네트워크 동작 확인 완료)
+**버전**: 3.3 (Tally TX/RX 앱, 스위처 드라이버 추가)
 
 ---
 
@@ -17,6 +26,9 @@ ESP32-S3 (EoRa-S3) 기반 LoRa 통신 프로젝트의 5계층 아키텍처입니
 ┌─────────────────────────────────────────────────────────┐
 │ 01_app (앱)                                             │
 │ - lora_test: LoRa 테스트 앱                            │
+│ - network_test: 네트워크 테스트 앱                     │
+│ - tally_tx_app: Tally 송신기 앱                        │
+│ - tally_rx_app: Tally 수신기 앱                        │
 └─────────────────────────────────────────────────────────┘
                            │
 ┌─────────────────────────────────────────────────────────┐
@@ -30,6 +42,7 @@ ESP32-S3 (EoRa-S3) 기반 LoRa 통신 프로젝트의 5계층 아키텍처입니
 │ - lora_service: LoRa 통신 서비스                       │
 │ - network_service: 네트워크 통합 관리                  │
 │ - config_service: NVS 설정 관리                        │
+│ - switcher_service: 스위처 연결 서비스                 │
 └─────────────────────────────────────────────────────────┘
                            │
 ┌─────────────────────────────────────────────────────────┐
@@ -37,6 +50,10 @@ ESP32-S3 (EoRa-S3) 기반 LoRa 통신 프로젝트의 5계층 아키텍처입니
 │ - lora_driver: RadioLib 래퍼                           │
 │ - wifi_driver: WiFi AP+STA 제어 (C++)                  │
 │ - ethernet_driver: W5500 Ethernet 제어 (C++)            │
+│ - switcher_driver: 스위처 프로토콜 드라이버            │
+│   └─ atem: Blackmagic ATEM 프로토콜                   │
+│   └─ obs: OBS WebSocket 프로토콜                      │
+│   └─ vmix: vMix TCP 프로토콜                          │
 └─────────────────────────────────────────────────────────┘
                            │
 ┌─────────────────────────────────────────────────────────┐
@@ -49,6 +66,8 @@ ESP32-S3 (EoRa-S3) 기반 LoRa 통신 프로젝트의 5계층 아키텍처입니
 ┌─────────────────────────────────────────────────────────┐
 │ 00_common (공통)                                        │
 │ - event_bus: 이벤트 버스 시스템                         │
+│ - t_log: 로그 유틸리티                                  │
+│ - tally_types: Tally 타입 정의                          │
 └─────────────────────────────────────────────────────────┘
                            │
 ┌─────────────────────────────────────────────────────────┐
@@ -110,6 +129,8 @@ X 잘못된 예 (건너뛰기):
 | 컴포넌트 | 역할 | 의존성 | 상태 |
 |---------|------|--------|------|
 | event_bus | 컴포넌트 간 이벤트 기반 통신 | freertos | ✅ |
+| t_log | 로그 유틸리티 | - | ✅ |
+| tally_types | Tally 상태 타입 정의 (C++) | - | ✅ |
 
 ### 프로젝트 전역 (include/)
 
@@ -123,6 +144,8 @@ X 잘못된 예 (건너뛰기):
 |---------|------|--------|------|
 | lora_test | LoRa 테스트 앱 | button_poll, lora_service, event_bus | ✅ |
 | network_test | 네트워크 테스트 앱 (WiFi/Ethernet) | network_service, config_service | ✅ |
+| tally_tx_app | Tally 송신기 앱 | switcher_service, lora_service | ✅ |
+| tally_rx_app | Tally 수신기 앱 | lora_service | ✅ |
 
 ### 02_presentation - 프레젠테이션
 
@@ -136,6 +159,7 @@ X 잘못된 예 (건너뛰기):
 | lora_service | LoRa 통신 서비스 | lora_driver, event_bus | ✅ |
 | network_service | 네트워크 통합 관리 (C++) | wifi_driver, ethernet_driver, config_service | ✅ |
 | config_service | NVS 설정 관리 (C++) | nvs_flash | ✅ |
+| switcher_service | 스위처 연결 서비스 (C++) | switcher_driver, event_bus | ✅ |
 
 ### 04_driver - 드라이버
 
@@ -144,6 +168,9 @@ X 잘못된 예 (건너뛰기):
 | lora_driver | RadioLib 래퍼 | lora_hal, RadioLib | ✅ |
 | wifi_driver | WiFi AP+STA 제어 (C++) | wifi_hal | ✅ |
 | ethernet_driver | W5500 Ethernet 제어 (C++) | ethernet_hal | ✅ |
+| switcher_driver/atem | Blackmagic ATEM 프로토콜 (C++) | esp_netif | ✅ |
+| switcher_driver/obs | OBS WebSocket 프로토콜 (C++) | esp_netif | ✅ |
+| switcher_driver/vmix | vMix TCP 프로토콜 (C++) | esp_netif | ✅ |
 
 ### 05_hal - 하드웨어 추상화
 
@@ -182,6 +209,22 @@ network_service (03_service)
     │
     └─→ config_service (03_service/C++)
             └─→ nvs_flash
+
+# Tally System
+tally_tx_app (01_app)
+    │
+    ├─→ switcher_service (03_service)
+    │       ├─→ switcher_driver/atem (04_driver)
+    │       ├─→ switcher_driver/obs (04_driver)
+    │       └─→ switcher_driver/vmix (04_driver)
+    │
+    └─→ lora_service (03_service)
+            └─→ lora_driver (04_driver)
+
+tally_rx_app (01_app)
+    │
+    └─→ lora_service (03_service)
+            └─→ lora_driver (04_driver)
 
 # 공통
 include/PinConfig.h → 모든 계층에서 사용

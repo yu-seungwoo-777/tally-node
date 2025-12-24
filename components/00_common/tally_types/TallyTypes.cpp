@@ -15,22 +15,30 @@ void packed_data_init(packed_data_t* packed, uint8_t channel_count)
 {
     if (!packed) return;
 
+    // 기존 메모리 해제
+    if (packed->data) {
+        free(packed->data);
+        packed->data = nullptr;
+    }
+
     packed->channel_count = (channel_count > TALLY_MAX_CHANNELS) ? TALLY_MAX_CHANNELS : channel_count;
 
     if (channel_count > 0) {
         // (채널 수 + 3) / 4 바이트 계산
         uint8_t byte_count = (channel_count + 3) / 4;
-        // 최대 버퍼 크기 제한 (8바이트)
-        if (byte_count > sizeof(packed->data)) {
-            byte_count = sizeof(packed->data);
-        }
-        packed->data_size = byte_count;
-        // 버퍼 초기화
-        for (uint8_t i = 0; i < byte_count; i++) {
-            packed->data[i] = 0;
+
+        // 메모리 할당
+        packed->data = (uint8_t*) malloc(byte_count);
+        if (packed->data) {
+            packed->data_size = byte_count;
+            // 버퍼 초기화
+            memset(packed->data, 0, byte_count);
+        } else {
+            packed->data_size = 0;
         }
     } else {
         packed->data_size = 0;
+        packed->data = nullptr;
     }
 }
 
@@ -38,7 +46,12 @@ void packed_data_cleanup(packed_data_t* packed)
 {
     if (!packed) return;
 
-    // 정적 버퍼이므로 해제 불필요, 단지 초기화만
+    // 메모리 해제
+    if (packed->data) {
+        free(packed->data);
+        packed->data = nullptr;
+    }
+
     packed->data_size = 0;
     packed->channel_count = 0;
 }
@@ -154,6 +167,88 @@ void packed_data_from_uint64(packed_data_t* packed, uint64_t value, uint8_t chan
             }
         }
     }
+}
+
+char* packed_data_to_hex(const packed_data_t* packed, char* buf, size_t buf_size)
+{
+    if (!buf || buf_size == 0) return nullptr;
+
+    buf[0] = '\0';
+
+    if (!packed || !packed->data || packed->data_size == 0) {
+        return buf;
+    }
+
+    // 각 바이트를 2자리 16진수로 변환
+    size_t pos = 0;
+    for (uint8_t i = 0; i < packed->data_size && pos + 2 < buf_size; i++) {
+        snprintf(buf + pos, buf_size - pos, "%02X", packed->data[i]);
+        pos += 2;
+    }
+
+    return buf;
+}
+
+char* packed_data_format_tally(const packed_data_t* packed, char* buf, size_t buf_size)
+{
+    if (!buf || buf_size < 32) {
+        if (buf && buf_size > 0) buf[0] = '\0';
+        return buf;
+    }
+
+    // 기본값: 모두 OFF
+    const char* all_off = "PGM[-] PVW[-]";
+    strncpy(buf, all_off, buf_size - 1);
+    buf[buf_size - 1] = '\0';
+
+    if (!packed || !packed_data_is_valid(packed)) {
+        return buf;
+    }
+
+    // PGM/PVW 채널 수집
+    uint8_t pgm[20], pvw[20];
+    uint8_t pgm_count = 0, pvw_count = 0;
+
+    for (uint8_t i = 0; i < packed->channel_count && i < 20; i++) {
+        uint8_t state = packed_data_get_channel(packed, i + 1);
+        if (state == 0x01 || state == 0x03) {  // PGM or BOTH
+            pgm[pgm_count++] = i + 1;
+        }
+        if (state == 0x02 || state == 0x03) {  // PVW or BOTH
+            pvw[pvw_count++] = i + 1;
+        }
+    }
+
+    // PGM 문자열 생성
+    char pgm_str[24] = "PGM[";
+    if (pgm_count > 0) {
+        char* p = pgm_str + 4;
+        for (uint8_t i = 0; i < pgm_count && i < 20; i++) {
+            if (i > 0) *p++ = ',';
+            p += snprintf(p, 4, "%d", pgm[i]);
+        }
+    } else {
+        strcat(pgm_str, "-");
+    }
+    strcat(pgm_str, "]");
+
+    // PVW 문자열 생성
+    char pvw_str[24] = "PVW[";
+    if (pvw_count > 0) {
+        char* p = pvw_str + 4;
+        for (uint8_t i = 0; i < pvw_count && i < 20; i++) {
+            if (i > 0) *p++ = ',';
+            p += snprintf(p, 4, "%d", pvw[i]);
+        }
+    } else {
+        strcat(pvw_str, "-");
+    }
+    strcat(pvw_str, "]");
+
+    // 결합: "PGM[...] PVW[...]"
+    snprintf(buf, buf_size, "%s %s", pgm_str, pvw_str);
+
+    return buf;
 }
 
 // ============================================================================

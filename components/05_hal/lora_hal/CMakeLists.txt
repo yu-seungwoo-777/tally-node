@@ -1,7 +1,7 @@
 idf_component_register(
     SRCS "lora_hal.cpp"
     INCLUDE_DIRS "include"
-    REQUIRES driver esp_timer freertos
+    REQUIRES driver esp_timer freertos t_log
 )
 
 # C++ 컴파일 옵션

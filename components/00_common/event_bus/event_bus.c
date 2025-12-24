@@ -4,7 +4,7 @@
  */
 
 #include "event_bus.h"
-#include "esp_log.h"
+#include "t_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -68,7 +68,7 @@ const char* event_type_to_string(event_type_t type) {
 static void event_handler_task(void* arg) {
     event_data_t event;
 
-    ESP_LOGI(TAG, "Event handler task started");
+    T_LOGI(TAG, "Event handler task started");
 
     while (1) {
         if (xQueueReceive(g_event_bus.queue, &event, portMAX_DELAY) == pdTRUE) {
@@ -100,14 +100,14 @@ esp_err_t event_bus_init(void) {
     // 큐 생성
     g_event_bus.queue = xQueueCreate(EVENT_QUEUE_SIZE, sizeof(event_data_t));
     if (g_event_bus.queue == NULL) {
-        ESP_LOGE(TAG, "Failed to create event queue");
+        T_LOGE(TAG, "Failed to create event queue");
         return ESP_FAIL;
     }
 
     // 뮤텍스 생성
     g_event_bus.mutex = xSemaphoreCreateMutex();
     if (g_event_bus.mutex == NULL) {
-        ESP_LOGE(TAG, "Failed to create mutex");
+        T_LOGE(TAG, "Failed to create mutex");
         vQueueDelete(g_event_bus.queue);
         return ESP_FAIL;
     }
@@ -126,25 +126,25 @@ esp_err_t event_bus_init(void) {
     );
 
     if (ret != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create event handler task");
+        T_LOGE(TAG, "Failed to create event handler task");
         vSemaphoreDelete(g_event_bus.mutex);
         vQueueDelete(g_event_bus.queue);
         return ESP_FAIL;
     }
 
     g_event_bus.initialized = true;
-    ESP_LOGI(TAG, "Event bus initialized");
+    T_LOGI(TAG, "Event bus initialized");
     return ESP_OK;
 }
 
 esp_err_t event_bus_publish(event_type_t type, const void* data, size_t data_size) {
     if (!g_event_bus.initialized) {
-        ESP_LOGE(TAG, "Event bus not initialized");
+        T_LOGE(TAG, "Event bus not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (type >= _EVT_MAX) {
-        ESP_LOGE(TAG, "Invalid event type: %d", type);
+        T_LOGE(TAG, "Invalid event type: %d", type);
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -157,22 +157,22 @@ esp_err_t event_bus_publish(event_type_t type, const void* data, size_t data_siz
 
     // 큐에 전송 (대기 없음)
     if (xQueueSend(g_event_bus.queue, &event, 0) != pdTRUE) {
-        ESP_LOGW(TAG, "Event queue full: %s", event_type_to_string(type));
+        T_LOGW(TAG, "Event queue full: %s", event_type_to_string(type));
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGV(TAG, "Published: %s", event_type_to_string(type));
+    T_LOGV(TAG, "Published: %s", event_type_to_string(type));
     return ESP_OK;
 }
 
 esp_err_t event_bus_subscribe(event_type_t type, event_callback_t callback) {
     if (!g_event_bus.initialized) {
-        ESP_LOGE(TAG, "Event bus not initialized");
+        T_LOGE(TAG, "Event bus not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (type >= _EVT_MAX || callback == NULL) {
-        ESP_LOGE(TAG, "Invalid arguments for subscribe");
+        T_LOGE(TAG, "Invalid arguments for subscribe");
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -192,11 +192,11 @@ esp_err_t event_bus_subscribe(event_type_t type, event_callback_t callback) {
     xSemaphoreGive(g_event_bus.mutex);
 
     if (!found) {
-        ESP_LOGE(TAG, "No free subscriber slot for %s", event_type_to_string(type));
+        T_LOGE(TAG, "No free subscriber slot for %s", event_type_to_string(type));
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG, "Subscribed to: %s", event_type_to_string(type));
+    T_LOGI(TAG, "Subscribed to: %s", event_type_to_string(type));
     return ESP_OK;
 }
 

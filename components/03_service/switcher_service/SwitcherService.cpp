@@ -4,20 +4,24 @@
  */
 
 #include "SwitcherService.h"
+#include "t_log.h"
+#include "event_bus.h"
 #include "AtemDriver.h"
 #include "VmixDriver.h"
 #include "ObsDriver.h"
 #include "SwitcherConfig.h"
 #include "WiFiDriver.h"
 #include "EthernetDriver.h"
-#include "t_log.h"
 #include <cstring>
 
 // ============================================================================
 // 태그
 // ============================================================================
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
 static const char* TAG = "SwitcherService";
+#pragma GCC diagnostic pop
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -51,6 +55,9 @@ SwitcherService::SwitcherService()
     , change_callback_(nullptr)
     , task_handle_(nullptr)
     , task_running_(false)
+    , tally_changed_(false)
+    , switcher_changed_(false)
+    , last_switcher_role_(SWITCHER_ROLE_PRIMARY)
 {
     combined_packed_.data = nullptr;
     combined_packed_.data_size = 0;
@@ -147,9 +154,9 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
         onSwitcherTallyChange(role);
     });
 
-    // 연결 상태 콜백 설정
+    // 연결 상태 콜백 설정 (내부 로그는 DEBUG 레벨)
     driver->setConnectionCallback([this, role](connection_state_t state) {
-        T_LOGI(TAG, "%s 연결 상태: %s", switcher_role_to_string(role),
+        T_LOGD(TAG, "%s 연결 상태: %s", switcher_role_to_string(role),
                  connection_state_to_string(state));
         if (connection_callback_) {
             connection_callback_(state);
@@ -246,7 +253,7 @@ bool SwitcherService::start() {
         "switcher_svc",           // 태스크 이름
         4096,                     // 스택 크기
         this,                     // 파라미터 (this 포인터)
-        5,                        // 우선순위 (높음: 1=lowest, 25=highest)
+        8,                        // 우선순위 (lwIP보다 높게)
         task_stack_,              // 스택 버퍼
         &task_buffer_             // 태스크 핸들
     );
@@ -257,7 +264,7 @@ bool SwitcherService::start() {
         return false;
     }
 
-    T_LOGI(TAG, "태스크 시작 (우선순위: 5, 10ms 주기)");
+    T_LOGI(TAG, "태스크 시작 (우선순위: 8, 10ms 주기)");
     return true;
 }
 
@@ -295,6 +302,10 @@ void SwitcherService::taskFunction(void* param) {
 }
 
 void SwitcherService::taskLoop() {
+    // ============================================================================
+    // 어댑터 처리
+    // ============================================================================
+
     // Primary 처리
     if (primary_.adapter) {
         // 연결 상태 확인 및 자동 재연결
@@ -362,8 +373,11 @@ packed_data_t SwitcherService::combineDualModeTally() const {
         return empty;
     }
 
-    // 전체 채널 수 계산 (Primary + Secondary offset)
-    uint8_t total_channels = primary_data.channel_count + secondary_offset_;
+    // 전체 채널 수 = min(Primary, offset) + Secondary
+    uint8_t primary_channels = (primary_data.channel_count < secondary_offset_)
+                                ? primary_data.channel_count
+                                : secondary_offset_;
+    uint8_t total_channels = primary_channels + secondary_data.channel_count;
 
     // 최대 20채널 제한
     if (total_channels > TALLY_MAX_CHANNELS) {
@@ -374,8 +388,8 @@ packed_data_t SwitcherService::combineDualModeTally() const {
     packed_data_cleanup(&combined_packed_);
     packed_data_init(&combined_packed_, total_channels);
 
-    // Primary 데이터 복사 (offset 0)
-    for (uint8_t i = 0; i < primary_data.channel_count; i++) {
+    // Primary 데이터 복사 (min(primary, offset) 만큼만)
+    for (uint8_t i = 0; i < primary_channels; i++) {
         uint8_t flags = packed_data_get_channel(&primary_data, i + 1);
         packed_data_set_channel(&combined_packed_, i + 1, flags);
     }
@@ -486,7 +500,7 @@ void SwitcherService::checkSwitcherChange(switcher_role_t role) {
                 strcat(hex_str, buf);
                 if (i < current_packed.data_size - 1) strcat(hex_str, " ");
             }
-            T_LOGI(TAG, "%s packed 변경: [%s] (%d채널, %d바이트)",
+            T_LOGD(TAG, "%s packed 변경: [%s] (%d채널, %d바이트)",
                      switcher_role_to_string(role), hex_str, current_packed.channel_count, current_packed.data_size);
         }
     }
@@ -501,18 +515,25 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
         packed_data_cleanup(&combined_packed_);
     }
 
-    // Tally 콜백 호출
-    if (tally_callback_) {
-        tally_callback_();
+    // 병합된 Tally 값 출력 (공통 해석 함수 사용)
+    packed_data_t combined = getCombinedTally();
+    if (packed_data_is_valid(&combined)) {
+        char hex_str[16];
+        packed_data_to_hex(&combined, hex_str, sizeof(hex_str));
+
+        char tally_str[64];
+        packed_data_format_tally(&combined, tally_str, sizeof(tally_str));
+
+        T_LOGI(TAG, "Combined Tally: [%s] (%d채널, %d바이트) → %s",
+                 hex_str, combined.channel_count, combined.data_size, tally_str);
+
+        // 이벤트 버스로 Tally 상태 변경 발행
+        event_bus_publish(EVT_TALLY_STATE_CHANGED, combined.data, combined.data_size);
     }
 
-    // 변경 콜백 호출
-    if (change_callback_) {
-        SwitcherInfo* info = getSwitcherInfo(role);
-        if (info && info->has_changed) {
-            info->has_changed = false;
-            change_callback_(role);
-        }
+    // 사용자 콜백 호출 (Tally 변경 알림)
+    if (tally_callback_) {
+        tally_callback_();
     }
 }
 
@@ -655,6 +676,86 @@ void switcher_service_set_switcher_change_callback(switcher_service_handle_t han
             }
         }
     );
+}
+
+// ============================================================================
+// LoRa 패킷 해석 (수신 측)
+// ============================================================================
+
+bool switcher_service_parse_lora_packet(switcher_service_handle_t handle,
+                                        const uint8_t* packet, size_t length,
+                                        packed_data_t* tally) {
+    if (!packet || !tally || length < 2) {
+        return false;
+    }
+
+    // 1단계: 헤더 분리
+    uint8_t header = packet[0];
+    uint8_t channel_count = 0;
+    switch (header) {
+        case 0xF1: channel_count = 8; break;
+        case 0xF2: channel_count = 12; break;
+        case 0xF3: channel_count = 16; break;
+        case 0xF4: channel_count = 20; break;
+        default: return false;  // 잘못된 헤더
+    }
+
+    // 데이터 길이 확인
+    uint8_t expected_data_length = (channel_count + 3) / 4;
+    if (length < 1 + expected_data_length) {
+        return false;
+    }
+
+    // 2단계: 데이터 해석
+    packed_data_init(tally, channel_count);
+    for (uint8_t i = 0; i < expected_data_length && i < tally->data_size; i++) {
+        tally->data[i] = packet[1 + i];
+    }
+
+    return true;
+}
+
+uint8_t switcher_service_get_tally_state(const packed_data_t* tally, uint8_t channel) {
+    if (!tally || channel < 1 || channel > tally->channel_count) {
+        return 0;  // OFF
+    }
+    return packed_data_get_channel(tally, channel);
+}
+
+void switcher_service_get_pgm_channels(const packed_data_t* tally,
+                                       uint8_t* pgm, uint8_t* pgm_count,
+                                       uint8_t max_count) {
+    if (!tally || !pgm || !pgm_count) {
+        if (pgm_count) *pgm_count = 0;
+        return;
+    }
+
+    uint8_t count = 0;
+    for (uint8_t i = 0; i < tally->channel_count && i < max_count; i++) {
+        uint8_t state = packed_data_get_channel(tally, i + 1);
+        if (state == 0x01 || state == 0x03) {  // PGM or BOTH
+            pgm[count++] = i + 1;
+        }
+    }
+    *pgm_count = count;
+}
+
+void switcher_service_get_pvw_channels(const packed_data_t* tally,
+                                       uint8_t* pvw, uint8_t* pvw_count,
+                                       uint8_t max_count) {
+    if (!tally || !pvw || !pvw_count) {
+        if (pvw_count) *pvw_count = 0;
+        return;
+    }
+
+    uint8_t count = 0;
+    for (uint8_t i = 0; i < tally->channel_count && i < max_count; i++) {
+        uint8_t state = packed_data_get_channel(tally, i + 1);
+        if (state == 0x02 || state == 0x03) {  // PVW or BOTH
+            pvw[count++] = i + 1;
+        }
+    }
+    *pvw_count = count;
 }
 
 } // extern "C"

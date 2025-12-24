@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -218,6 +219,30 @@ uint64_t packed_data_to_uint64(const packed_data_t* packed);
  * @param channel_count 채널 수
  */
 void packed_data_from_uint64(packed_data_t* packed, uint64_t value, uint8_t channel_count);
+
+/**
+ * @brief PackedData를 16진수 문자열로 변환
+ * @param packed PackedData 구조체 포인터
+ * @param buf 출력 버퍼
+ * @param buf_size 버퍼 크기 (최소 data_size * 2 + 1)
+ * @return buf 포인터
+ */
+char* packed_data_to_hex(const packed_data_t* packed, char* buf, size_t buf_size);
+
+/**
+ * @brief PackedData를 Tally 문자열로 포맷 (공통 해석 함수)
+ * @param packed PackedData 구조체 포인터
+ * @param buf 출력 버퍼
+ * @param buf_size 버퍼 크기 (최소 64)
+ * @return buf 포인터
+ *
+ * 출력 형식: "PGM[1,2] PVW[3]" 또는 "PGM[-] PVW[-]"
+ *
+ * TX/RX 공통으로 사용:
+ * - TX: 로그 출력용
+ * - RX: 수신 패킷 해석용
+ */
+char* packed_data_format_tally(const packed_data_t* packed, char* buf, size_t buf_size);
 
 // ============================================================================
 // SwitcherConfig 함수

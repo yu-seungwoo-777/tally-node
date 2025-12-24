@@ -1,7 +1,7 @@
 # 메인 컴포넌트
-# lora_test 또는 network_test 앱을 선택하여 사용
+# Tally TX/RX 앱 또는 이더넷 테스트 모드
 
 idf_component_register(
     SRCS "main.cpp"
-    REQUIRES lora_test network_test nvs_flash
+    REQUIRES lora_test network_test ethernet_hal nvs_flash esp_netif
 )

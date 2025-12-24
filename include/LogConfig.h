@@ -35,7 +35,7 @@ extern "C" {
  * @define T_LOG_TIMESTAMP_ENABLE 0  타임스탬프 제거
  */
 #ifndef T_LOG_TIMESTAMP_ENABLE
-#define T_LOG_TIMESTAMP_ENABLE 0
+#define T_LOG_TIMESTAMP_ENABLE 1
 #endif
 
 /**

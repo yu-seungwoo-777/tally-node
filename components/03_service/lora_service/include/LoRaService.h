@@ -15,6 +15,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "TallyTypes.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -93,6 +94,26 @@ esp_err_t lora_service_send(const uint8_t* data, size_t length);
  * @return ESP_OK 성공
  */
 esp_err_t lora_service_send_string(const char* str);
+
+/**
+ * @brief Tally 데이터 송신 (F1-F4 헤더 형식)
+ *
+ * @param tally Packed Tally 데이터
+ * @return ESP_OK 성공
+ */
+esp_err_t lora_service_send_tally(const packed_data_t* tally);
+
+// ============================================================================
+// Tally 패킷 해석 (수신)
+// ============================================================================
+
+/**
+ * @brief Tally 패킷 헤더에서 채널 수 추출
+ *
+ * @param header 패킷 헤더 (0xF1~0xF4)
+ * @return 채널 수 (0=잘못된 헤더)
+ */
+uint8_t lora_service_tally_get_channel_count(uint8_t header);
 
 /**
  * @brief 수신 콜백 설정

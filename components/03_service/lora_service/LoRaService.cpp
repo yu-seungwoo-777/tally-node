@@ -11,7 +11,7 @@
 #include "lora_driver.h"
 #include "event_bus.h"
 #include "LoRaConfig.h"
-#include "esp_log.h"
+#include "t_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -83,7 +83,7 @@ static void on_driver_receive(const uint8_t* data, size_t length)
  */
 static void tx_task(void* arg)
 {
-    ESP_LOGI(TAG, "송신 태스크 시작");
+    T_LOGI(TAG, "송신 태스크 시작");
 
     lora_tx_packet_t packet;
 
@@ -104,10 +104,10 @@ static void tx_task(void* arg)
 
             if (ret == ESP_OK) {
                 s_packets_sent++;
-                ESP_LOGV(TAG, "송신: %zu bytes", packet.length);
+                T_LOGV(TAG, "송신: %zu bytes", packet.length);
                 event_bus_publish(EVT_LORA_PACKET_SENT, &s_packets_sent, sizeof(s_packets_sent));
             } else {
-                ESP_LOGI(TAG, "송신 실패: %d", ret);
+                T_LOGI(TAG, "송신 실패: %d", ret);
             }
         }
 
@@ -115,7 +115,7 @@ static void tx_task(void* arg)
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 
-    ESP_LOGI(TAG, "송신 태스크 종료");
+    T_LOGI(TAG, "송신 태스크 종료");
     vTaskDelete(nullptr);
 }
 
@@ -128,16 +128,16 @@ extern "C" {
 esp_err_t lora_service_init(const lora_service_config_t* config)
 {
     if (s_initialized) {
-        ESP_LOGI(TAG, "이미 초기화됨");
+        T_LOGI(TAG, "이미 초기화됨");
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "LoRa Service 초기화 중...");
+    T_LOGI(TAG, "LoRa Service 초기화 중...");
 
     // 송신 큐 생성
     s_tx_queue = xQueueCreate(TX_QUEUE_SIZE, sizeof(lora_tx_packet_t));
     if (s_tx_queue == nullptr) {
-        ESP_LOGI(TAG, "송신 큐 생성 실패");
+        T_LOGI(TAG, "송신 큐 생성 실패");
         return ESP_FAIL;
     }
 
@@ -163,7 +163,7 @@ esp_err_t lora_service_init(const lora_service_config_t* config)
     // 드라이버 초기화
     esp_err_t ret = lora_driver_init(&driver_config);
     if (ret != ESP_OK) {
-        ESP_LOGI(TAG, "드라이버 초기화 실패");
+        T_LOGI(TAG, "드라이버 초기화 실패");
         vQueueDelete(s_tx_queue);
         s_tx_queue = nullptr;
         return ESP_FAIL;
@@ -173,7 +173,7 @@ esp_err_t lora_service_init(const lora_service_config_t* config)
     lora_driver_set_receive_callback(on_driver_receive);
 
     s_initialized = true;
-    ESP_LOGI(TAG, "LoRa Service 초기화 완료 (큐 크기: %d)", TX_QUEUE_SIZE);
+    T_LOGI(TAG, "LoRa Service 초기화 완료 (큐 크기: %d)", TX_QUEUE_SIZE);
 
     // 이벤트 발행
     bool running = false;
@@ -185,21 +185,21 @@ esp_err_t lora_service_init(const lora_service_config_t* config)
 esp_err_t lora_service_start(void)
 {
     if (!s_initialized) {
-        ESP_LOGI(TAG, "초기화되지 않음");
+        T_LOGI(TAG, "초기화되지 않음");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (s_running) {
-        ESP_LOGI(TAG, "이미 실행 중");
+        T_LOGI(TAG, "이미 실행 중");
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "LoRa Service 시작 중...");
+    T_LOGI(TAG, "LoRa Service 시작 중...");
 
     // 수신 모드 시작
     esp_err_t ret = lora_driver_start_receive();
     if (ret != ESP_OK) {
-        ESP_LOGI(TAG, "수신 모드 시작 실패");
+        T_LOGI(TAG, "수신 모드 시작 실패");
         return ret;
     }
 
@@ -209,18 +209,18 @@ esp_err_t lora_service_start(void)
         "lora_tx",
         4096,
         nullptr,
-        configMAX_PRIORITIES - 3,
+        6,  // 우선순위 (중간)
         &s_tx_task,
         1
     );
 
     if (task_ret != pdPASS) {
-        ESP_LOGI(TAG, "송신 태스크 생성 실패");
+        T_LOGI(TAG, "송신 태스크 생성 실패");
         return ESP_FAIL;
     }
 
     s_running = true;
-    ESP_LOGI(TAG, "LoRa Service 시작 완료");
+    T_LOGI(TAG, "LoRa Service 시작 완료");
 
     // 이벤트 발행
     bool running = true;
@@ -235,7 +235,7 @@ void lora_service_stop(void)
         return;
     }
 
-    ESP_LOGI(TAG, "LoRa Service 정지 중...");
+    T_LOGI(TAG, "LoRa Service 정지 중...");
     s_running = false;
 
     // 태스크 종료 대기
@@ -248,7 +248,7 @@ void lora_service_stop(void)
         s_tx_task = nullptr;
     }
 
-    ESP_LOGI(TAG, "LoRa Service 정지 완료");
+    T_LOGI(TAG, "LoRa Service 정지 완료");
 
     // 이벤트 발행
     bool running = false;
@@ -266,7 +266,7 @@ void lora_service_deinit(void)
 
     lora_driver_deinit();
     s_initialized = false;
-    ESP_LOGI(TAG, "LoRa Service 해제 완료");
+    T_LOGI(TAG, "LoRa Service 해제 완료");
 }
 
 esp_err_t lora_service_send(const uint8_t* data, size_t length)
@@ -276,7 +276,7 @@ esp_err_t lora_service_send(const uint8_t* data, size_t length)
     }
 
     if (length > MAX_PACKET_SIZE) {
-        ESP_LOGI(TAG, "패킷 크기 초과: %zu > %d", length, MAX_PACKET_SIZE);
+        T_LOGI(TAG, "패킷 크기 초과: %zu > %d", length, MAX_PACKET_SIZE);
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -292,7 +292,7 @@ esp_err_t lora_service_send(const uint8_t* data, size_t length)
     }
 
     s_tx_dropped++;
-    ESP_LOGI(TAG, "송신 큐 full (패킷 폐기)");
+    T_LOGI(TAG, "송신 큐 full (패킷 폐기)");
     return ESP_ERR_NO_MEM;
 }
 
@@ -304,8 +304,62 @@ esp_err_t lora_service_send_string(const char* str)
     return lora_service_send((const uint8_t*)str, strlen(str));
 }
 
-void lora_service_set_receive_callback(lora_service_receive_callback_t callback)
+// ============================================================================
+// Tally 패킷 헬퍼 함수 (F1-F4 헤더 형식)
+// ============================================================================
+
+/**
+ * @brief 채널 수에 따른 헤더 계산
+ * 0xF1 = 8채널 (2바이트)
+ * 0xF2 = 12채널 (3바이트)
+ * 0xF3 = 16채널 (4바이트)
+ * 0xF4 = 20채널 (5바이트)
+ */
+static uint8_t get_tally_header(uint8_t channel_count) {
+    if (channel_count <= 8) return 0xF1;
+    if (channel_count <= 12) return 0xF2;
+    if (channel_count <= 16) return 0xF3;
+    return 0xF4;  // 20채널
+}
+
+esp_err_t lora_service_send_tally(const packed_data_t* tally)
 {
+    if (tally == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!packed_data_is_valid(tally)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // 패킷 버퍼: [Header][Data...]
+    uint8_t packet[16];  // 헤더(1) + 최대 데이터(5) = 6바이트
+    uint8_t header = get_tally_header(tally->channel_count);
+
+    packet[0] = header;
+    for (uint8_t i = 0; i < tally->data_size && i < 15; i++) {
+        packet[1 + i] = tally->data[i];
+    }
+
+    size_t packet_size = 1 + tally->data_size;
+    return lora_service_send(packet, packet_size);
+}
+
+// ============================================================================
+// Tally 패킷 해석 (수신)
+// ============================================================================
+
+uint8_t lora_service_tally_get_channel_count(uint8_t header) {
+    switch (header) {
+        case 0xF1: return 8;
+        case 0xF2: return 12;
+        case 0xF3: return 16;
+        case 0xF4: return 20;
+        default:  return 0;  // 잘못된 헤더
+    }
+}
+
+void lora_service_set_receive_callback(lora_service_receive_callback_t callback) {
     s_user_callback = callback;
 }
 

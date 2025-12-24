@@ -4,17 +4,49 @@
  */
 
 #include "tally_tx_app.h"
+#include "t_log.h"
 #include "SwitcherService.h"
 #include "NetworkService.h"
 #include "SwitcherConfig.h"
-#include "t_log.h"
+#include "LoRaService.h"
+#include "TallyTypes.h"
+#include "LoRaConfig.h"
+#include "esp_netif.h"
+#include "esp_event.h"
 #include <cstring>
+
+// ============================================================================
+// LoRa 송신 헬퍼
+// ============================================================================
+
+/**
+ * @brief LoRa로 Tally 데이터 송신
+ */
+static void send_tally_via_lora(const packed_data_t* tally) {
+    if (!packed_data_is_valid(tally)) {
+        T_LOGW(TAG, "LoRa 송신 스킵: 잘못된 Tally 데이터");
+        return;
+    }
+
+    char hex_str[16];
+    packed_data_to_hex(tally, hex_str, sizeof(hex_str));
+
+    esp_err_t ret = lora_service_send_tally(tally);
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "LoRa 송신: [%s] (%d채널)", hex_str, tally->channel_count);
+    } else {
+        T_LOGE(TAG, "LoRa 송신 실패: [%s] -> %s", hex_str, esp_err_to_name(ret));
+    }
+}
 
 // ============================================================================
 // 태그
 // ============================================================================
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
 static const char* TAG = "tally_tx_app";
+#pragma GCC diagnostic pop
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -43,14 +75,12 @@ static struct {
     tally_tx_config_t config;
     bool running;
     bool initialized;
-    uint32_t last_send_time;
     packed_data_t last_tally;
 } s_app = {
     .service = nullptr,
     .config = TALLY_TX_DEFAULT_CONFIG,
     .running = false,
     .initialized = false,
-    .last_send_time = 0,
     .last_tally = {nullptr, 0, 0}
 };
 
@@ -59,8 +89,13 @@ static struct {
 // ============================================================================
 
 static void on_tally_change(void) {
-    // Tally 데이터 변경 시 로그 출력
-    T_LOGI(TAG, "Tally 데이터 변경 감지");
+    // Tally 데이터 변경 시 즉시 LoRa 송신
+    if (!s_app.initialized || !s_app.service) {
+        return;
+    }
+
+    packed_data_t tally = switcher_service_get_combined_tally(s_app.service);
+    send_tally_via_lora(&tally);
 }
 
 static void on_connection_change(connection_state_t state) {
@@ -82,6 +117,18 @@ bool tally_tx_app_init(const tally_tx_config_t* config) {
     }
 
     T_LOGI(TAG, "Tally 송신 앱 초기화 중...");
+
+    // 네트워크 스택 초기화 (LWIP tcpip_mbox 초기화)
+    esp_err_t ret = esp_netif_init();
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        T_LOGE(TAG, "esp_netif_init 실패: %s", esp_err_to_name(ret));
+        return false;
+    }
+    ret = esp_event_loop_create_default();
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        T_LOGE(TAG, "이벤트 루프 생성 실패: %s", esp_err_to_name(ret));
+        return false;
+    }
 
     // 1. NetworkService 초기화 (스위처 통신을 위한 네트워크)
     esp_err_t net_ret = network_service_init();
@@ -158,6 +205,22 @@ bool tally_tx_app_init(const tally_tx_config_t* config) {
     }
     T_LOGI(TAG, "SwitcherService 태스크 시작 (10ms 주기)");
 
+    // LoRa 초기화
+    lora_service_config_t lora_config = {
+        .frequency = LORA_DEFAULT_FREQ,      // LoRaConfig.h 기본 주파수
+        .spreading_factor = LORA_DEFAULT_SF, // LoRaConfig.h 기본 SF
+        .coding_rate = LORA_DEFAULT_CR,      // LoRaConfig.h 기본 CR
+        .bandwidth = LORA_DEFAULT_BW,        // LoRaConfig.h 기본 BW
+        .tx_power = LORA_DEFAULT_TX_POWER,   // LoRaConfig.h 기본 전력
+        .sync_word = LORA_DEFAULT_SYNC_WORD  // LoRaConfig.h 기본 SyncWord
+    };
+    esp_err_t lora_ret = lora_service_init(&lora_config);
+    if (lora_ret != ESP_OK) {
+        T_LOGW(TAG, "LoRa 초기화 실패: %s", esp_err_to_name(lora_ret));
+    } else {
+        T_LOGI(TAG, "LoRa 초기화 완료");
+    }
+
     s_app.initialized = true;
     T_LOGI(TAG, "Tally 송신 앱 초기화 완료");
 
@@ -195,8 +258,10 @@ void tally_tx_app_start(void) {
         return;
     }
 
+    // LoRa 시작
+    lora_service_start();
+
     s_app.running = true;
-    s_app.last_send_time = 0;
     T_LOGI(TAG, "Tally 송신 앱 시작");
 }
 
@@ -204,6 +269,9 @@ void tally_tx_app_stop(void) {
     if (!s_app.running) {
         return;
     }
+
+    // LoRa 정지
+    lora_service_stop();
 
     s_app.running = false;
     T_LOGI(TAG, "Tally 송신 앱 정지");
@@ -221,6 +289,9 @@ void tally_tx_app_deinit(void) {
         packed_data_cleanup(&s_app.last_tally);
     }
 
+    // LoRa 정리
+    lora_service_deinit();
+
     // NetworkService 정리
     network_service_deinit();
 
@@ -229,48 +300,9 @@ void tally_tx_app_deinit(void) {
 }
 
 void tally_tx_app_loop(void) {
-    if (!s_app.running || !s_app.service) {
-        return;
-    }
-
     // SwitcherService 루프 처리는 내부 태스크에서 자동 실행됨
-    // (별도 FreeRTOS 태스크로 10ms 주기 실행)
-
-    // 주기적 Tally 송신
-    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    if (now - s_app.last_send_time >= s_app.config.send_interval_ms) {
-        s_app.last_send_time = now;
-
-        // 결합된 Tally 데이터 가져오기
-        packed_data_t tally = switcher_service_get_combined_tally(s_app.service);
-
-        if (packed_data_is_valid(&tally)) {
-            // 이전 데이터 해제
-            if (s_app.last_tally.data) {
-                packed_data_cleanup(&s_app.last_tally);
-            }
-
-            // 데이터 복사 (caller가 소유한 데이터이므로)
-            packed_data_copy(&s_app.last_tally, &tally);
-
-            // LoRa 송신 (TODO: LoRaService 연동)
-            // lora_service_send_tally(&tally);
-
-            // hex 문자열 생성
-            char hex_str[64] = "";
-            for (uint8_t i = 0; i < tally.data_size && i < 8; i++) {
-                char buf[8];
-                snprintf(buf, sizeof(buf), "%02X", tally.data[i]);
-                strcat(hex_str, buf);
-                if (i < tally.data_size - 1) strcat(hex_str, " ");
-            }
-
-            T_LOGI(TAG, "Tally 송신: [%s] (%d채널, %d바이트)",
-                     hex_str, tally.channel_count, tally.data_size);
-        } else {
-            T_LOGD(TAG, "Tally 데이터 유효하지 않음 (대기 중...)");
-        }
-    }
+    // Tally 변경 시 on_tally_change() 콜백을 통해 즉시 LoRa 송신
+    (void)s_app;
 }
 
 void tally_tx_app_print_status(void) {
@@ -301,13 +333,8 @@ void tally_tx_app_print_status(void) {
              switcher_service_get_secondary_offset(s_app.service));
 
     if (s_app.last_tally.data && s_app.last_tally.data_size > 0) {
-        char hex_str[64] = "";
-        for (uint8_t i = 0; i < s_app.last_tally.data_size && i < 8; i++) {
-            char buf[8];
-            snprintf(buf, sizeof(buf), "%02X", s_app.last_tally.data[i]);
-            strcat(hex_str, buf);
-            if (i < s_app.last_tally.data_size - 1) strcat(hex_str, " ");
-        }
+        char hex_str[16];
+        packed_data_to_hex(&s_app.last_tally, hex_str, sizeof(hex_str));
         T_LOGI(TAG, "마지막 Tally: [%s] (%d채널)",
                  hex_str, s_app.last_tally.channel_count);
     }

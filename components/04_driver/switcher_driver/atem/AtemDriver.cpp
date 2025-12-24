@@ -7,6 +7,7 @@
 
 #include "AtemDriver.h"
 #include "SwitcherConfig.h"
+#include "event_bus.h"
 #include "t_log.h"
 #include <sys/socket.h>
 
@@ -728,7 +729,7 @@ void AtemDriver::handleTallyByIndex(const uint8_t* data, uint16_t length) {
         if (i < current.data_size - 1) strcat(hex_str, " ");
     }
 
-    T_LOGI(TAG, "Tally: [%s] (%d채널)", hex_str, current.channel_count);
+    T_LOGD(TAG, "Tally: [%s] (%d채널)", hex_str, current.channel_count);
 
     // Program/Preview 카메라 목록 출력
     if (!program_channels.empty() || !preview_channels.empty()) {
@@ -749,7 +750,7 @@ void AtemDriver::handleTallyByIndex(const uint8_t* data, uint16_t length) {
             strcat(preview_list, num);
         }
 
-        T_LOGI(TAG, "Tally: PGM[%s] PVW[%s]",
+        T_LOGD(TAG, "Tally: PGM[%s] PVW[%s]",
                  program_channels.empty() ? "-" : program_list,
                  preview_channels.empty() ? "-" : preview_list);
     }
@@ -812,6 +813,13 @@ void AtemDriver::setConnectionState(connection_state_t new_state) {
 
         const char* state_name = connection_state_to_string(new_state);
         T_LOGI(TAG, "[%s] 연결 상태: %s", config_.name.c_str(), state_name);
+
+        // 이벤트 버스로 상태 변경 발행
+        if (new_state == CONNECTION_STATE_READY || new_state == CONNECTION_STATE_CONNECTED) {
+            event_bus_publish(EVT_SWITCHER_CONNECTED, nullptr, 0);
+        } else if (new_state == CONNECTION_STATE_DISCONNECTED) {
+            event_bus_publish(EVT_SWITCHER_DISCONNECTED, nullptr, 0);
+        }
 
         if (connection_callback_) {
             connection_callback_(new_state);

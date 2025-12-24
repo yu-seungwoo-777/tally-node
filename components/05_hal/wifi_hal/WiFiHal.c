@@ -4,7 +4,7 @@
  */
 
 #include "WiFiHal.h"
-#include "esp_log.h"
+#include "t_log.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_netif.h"
@@ -38,35 +38,35 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                                int32_t event_id, void* event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        ESP_LOGD(TAG, "WiFi STA 시작됨");
+        T_LOGD(TAG, "WiFi STA 시작됨");
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_STOP) {
-        ESP_LOGD(TAG, "WiFi STA 정지됨");
+        T_LOGD(TAG, "WiFi STA 정지됨");
         if (s_event_group) {
             xEventGroupClearBits(s_event_group, WIFI_HAL_CONNECTED_BIT);
         }
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        ESP_LOGW(TAG, "WiFi STA 연결 해제됨");
+        T_LOGW(TAG, "WiFi STA 연결 해제됨");
         if (s_event_group) {
             xEventGroupClearBits(s_event_group, WIFI_HAL_CONNECTED_BIT);
         }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-        ESP_LOGI(TAG, "WiFi STA IP 획득: " IPSTR, IP2STR(&event->ip_info.ip));
+        T_LOGI(TAG, "WiFi STA IP 획득: " IPSTR, IP2STR(&event->ip_info.ip));
         if (s_event_group) {
             xEventGroupSetBits(s_event_group, WIFI_HAL_CONNECTED_BIT);
         }
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_START) {
-        ESP_LOGI(TAG, "WiFi AP 시작됨");
+        T_LOGI(TAG, "WiFi AP 시작됨");
         if (s_event_group) {
             xEventGroupSetBits(s_event_group, WIFI_HAL_STARTED_BIT);
         }
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STOP) {
-        ESP_LOGI(TAG, "WiFi AP 정지됨");
+        T_LOGI(TAG, "WiFi AP 정지됨");
         if (s_event_group) {
             xEventGroupClearBits(s_event_group, WIFI_HAL_STARTED_BIT);
         }
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_SCAN_DONE) {
-        ESP_LOGD(TAG, "WiFi 스캔 완료");
+        T_LOGD(TAG, "WiFi 스캔 완료");
         if (s_event_group) {
             xEventGroupSetBits(s_event_group, WIFI_HAL_SCAN_DONE_BIT);
         }
@@ -85,32 +85,44 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 esp_err_t wifi_hal_init(void)
 {
     if (s_initialized) {
-        ESP_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "이미 초기화됨");
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "WiFi HAL 초기화 중...");
+    T_LOGI(TAG, "WiFi HAL 초기화 중...");
 
     // 이벤트 그룹 생성
     s_event_group = xEventGroupCreate();
     if (!s_event_group) {
-        ESP_LOGE(TAG, "이벤트 그룹 생성 실패");
+        T_LOGE(TAG, "이벤트 그룹 생성 실패");
         return ESP_ERR_NO_MEM;
     }
 
     // 기본 WiFi 초기화
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    // NVS 비활성화 (속도 향상) - RAM에 설정 저장
+    cfg.nvs_enable = 0;
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    // 이벤트 루프 생성
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    // 이벤트 루프 생성 (이미 생성된 경우 무시)
+    esp_err_t ret = esp_event_loop_create_default();
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        T_LOGE(TAG, "이벤트 루프 생성 실패: %s", esp_err_to_name(ret));
+        return ret;
+    }
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
                                                      &wifi_event_handler, NULL));
+
+    // WiFi 슬립 모드 비활성화 (최고 성능)
+    esp_wifi_set_ps(WIFI_PS_NONE);
+
+    // 802.11bgn 프로토콜 설정 (최고 속도)
+    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
 
     s_initialized = true;
     s_state = WIFI_HAL_STATE_IDLE;
 
-    ESP_LOGI(TAG, "WiFi HAL 초기화 완료");
+    T_LOGI(TAG, "WiFi HAL 초기화 완료");
     return ESP_OK;
 }
 
@@ -120,7 +132,7 @@ esp_err_t wifi_hal_deinit(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "WiFi HAL 정리 중...");
+    T_LOGI(TAG, "WiFi HAL 정리 중...");
 
     esp_wifi_stop();
     esp_wifi_deinit();
@@ -130,7 +142,7 @@ esp_err_t wifi_hal_deinit(void)
     s_initialized = false;
     s_state = WIFI_HAL_STATE_STOPPED;
 
-    ESP_LOGI(TAG, "WiFi HAL 정리 완료");
+    T_LOGI(TAG, "WiFi HAL 정리 완료");
     return ESP_OK;
 }
 
@@ -141,28 +153,28 @@ esp_err_t wifi_hal_deinit(void)
 void* wifi_hal_create_ap_netif(void)
 {
     if (s_netif_ap) {
-        ESP_LOGW(TAG, "AP netif 이미 생성됨");
+        T_LOGW(TAG, "AP netif 이미 생성됨");
         return s_netif_ap;
     }
 
     // ESP-IDF 5.5.0: esp_netif_create_default_wifi_ap() 사용
     s_netif_ap = esp_netif_create_default_wifi_ap();
 
-    ESP_LOGI(TAG, "AP netif 생성 완료");
+    T_LOGI(TAG, "AP netif 생성 완료");
     return s_netif_ap;
 }
 
 void* wifi_hal_create_sta_netif(void)
 {
     if (s_netif_sta) {
-        ESP_LOGW(TAG, "STA netif 이미 생성됨");
+        T_LOGW(TAG, "STA netif 이미 생성됨");
         return s_netif_sta;
     }
 
     // ESP-IDF 5.5.0: esp_netif_create_default_wifi_sta() 사용
     s_netif_sta = esp_netif_create_default_wifi_sta();
 
-    ESP_LOGI(TAG, "STA netif 생성 완료");
+    T_LOGI(TAG, "STA netif 생성 완료");
     return s_netif_sta;
 }
 
@@ -186,7 +198,7 @@ esp_err_t wifi_hal_start(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "WiFi 시작 중...");
+    T_LOGI(TAG, "WiFi 시작 중...");
     esp_err_t ret = esp_wifi_start();
     if (ret == ESP_OK) {
         s_state = WIFI_HAL_STATE_STARTED;
@@ -200,7 +212,7 @@ esp_err_t wifi_hal_stop(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "WiFi 정지 중...");
+    T_LOGI(TAG, "WiFi 정지 중...");
     esp_err_t ret = esp_wifi_stop();
     if (ret == ESP_OK) {
         s_state = WIFI_HAL_STATE_STOPPED;
@@ -214,7 +226,7 @@ esp_err_t wifi_hal_connect(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "WiFi STA 연결 시도...");
+    T_LOGI(TAG, "WiFi STA 연결 시도...");
     return esp_wifi_connect();
 }
 
@@ -224,7 +236,7 @@ esp_err_t wifi_hal_disconnect(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "WiFi STA 연결 해제");
+    T_LOGI(TAG, "WiFi STA 연결 해제");
     return esp_wifi_disconnect();
 }
 
@@ -266,7 +278,7 @@ esp_err_t wifi_hal_scan_start(void)
         xEventGroupClearBits(s_event_group, WIFI_HAL_SCAN_DONE_BIT);
     }
 
-    ESP_LOGI(TAG, "WiFi 스캔 시작...");
+    T_LOGI(TAG, "WiFi 스캔 시작...");
     wifi_scan_config_t scan_config = {
         .ssid = NULL,
         .bssid = NULL,

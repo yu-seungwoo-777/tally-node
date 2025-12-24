@@ -5,7 +5,8 @@
 
 #include "EthernetHal.h"
 #include "PinConfig.h"
-#include "esp_log.h"
+#include "t_log.h"
+#include <string.h>
 #include "esp_eth.h"
 #include "esp_eth_mac.h"
 #include "esp_eth_phy.h"
@@ -58,22 +59,22 @@ static void eth_event_handler(void* arg, esp_event_base_t event_base,
 {
     if (event_base == ETH_EVENT) {
         if (event_id == ETHERNET_EVENT_START) {
-            ESP_LOGI(TAG, "Ethernet 시작됨");
+            T_LOGI(TAG, "Ethernet 시작됨");
             if (s_event_group) {
                 xEventGroupSetBits(s_event_group, ETH_HAL_STARTED_BIT);
             }
         } else if (event_id == ETHERNET_EVENT_STOP) {
-            ESP_LOGI(TAG, "Ethernet 정지됨");
+            T_LOGI(TAG, "Ethernet 정지됨");
             s_started = false;
             s_link_up = false;
             if (s_event_group) {
                 xEventGroupSetBits(s_event_group, ETH_HAL_STOPPED_BIT);
             }
         } else if (event_id == ETHERNET_EVENT_CONNECTED) {
-            ESP_LOGI(TAG, "Ethernet 링크 업");
+            T_LOGI(TAG, "Ethernet 링크 업");
             s_link_up = true;
         } else if (event_id == ETHERNET_EVENT_DISCONNECTED) {
-            ESP_LOGW(TAG, "Ethernet 링크 다운");
+            T_LOGW(TAG, "Ethernet 링크 다운");
             s_link_up = false;
         }
     }
@@ -90,7 +91,7 @@ static void ip_event_handler(void* arg, esp_event_base_t event_base,
     if (event_base == IP_EVENT) {
         if (event_id == IP_EVENT_ETH_GOT_IP) {
             ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-            ESP_LOGI(TAG, "Ethernet IP 획득: " IPSTR, IP2STR(&event->ip_info.ip));
+            T_LOGI(TAG, "Ethernet IP 획득: " IPSTR, IP2STR(&event->ip_info.ip));
             if (s_event_group) {
                 xEventGroupSetBits(s_event_group, ETH_HAL_GOT_IP_BIT);
             }
@@ -110,16 +111,16 @@ static void ip_event_handler(void* arg, esp_event_base_t event_base,
 esp_err_t ethernet_hal_init(void)
 {
     if (s_initialized) {
-        ESP_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "이미 초기화됨");
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "Ethernet HAL 초기화 중...");
+    T_LOGI(TAG, "Ethernet HAL 초기화 중...");
 
     // 이벤트 그룹 생성
     s_event_group = xEventGroupCreate();
     if (!s_event_group) {
-        ESP_LOGE(TAG, "이벤트 그룹 생성 실패");
+        T_LOGE(TAG, "이벤트 그룹 생성 실패");
         return ESP_ERR_NO_MEM;
     }
 
@@ -137,7 +138,7 @@ esp_err_t ethernet_hal_init(void)
     gpio_set_level(EORA_S3_W5500_RST, 1);
     vTaskDelay(pdMS_TO_TICKS(50));  // HIGH 안정화: 50ms
 
-    ESP_LOGI(TAG, "Ethernet HAL 초기화 완료");
+    T_LOGI(TAG, "Ethernet HAL 초기화 완료");
     s_initialized = true;
     s_state = ETHERNET_HAL_STATE_IDLE;
     return ESP_OK;
@@ -149,7 +150,7 @@ esp_err_t ethernet_hal_deinit(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "Ethernet HAL 정리 중...");
+    T_LOGI(TAG, "Ethernet HAL 정리 중...");
 
     ethernet_hal_stop();
     vEventGroupDelete(s_event_group);
@@ -158,7 +159,7 @@ esp_err_t ethernet_hal_deinit(void)
     s_initialized = false;
     s_state = ETHERNET_HAL_STATE_STOPPED;
 
-    ESP_LOGI(TAG, "Ethernet HAL 정리 완료");
+    T_LOGI(TAG, "Ethernet HAL 정리 완료");
     return ESP_OK;
 }
 
@@ -173,17 +174,25 @@ esp_err_t ethernet_hal_start(void)
     }
 
     if (s_started) {
-        ESP_LOGW(TAG, "이미 시작됨");
+        T_LOGW(TAG, "이미 시작됨");
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "Ethernet 시작 중...");
+    T_LOGI(TAG, "Ethernet 시작 중...");
 
     // netif 초기화 (ESP-IDF 5.5.0 필수)
-    esp_netif_init();
+    esp_err_t ret = esp_netif_init();
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        T_LOGE(TAG, "esp_netif_init 실패: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     // 이벤트 루프 생성 (이미 존재하면 무시)
-    esp_event_loop_create_default();
+    ret = esp_event_loop_create_default();
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        T_LOGE(TAG, "이벤트 루프 생성 실패: %s", esp_err_to_name(ret));
+        return ret;
+    }
 
     // SPI 버스 설정 (ESP-IDF 5.5.0 방식)
     spi_bus_config_t buscfg = {
@@ -196,15 +205,15 @@ esp_err_t ethernet_hal_start(void)
     };
 
     // SPI 버스 초기화
-    ESP_LOGI(TAG, "SPI 버스: MOSI=%d, MISO=%d, SCK=%d, CS=%d",
+    T_LOGI(TAG, "SPI 버스: MOSI=%d, MISO=%d, SCK=%d, CS=%d",
              EORA_S3_W5500_MOSI, EORA_S3_W5500_MISO, EORA_S3_W5500_SCK, EORA_S3_W5500_CS);
-    esp_err_t ret = spi_bus_initialize(EORA_S3_W5500_SPI_HOST, &buscfg, SPI_DMA_CH_AUTO);
+    ret = spi_bus_initialize(EORA_S3_W5500_SPI_HOST, &buscfg, SPI_DMA_CH_AUTO);
     if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
-        ESP_LOGE(TAG, "SPI 버스 초기화 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "SPI 버스 초기화 실패: %s", esp_err_to_name(ret));
         return ret;
     }
     if (ret == ESP_ERR_INVALID_STATE) {
-        ESP_LOGI(TAG, "SPI 버스 이미 초기화됨 (재사용)");
+        T_LOGI(TAG, "SPI 버스 이미 초기화됨 (재사용)");
     }
 
     // SPI 디바이스 설정 (examples/1, 2 동일)
@@ -224,7 +233,7 @@ esp_err_t ethernet_hal_start(void)
     // INT 핀이 없으면 폴링 모드 설정 필수
     if (w5500_config.int_gpio_num < 0) {
         w5500_config.poll_period_ms = 100;  // 100ms 폴링
-        ESP_LOGI(TAG, "INT 핀 미사용, 폴링 모드 활성화 (100ms)");
+        T_LOGI(TAG, "INT 핀 미사용, 폴링 모드 활성화 (100ms)");
     }
 
     // MAC 설정 (examples/1 참고)
@@ -235,14 +244,14 @@ esp_err_t ethernet_hal_start(void)
     eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
     phy_config.reset_gpio_num = -1;  // 수동 리셋 완료
 
-    ESP_LOGI(TAG, "W5500 드라이버 생성 (SPI 클럭: 20MHz)...");
+    T_LOGI(TAG, "W5500 드라이버 생성 (SPI 클럭: 20MHz)...");
 
     // MAC과 PHY 생성
     esp_eth_mac_t* mac = esp_eth_mac_new_w5500(&w5500_config, &mac_config);
     esp_eth_phy_t* phy = esp_eth_phy_new_w5500(&phy_config);
 
     if (!mac || !phy) {
-        ESP_LOGE(TAG, "W5500 MAC/PHY 드라이버 생성 실패");
+        T_LOGE(TAG, "W5500 MAC/PHY 드라이버 생성 실패");
         if (mac) free(mac);
         if (phy) free(phy);
         return ESP_FAIL;
@@ -257,25 +266,25 @@ esp_err_t ethernet_hal_start(void)
 
     ret = esp_eth_driver_install(&eth_config, &s_eth_handle);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Ethernet 드라이버 설치 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "Ethernet 드라이버 설치 실패: %s", esp_err_to_name(ret));
 
         // W5500 감지 실패 디버깅 정보
         if (ret == ESP_ERR_INVALID_VERSION) {
-            ESP_LOGE(TAG, "===== W5500 칩 버전 불일치 =====");
-            ESP_LOGE(TAG, "원인: SPI 통신 실패 (칩 ID 읽기 실패)");
-            ESP_LOGE(TAG, "");
-            ESP_LOGE(TAG, "하드웨어 체크리스트:");
-            ESP_LOGE(TAG, "  1. W5500 모듈 장착 확인");
-            ESP_LOGE(TAG, "  2. 전원 공급 확인 (3.3V)");
-            ESP_LOGE(TAG, "  3. SPI 핀 연결: MOSI=%d, MISO=%d, SCK=%d, CS=%d",
+            T_LOGE(TAG, "===== W5500 칩 버전 불일치 =====");
+            T_LOGE(TAG, "원인: SPI 통신 실패 (칩 ID 읽기 실패)");
+            T_LOGE(TAG, "");
+            T_LOGE(TAG, "하드웨어 체크리스트:");
+            T_LOGE(TAG, "  1. W5500 모듈 장착 확인");
+            T_LOGE(TAG, "  2. 전원 공급 확인 (3.3V)");
+            T_LOGE(TAG, "  3. SPI 핀 연결: MOSI=%d, MISO=%d, SCK=%d, CS=%d",
                      EORA_S3_W5500_MOSI, EORA_S3_W5500_MISO, EORA_S3_W5500_SCK, EORA_S3_W5500_CS);
-            ESP_LOGE(TAG, "  4. 제어 핀: RST=%d, INT=%d", EORA_S3_W5500_RST, EORA_S3_W5500_INT);
-            ESP_LOGE(TAG, "");
-            ESP_LOGE(TAG, "SPI 설정:");
-            ESP_LOGE(TAG, "  버스: SPI3_HOST");
-            ESP_LOGE(TAG, "  클럭: 20MHz");
-            ESP_LOGE(TAG, "  모드: 0");
-            ESP_LOGE(TAG, "================================");
+            T_LOGE(TAG, "  4. 제어 핀: RST=%d, INT=%d", EORA_S3_W5500_RST, EORA_S3_W5500_INT);
+            T_LOGE(TAG, "");
+            T_LOGE(TAG, "SPI 설정:");
+            T_LOGE(TAG, "  버스: SPI3_HOST");
+            T_LOGE(TAG, "  클럭: 20MHz");
+            T_LOGE(TAG, "  모드: 0");
+            T_LOGE(TAG, "================================");
         }
 
         return ret;
@@ -291,13 +300,13 @@ esp_err_t ethernet_hal_start(void)
     // 이벤트 핸들러 등록
     ret = esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "ETH 이벤트 핸들러 등록 실패");
+        T_LOGE(TAG, "ETH 이벤트 핸들러 등록 실패");
         return ret;
     }
 
     ret = esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &ip_event_handler, NULL);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "IP 이벤트 핸들러 등록 실패");
+        T_LOGE(TAG, "IP 이벤트 핸들러 등록 실패");
         return ret;
     }
 
@@ -309,21 +318,21 @@ esp_err_t ethernet_hal_start(void)
     void* glue = esp_eth_new_netif_glue(s_eth_handle);
     ret = esp_netif_attach(s_netif, glue);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "netif 연결 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "netif 연결 실패: %s", esp_err_to_name(ret));
         return ret;
     }
 
     // 시작
     ret = esp_eth_start(s_eth_handle);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Ethernet 시작 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "Ethernet 시작 실패: %s", esp_err_to_name(ret));
         return ret;
     }
 
     s_started = true;
     s_state = ETHERNET_HAL_STATE_STARTED;
 
-    ESP_LOGI(TAG, "Ethernet 시작 완료");
+    T_LOGI(TAG, "Ethernet 시작 완료");
     return ESP_OK;
 }
 
@@ -333,7 +342,7 @@ esp_err_t ethernet_hal_stop(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "Ethernet 정지 중...");
+    T_LOGI(TAG, "Ethernet 정지 중...");
 
     if (s_eth_handle) {
         esp_eth_stop(s_eth_handle);
@@ -351,7 +360,7 @@ esp_err_t ethernet_hal_stop(void)
     s_started = false;
     s_state = ETHERNET_HAL_STATE_STOPPED;
 
-    ESP_LOGI(TAG, "Ethernet 정지 완료");
+    T_LOGI(TAG, "Ethernet 정지 완료");
     return ESP_OK;
 }
 
@@ -375,7 +384,7 @@ esp_err_t ethernet_hal_enable_dhcp(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "DHCP 모드 활성화");
+    T_LOGI(TAG, "DHCP 모드 활성화");
 
     esp_netif_dhcp_status_t dhcp_status;
     esp_netif_dhcpc_get_status(s_netif, &dhcp_status);
@@ -393,10 +402,10 @@ esp_err_t ethernet_hal_enable_static(const char* ip, const char* netmask, const 
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "Static IP 모드 활성화");
-    ESP_LOGI(TAG, "  IP: %s", ip);
-    ESP_LOGI(TAG, "  Netmask: %s", netmask);
-    ESP_LOGI(TAG, "  Gateway: %s", gateway);
+    T_LOGI(TAG, "Static IP 모드 활성화");
+    T_LOGI(TAG, "  IP: %s", ip);
+    T_LOGI(TAG, "  Netmask: %s", netmask);
+    T_LOGI(TAG, "  Gateway: %s", gateway);
 
     // DHCP 정지
     esp_netif_dhcpc_stop(s_netif);

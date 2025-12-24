@@ -5,7 +5,8 @@
 
 #include "WiFiDriver.h"
 #include "WiFiHal.h"
-#include "esp_log.h"
+#include "event_bus.h"
+#include "t_log.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
 #include "esp_mac.h"
@@ -134,7 +135,7 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
             case WIFI_EVENT_AP_START:
-                ESP_LOGI(TAG, "WiFi AP 시작됨");
+                T_LOGI(TAG, "WiFi AP 시작됨");
                 s_ap_started = true;
 
                 if (s_netif_ap) {
@@ -150,7 +151,7 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
                 break;
 
             case WIFI_EVENT_AP_STOP:
-                ESP_LOGI(TAG, "WiFi AP 정지됨");
+                T_LOGI(TAG, "WiFi AP 정지됨");
                 s_ap_started = false;
                 s_ap_clients = 0;
                 memset(s_ap_ip, 0, sizeof(s_ap_ip));
@@ -161,7 +162,7 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
 
             case WIFI_EVENT_AP_STACONNECTED: {
                 auto* event = (wifi_event_ap_staconnected_t*) event_data;
-                ESP_LOGI(TAG, "STA 연결됨: " MACSTR, MAC2STR(event->mac));
+                T_LOGI(TAG, "STA 연결됨: " MACSTR, MAC2STR(event->mac));
                 s_ap_clients++;
                 if (s_status_callback) {
                     s_status_callback();
@@ -171,7 +172,7 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
 
             case WIFI_EVENT_AP_STADISCONNECTED: {
                 auto* event = (wifi_event_ap_stadisconnected_t*) event_data;
-                ESP_LOGI(TAG, "STA 연결 해제됨: " MACSTR, MAC2STR(event->mac));
+                T_LOGI(TAG, "STA 연결 해제됨: " MACSTR, MAC2STR(event->mac));
                 if (s_ap_clients > 0) {
                     s_ap_clients--;
                 }
@@ -182,25 +183,28 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
             }
 
             case WIFI_EVENT_STA_START:
-                ESP_LOGI(TAG, "WiFi STA 시작됨, 연결 시도...");
+                T_LOGI(TAG, "WiFi STA 시작됨, 연결 시도...");
                 s_sta_retry_count = 0;
                 esp_wifi_connect();
                 break;
 
             case WIFI_EVENT_STA_DISCONNECTED: {
                 auto* event = (wifi_event_sta_disconnected_t*) event_data;
-                ESP_LOGW(TAG, "STA 연결 해제됨: 이유=%d", event->reason);
+                T_LOGW(TAG, "STA 연결 해제됨: 이유=%d", event->reason);
                 s_sta_connected = false;
                 s_sta_rssi = 0;
                 memset(s_sta_ip, 0, sizeof(s_sta_ip));
 
+                // 이벤트 버스로 네트워크 해제 발행
+                event_bus_publish(EVT_NETWORK_DISCONNECTED, nullptr, 0);
+
                 if (s_sta_retry_count < MAX_STA_RETRY) {
                     s_sta_retry_count++;
-                    ESP_LOGI(TAG, "STA 재연결 시도 (%d/%d)...", s_sta_retry_count, MAX_STA_RETRY);
+                    T_LOGI(TAG, "STA 재연결 시도 (%d/%d)...", s_sta_retry_count, MAX_STA_RETRY);
                     vTaskDelay(pdMS_TO_TICKS(1000 * s_sta_retry_count));
                     esp_wifi_connect();
                 } else {
-                    ESP_LOGE(TAG, "STA 재연결 실패 (최대 재시도 도달)");
+                    T_LOGE(TAG, "STA 재연결 실패 (최대 재시도 도달)");
                 }
 
                 if (s_status_callback) {
@@ -210,7 +214,7 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
             }
 
             case WIFI_EVENT_SCAN_DONE:
-                ESP_LOGD(TAG, "WiFi 스캔 완료");
+                T_LOGD(TAG, "WiFi 스캔 완료");
                 break;
 
             default:
@@ -219,11 +223,14 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
     } else if (event_base == IP_EVENT) {
         if (event_id == IP_EVENT_STA_GOT_IP) {
             auto* event = (ip_event_got_ip_t*) event_data;
-            ESP_LOGI(TAG, "STA IP 획득: " IPSTR, IP2STR(&event->ip_info.ip));
+            T_LOGI(TAG, "STA IP 획득: " IPSTR, IP2STR(&event->ip_info.ip));
             s_sta_connected = true;
             s_sta_retry_count = 0;
 
             snprintf(s_sta_ip, sizeof(s_sta_ip), IPSTR, IP2STR(&event->ip_info.ip));
+
+            // 이벤트 버스로 네트워크 연결 발행
+            event_bus_publish(EVT_NETWORK_CONNECTED, s_sta_ip, sizeof(s_sta_ip));
 
             if (s_status_callback) {
                 s_status_callback();
@@ -240,11 +247,11 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
                            const char* sta_ssid, const char* sta_password)
 {
     if (s_initialized) {
-        ESP_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "이미 초기화됨");
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "WiFi Driver 초기화 중...");
+    T_LOGI(TAG, "WiFi Driver 초기화 중...");
 
     // 설정 저장
     if (ap_ssid) {
@@ -266,7 +273,7 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
     // WiFi HAL 초기화
     esp_err_t ret = wifi_hal_init();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "WiFi HAL 초기화 실패");
+        T_LOGE(TAG, "WiFi HAL 초기화 실패");
         return ret;
     }
 
@@ -288,7 +295,7 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
     if (s_ap_enabled) {
         s_netif_ap = (esp_netif_t*)wifi_hal_create_ap_netif();
         if (!s_netif_ap) {
-            ESP_LOGE(TAG, "AP netif 생성 실패");
+            T_LOGE(TAG, "AP netif 생성 실패");
             return ESP_FAIL;
         }
 
@@ -313,7 +320,7 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
     if (s_sta_enabled) {
         s_netif_sta = (esp_netif_t*)wifi_hal_create_sta_netif();
         if (!s_netif_sta) {
-            ESP_LOGE(TAG, "STA netif 생성 실패");
+            T_LOGE(TAG, "STA netif 생성 실패");
             return ESP_FAIL;
         }
 
@@ -331,16 +338,16 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
     // WiFi 시작
     ret = wifi_hal_start();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "WiFi 시작 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "WiFi 시작 실패: %s", esp_err_to_name(ret));
         return ret;
     }
 
     s_initialized = true;
 
-    ESP_LOGI(TAG, "WiFi Driver 초기화 완료");
-    ESP_LOGI(TAG, "  AP: %s (%s)", s_ap_enabled ? s_ap_ssid : "비활성화",
+    T_LOGI(TAG, "WiFi Driver 초기화 완료");
+    T_LOGI(TAG, "  AP: %s (%s)", s_ap_enabled ? s_ap_ssid : "비활성화",
              s_ap_password[0] != '\0' ? "보호됨" : "열림");
-    ESP_LOGI(TAG, "  STA: %s (%s)", s_sta_enabled ? s_sta_ssid : "비활성화",
+    T_LOGI(TAG, "  STA: %s (%s)", s_sta_enabled ? s_sta_ssid : "비활성화",
              s_sta_password[0] != '\0' ? "보호됨" : "열림");
 
     return ESP_OK;
@@ -352,7 +359,7 @@ esp_err_t WiFiDriver::deinit(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "WiFi Driver 정리 중...");
+    T_LOGI(TAG, "WiFi Driver 정리 중...");
 
     wifi_hal_stop();
     wifi_hal_deinit();
@@ -361,7 +368,7 @@ esp_err_t WiFiDriver::deinit(void)
     s_ap_started = false;
     s_sta_connected = false;
 
-    ESP_LOGI(TAG, "WiFi Driver 정리 완료");
+    T_LOGI(TAG, "WiFi Driver 정리 완료");
     return ESP_OK;
 }
 
@@ -402,7 +409,7 @@ esp_err_t WiFiDriver::scan(ScanResult* results, uint16_t max_count, uint16_t* ou
 
     esp_err_t ret = wifi_hal_scan_start();
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "스캔 시작 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "스캔 시작 실패: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -451,7 +458,7 @@ esp_err_t WiFiDriver::reconnectSTA(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "STA 재연결 시도...");
+    T_LOGI(TAG, "STA 재연결 시도...");
     s_sta_retry_count = 0;
     return wifi_hal_connect();
 }
@@ -462,7 +469,7 @@ esp_err_t WiFiDriver::disconnectSTA(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    ESP_LOGI(TAG, "STA 연결 해제");
+    T_LOGI(TAG, "STA 연결 해제");
     return wifi_hal_disconnect();
 }
 

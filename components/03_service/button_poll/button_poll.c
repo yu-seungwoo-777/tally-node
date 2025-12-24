@@ -11,7 +11,7 @@
 
 #include "button_poll.h"
 #include "PinConfig.h"
-#include "esp_log.h"
+#include "t_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
@@ -103,7 +103,7 @@ static void invoke_callback(button_action_t action)
  */
 static void button_poll_task(void* arg)
 {
-    ESP_LOGI(TAG, "버튼 폴링 태스크 시작");
+    T_LOGI(TAG, "버튼 폴링 태스크 시작");
 
     while (s_btn.running) {
         uint64_t current_time = esp_timer_get_time();
@@ -143,7 +143,7 @@ static void button_poll_task(void* arg)
 
             } else if (s_btn.state == BUTTON_STATE_WAITING_RELEASE && !current_state) {
                 // 롱 프레스 후 버튼 떼어짐
-                ESP_LOGV(TAG, "롱 프레스 해제");
+                T_LOGV(TAG, "롱 프레스 해제");
                 invoke_callback(BUTTON_ACTION_LONG_RELEASE);
                 reset_button_state();
             }
@@ -154,7 +154,7 @@ static void button_poll_task(void* arg)
             uint64_t press_duration = current_time - s_btn.press_time;
             if (press_duration >= LONG_PRESS_MS * 1000ULL) {
                 // 롱 프레스 발생
-                ESP_LOGV(TAG, "롱 프레스! (%.1f초)", LONG_PRESS_MS / 1000.0f);
+                T_LOGV(TAG, "롱 프레스! (%.1f초)", LONG_PRESS_MS / 1000.0f);
                 s_btn.long_press_fired = true;
                 s_btn.click_count = 0;
                 s_btn.state = BUTTON_STATE_WAITING_RELEASE;
@@ -168,7 +168,7 @@ static void button_poll_task(void* arg)
             uint64_t idle_time = current_time - s_btn.release_time;
             if (idle_time >= MULTI_CLICK_TIMEOUT_MS * 1000ULL) {
                 // 단일 클릭 확정
-                ESP_LOGV(TAG, "단일 클릭");
+                T_LOGV(TAG, "단일 클릭");
                 invoke_callback(BUTTON_ACTION_SINGLE);
                 reset_button_state();
             }
@@ -177,7 +177,7 @@ static void button_poll_task(void* arg)
         vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
     }
 
-    ESP_LOGI(TAG, "버튼 폴링 태스크 종료");
+    T_LOGI(TAG, "버튼 폴링 태스크 종료");
     vTaskDelete(NULL);
 }
 
@@ -189,7 +189,7 @@ esp_err_t button_poll_init(void)
 {
     // 이미 초기화됨
     if (s_btn.poll_task != NULL) {
-        ESP_LOGI(TAG, "이미 초기화됨");
+        T_LOGI(TAG, "이미 초기화됨");
         return ESP_OK;
     }
 
@@ -204,21 +204,21 @@ esp_err_t button_poll_init(void)
 
     esp_err_t ret = gpio_config(&io_conf);
     if (ret != ESP_OK) {
-        ESP_LOGI(TAG, "GPIO 설정 실패: %s", esp_err_to_name(ret));
+        T_LOGI(TAG, "GPIO 설정 실패: %s", esp_err_to_name(ret));
         return ret;
     }
 
     // 초기 상태 읽기
     reset_button_state();
 
-    ESP_LOGI(TAG, "버튼 폴링 초기화 완료 (GPIO %d)", EORA_S3_BUTTON);
+    T_LOGI(TAG, "버튼 폴링 초기화 완료 (GPIO %d)", EORA_S3_BUTTON);
     return ESP_OK;
 }
 
 esp_err_t button_poll_start(void)
 {
     if (s_btn.running) {
-        ESP_LOGI(TAG, "이미 실행 중");
+        T_LOGI(TAG, "이미 실행 중");
         return ESP_OK;
     }
 
@@ -235,12 +235,12 @@ esp_err_t button_poll_start(void)
     );
 
     if (ret != pdPASS) {
-        ESP_LOGI(TAG, "폴링 태스크 생성 실패");
+        T_LOGI(TAG, "폴링 태스크 생성 실패");
         s_btn.running = false;
         return ESP_ERR_NO_MEM;
     }
 
-    ESP_LOGI(TAG, "버튼 폴링 시작");
+    T_LOGI(TAG, "버튼 폴링 시작");
     return ESP_OK;
 }
 
@@ -262,14 +262,14 @@ void button_poll_stop(void)
         s_btn.poll_task = NULL;
     }
 
-    ESP_LOGI(TAG, "버튼 폴링 정지");
+    T_LOGI(TAG, "버튼 폴링 정지");
 }
 
 void button_poll_deinit(void)
 {
     button_poll_stop();
     s_btn.callback = NULL;
-    ESP_LOGI(TAG, "버튼 폴링 해제 완료");
+    T_LOGI(TAG, "버튼 폴링 해제 완료");
 }
 
 void button_poll_set_callback(button_callback_t callback)

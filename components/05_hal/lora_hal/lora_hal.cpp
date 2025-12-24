@@ -7,7 +7,7 @@
 
 #include "lora_hal.h"
 #include "PinConfig.h"
-#include "esp_log.h"
+#include "t_log.h"
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
 #include "esp_timer.h"
@@ -65,9 +65,9 @@ public:
 
         esp_err_t ret = spi_bus_initialize(spi_host, &buscfg, SPI_DMA_DISABLED);
         if (ret == ESP_ERR_INVALID_STATE) {
-            ESP_LOGI(TAG, "SPI 버스 이미 초기화됨");
+            T_LOGI(TAG, "SPI 버스 이미 초기화됨");
         } else if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "SPI 버스 초기화 실패: %d", ret);
+            T_LOGE(TAG, "SPI 버스 초기화 실패: %d", ret);
             return;
         }
 
@@ -81,12 +81,12 @@ public:
 
         ret = spi_bus_add_device(spi_host, &devcfg, &spi_device);
         if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "SPI 디바이스 추가 실패: %d (%s)", ret, esp_err_to_name(ret));
+            T_LOGE(TAG, "SPI 디바이스 추가 실패: %d (%s)", ret, esp_err_to_name(ret));
             return;
         }
 
         initialized = true;
-        ESP_LOGI(TAG, "LoRa HAL 초기화 완료 (spi_device=%p)", (void*)spi_device);
+        T_LOGI(TAG, "LoRa HAL 초기화 완료 (spi_device=%p)", (void*)spi_device);
     }
 
     // 초기화 상태 확인
@@ -169,7 +169,7 @@ public:
     void spiTransfer(uint8_t* out, size_t len, uint8_t* in) override {
         if (len == 0) return;
         if (spi_device == nullptr) {
-            ESP_LOGE(TAG, "SPI 디바이스가 초기화되지 않음");
+            T_LOGE(TAG, "SPI 디바이스가 초기화되지 않음");
             return;
         }
 
@@ -196,7 +196,7 @@ public:
             if (ret == ESP_OK) {
                 s_isr_service_installed = true;
             } else if (ret != ESP_ERR_INVALID_STATE) {
-                ESP_LOGE(TAG, "GPIO ISR 서비스 설치 실패: %s", esp_err_to_name(ret));
+                T_LOGE(TAG, "GPIO ISR 서비스 설치 실패: %s", esp_err_to_name(ret));
             }
         }
 
@@ -237,7 +237,7 @@ esp_err_t lora_hal_init(void)
 
     // 초기화 성공 확인
     if (!s_hal->isInitialized()) {
-        ESP_LOGE(TAG, "HAL 초기화 실패 (spi_device가 nullptr)");
+        T_LOGE(TAG, "HAL 초기화 실패 (spi_device가 nullptr)");
         return ESP_FAIL;
     }
 

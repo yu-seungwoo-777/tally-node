@@ -4,4 +4,6 @@ idf_component_register(
     REQUIRES
         lora_driver
         event_bus
+        tally_types
+        t_log
 )

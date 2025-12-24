@@ -5,7 +5,7 @@
 
 #include "ConfigService.h"
 #include "NetworkConfig.h"
-#include "esp_log.h"
+#include "t_log.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include <cstring>
@@ -65,11 +65,11 @@ bool ConfigServiceClass::s_initialized = false;
 esp_err_t ConfigServiceClass::init(void)
 {
     if (s_initialized) {
-        ESP_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "이미 초기화됨");
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "Config Service 초기화 중...");
+    T_LOGI(TAG, "Config Service 초기화 중...");
 
     // NVS 초기화
     esp_err_t ret = nvs_flash_init();
@@ -81,7 +81,7 @@ esp_err_t ConfigServiceClass::init(void)
 
     s_initialized = true;
 
-    ESP_LOGI(TAG, "Config Service 초기화 완료");
+    T_LOGI(TAG, "Config Service 초기화 완료");
     return ESP_OK;
 }
 
@@ -99,7 +99,7 @@ esp_err_t ConfigServiceClass::loadAll(config_all_t* config)
 
     esp_err_t ret = getWiFiAP(&config->wifi_ap);
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "WiFi AP 설정 로드 실패, 기본값 사용");
+        T_LOGW(TAG, "WiFi AP 설정 로드 실패, 기본값 사용");
         loadDefaults(config);
         return ret;
     }
@@ -335,7 +335,7 @@ esp_err_t ConfigServiceClass::loadDefaults(config_all_t* config)
     strncpy(config->wifi_ap.ssid, WIFI_AP_SSID, sizeof(config->wifi_ap.ssid) - 1);
     strncpy(config->wifi_ap.password, WIFI_AP_PASSWORD, sizeof(config->wifi_ap.password) - 1);
     config->wifi_ap.channel = (WIFI_AP_CHANNEL > 0) ? WIFI_AP_CHANNEL : 1;
-    config->wifi_ap.enabled = true;
+    config->wifi_ap.enabled = true;  // AP 활성화
 
     // WiFi STA 기본값 (NetworkConfig.h, AP+STA 모드)
     strncpy(config->wifi_sta.ssid, WIFI_STA_SSID, sizeof(config->wifi_sta.ssid) - 1);
@@ -349,13 +349,13 @@ esp_err_t ConfigServiceClass::loadDefaults(config_all_t* config)
     strncpy(config->ethernet.static_gateway, STATIC_GATEWAY, sizeof(config->ethernet.static_gateway) - 1);
     config->ethernet.enabled = true;
 
-    ESP_LOGI(TAG, "기본값 로드됨");
+    T_LOGI(TAG, "기본값 로드됨");
     return ESP_OK;
 }
 
 esp_err_t ConfigServiceClass::factoryReset(void)
 {
-    ESP_LOGI(TAG, "공장 초기화 수행 중...");
+    T_LOGI(TAG, "공장 초기화 수행 중...");
 
     config_all_t defaultConfig;
     loadDefaults(&defaultConfig);
