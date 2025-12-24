@@ -7,7 +7,7 @@ file(GLOB U8G2_SOURCES
 
 # U8g2 ESP-IDF HAL 소스
 file(GLOB U8G2_HAL_SOURCES
-    u8g2_hal/src/*.c
+    u8g2_hal/*.c
 )
 
 # Display HAL 소스

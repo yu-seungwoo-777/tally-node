@@ -1,16 +1,16 @@
-실제 폴더 구조와 문서를 비교하면 다음과 같은 차이가 있습니다:
+파일을 확인했습니다. 문제 사항:
 
-1. **00_common**: `t_log`, `tally_types` 컴포넌트가 추가됨
-2. **01_app**: `tally_tx_app`, `tally_rx_app` 컴포넌트가 추가됨
-3. **03_service**: `switcher_service` 컴포넌트가 추가됨
-4. **04_driver**: `switcher_driver` (하위에 atem/, obs/, vmix/ 포함) 컴포넌트가 추가됨
+1. **1-6줄**: 불필요한 텍스트가 포함되어 있음 (AI의 사고 과정이 실수로 파일에 들어감)
+2. **"## 컴포넌트 폴더 구조" 섹션**: 이미 존재하며 내용이 정확함
 
-문서를 수정합니다:
+수정이 필요합니다. 파일开头 부분의 불필요한 텍스트(1-6줄)를 제거한 수정된 전체 파일을 출력합니다.
+
+---
 
 # 아키텍처
 
-**작성일**: 2025-12-23
-**버전**: 3.3 (Tally TX/RX 앱, 스위처 드라이버 추가)
+**작성일**: 2025-12-25
+**버전**: 3.5 (문서 동기화)
 
 ---
 
@@ -54,6 +54,7 @@ ESP32-S3 (EoRa-S3) 기반 LoRa 통신 프로젝트의 5계층 아키텍처입니
 │   └─ atem: Blackmagic ATEM 프로토콜                   │
 │   └─ obs: OBS WebSocket 프로토콜                      │
 │   └─ vmix: vMix TCP 프로토콜                          │
+│ - display_driver: 디스플레이 드라이버 (C++)             │
 └─────────────────────────────────────────────────────────┘
                            │
 ┌─────────────────────────────────────────────────────────┐
@@ -61,6 +62,9 @@ ESP32-S3 (EoRa-S3) 기반 LoRa 통신 프로젝트의 5계층 아키텍처입니
 │ - lora_hal: SX1262 하드웨어 제어                        │
 │ - wifi_hal: esp_wifi 캡슐화 (C)                        │
 │ - ethernet_hal: W5500 SPI/GPIO (C)                      │
+│ - display_hal: 디스플레이 HAL (C)                       │
+│   └─ u8g2_hal: U8g2 래퍼                               │
+│   └─ u8g2_lib: U8g2 라이브러리                         │
 └─────────────────────────────────────────────────────────┘
                            │
 ┌─────────────────────────────────────────────────────────┐
@@ -74,6 +78,47 @@ ESP32-S3 (EoRa-S3) 기반 LoRa 통신 프로젝트의 5계층 아키텍처입니
 │ 프로젝트 전역 (include/)                                │
 │ - PinConfig.h: EoRa-S3 핀 맵 정의                      │
 └─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 컴포넌트 폴더 구조
+
+```
+components/
+├── 00_common/
+│   ├── event_bus/
+│   ├── t_log/
+│   └── tally_types/
+├── 01_app/
+│   ├── lora_test/
+│   ├── network_test/
+│   ├── tally_tx_app/
+│   └── tally_rx_app/
+├── 02_presentation/
+│   (비어있음)
+├── 03_service/
+│   ├── button_poll/
+│   ├── config_service/
+│   ├── lora_service/
+│   ├── network_service/
+│   └── switcher_service/
+├── 04_driver/
+│   ├── display_driver/
+│   ├── ethernet_driver/
+│   ├── lora_driver/
+│   ├── switcher_driver/
+│   │   ├── atem/
+│   │   ├── obs/
+│   │   └── vmix/
+│   └── wifi_driver/
+└── 05_hal/
+    ├── display_hal/
+    │   ├── u8g2_hal/
+    │   └── u8g2_lib/
+    ├── ethernet_hal/
+    ├── lora_hal/
+    └── wifi_hal/
 ```
 
 ---
@@ -171,6 +216,7 @@ X 잘못된 예 (건너뛰기):
 | switcher_driver/atem | Blackmagic ATEM 프로토콜 (C++) | esp_netif | ✅ |
 | switcher_driver/obs | OBS WebSocket 프로토콜 (C++) | esp_netif | ✅ |
 | switcher_driver/vmix | vMix TCP 프로토콜 (C++) | esp_netif | ✅ |
+| display_driver | 디스플레이 드라이버 (C++) | display_hal | ✅ |
 
 ### 05_hal - 하드웨어 추상화
 
@@ -179,6 +225,9 @@ X 잘못된 예 (건너뛰기):
 | lora_hal | LoRa 하드웨어 제어 (SX1262) | C | driver | ✅ |
 | wifi_hal | esp_wifi 캡슐화 | C | esp_wifi, esp_netif | ✅ |
 | ethernet_hal | W5500 SPI/GPIO (ESP-IDF 5.5.0, 동작 확인) | C | esp_eth, spi_master | ✅ |
+| display_hal | 디스플레이 HAL (SSD1306 + U8g2) | C | gpio, i2c, spi_master | ✅ |
+| display_hal/u8g2_hal | U8g2 래퍼 | C | u8g2_lib | ✅ |
+| display_hal/u8g2_lib | U8g2 라이브러리 | C | - | ✅ |
 
 ---
 
@@ -209,6 +258,13 @@ network_service (03_service)
     │
     └─→ config_service (03_service/C++)
             └─→ nvs_flash
+
+# Display
+display_driver (04_driver/C++)
+    └─→ display_hal (05_hal/C)
+            ├─→ u8g2_hal
+            │       └─→ u8g2_lib
+            └─→ gpio, i2c, spi_master
 
 # Tally System
 tally_tx_app (01_app)
@@ -272,6 +328,7 @@ include/PinConfig.h → 모든 계층에서 사용
 | 보드 | EoRa-S3 (ESP32-S3) |
 | LoRa 칩 | SX1262 |
 | 버튼 | GPIO_NUM_0 (내장 BOOT 버튼, Active Low) |
+| 디스플레이 | SSD1306 OLED (I2C) |
 
 ### 핀 맵 (include/PinConfig.h)
 
@@ -289,6 +346,8 @@ include/PinConfig.h → 모든 계층에서 사용
 | W5500 SCK | 48 | SPI3_HOST |
 | W5500 CS | 47 | Chip Select |
 | W5500 RST | 12 | Reset |
+| Display SDA | 43 | I2C SDA |
+| Display SCL | 44 | I2C SCL |
 | LED BOARD | 37 | 보드 내장 LED |
 | LED PGM | 38 | Program LED (빨간색) |
 | LED PVW | 39 | Preview LED (녹색) |

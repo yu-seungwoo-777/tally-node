@@ -94,9 +94,14 @@ for cmake_file in $(find "$COMPONENT_DIR" -name "CMakeLists.txt" -type f); do
     fi
 
     # 3.3 INCLUDE_DIRS "include" 사용 확인
-    if ! grep -q 'INCLUDE_DIRS "include"' "$cmake_file" && ! grep -q "INCLUDE_DIRS include" "$cmake_file"; then
-        echo "⚠️  $cmake_file: INCLUDE_DIRS \"include\" 없음"
-        CMAKE_WARNINGS=$((CMAKE_WARNINGS + 1))
+    #    멀티라인 INCLUDE_DIRS를 처리하기 위해 구간을 추출하여 검사
+    INCLUDE_SECTION=$(sed -n '/INCLUDE_DIRS/,/REQUIRES\|PUBLIC\|PRIVATE/p' "$cmake_file" 2>/dev/null || true)
+    if ! echo "$INCLUDE_SECTION" | grep -q '"include"' && ! echo "$INCLUDE_SECTION" | grep -q "'include'"; then
+        # include/ 폴더가 실제로 존재하는지도 확인
+        if [ -d "$COMP_DIR/include" ]; then
+            echo "⚠️  $cmake_file: include/ 폴더가 있으나 INCLUDE_DIRS에 누락"
+            CMAKE_WARNINGS=$((CMAKE_WARNINGS + 1))
+        fi
     fi
 
     # 3.4 SRCS에 지정된 파일이 실제로 존재하는지 확인
