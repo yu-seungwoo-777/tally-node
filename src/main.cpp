@@ -19,11 +19,15 @@
 // 앱 모드 선택 (0 또는 1로 설정, 하나만 1로 활성화)
 // ============================================================================
 
+#define RUN_DISPLAY_TEST    1   // 디스플레이 테스트 (OLED)
 #define RUN_ETH_TEST        0   // 이더넷 테스트 모드 (W5500만)
-#define RUN_TALLY_TX_APP    1   // Tally TX 앱 (스위처 연결 + LoRa 송신)
+#define RUN_TALLY_TX_APP    0   // Tally TX 앱 (스위처 연결 + LoRa 송신)
 #define RUN_TALLY_RX_APP    0   // Tally RX 앱 (LoRa 수신)
 
-#if RUN_ETH_TEST
+#if RUN_DISPLAY_TEST
+    #include "DisplayDriver.h"
+    #include "u8g2.h"
+#elif RUN_ETH_TEST
     #include "EthernetHal.h"
     #include "esp_netif.h"
 #elif RUN_TALLY_TX_APP
@@ -38,7 +42,9 @@ extern "C" void app_main(void)
 {
     T_LOGI(TAG, "========================================");
     T_LOGI(TAG, "EoRa-S3 Tally Node");
-#if RUN_ETH_TEST
+#if RUN_DISPLAY_TEST
+    T_LOGI(TAG, "앱: 디스플레이 테스트 (OLED)");
+#elif RUN_ETH_TEST
     T_LOGI(TAG, "앱: 이더넷 테스트 (W5500 only)");
 #elif RUN_TALLY_TX_APP
     T_LOGI(TAG, "앱: Tally TX (스위처 연결 + LoRa 송신)");
@@ -55,7 +61,47 @@ extern "C" void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-#if RUN_ETH_TEST
+#if RUN_DISPLAY_TEST
+
+    // ============================================================================
+    // 디스플레이 테스트 모드
+    // ============================================================================
+
+    T_LOGI(TAG, "");
+    T_LOGI(TAG, "===== 디스플레이 테스트 모드 =====");
+    T_LOGI(TAG, "");
+
+    // 디스플레이 드라이버 초기화
+    ret = DisplayDriver_init();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "DisplayDriver 초기화 실패: %s", esp_err_to_name(ret));
+        return;
+    }
+    T_LOGI(TAG, "DisplayDriver 초기화 완료");
+
+    // U8g2 인스턴스 가져오기
+    u8g2_t* u8g2 = DisplayDriver_getU8g2();
+
+    // 테스트: 텍스트 표시
+    T_LOGI(TAG, "텍스트 표시 테스트...");
+
+    DisplayDriver_clearBuffer();
+
+    // 타이틀 (텍스트만 안쪽 여백)
+    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+    u8g2_DrawStr(u8g2, 4, 10, "EoRa-S3 Display");
+    u8g2_DrawStr(u8g2, 4, 20, "Test Mode");
+    u8g2_DrawStr(u8g2, 4, 30, "U8g2 + SSD1306");
+
+    // 박스 그리기 (가장자리)
+    u8g2_DrawFrame(u8g2, 0, 0, 128, 64);
+
+    DisplayDriver_sendBuffer();
+
+    T_LOGI(TAG, "화면 업데이트 완료");
+    T_LOGI(TAG, "");
+
+#elif RUN_ETH_TEST
 
     // ============================================================================
     // 이더넷 테스트 모드
