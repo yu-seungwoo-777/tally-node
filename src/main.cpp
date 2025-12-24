@@ -19,12 +19,15 @@
 
 // App 선택 (하나만 활성화)
 #define RUN_LORA_TEST_APP       0   // LoRa 테스트 앱
-#define RUN_NETWORK_TEST_APP    1   // 네트워크 테스트 앱
+#define RUN_NETWORK_TEST_APP    0   // 네트워크 테스트 앱
+#define RUN_TALLY_TX_APP        1   // Tally TX 앱 (스위처 연결)
 
 #if RUN_LORA_TEST_APP
     #include "lora_test_app.h"
 #elif RUN_NETWORK_TEST_APP
     #include "network_test_app.h"
+#elif RUN_TALLY_TX_APP
+    #include "tally_tx_app.h"
 #endif
 
 static const char* TAG = "MAIN";
@@ -37,6 +40,8 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "앱: LoRa 테스트");
 #elif RUN_NETWORK_TEST_APP
     ESP_LOGI(TAG, "앱: 네트워크 테스트");
+#elif RUN_TALLY_TX_APP
+    ESP_LOGI(TAG, "앱: Tally TX (스위처 연결)");
 #endif
     ESP_LOGI(TAG, "========================================");
 
@@ -81,6 +86,18 @@ extern "C" void app_main(void)
     // 주기적으로 상태 출력
     ESP_LOGI(TAG, "5초마다 네트워크 상태 출력...");
 
+#elif RUN_TALLY_TX_APP
+
+    // Tally TX 앱 초기화 및 시작 (기본 설정 사용)
+    if (!tally_tx_app_init(nullptr)) {
+        ESP_LOGE(TAG, "앱 초기화 실패");
+        return;
+    }
+
+    tally_tx_app_start();
+
+    ESP_LOGI(TAG, "스위처 연결 대기 중...");
+
 #endif
 
     ESP_LOGI(TAG, "시스템 시작 완료");
@@ -93,6 +110,8 @@ extern "C" void app_main(void)
             network_test_app_print_status();
         }
         vTaskDelay(pdMS_TO_TICKS(5000));
+#elif RUN_TALLY_TX_APP
+        vTaskDelay(pdMS_TO_TICKS(1000));
 #else
         vTaskDelay(pdMS_TO_TICKS(1000));
 #endif
