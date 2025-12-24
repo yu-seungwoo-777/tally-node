@@ -1,0 +1,9 @@
+# PlatformIO 빌드 디렉토리
+.pio/
+
+# 예제 프로젝트
+examples/
+
+# 로컬 설정 (t_log 등 유지)
+# include/LogConfig.h
+# components/00_common/t_log/
