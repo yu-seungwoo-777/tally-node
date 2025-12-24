@@ -56,7 +56,7 @@ static const char* TAG = "tally_tx_app";
 
 const tally_tx_config_t TALLY_TX_DEFAULT_CONFIG = {
     .switcher1_ip = SWITCHER_PRIMARY_IP,
-    .switcher2_ip = nullptr,                      // Secondary 미사용
+    .switcher2_ip = SWITCHER_SECONDARY_IP,        // Secondary 기본 IP 사용
     .switcher_port = SWITCHER_PRIMARY_PORT,       // 0=기본값 사용
     .camera_limit = SWITCHER_PRIMARY_CAMERA_LIMIT,
     .dual_mode = SWITCHER_DUAL_MODE_ENABLED,

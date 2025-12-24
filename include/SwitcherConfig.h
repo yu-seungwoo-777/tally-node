@@ -107,7 +107,7 @@
 #define SWITCHER_SECONDARY_INTERFACE    1                  ///< Secondary 네트워크 인터페이스 (1=WiFi, 2=Ethernet)
 
 // 듀얼모드 기본값
-#define SWITCHER_DUAL_MODE_ENABLED       false              ///< 듀얼모드 기본값
+#define SWITCHER_DUAL_MODE_ENABLED       true              ///< 듀얼모드 기본값
 #define SWITCHER_DUAL_MODE_OFFSET        4                  ///< Secondary 오프셋 기본값 (5번 채널부터)
 
 // ============================================================================
