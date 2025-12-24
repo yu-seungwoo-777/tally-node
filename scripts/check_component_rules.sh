@@ -148,52 +148,80 @@ echo ""
 echo "[4] 감지된 컴포넌트 구조..."
 echo ""
 
-# 각 계층별 컴포넌트 출력
+# 각 계층별 컴포넌트 출력 (최대 4단계 깊이 지원)
 for layer in 00_common 01_app 02_presentation 03_service 04_driver 05_hal; do
     LAYER_PATH="$COMPONENT_DIR/$layer"
     if [ -d "$LAYER_PATH" ]; then
         echo "[$layer]"
 
-        # 2계층 깊이 컴포넌트 (예: 03_service/button_poll)
-        DEPTH2_COMPS=$(find "$LAYER_PATH" -mindepth 2 -maxdepth 2 -type d -name "include" 2>/dev/null | \
+        # include 폴더 기준으로 모든 컴포넌트 검색 (최대 4단계)
+        ALL_COMPS=$(find "$LAYER_PATH" -mindepth 2 -maxdepth 5 -type d -name "include" 2>/dev/null | \
             sed "s|$LAYER_PATH/||" | sed 's|/include||' | sort)
 
-        # 3계층 깊이 컴포넌트 (예: 04_driver/switcher_driver/atem)
-        DEPTH3_COMPS=$(find "$LAYER_PATH" -mindepth 3 -maxdepth 3 -type d -name "include" 2>/dev/null | \
-            sed "s|$LAYER_PATH/||" | sed 's|/include||' | sort)
+        if [ -n "$ALL_COMPS" ]; then
+            # Python을 사용한 정렬 (깊은 구조 지원)
+            echo "$ALL_COMPS" | python3 -c '
+import sys
 
-        # 출력을 위해 그룹핑
-        if [ -n "$DEPTH2_COMPS" ] || [ -n "$DEPTH3_COMPS" ]; then
-            # 3계층 컴포넌트의 부모 목록 추출
-            PARENTS=$(echo "$DEPTH3_COMPS" 2>/dev/null | cut -d'/' -f1 | sort | uniq)
+comps = sys.stdin.read().strip().split("\n")
+if not comps or comps[0] == "":
+    sys.exit(0)
 
-            # 2계층 컴포넌트 출력 (하위 컴포넌트가 있는 것은 제외)
-            if [ -n "$DEPTH2_COMPS" ]; then
-                echo "$DEPTH2_COMPS" | while read comp; do
-                    # 하위에 3계층 컴포넌트가 있는지 체크
-                    if echo "$PARENTS" | grep -q "^${comp}$"; then
-                        # 하위 컴포넌트가 있음 - 나중에 3계층에서 출력
-                        :
-                    else
-                        echo "  └─ $comp"
-                    fi
-                done
-            fi
+# 자신을 포함하는 경로를 추적 (하위 컴포넌트가 있는 상위 경로는 제외)
+parent_paths = set()
+for c in comps:
+    parts = c.split("/")
+    for i in range(1, len(parts)):
+        parent_paths.add("/".join(parts[:i]))
 
-            # 3계층 컴포넌트 출력 (부모별로 그룹핑)
-            if [ -n "$DEPTH3_COMPS" ]; then
-                PREV_PARENT=""
-                echo "$DEPTH3_COMPS" | while read comp_path; do
-                    PARENT=$(echo "$comp_path" | cut -d'/' -f1)
-                    CHILD=$(echo "$comp_path" | cut -d'/' -f2)
-                    # 부모가 바뀌었으면 출력
-                    if [ "$PREV_PARENT" != "$PARENT" ]; then
-                        echo "  └─ $PARENT/"
-                        PREV_PARENT="$PARENT"
-                    fi
-                    echo "    └─ $CHILD"
-                done
-            fi
+# 중간 부모 경로 추적
+last_top = ""
+last_second = ""
+
+for comp in sorted(comps):
+    parts = comp.split("/")
+    depth = len(parts)
+
+    # 하위 컴포넌트가 있는 상위 경로는 제외
+    if comp in parent_paths:
+        continue
+
+    if depth == 1:
+        # 1단계: event_bus
+        print(f"  └─ {comp}")
+    elif depth >= 2:
+        top = parts[0]
+
+        # 상위 폴더가 바뀌면 출력
+        if top != last_top:
+            print(f"  └─ {top}/")
+            last_top = top
+            last_second = ""  # 2단계 초기화
+
+        if depth == 2:
+            # 2단계: display/DisplayManager
+            print(f"    └─ {parts[1]}")
+        elif depth == 3:
+            # 3단계: display/pages/BootPage
+            second = parts[1]
+
+            if second != last_second:
+                print(f"    └─ {second}/")
+                last_second = second
+
+            print(f"      └─ {parts[2]}")
+        elif depth == 4:
+            # 4단계: a/b/c/d
+            second = parts[1]
+            third = parts[2]
+
+            if second != last_second:
+                print(f"    └─ {second}/")
+                last_second = second
+
+            print(f"      └─ {third}/")
+            print(f"        └─ {parts[3]}")
+'
         else
             echo "  (비어있음)"
         fi
