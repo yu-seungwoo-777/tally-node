@@ -68,11 +68,11 @@ esp_err_t display_test_app_start(void)
     T_LOGI(TAG, "===== 부팅 시나리오 시작 =====");
 
     const char* boot_messages[] = {
-        "LoRa 초기화 중...",
-        "네트워크 초기화 중...",
-        "설정 로드 중...",
-        "서비스 시작 중...",
-        "시스템 준비 완료"
+        "LoRa init...",
+        "Network init...",
+        "Loading config...",
+        "Starting services...",
+        "System ready"
     };
 
     for (int i = 0; i < 5; i++) {
