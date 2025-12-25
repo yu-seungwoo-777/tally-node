@@ -6,8 +6,17 @@
 #ifndef TALLY_PAGE_H
 #define TALLY_PAGE_H
 
+#include <stdint.h>
+#include <stdbool.h>
 #include "DisplayManager.h"
-#include "tally_types.h"
+
+// Tally 타입 전방 선언 (나중에 tally_types.h로 교체)
+typedef enum {
+    TALLY_STATE_OFF = 0,
+    TALLY_STATE_SAFE,   // 안전 상태
+    TALLY_STATE_PVW,
+    TALLY_STATE_PGM
+} tally_state_t;
 
 #ifdef __cplusplus
 extern "C" {

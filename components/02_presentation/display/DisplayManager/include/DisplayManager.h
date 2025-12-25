@@ -102,6 +102,22 @@ void display_manager_set_power(bool on);
  */
 u8g2_t* display_manager_get_u8g2(void);
 
+// ============================================================================
+// BootPage 편의 API (DisplayManager를 통해 BootPage 제어)
+// ============================================================================
+
+/**
+ * @brief 부팅 메시지 설정
+ * @param message 표시할 메시지
+ */
+void display_manager_boot_set_message(const char* message);
+
+/**
+ * @brief 진행률 설정
+ * @param progress 진행률 (0-100)
+ */
+void display_manager_boot_set_progress(uint8_t progress);
+
 #ifdef __cplusplus
 }
 #endif

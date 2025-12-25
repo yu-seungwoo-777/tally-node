@@ -5,6 +5,7 @@
 
 #include "DisplayManager.h"
 #include "DisplayDriver.h"
+#include "BootPage.h"
 #include "t_log.h"
 #include <string.h>
 
@@ -125,6 +126,9 @@ extern "C" bool display_manager_init(void)
     s_mgr.current_page = PAGE_NONE;
     s_mgr.previous_page = PAGE_NONE;
 
+    // BootPage 자동 등록
+    boot_page_init();
+
     s_mgr.initialized = true;
     T_LOGI(TAG, "DisplayManager 초기화 완료");
     return true;
@@ -213,7 +217,7 @@ extern "C" void display_manager_force_refresh(void)
 extern "C" void display_manager_set_power(bool on)
 {
     s_mgr.power_on = on;
-    DisplayDriver_setPowerSave(on ? 0 : 1);
+    DisplayDriver_setPower(on);
 
     if (on && s_mgr.initialized) {
         display_manager_force_refresh();
@@ -225,6 +229,20 @@ extern "C" void display_manager_set_power(bool on)
 extern "C" u8g2_t* display_manager_get_u8g2(void)
 {
     return DisplayDriver_getU8g2();
+}
+
+// ============================================================================
+// BootPage 편의 API 구현
+// ============================================================================
+
+extern "C" void display_manager_boot_set_message(const char* message)
+{
+    boot_page_set_message(message);
+}
+
+extern "C" void display_manager_boot_set_progress(uint8_t progress)
+{
+    boot_page_set_progress(progress);
 }
 
 /**

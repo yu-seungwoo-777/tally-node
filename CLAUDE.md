@@ -114,12 +114,45 @@ component_name/
 
 ### CMakeLists.txt 패턴
 
+#### 레이어 CMakeLists.txt
+
+모든 레이어 폴더(`00_common`, `01_app`, ...)의 CMakeLists.txt는 **빈 파일** 또는 **주석만**:
+
+```cmake
+# 01_app Layer CMakeLists.txt
+```
+
+**이유**: 레이어 폴더는 그룹핑용이며, 실제 컴포넌트는 하위 폴더에 있음
+
+#### 컴포넌트 CMakeLists.txt
+
 ```cmake
 idf_component_register(
     SRCS "file.c"                 # 루트에 있는 소스
     INCLUDE_DIRS "include"        # 헤더 폴더
     REQUIRES other_component      # 의존 컴포넌트
 )
+```
+
+#### 메타 컴포넌트 (하위 폴더에 컴포넌트를 가진 경우)
+
+```cmake
+# 메타 컴포넌트 예: switcher_driver, display
+idf_component_register(
+    SRCS ""          # 소스 없음
+    INCLUDE_DIRS ""  # 헤더 없음
+)
+```
+
+**예시 구조:**
+```
+04_driver/
+├── CMakeLists.txt         # (빈 파일)
+├── switcher_driver/
+│   ├── CMakeLists.txt     # (메타 컴포넌트)
+│   ├── atem/
+│   ├── obs/
+│   └── vmix/
 ```
 
 ---

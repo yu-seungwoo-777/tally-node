@@ -4,6 +4,7 @@
  */
 
 #include "BootPage.h"
+#include "DisplayManager.h"
 #include "t_log.h"
 #include <string.h>
 #include <stdio.h>
@@ -35,42 +36,77 @@ static void page_init(void)
 }
 
 /**
- * @brief 렌더링
+ * @brief 프로페셔널 박스 그리기 (examples/1 참고)
+ */
+static void draw_professional_box(u8g2_t* u8g2)
+{
+    // 프로페셔널 박스 (가운데 정렬)
+    const int box_width = 124;  // 너비
+    const int box_height = 34;  // 2줄 텍스트를 위한 높이
+    const int box_x = (128 - box_width) / 2;  // 가운데 정렬
+    const int box_y = 2;
+
+    // 박스 그리기 (두꺼운 테두리, +2 간격)
+    u8g2_DrawFrame(u8g2, box_x, box_y, box_width, box_height);
+    u8g2_DrawFrame(u8g2, box_x + 2, box_y + 2, box_width - 4, box_height - 4);
+
+    // 타이틀과 버전 (1줄, 중앙 정렬)
+    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+    const char* title_version = "TALLY-NODE v2.0.0";
+    int title_width = u8g2_GetStrWidth(u8g2, title_version);
+    int title_x = box_x + (box_width - title_width) / 2;
+    u8g2_DrawStr(u8g2, title_x, box_y + 14, title_version);
+
+    // 모드 정보 (2줄, 중앙 정렬)
+    char mode_str[32];
+#ifdef DEVICE_MODE_TX
+    snprintf(mode_str, sizeof(mode_str), "MODE: TX (868MHz)");
+#else
+    snprintf(mode_str, sizeof(mode_str), "MODE: RX (868MHz)");
+#endif
+    int mode_width = u8g2_GetStrWidth(u8g2, mode_str);
+    int mode_x = box_x + (box_width - mode_width) / 2;
+    u8g2_DrawStr(u8g2, mode_x, box_y + 26, mode_str);
+}
+
+/**
+ * @brief 렌더링 (examples/1 BootScreen 참고)
  */
 static void page_render(u8g2_t* u8g2)
 {
     // 화면 지우기는 DisplayManager에서 수행됨
 
-    // 타이틀
-    u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
-    u8g2_DrawStr(u8g2, 4, 24, "EoRa-S3");
+    // 프로페셔널 박스
+    draw_professional_box(u8g2);
 
-    // 메시지
+    // 진행 문구와 퍼센트 표시 (1줄, 중앙 정렬)
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-    u8g2_DrawStr(u8g2, 4, 38, s_boot_page.message);
+    char percent_text[12];
+    snprintf(percent_text, sizeof(percent_text), "%d%%", s_boot_page.progress);
 
-    // 진행률 바
-    const int bar_x = 4;
-    const int bar_y = 48;
-    const int bar_width = 120;
-    const int bar_height = 8;
+    // 문구와 퍼센트 결합
+    char combined_text[80];
+    snprintf(combined_text, sizeof(combined_text), "%s %s", s_boot_page.message, percent_text);
+    int msg_width = u8g2_GetStrWidth(u8g2, combined_text);
+    int msg_x = (128 - msg_width) / 2;
+    u8g2_DrawStr(u8g2, msg_x, 50, combined_text);
 
-    // 배경 (빈 바)
+    // 프로그레스바 (전체 너비)
+    const int bar_width = 112;  // 전체 너비에서 좌우 여백 8px씩
+    const int bar_height = 6;
+    const int bar_x = 8;
+    const int bar_y = 56;
+
+    // 프로그레스바 배경
     u8g2_DrawFrame(u8g2, bar_x, bar_y, bar_width, bar_height);
 
-    // 진행률
+    // 프로그레스바 채우기
     if (s_boot_page.progress > 0) {
         int fill_width = (bar_width * s_boot_page.progress) / 100;
-        u8g2_DrawBox(u8g2, bar_x, bar_y, fill_width, bar_height);
+        if (fill_width > 0) {
+            u8g2_DrawBox(u8g2, bar_x, bar_y, fill_width, bar_height);
+        }
     }
-
-    // 진행률 텍스트
-    char progress_str[8];
-    snprintf(progress_str, sizeof(progress_str), "%d%%", s_boot_page.progress);
-    u8g2_DrawStr(u8g2, 4, 62, progress_str);
-
-    // 버전 정보 (오른쪽 하단)
-    u8g2_DrawStr(u8g2, 80, 62, "v1.0");
 }
 
 /**

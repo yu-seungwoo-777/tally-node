@@ -25,8 +25,7 @@
 #define RUN_TALLY_RX_APP    0   // Tally RX 앱 (LoRa 수신)
 
 #if RUN_DISPLAY_TEST
-    #include "DisplayDriver.h"
-    #include "u8g2.h"
+    #include "display_test_app.h"
 #elif RUN_ETH_TEST
     #include "EthernetHal.h"
     #include "esp_netif.h"
@@ -64,42 +63,25 @@ extern "C" void app_main(void)
 #if RUN_DISPLAY_TEST
 
     // ============================================================================
-    // 디스플레이 테스트 모드
+    // 디스플레이 테스트 앱
     // ============================================================================
 
     T_LOGI(TAG, "");
-    T_LOGI(TAG, "===== 디스플레이 테스트 모드 =====");
+    T_LOGI(TAG, "===== 디스플레이 테스트 앱 =====");
     T_LOGI(TAG, "");
 
-    // 디스플레이 드라이버 초기화
-    ret = DisplayDriver_init();
+    // 디스플레이 테스트 앱 초기화 및 시작
+    ret = display_test_app_init();
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "DisplayDriver 초기화 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "디스플레이 테스트 앱 초기화 실패: %s", esp_err_to_name(ret));
         return;
     }
-    T_LOGI(TAG, "DisplayDriver 초기화 완료");
 
-    // U8g2 인스턴스 가져오기
-    u8g2_t* u8g2 = DisplayDriver_getU8g2();
-
-    // 테스트: 텍스트 표시
-    T_LOGI(TAG, "텍스트 표시 테스트...");
-
-    DisplayDriver_clearBuffer();
-
-    // 타이틀 (텍스트만 안쪽 여백)
-    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-    u8g2_DrawStr(u8g2, 4, 10, "EoRa-S3 Display");
-    u8g2_DrawStr(u8g2, 4, 20, "Test Mode");
-    u8g2_DrawStr(u8g2, 4, 30, "U8g2 + SSD1306");
-
-    // 박스 그리기 (가장자리)
-    u8g2_DrawFrame(u8g2, 0, 0, 128, 64);
-
-    DisplayDriver_sendBuffer();
-
-    T_LOGI(TAG, "화면 업데이트 완료");
-    T_LOGI(TAG, "");
+    ret = display_test_app_start();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "디스플레이 테스트 앱 시작 실패: %s", esp_err_to_name(ret));
+        return;
+    }
 
 #elif RUN_ETH_TEST
 

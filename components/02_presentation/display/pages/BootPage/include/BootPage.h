@@ -6,7 +6,8 @@
 #ifndef BOOT_PAGE_H
 #define BOOT_PAGE_H
 
-#include "DisplayManager.h"
+#include <stdint.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
