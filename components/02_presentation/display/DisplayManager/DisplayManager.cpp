@@ -211,7 +211,8 @@ extern "C" void display_manager_force_refresh(void)
         return;
     }
 
-    s_mgr.last_refresh_ms = 0;  // 다음 루프에서 강제 갱신
+    // 즉시 렌더링
+    render_current_page();
 }
 
 extern "C" void display_manager_set_power(bool on)
