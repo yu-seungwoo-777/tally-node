@@ -7,6 +7,8 @@
 #include "NetworkConfig.h"
 #include "LoRaConfig.h"
 #include "battery_driver.h"
+#include "TemperatureDriver.h"
+#include "event_bus.h"
 #include "t_log.h"
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -53,6 +55,7 @@ public:
     static esp_err_t setDevice(const config_device_t* config);
     static esp_err_t setBrightness(uint8_t brightness);
     static esp_err_t setCameraId(uint8_t camera_id);
+    static uint8_t getCameraId(void);
     static esp_err_t setRf(float frequency, uint8_t sync_word);
 
     // System 상태 (추가)
@@ -103,6 +106,9 @@ esp_err_t ConfigServiceClass::init(void)
 
     // 배터리 드라이버 초기화
     battery_driver_init();
+
+    // 온도 센서 드라이버 초기화
+    TemperatureDriver_init();
 
     // 배터리 읽기
     s_system_state.battery = updateBattery();
@@ -394,7 +400,7 @@ esp_err_t ConfigServiceClass::loadDefaults(config_all_t* config)
     config->ethernet.enabled = true;
 
     // Device 기본값 (LoRaConfig.h)
-    config->device.brightness = 50;       // 기본 밝기 50%
+    config->device.brightness = 128;      // 기본 밝기 50% (128/255)
     config->device.camera_id = 1;        // 기본 카메라 ID
     config->device.rf.frequency = LORA_DEFAULT_FREQ;
     config->device.rf.sync_word = LORA_DEFAULT_SYNC_WORD;
@@ -426,7 +432,7 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config)
     memset(config, 0, sizeof(config_device_t));
 
     // 기본값 설정
-    config->brightness = 50;
+    config->brightness = 128;  // 50%
     config->camera_id = 1;
     config->rf.frequency = LORA_DEFAULT_FREQ;
     config->rf.sync_word = LORA_DEFAULT_SYNC_WORD;
@@ -438,7 +444,7 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config)
         return ESP_OK;
     }
 
-    uint8_t brightness = 50;
+    uint8_t brightness = 128;  // 기본값 50%
     if (nvs_get_u8(handle, "dev_brightness", &brightness) == ESP_OK) {
         config->brightness = brightness;
     }
@@ -495,7 +501,16 @@ esp_err_t ConfigServiceClass::setBrightness(uint8_t brightness)
     }
 
     dev.brightness = brightness;
-    return setDevice(&dev);
+    ret = setDevice(&dev);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // 밝기 변경 이벤트 발행 (0-255 범위)
+    event_bus_publish(EVT_BRIGHTNESS_CHANGED, &brightness, sizeof(brightness));
+    T_LOGI(TAG, "밝기 변경: %d, 이벤트 발행", brightness);
+
+    return ESP_OK;
 }
 
 esp_err_t ConfigServiceClass::setCameraId(uint8_t camera_id)
@@ -508,6 +523,16 @@ esp_err_t ConfigServiceClass::setCameraId(uint8_t camera_id)
 
     dev.camera_id = camera_id;
     return setDevice(&dev);
+}
+
+uint8_t ConfigServiceClass::getCameraId(void)
+{
+    config_device_t dev;
+    esp_err_t ret = getDevice(&dev);
+    if (ret != ESP_OK) {
+        return 1;  // 기본값
+    }
+    return dev.camera_id;
 }
 
 esp_err_t ConfigServiceClass::setRf(float frequency, uint8_t sync_word)
@@ -675,6 +700,17 @@ esp_err_t config_service_set_camera_id(uint8_t camera_id)
     return ConfigServiceClass::setCameraId(camera_id);
 }
 
+uint8_t config_service_get_camera_id(void)
+{
+    return ConfigServiceClass::getCameraId();
+}
+
+uint8_t config_service_get_max_camera_num(void)
+{
+    // 기본 최대 카메라 번호 (추후 NVS에서 로드 가능)
+    return 20;
+}
+
 esp_err_t config_service_set_rf(float frequency, uint8_t sync_word)
 {
     return ConfigServiceClass::setRf(frequency, sync_word);
@@ -702,6 +738,20 @@ void config_service_set_battery(uint8_t battery)
 uint8_t config_service_update_battery(void)
 {
     return ConfigServiceClass::updateBattery();
+}
+
+float config_service_get_voltage(void)
+{
+    float voltage = 3.7f;  // 기본값
+    battery_driver_get_voltage(&voltage);
+    return voltage;
+}
+
+float config_service_get_temperature(void)
+{
+    float temp = 25.0f;  // 기본값
+    TemperatureDriver_getCelsius(&temp);
+    return temp;
 }
 
 void config_service_set_stopped(bool stopped)

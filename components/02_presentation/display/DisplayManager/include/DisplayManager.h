@@ -126,6 +126,103 @@ void display_manager_boot_set_progress(uint8_t progress);
  */
 void display_manager_boot_complete(void);
 
+// ============================================================================
+// 페이지 편의 API (DisplayManager를 통해 TxPage/RxPage 제어)
+// ============================================================================
+
+/**
+ * @brief 현재 서브 페이지 인덱스 가져오기
+ * @return 현재 서브 페이지 번호 (TX: 1-5, RX: 1-2)
+ */
+uint8_t display_manager_get_page_index(void);
+
+/**
+ * @brief 서브 페이지 전환
+ * @param index 서브 페이지 번호 (TX: 1-5, RX: 1-2)
+ */
+void display_manager_switch_page(uint8_t index);
+
+// ============================================================================
+// RxPage 전용 API (DEVICE_MODE_RX일 때만 사용)
+// ============================================================================
+
+#ifdef DEVICE_MODE_RX
+
+/**
+ * @brief RxPage 카메라 ID 설정
+ * @param cam_id 카메라 ID (1-20)
+ */
+void display_manager_set_cam_id(uint8_t cam_id);
+
+/**
+ * @brief RxPage 상태 가져오기 (0=Normal, 1=CameraID)
+ * @return 현재 페이지 상태
+ */
+int display_manager_get_state(void);
+
+/**
+ * @brief RxPage 카메라 ID 팝업 표시
+ * @param max_camera_num 최대 카메라 번호
+ */
+void display_manager_show_camera_id_popup(uint8_t max_camera_num);
+
+/**
+ * @brief RxPage 카메라 ID 팝업 숨기기
+ */
+void display_manager_hide_camera_id_popup(void);
+
+/**
+ * @brief RxPage 카메라 ID 변경 중 상태 설정
+ * @param changing true = 변경 중, false = 정지
+ */
+void display_manager_set_camera_id_changing(bool changing);
+
+/**
+ * @brief RxPage 카메라 ID 변경 중인지 확인
+ * @return true = 변경 중, false = 정지
+ */
+bool display_manager_is_camera_id_changing(void);
+
+/**
+ * @brief RxPage 표시중인 카메라 ID 가져오기
+ * @return 현재 표시중인 카메라 ID
+ */
+uint8_t display_manager_get_display_camera_id(void);
+
+/**
+ * @brief RxPage 카메라 ID 순환
+ * @param max_camera_num 최대 카메라 번호
+ * @return 새로운 카메라 ID
+ */
+uint8_t display_manager_cycle_camera_id(uint8_t max_camera_num);
+
+#endif // DEVICE_MODE_RX
+
+// ============================================================================
+// System 데이터 업데이트 API
+// ============================================================================
+
+/**
+ * @brief System 데이터 업데이트
+ * @param device_id 디바이스 ID (4자리 hex 문자열)
+ * @param battery 배터리 % (0-100)
+ * @param voltage 전압 (V)
+ * @param temperature 온도 (°C)
+ */
+void display_manager_update_system(const char* device_id, uint8_t battery,
+                                   float voltage, float temperature);
+
+// ============================================================================
+// 디스플레이 갱신
+// ============================================================================
+
+/**
+ * @brief 디스플레이 갱신 루프 (주기적으로 호출해야 함)
+ *
+ * @note 이 함수는 메인 루프나 타이머에서 주기적으로 호출되어야 함
+ */
+void display_manager_update(void);
+
 #ifdef __cplusplus
 }
 #endif

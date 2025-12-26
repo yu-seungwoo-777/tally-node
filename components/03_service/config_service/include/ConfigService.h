@@ -59,7 +59,7 @@ typedef struct {
 
 // Device 설정 (NVS 저장)
 typedef struct {
-    uint8_t brightness;      // 0-100
+    uint8_t brightness;      // 0-255
     uint8_t camera_id;       // 카메라 ID
     config_rf_t rf;          // RF 설정
 } config_device_t;
@@ -154,6 +154,17 @@ esp_err_t config_service_set_brightness(uint8_t brightness);
 esp_err_t config_service_set_camera_id(uint8_t camera_id);
 
 /**
+ * @brief 카메라 ID 가져오기
+ */
+uint8_t config_service_get_camera_id(void);
+
+/**
+ * @brief 최대 카메라 번호 가져오기
+ * @return 최대 카메라 번호 (기본값: 20)
+ */
+uint8_t config_service_get_max_camera_num(void);
+
+/**
  * @brief RF 설정 (주파수 + Sync Word)
  */
 esp_err_t config_service_set_rf(float frequency, uint8_t sync_word);
@@ -181,6 +192,18 @@ void config_service_set_battery(uint8_t battery);
  * @brief Battery ADC로 읽기 (백분율 반환)
  */
 uint8_t config_service_update_battery(void);
+
+/**
+ * @brief 전압 가져오기 (V)
+ * @return 전압 (V)
+ */
+float config_service_get_voltage(void);
+
+/**
+ * @brief 온도 가져오기 (°C)
+ * @return 온도 (°C)
+ */
+float config_service_get_temperature(void);
 
 /**
  * @brief Stopped 상태 설정

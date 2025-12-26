@@ -10,17 +10,27 @@
 #include "u8g2.h"
 #include "u8g2_esp32_hal.h"
 #include "t_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 static const char* TAG = "DISP_DRV";
 
 // U8g2 인스턴스 (전역 변수로 u8g2_fonts.c에서 접근 가능)
 static u8g2_t s_u8g2;
 static bool s_initialized = false;
+static SemaphoreHandle_t s_mutex = NULL;
 
 esp_err_t DisplayDriver_init(void)
 {
     if (s_initialized) {
         return ESP_OK;
+    }
+
+    // 뮤텍스 생성
+    s_mutex = xSemaphoreCreateMutex();
+    if (s_mutex == NULL) {
+        T_LOGE(TAG, "뮤텍스 생성 실패");
+        return ESP_FAIL;
     }
 
     // I2C 핀 설정
@@ -60,8 +70,11 @@ esp_err_t DisplayDriver_init(void)
 void DisplayDriver_setPower(bool on)
 {
     if (s_initialized) {
-        u8g2_SetPowerSave(&s_u8g2, on ? 0 : 1);
-        display_hal_set_power(on);
+        if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            u8g2_SetPowerSave(&s_u8g2, on ? 0 : 1);
+            display_hal_set_power(on);
+            xSemaphoreGive(s_mutex);
+        }
     }
 }
 
@@ -75,7 +88,37 @@ void DisplayDriver_clearBuffer(void)
 void DisplayDriver_sendBuffer(void)
 {
     if (s_initialized) {
+        if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            u8g2_SendBuffer(&s_u8g2);
+            xSemaphoreGive(s_mutex);
+        }
+    }
+}
+
+void DisplayDriver_sendBufferSync(void)
+{
+    // 내부용: 이미 뮤텍스 획득 상태에서 호출
+    if (s_initialized) {
         u8g2_SendBuffer(&s_u8g2);
+    }
+}
+
+esp_err_t DisplayDriver_takeMutex(uint32_t timeout_ms)
+{
+    if (!s_initialized || s_mutex == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(timeout_ms)) == pdTRUE) {
+        return ESP_OK;
+    }
+    return ESP_ERR_TIMEOUT;
+}
+
+void DisplayDriver_giveMutex(void)
+{
+    if (s_mutex != NULL) {
+        xSemaphoreGive(s_mutex);
     }
 }
 

@@ -6,6 +6,8 @@
 #include "DisplayManager.h"
 #include "DisplayDriver.h"
 #include "BootPage.h"
+#include "TxPage.h"
+#include "RxPage.h"
 #include "t_log.h"
 #include <string.h>
 
@@ -59,6 +61,12 @@ static void render_current_page(void)
         return;
     }
 
+    // 뮤텍스 획득 (전체 렌더링 사이클 보호)
+    if (DisplayDriver_takeMutex(100) != ESP_OK) {
+        T_LOGW(TAG, "뮤텍스 획득 실패 - 렌더링 스킵");
+        return;
+    }
+
     // 등록된 페이지에서 찾기
     for (int i = 0; i < s_mgr.page_count; i++) {
         if (s_mgr.pages[i]->id == s_mgr.current_page) {
@@ -66,11 +74,13 @@ static void render_current_page(void)
             if (u8g2 != nullptr) {
                 DisplayDriver_clearBuffer();
                 s_mgr.pages[i]->render(u8g2);
-                DisplayDriver_sendBuffer();
+                DisplayDriver_sendBufferSync();  // 이미 뮤텍스 보유 중
             }
             break;
         }
     }
+
+    DisplayDriver_giveMutex();
 }
 
 /**
@@ -128,6 +138,13 @@ extern "C" bool display_manager_init(void)
 
     // BootPage 자동 등록
     boot_page_init();
+
+    // 빌드 환경에 따라 TxPage 또는 RxPage 등록
+#ifdef DEVICE_MODE_TX
+    tx_page_init();
+#elif defined(DEVICE_MODE_RX)
+    rx_page_init();
+#endif
 
     s_mgr.initialized = true;
     T_LOGI(TAG, "DisplayManager 초기화 완료");
@@ -194,7 +211,7 @@ extern "C" void display_manager_set_page(display_page_t page_id)
     s_mgr.previous_page = s_mgr.current_page;
     s_mgr.current_page = page_id;
 
-    T_LOGI(TAG, "페이지 전환: %d -> %d", s_mgr.previous_page, s_mgr.current_page);
+    T_LOGD(TAG, "페이지 전환: %d -> %d", s_mgr.previous_page, s_mgr.current_page);
 
     handle_page_transition();
     display_manager_force_refresh();
@@ -296,6 +313,113 @@ extern "C" void display_manager_boot_complete(void)
 {
     display_page_t default_page = get_default_page();
 
-    T_LOGI(TAG, "부팅 완료 -> 페이지 전환: %d", default_page);
+    T_LOGD(TAG, "부팅 완료 -> 페이지 전환: %d", default_page);
     display_manager_set_page(default_page);
 }
+
+// ============================================================================
+// 페이지 편의 API 구현 (TX/RX 공통)
+// ============================================================================
+
+// 페이지별 함수 매크로 (빌드 모드에 따라 TxPage 또는 RxPage 함수 호출)
+#ifdef DEVICE_MODE_TX
+    #define PAGE_GET_CURRENT()   tx_page_get_current_page()
+    #define PAGE_SWITCH(idx)      tx_page_switch_page(idx)
+#elif defined(DEVICE_MODE_RX)
+    #define PAGE_GET_CURRENT()   rx_page_get_current_page()
+    #define PAGE_SWITCH(idx)      rx_page_switch_page(idx)
+#endif
+
+extern "C" uint8_t display_manager_get_page_index(void)
+{
+    return PAGE_GET_CURRENT();
+}
+
+extern "C" void display_manager_switch_page(uint8_t index)
+{
+    PAGE_SWITCH(index);
+}
+
+// 매크로 정의 해제
+#undef PAGE_GET_CURRENT
+#undef PAGE_SWITCH
+
+// ============================================================================
+// RxPage 전용 API 구현 (DEVICE_MODE_RX일 때만)
+// ============================================================================
+
+#ifdef DEVICE_MODE_RX
+
+extern "C" void display_manager_set_cam_id(uint8_t cam_id)
+{
+    rx_page_set_cam_id(cam_id);
+}
+
+extern "C" int display_manager_get_state(void)
+{
+    return (int)rx_page_get_state();
+}
+
+extern "C" void display_manager_show_camera_id_popup(uint8_t max_camera_num)
+{
+    rx_page_show_camera_id_popup_with_max(max_camera_num);
+}
+
+extern "C" void display_manager_hide_camera_id_popup(void)
+{
+    rx_page_hide_camera_id_popup();
+}
+
+extern "C" void display_manager_set_camera_id_changing(bool changing)
+{
+    rx_page_set_camera_id_changing(changing);
+}
+
+extern "C" bool display_manager_is_camera_id_changing(void)
+{
+    return rx_page_is_camera_id_changing();
+}
+
+extern "C" uint8_t display_manager_get_display_camera_id(void)
+{
+    return rx_page_get_display_camera_id();
+}
+
+extern "C" uint8_t display_manager_cycle_camera_id(uint8_t max_camera_num)
+{
+    return rx_page_cycle_camera_id(max_camera_num);
+}
+
+#endif // DEVICE_MODE_RX
+
+// ============================================================================
+// System 데이터 업데이트 API
+// ============================================================================
+
+// 페이지별 함수 매크로 (빌드 모드에 따라 TxPage 또는 RxPage 함수 호출)
+#ifdef DEVICE_MODE_TX
+    #define PAGE_SET_DEVICE_ID(id)    tx_page_set_device_id(id)
+    #define PAGE_SET_BATTERY(pct)     tx_page_set_battery(pct)
+    #define PAGE_SET_VOLTAGE(vol)     tx_page_set_voltage(vol)
+    #define PAGE_SET_TEMPERATURE(t)   tx_page_set_temperature(t)
+#elif defined(DEVICE_MODE_RX)
+    #define PAGE_SET_DEVICE_ID(id)    rx_page_set_device_id(id)
+    #define PAGE_SET_BATTERY(pct)     rx_page_set_battery(pct)
+    #define PAGE_SET_VOLTAGE(vol)     rx_page_set_voltage(vol)
+    #define PAGE_SET_TEMPERATURE(t)   rx_page_set_temperature(t)
+#endif
+
+extern "C" void display_manager_update_system(const char* device_id, uint8_t battery,
+                                               float voltage, float temperature)
+{
+    PAGE_SET_DEVICE_ID(device_id);
+    PAGE_SET_BATTERY(battery);
+    PAGE_SET_VOLTAGE(voltage);
+    PAGE_SET_TEMPERATURE(temperature);
+}
+
+// 매크로 정의 해제
+#undef PAGE_SET_DEVICE_ID
+#undef PAGE_SET_BATTERY
+#undef PAGE_SET_VOLTAGE
+#undef PAGE_SET_TEMPERATURE

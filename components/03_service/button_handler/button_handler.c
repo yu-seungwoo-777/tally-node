@@ -3,14 +3,12 @@
  * @brief 버튼 핸들러 구현
  *
  * button_poll 서비스의 이벤트를 받아서
- * DisplayManager의 페이지 전환 기능을 수행합니다.
+ * event_bus로 이벤트를 발행합니다.
  */
 
 #include "button_handler.h"
 #include "button_poll.h"
-#include "DisplayManager.h"
-#include "TxPage.h"
-#include "RxPage.h"
+#include "event_bus.h"
 #include "t_log.h"
 
 static const char* TAG = "BtnHandler";
@@ -24,40 +22,23 @@ static bool s_started = false;
  */
 static void button_callback(button_action_t action)
 {
-    display_page_t current_page = display_manager_get_current_page();
-
     switch (action) {
         case BUTTON_ACTION_SINGLE:
-            // 단일 클릭: 현재 페이지 내에서 서브 페이지 전환
-            if (current_page == PAGE_RX) {
-                // RxPage: 1 ↔ 2 토글
-                uint8_t current = rx_page_get_current_page();
-                uint8_t next = (current == 1) ? 2 : 1;
-                rx_page_switch_page(next);
-                display_manager_force_refresh();
-                T_LOGI(TAG, "RxPage: %d -> %d", current, next);
-            }
-            else if (current_page == PAGE_TX) {
-                // TxPage: 1 -> 2 -> 3 -> 4 -> 5 -> 1 순환
-                uint8_t current = tx_page_get_current_page();
-                uint8_t next = (current == 5) ? 1 : (current + 1);
-                tx_page_switch_page(next);
-                display_manager_force_refresh();
-                T_LOGI(TAG, "TxPage: %d -> %d", current, next);
-            }
-            else {
-                T_LOGD(TAG, "Single click on page %d (no action)", current_page);
-            }
+            // 단일 클릭 이벤트 발행
+            event_bus_publish(EVT_BUTTON_SINGLE_CLICK, NULL, 0);
+            T_LOGD(TAG, "Single click event published");
             break;
 
         case BUTTON_ACTION_LONG:
-            // 롱 프레스: 추후 설정 페이지 진입 등
-            T_LOGI(TAG, "Long press (future: settings page)");
+            // 롱 프레스 이벤트 발행
+            event_bus_publish(EVT_BUTTON_LONG_PRESS, NULL, 0);
+            T_LOGD(TAG, "Long press event published");
             break;
 
         case BUTTON_ACTION_LONG_RELEASE:
-            // 롱 프레스 해제
-            T_LOGD(TAG, "Long press release");
+            // 롱 프레스 해제 이벤트 발행
+            event_bus_publish(EVT_BUTTON_LONG_RELEASE, NULL, 0);
+            T_LOGD(TAG, "Long release event published");
             break;
 
         default:
@@ -86,7 +67,7 @@ esp_err_t button_handler_start(void)
     button_poll_set_callback(button_callback);
 
     s_started = true;
-    T_LOGI(TAG, "버튼 핸들러 시작 (콜백 등록 완료)");
+    T_LOGI(TAG, "버튼 핸들러 시작");
     return ESP_OK;
 }
 

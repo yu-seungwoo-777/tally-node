@@ -26,6 +26,13 @@ typedef enum {
     // 시스템 이벤트 (01_app)
     EVT_SYSTEM_READY = 0,
     EVT_CONFIG_CHANGED,
+    EVT_BRIGHTNESS_CHANGED,     ///< 밝기 설정 변경 (data: uint8_t, 0-255)
+    EVT_CAMERA_ID_CHANGED,      ///< 카메라 ID 변경 (data: uint8_t, 1-20)
+
+    // 버튼 이벤트 (03_service → 01_app)
+    EVT_BUTTON_SINGLE_CLICK,    ///< 버튼 단일 클릭 (짧게 눌름)
+    EVT_BUTTON_LONG_PRESS,      ///< 버튼 롱프레스 시작 (1000ms)
+    EVT_BUTTON_LONG_RELEASE,    ///< 버튼 롱프레스 해제
 
     // 정보/상태 이벤트
     EVT_INFO_UPDATED,
@@ -46,7 +53,6 @@ typedef enum {
     EVT_TALLY_STATE_CHANGED,      // 핵심: Tally 상태 변경
 
     // UI 이벤트 (02_presentation)
-    EVT_BUTTON_PRESSED,
     EVT_DISPLAY_UPDATE_REQUEST,
 
     // LED 이벤트 (02_presentation)
