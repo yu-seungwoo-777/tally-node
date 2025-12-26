@@ -15,7 +15,7 @@
 #include <RadioLib.h>
 #include <string.h>
 
-static const char* TAG = "LoRaDriver";
+static const char* TAG __attribute__((unused)) = "LoRaDriver";
 
 // =============================================================================
 // 정적 변수
@@ -365,7 +365,7 @@ void lora_driver_check_received(void) {
                      num_bytes, rssi, snr);
 
             if (s_receive_callback) {
-                s_receive_callback(buffer, num_bytes);
+                s_receive_callback(buffer, num_bytes, (int16_t)rssi, snr);
             }
         } else {
             xSemaphoreGive(s_spi_mutex);

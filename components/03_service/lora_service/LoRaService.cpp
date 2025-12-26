@@ -18,7 +18,7 @@
 #include <string.h>
 #include <stdio.h>
 
-static const char* TAG = "LORA_SERVICE";
+static const char* TAG __attribute__((unused)) = "LORA_SERVICE";
 
 // ============================================================================
 // 상수
@@ -60,15 +60,23 @@ static TaskHandle_t s_tx_task = nullptr;
 /**
  * @brief 드라이버 수신 콜백 (내부)
  */
-static void on_driver_receive(const uint8_t* data, size_t length)
+static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, float snr)
 {
     s_packets_received++;
 
-    // 이벤트 발행
-    uint32_t packet_len = (uint32_t)length;
-    event_bus_publish(EVT_LORA_PACKET_RECEIVED, &packet_len, sizeof(packet_len));
+    // 이벤트 발행 (패킷 데이터 + RSSI/SNR)
+    lora_packet_event_t packet_event = {};
+    if (length > LORA_MAX_PACKET_SIZE) {
+        length = LORA_MAX_PACKET_SIZE;
+    }
+    memcpy(packet_event.data, data, length);
+    packet_event.length = length;
+    packet_event.rssi = rssi;
+    packet_event.snr = snr;
 
-    // 사용자 콜백 호출
+    event_bus_publish(EVT_LORA_PACKET_RECEIVED, &packet_event, sizeof(packet_event));
+
+    // 사용자 콜백 호출 (레거시 지원)
     if (s_user_callback) {
         s_user_callback(data, length);
     }

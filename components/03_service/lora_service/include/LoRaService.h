@@ -50,7 +50,17 @@ typedef struct {
     uint32_t packets_received;  // 수신 패킷 수
 } lora_service_status_t;
 
-// 수신 콜백
+// 수신 패킷 이벤트 데이터 (event_bus용)
+#define LORA_MAX_PACKET_SIZE 256
+
+typedef struct {
+    uint8_t data[LORA_MAX_PACKET_SIZE];
+    size_t length;
+    int16_t rssi;
+    float snr;
+} lora_packet_event_t;
+
+// 수신 콜백 (레거시, event_bus 권장)
 typedef void (*lora_service_receive_callback_t)(const uint8_t* data, size_t length);
 
 /**

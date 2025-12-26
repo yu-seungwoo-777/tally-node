@@ -18,7 +18,7 @@
 #include "freertos/task.h"
 #include <cstring>
 
-static const char* TAG = "LoRaTestApp";
+static const char* TAG __attribute__((unused)) = "LoRaTestApp";
 
 // ============================================================================
 // 정적 변수

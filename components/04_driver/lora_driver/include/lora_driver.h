@@ -44,8 +44,8 @@ typedef struct {
     int8_t snr;                 // dB
 } lora_status_t;
 
-// 수신 콜백
-typedef void (*lora_receive_callback_t)(const uint8_t* data, size_t length);
+// 수신 콜백 (RSSI, SNR 포함)
+typedef void (*lora_receive_callback_t)(const uint8_t* data, size_t length, int16_t rssi, float snr);
 
 /**
  * @brief LoRa 드라이버 초기화
