@@ -123,8 +123,8 @@ sync_from_remote() {
         --exclude='*.log'
     )
 
-    # rsync 명령어 구성
-    RSYNC_CMD="rsync -avz --progress ${EXCLUDE_LIST[@]} -e 'ssh -p $REMOTE_PORT -o StrictHostKeyChecking=no' $REMOTE_USER@$REMOTE_IP:$REMOTE_PATH/ $PROJECT_DIR/"
+    # rsync 명령어 구성 (--delete 추가: 원격에 없는 로컬 파일 삭제)
+    RSYNC_CMD="rsync -avz --delete --progress ${EXCLUDE_LIST[@]} -e 'ssh -p $REMOTE_PORT -o StrictHostKeyChecking=no' $REMOTE_USER@$REMOTE_IP:$REMOTE_PATH/ $PROJECT_DIR/"
 
     # expect를 사용하여 rsync 실행
     if run_rsync_with_expect "$RSYNC_CMD"; then

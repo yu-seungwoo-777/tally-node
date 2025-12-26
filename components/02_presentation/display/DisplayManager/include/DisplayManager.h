@@ -25,9 +25,9 @@ extern "C" {
  */
 typedef enum {
     PAGE_NONE = 0,    // 초기 상태
-    PAGE_BOOT,        // 부팅 화면
-    PAGE_TALLY,       // Tally 상태
-    PAGE_INFO,        // 정보 화면
+    PAGE_BOOT,        // 부팅 화면 (공용)
+    PAGE_TX,          // TX 모드 페이지
+    PAGE_RX,          // RX 모드 페이지
     PAGE_COUNT        // 페이지 수
 } display_page_t;
 
@@ -117,6 +117,14 @@ void display_manager_boot_set_message(const char* message);
  * @param progress 진행률 (0-100)
  */
 void display_manager_boot_set_progress(uint8_t progress);
+
+/**
+ * @brief 부팅 완료 후 기본 페이지로 전환
+ *
+ * 빌드 환경(DEVICE_MODE_TX/DEVICE_MODE_RX)에 따라
+ * TX 또는 RX 페이지로 자동 전환합니다.
+ */
+void display_manager_boot_complete(void);
 
 #ifdef __cplusplus
 }

@@ -4,6 +4,7 @@
  *
  * 01_app 계층 - 애플리케이션
  * - DisplayManager, BootPage 사용하여 부팅 화면 테스트
+ * - TX/RX 페이지 전환 테스트
  */
 
 #ifndef DISPLAY_TEST_APP_H

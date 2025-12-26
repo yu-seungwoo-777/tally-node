@@ -1,7 +1,0 @@
-# TallyPage Component
-
-idf_component_register(
-    SRCS "TallyPage.cpp"
-    INCLUDE_DIRS "include"
-    REQUIRES DisplayManager t_log
-)

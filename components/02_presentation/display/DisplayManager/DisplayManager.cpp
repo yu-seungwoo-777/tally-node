@@ -266,3 +266,36 @@ extern "C" void display_manager_update(void)
     s_mgr.last_refresh_ms = now;
     render_current_page();
 }
+
+// ============================================================================
+// 부팅 완료 후 페이지 전환
+// ============================================================================
+
+/**
+ * @brief 빌드 환경에 따른 기본 페이지 가져오기
+ *
+ * @return PAGE_TX (DEVICE_MODE_TX) 또는 PAGE_RX (DEVICE_MODE_RX)
+ */
+static display_page_t get_default_page(void)
+{
+#ifdef DEVICE_MODE_TX
+    return PAGE_TX;
+#elif defined(DEVICE_MODE_RX)
+    return PAGE_RX;
+#else
+    return PAGE_BOOT;  // 기본값
+#endif
+}
+
+/**
+ * @brief 부팅 완료 후 기본 페이지로 전환
+ *
+ * BootPage에서 TX/RX 페이지로 자동 전환
+ */
+extern "C" void display_manager_boot_complete(void)
+{
+    display_page_t default_page = get_default_page();
+
+    T_LOGI(TAG, "부팅 완료 -> 페이지 전환: %d", default_page);
+    display_manager_set_page(default_page);
+}
