@@ -91,18 +91,7 @@ typedef struct {
     uint8_t channel_count;      ///< 실제 채널 수
 } packed_data_t;
 
-/**
- * @brief Tally 이벤트 데이터 (Event Bus용)
- *
- * EVT_TALLY_STATE_CHANGED 이벤트와 함께 전달되는 데이터
- * packed_data는 이벤트 발행 후 즉시 해제 가능하므로 필요시 복사
- */
-typedef struct {
-    switcher_role_t source;     ///< Tally 소스 (Primary/Secondary)
-    packed_data_t tally;        ///< Packed Tally 데이터
-    uint8_t channel_count;      ///< 채널 수
-    uint64_t tally_value;       ///< 64비트 packed 값 (빠른 접근용)
-} tally_event_data_t;
+// tally_event_data_t는 event_bus.h로 이동 (EVT_TALLY_STATE_CHANGED 이벤트용)
 
 /**
  * @brief Switcher 상태 구조체

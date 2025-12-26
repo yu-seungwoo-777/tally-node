@@ -8,7 +8,7 @@
  */
 
 #include "RxPage.h"
-#include "../../icons/icons.h"
+#include "icons.h"
 #include "t_log.h"
 #include <string.h>
 #include <stdio.h>
@@ -60,6 +60,13 @@ static struct {
 // 현재 페이지 (1: Tally, 2: System)
 static uint8_t s_current_page = 1;
 
+// 페이지 상태 (NORMAL, CAMERA_ID)
+static rx_page_state_t s_page_state = RX_PAGE_STATE_NORMAL;
+
+// 카메라 ID 팝업 관련 변수
+static uint8_t s_display_camera_id = 1;    // 팝업에 표시될 ID
+static bool s_camera_id_changing = false;  // ID 자동 변경 중
+
 // ============================================================================
 // 내부 함수 선언
 // ============================================================================
@@ -67,6 +74,7 @@ static uint8_t s_current_page = 1;
 static void draw_rx_header(u8g2_t* u8g2);
 static void draw_tally_page(u8g2_t* u8g2);
 static void draw_system_page(u8g2_t* u8g2);
+static void draw_camera_id_popup(u8g2_t* u8g2);
 
 // ============================================================================
 // 페이지 인터페이스 구현
@@ -85,6 +93,13 @@ static void page_init(void)
  */
 static void page_render(u8g2_t* u8g2)
 {
+    // 페이지 상태에 따라 다르게 렌더링
+    if (s_page_state == RX_PAGE_STATE_CAMERA_ID) {
+        draw_camera_id_popup(u8g2);
+        return;
+    }
+
+    // 일반 상태: 현재 페이지에 따라 렌더링
     if (s_current_page == 1) {
         draw_tally_page(u8g2);
     } else {
@@ -132,6 +147,7 @@ static void draw_rx_header(u8g2_t* u8g2)
 {
     uint8_t battery_level = getBatteryLevel(s_system_data.battery_percent);
     drawTallyBatteryIcon(u8g2, 105, 2, battery_level);
+    T_LOGD(TAG, "draw_rx_header: RSSI=%d SNR=%.1f", s_system_data.rssi, s_system_data.snr);
     drawTallySignalIcon(u8g2, 85, 2, s_system_data.rssi, s_system_data.snr);
 }
 
@@ -156,7 +172,7 @@ static void draw_tally_page(u8g2_t* u8g2)
 
     // PGM 영역 (위쪽 절반)
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-    u8g2_DrawStr(u8g2, 110, 25, "PGM");
+    u8g2_DrawStr(u8g2, 110, 26, "PGM");
 
     if (s_tally_data.pgm_count > 0) {
         int max_x_pos = 110 - u8g2_GetStrWidth(u8g2, "PGM") - 5;
@@ -206,7 +222,7 @@ static void draw_tally_page(u8g2_t* u8g2)
 
     // PVW 영역 (아래쪽 절반)
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-    u8g2_DrawStr(u8g2, 110, 50, "PVW");
+    u8g2_DrawStr(u8g2, 110, 51, "PVW");
 
     if (s_tally_data.pvw_count > 0) {
         int max_x_pos = 110 - u8g2_GetStrWidth(u8g2, "PVW") - 5;
@@ -294,6 +310,10 @@ static void draw_system_page(u8g2_t* u8g2)
     char temp_str[10];
     snprintf(temp_str, sizeof(temp_str), "%.1f C", s_system_data.temperature);
     u8g2_DrawStr(u8g2, 35, 61, temp_str);
+
+    // Device ID (오른쪽 정렬)
+    int id_width = u8g2_GetStrWidth(u8g2, s_system_data.device_id);
+    u8g2_DrawStr(u8g2, 126 - id_width, 61, s_system_data.device_id);
 }
 
 // ============================================================================
@@ -340,6 +360,7 @@ extern "C" void rx_page_set_battery(uint8_t percent)
 extern "C" void rx_page_set_rssi(int16_t rssi)
 {
     s_system_data.rssi = rssi;
+    T_LOGD(TAG, "RSSI 설정: %d", rssi);
 }
 
 extern "C" void rx_page_set_snr(float snr)
@@ -392,4 +413,120 @@ extern "C" void rx_page_switch_page(uint8_t page)
 extern "C" uint8_t rx_page_get_current_page(void)
 {
     return s_current_page;
+}
+
+// ========== 카메라 ID 변경 팝업 제어 ==========
+
+extern "C" void rx_page_set_state(rx_page_state_t state)
+{
+    s_page_state = state;
+}
+
+extern "C" rx_page_state_t rx_page_get_state(void)
+{
+    return s_page_state;
+}
+
+extern "C" void rx_page_show_camera_id_popup(void)
+{
+    rx_page_show_camera_id_popup_with_max(20);  // 기본값
+}
+
+/**
+ * @brief 카메라 ID 변경 팝업 표시 (최대값 지정)
+ * @param max_camera_num 최대 카메라 번호
+ */
+extern "C" void rx_page_show_camera_id_popup_with_max(uint8_t max_camera_num)
+{
+    s_page_state = RX_PAGE_STATE_CAMERA_ID;
+    // 현재 저장된 카메라 ID로 표시 ID 초기화 (max로 clamping)
+    s_display_camera_id = s_tally_data.cam_id;
+    if (s_display_camera_id > max_camera_num) {
+        s_display_camera_id = 1;  // max를 초과하면 1로 리셋
+    }
+    s_camera_id_changing = false;
+    T_LOGD(TAG, "Camera ID 팝업 표시 (ID: %d, max: %d)", s_display_camera_id, max_camera_num);
+}
+
+extern "C" void rx_page_hide_camera_id_popup(void)
+{
+    s_page_state = RX_PAGE_STATE_NORMAL;
+    s_camera_id_changing = false;
+    T_LOGD(TAG, "Camera ID 팝업 숨김");
+}
+
+extern "C" uint8_t rx_page_get_display_camera_id(void)
+{
+    return s_display_camera_id;
+}
+
+extern "C" void rx_page_set_display_camera_id(uint8_t cam_id)
+{
+    if (cam_id >= 1 && cam_id <= 20) {
+        s_display_camera_id = cam_id;
+    }
+}
+
+extern "C" void rx_page_set_camera_id_changing(bool changing)
+{
+    s_camera_id_changing = changing;
+}
+
+extern "C" bool rx_page_is_camera_id_changing(void)
+{
+    return s_camera_id_changing;
+}
+
+extern "C" uint8_t rx_page_cycle_camera_id(uint8_t max_camera_num)
+{
+    if (s_display_camera_id >= max_camera_num) {
+        s_display_camera_id = 1;
+    } else {
+        s_display_camera_id++;
+    }
+    T_LOGD(TAG, "Camera ID 순환: %d (최대: %d)", s_display_camera_id, max_camera_num);
+    return s_display_camera_id;
+}
+
+// ============================================================================
+// 내부 함수 구현 (카메라 ID 팝업)
+// ============================================================================
+
+/**
+ * @brief 카메라 ID 변경 팝업 그리기
+ * SettingsPage.cpp의 drawCameraIdPopup() 디자인 참고
+ */
+static void draw_camera_id_popup(u8g2_t* u8g2)
+{
+    // 팝업 박스 좌표
+    int popup_x = 2;
+    int popup_y = 2;
+    int popup_w = 124;
+    int popup_h = 60;
+
+    // 팝업 배경 (흰색)
+    u8g2_SetDrawColor(u8g2, 0);
+    u8g2_DrawBox(u8g2, popup_x, popup_y, popup_w, popup_h);
+
+    // 팝업 테두리 (2줄 - 최외곽, 검은색)
+    u8g2_SetDrawColor(u8g2, 1);
+    u8g2_DrawFrame(u8g2, popup_x, popup_y, popup_w, popup_h);
+    u8g2_DrawFrame(u8g2, popup_x + 1, popup_y + 1, popup_w - 2, popup_h - 2);
+
+    // 상단 제목 "CAMERA ID" (검은색)
+    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+    int title_width = u8g2_GetStrWidth(u8g2, "CAMERA ID");
+    u8g2_DrawStr(u8g2, (128 - title_width) / 2, popup_y + 15, "CAMERA ID");
+
+    // 구분선 (더 길게)
+    u8g2_DrawHLine(u8g2, popup_x + 5, popup_y + 22, popup_w - 10);
+    u8g2_DrawHLine(u8g2, popup_x + 5, popup_y + 23, popup_w - 10);
+
+    // ID 표시 (중앙 큰 글자, 검은색)
+    char id_str[8];
+    snprintf(id_str, sizeof(id_str), "%d", s_display_camera_id);
+
+    u8g2_SetFont(u8g2, u8g2_font_profont29_mn);
+    int id_width = u8g2_GetStrWidth(u8g2, id_str);
+    u8g2_DrawStr(u8g2, (128 - id_width) / 2, popup_y + 50, id_str);
 }

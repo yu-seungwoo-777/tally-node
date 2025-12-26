@@ -53,6 +53,9 @@ static uint32_t s_tx_dropped = 0;          // 큐 오버플로우로 폐기된 �
 static QueueHandle_t s_tx_queue = nullptr;
 static TaskHandle_t s_tx_task = nullptr;
 
+// RSSI/SNR 업데이트 타이머
+static uint32_t s_last_rssi_update = 0;
+
 // ============================================================================
 // 내부 함수
 // ============================================================================
@@ -66,8 +69,8 @@ static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, 
 
     // 이벤트 발행 (패킷 데이터 + RSSI/SNR)
     lora_packet_event_t packet_event = {};
-    if (length > LORA_MAX_PACKET_SIZE) {
-        length = LORA_MAX_PACKET_SIZE;
+    if (length > MAX_PACKET_SIZE) {
+        length = MAX_PACKET_SIZE;
     }
     memcpy(packet_event.data, data, length);
     packet_event.length = length;
@@ -94,6 +97,8 @@ static void tx_task(void* arg)
     T_LOGI(TAG, "송신 태스크 시작");
 
     lora_tx_packet_t packet;
+    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    s_last_rssi_update = now;
 
     while (s_running) {
         // 비블로킹으로 큐 체크 (패킷 있으면 즉시 송신)
@@ -117,6 +122,24 @@ static void tx_task(void* arg)
             } else {
                 T_LOGI(TAG, "송신 실패: %d", ret);
             }
+        }
+
+        // 1초마다 RSSI/SNR 이벤트 발행
+        now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        if (now - s_last_rssi_update >= 1000) {
+            s_last_rssi_update = now;
+
+            // lora_service_status_t → lora_rssi_event_t 변환
+            lora_service_status_t full_status = lora_service_get_status();
+            lora_rssi_event_t event = {
+                .is_running = full_status.is_running,
+                .is_initialized = full_status.is_initialized,
+                .chip_type = (uint8_t)full_status.chip_type,  // enum → uint8_t
+                .frequency = full_status.frequency,
+                .rssi = full_status.rssi,
+                .snr = full_status.snr
+            };
+            event_bus_publish(EVT_LORA_RSSI_CHANGED, &event, sizeof(event));
         }
 
         // 큐가 비어있으면 짧게 대기 후 다시 체크 (수신 모드 유지)
@@ -313,22 +336,13 @@ esp_err_t lora_service_send_string(const char* str)
 }
 
 // ============================================================================
-// Tally 패킷 헬퍼 함수 (F1-F4 헤더 형식)
+// Tally 패킷 헬퍼 함수
 // ============================================================================
-
-/**
- * @brief 채널 수에 따른 헤더 계산
- * 0xF1 = 8채널 (2바이트)
- * 0xF2 = 12채널 (3바이트)
- * 0xF3 = 16채널 (4바이트)
- * 0xF4 = 20채널 (5바이트)
- */
-static uint8_t get_tally_header(uint8_t channel_count) {
-    if (channel_count <= 8) return 0xF1;
-    if (channel_count <= 12) return 0xF2;
-    if (channel_count <= 16) return 0xF3;
-    return 0xF4;  // 20채널
-}
+// 패킷 구조: [F1][ChannelCount][Data...]
+// - F1: 고정 헤더
+// - ChannelCount: 실제 채널 수 (1-20)
+// - Data: packed tally 데이터
+// ============================================================================
 
 esp_err_t lora_service_send_tally(const packed_data_t* tally)
 {
@@ -340,31 +354,18 @@ esp_err_t lora_service_send_tally(const packed_data_t* tally)
         return ESP_ERR_INVALID_ARG;
     }
 
-    // 패킷 버퍼: [Header][Data...]
-    uint8_t packet[16];  // 헤더(1) + 최대 데이터(5) = 6바이트
-    uint8_t header = get_tally_header(tally->channel_count);
+    // 패킷 버퍼: [F1][ChannelCount][Data...]
+    uint8_t packet[16];  // F1(1) + ChCount(1) + 최대 데이터(5) = 7바이트
 
-    packet[0] = header;
-    for (uint8_t i = 0; i < tally->data_size && i < 15; i++) {
-        packet[1 + i] = tally->data[i];
+    packet[0] = 0xF1;  // 고정 헤더
+    packet[1] = tally->channel_count;  // 채널 수 (1-20)
+
+    for (uint8_t i = 0; i < tally->data_size && i < 14; i++) {
+        packet[2 + i] = tally->data[i];
     }
 
-    size_t packet_size = 1 + tally->data_size;
+    size_t packet_size = 2 + tally->data_size;
     return lora_service_send(packet, packet_size);
-}
-
-// ============================================================================
-// Tally 패킷 해석 (수신)
-// ============================================================================
-
-uint8_t lora_service_tally_get_channel_count(uint8_t header) {
-    switch (header) {
-        case 0xF1: return 8;
-        case 0xF2: return 12;
-        case 0xF3: return 16;
-        case 0xF4: return 20;
-        default:  return 0;  // 잘못된 헤더
-    }
 }
 
 void lora_service_set_receive_callback(lora_service_receive_callback_t callback) {

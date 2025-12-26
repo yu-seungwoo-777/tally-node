@@ -70,6 +70,8 @@ typedef struct {
     uint8_t battery;         // 배터리 %
     uint32_t uptime;         // 업타임 (초)
     bool stopped;            // 기능 정지 상태
+    int16_t rssi;            // LoRa RSSI (dBm)
+    float snr;               // LoRa SNR (dB)
 } config_system_t;
 
 // 전체 설정
@@ -204,6 +206,18 @@ float config_service_get_voltage(void);
  * @return 온도 (°C)
  */
 float config_service_get_temperature(void);
+
+/**
+ * @brief RSSI 가져오기 (dBm)
+ * @return RSSI (dBm)
+ */
+int16_t config_service_get_rssi(void);
+
+/**
+ * @brief SNR 가져오기 (dB)
+ * @return SNR (dB)
+ */
+float config_service_get_snr(void);
 
 /**
  * @brief Stopped 상태 설정

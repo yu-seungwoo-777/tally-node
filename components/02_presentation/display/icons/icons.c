@@ -79,6 +79,9 @@ void drawTallySignalIcon(u8g2_t *u8g2, int16_t x, int16_t y, int16_t rssi, float
     // RSSI와 SNR을 고려한 신호 레벨 계산
     int signalLevel = getSignalLevel(rssi, snr);
 
+    // 디버그: 신호 레벨 로그
+    // printf("Signal: RSSI=%d SNR=%.1f Level=%d\n", rssi, snr, signalLevel);
+
     // 안테나 굵은 T자 모양
     const int antennaBaseX = x - 5;
     const int antennaBaseY = y;

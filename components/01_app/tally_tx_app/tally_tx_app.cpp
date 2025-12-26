@@ -21,6 +21,7 @@
 
 /**
  * @brief LoRa로 Tally 데이터 송신
+ * 패킷 구조: [F1][ChannelCount][Data...]
  */
 static void send_tally_via_lora(const packed_data_t* tally) {
     if (!packed_data_is_valid(tally)) {
@@ -33,7 +34,8 @@ static void send_tally_via_lora(const packed_data_t* tally) {
 
     esp_err_t ret = lora_service_send_tally(tally);
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "LoRa 송신: [%s] (%d채널)", hex_str, tally->channel_count);
+        T_LOGI(TAG, "LoRa 송신: [F1][%d][%s] (%d채널, %d바이트)",
+                 tally->channel_count, hex_str, tally->channel_count, tally->data_size);
     } else {
         T_LOGE(TAG, "LoRa 송신 실패: [%s] -> %s", hex_str, esp_err_to_name(ret));
     }

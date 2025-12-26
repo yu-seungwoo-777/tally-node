@@ -11,6 +11,7 @@
 
 #include "button_poll.h"
 #include "PinConfig.h"
+#include "event_bus.h"
 #include "t_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -26,6 +27,7 @@ static const char* TAG = "BUTTON";
 #define POLL_INTERVAL_MS     10    /**< 폴링 주기 (ms) */
 #define DEBOUNCE_MS          20    /**< 디바운스 시간 (ms) */
 #define LONG_PRESS_MS        1000  /**< 롱 프레스 시간 (ms) */
+#define LONG_PRESS_REPEAT_MS 500   /**< 롱 프레스 반복 간격 (ms) */
 #define MULTI_CLICK_TIMEOUT_MS 50  /**< 멀티클릭 타임아웃 (ms) */
 
 // ============================================================================
@@ -52,6 +54,7 @@ typedef struct {
     uint64_t press_time;           /**< 눌린 시간 (us) */
     uint64_t release_time;         /**< 떼어진 시간 (us) */
     uint64_t debounce_start;       /**< 디바운스 시작 시간 (us) */
+    uint64_t last_repeat_time;     /**< 마지막 반복 이벤트 시간 (us) */
 
     uint32_t click_count;          /**< 클릭 횟수 */
     bool long_press_fired;         /**< 롱 프레스 발생 플래그 */
@@ -78,6 +81,7 @@ static void reset_button_state(void)
     s_btn.long_press_fired = false;
     s_btn.press_time = 0;
     s_btn.release_time = 0;
+    s_btn.last_repeat_time = 0;
     s_btn.last_state = (gpio_get_level(EORA_S3_BUTTON) == 0);
     s_btn.debounce_start = esp_timer_get_time();
 }
@@ -143,8 +147,9 @@ static void button_poll_task(void* arg)
 
             } else if (s_btn.state == BUTTON_STATE_WAITING_RELEASE && !current_state) {
                 // 롱 프레스 후 버튼 떼어짐
-                T_LOGV(TAG, "롱 프레스 해제");
+                T_LOGI(TAG, "롱 프레스 해제");
                 invoke_callback(BUTTON_ACTION_LONG_RELEASE);
+                event_bus_publish(EVT_BUTTON_LONG_RELEASE, NULL, 0);
                 reset_button_state();
             }
         }
@@ -153,13 +158,24 @@ static void button_poll_task(void* arg)
         if (s_btn.state == BUTTON_STATE_PRESSED && !s_btn.long_press_fired) {
             uint64_t press_duration = current_time - s_btn.press_time;
             if (press_duration >= LONG_PRESS_MS * 1000ULL) {
-                // 롱 프레스 발생
-                T_LOGV(TAG, "롱 프레스! (%.1f초)", LONG_PRESS_MS / 1000.0f);
+                // 롱 프레스 시작
+                T_LOGI(TAG, "롱 프레스 시작 (%.1f초)", LONG_PRESS_MS / 1000.0f);
                 s_btn.long_press_fired = true;
                 s_btn.click_count = 0;
                 s_btn.state = BUTTON_STATE_WAITING_RELEASE;
+                s_btn.last_repeat_time = current_time;
 
                 invoke_callback(BUTTON_ACTION_LONG);
+                event_bus_publish(EVT_BUTTON_LONG_PRESS, NULL, 0);
+            }
+        }
+
+        // 롱 프레스 유지 중 반복 이벤트 발행
+        if (s_btn.state == BUTTON_STATE_WAITING_RELEASE && s_btn.long_press_fired && current_state) {
+            uint64_t repeat_elapsed = current_time - s_btn.last_repeat_time;
+            if (repeat_elapsed >= LONG_PRESS_REPEAT_MS * 1000ULL) {
+                s_btn.last_repeat_time = current_time;
+                event_bus_publish(EVT_BUTTON_LONG_PRESS, NULL, 0);
             }
         }
 

@@ -34,6 +34,11 @@ static volatile bool s_is_transmitting = false;
 static volatile bool s_transmitted_flag = false;
 static volatile bool s_received_flag = false;
 
+// 마지막 패킷 RSSI/SNR (패킷 수신 시에만 업데이트)
+static volatile int16_t s_last_packet_rssi = -120;
+static volatile int8_t s_last_packet_snr = 0;
+static volatile bool s_has_received_packet = false;  // 패킷 수신 여부 플래그
+
 // RTOS 자원
 static SemaphoreHandle_t s_semaphore = nullptr;
 static SemaphoreHandle_t s_spi_mutex = nullptr;  // SPI 작업 보호용 뮤텍스
@@ -246,13 +251,10 @@ lora_status_t lora_driver_get_status(void) {
         .snr = 0,
     };
 
-    if (s_initialized && s_radio && s_spi_mutex) {
-        // SPI 뮤텍스 잠금 (getRSSI/getSNR은 SPI 접근)
-        if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
-            status.rssi = (int16_t)s_radio->getRSSI();
-            status.snr = (int8_t)s_radio->getSNR();
-            xSemaphoreGive(s_spi_mutex);
-        }
+    // 패킷을 수신한 적이 있으면 마지막 패킷의 RSSI/SNR 반환
+    if (s_has_received_packet) {
+        status.rssi = s_last_packet_rssi;
+        status.snr = s_last_packet_snr;
     }
 
     return status;
@@ -357,6 +359,11 @@ void lora_driver_check_received(void) {
         if (state == RADIOLIB_ERR_NONE) {
             float rssi = s_radio->getRSSI();
             float snr = s_radio->getSNR();
+
+            // 패킷 RSSI/SNR 저장
+            s_last_packet_rssi = (int16_t)rssi;
+            s_last_packet_snr = (int8_t)snr;
+            s_has_received_packet = true;
 
             // 콜백 호출 전 뮤텍스 해제 (데드락 방지)
             xSemaphoreGive(s_spi_mutex);

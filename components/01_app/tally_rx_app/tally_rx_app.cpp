@@ -6,7 +6,11 @@
 #include "tally_rx_app.h"
 #include "t_log.h"
 #include "LoRaService.h"
+#include "ws2812_driver.h"
+#include "ConfigService.h"
+#include "button_poll.h"
 #include "TallyTypes.h"
+#include "event_bus.h"
 #include "LoRaConfig.h"
 #include <cstring>
 
@@ -24,40 +28,53 @@ static void on_lora_receive(const uint8_t* data, size_t len) {
         return;
     }
 
-    // 헤더 분석 및 데이터 추출
-    // 패킷 구조: [Header(1byte)][Data...]
-    // Header: F1=8ch, F2=12ch, F3=16ch, F4=20ch
-    const uint8_t* payload = data;
-    size_t payload_len = len;
+    // 패킷 구조: [F1][ChannelCount][Data...]
+    // - F1: 고정 헤더
+    // - ChannelCount: 실제 채널 수 (1-20)
+    // - Data: packed tally 데이터
 
-    if (len > 0) {
-        uint8_t header = data[0];
-        // F1-F4 헤더인 경우 제거
-        if (header >= 0xF1 && header <= 0xF4) {
-            payload = data + 1;
-            payload_len = len - 1;
-        }
-    }
-
-    // 길이 체크 (최대 255바이트, 255*4=1020채널)
-    if (payload_len > 255) {
-        T_LOGW(TAG, "페이로드 길이 초과: %d", (int)payload_len);
+    // 헤더 검증
+    if (data[0] != 0xF1) {
+        T_LOGW(TAG, "알 수 없는 헤더: 0x%02X", data[0]);
         return;
     }
 
-    // packed_data_t로 변환 (명시적 캐스팅)
+    // 길이 체크 (최소 2바이트: F1 + ChannelCount)
+    if (len < 2) {
+        T_LOGW(TAG, "패킷 길이 부족: %d", (int)len);
+        return;
+    }
+
+    uint8_t ch_count = data[1];
+    if (ch_count < 1 || ch_count > 20) {
+        T_LOGW(TAG, "잘못된 채널 수: %d", ch_count);
+        return;
+    }
+
+    // 데이터 길이 계산
+    uint8_t expected_data_len = (ch_count + 3) / 4;
+    size_t payload_len = len - 2;  // 헤더(2) 제외
+
+    if (payload_len != expected_data_len) {
+        T_LOGW(TAG, "데이터 길이 불일치: 예상 %d, 수신 %d", expected_data_len, (int)payload_len);
+        return;
+    }
+
+    const uint8_t* payload = &data[2];
+
+    // packed_data_t로 변환
     packed_data_t tally = {
         .data = const_cast<uint8_t*>(payload),
         .data_size = static_cast<uint8_t>(payload_len),
-        .channel_count = static_cast<uint8_t>(payload_len * 4)  // 1바이트 = 4채널 (2비트/채널)
+        .channel_count = ch_count  // 실제 채널 수 사용
     };
 
     if (!packed_data_is_valid(&tally)) {
-        T_LOGW(TAG, "잘못된 Tally 데이터 (길이: %d)", (int)len);
+        T_LOGW(TAG, "잘못된 Tally 데이터");
         return;
     }
 
-    // 헥스 문자열 변환
+    // 헥스 문자열 변환 (데이터만)
     char hex_str[16];
     packed_data_to_hex(&tally, hex_str, sizeof(hex_str));
 
@@ -65,8 +82,53 @@ static void on_lora_receive(const uint8_t* data, size_t len) {
     char tally_str[64];
     packed_data_format_tally(&tally, tally_str, sizeof(tally_str));
 
-    T_LOGI(TAG, "LoRa 수신: [%s] (%d채널, %d바이트) → %s",
-             hex_str, tally.channel_count, (int)payload_len, tally_str);
+    T_LOGI(TAG, "LoRa 수신: [F1][%d][%s] (%d채널, %d바이트) → %s",
+             ch_count, hex_str, ch_count, (int)payload_len, tally_str);
+
+    // Tally 상태 변경 이벤트 발행
+    tally_event_data_t event_data = {
+        .source = SWITCHER_ROLE_PRIMARY,  // LoRa는 Primary로 간주
+        .channel_count = ch_count,
+        .tally_data = {0},
+        .tally_value = packed_data_to_uint64(&tally)
+    };
+    memcpy(event_data.tally_data, payload, payload_len);
+
+    event_bus_publish(EVT_TALLY_STATE_CHANGED, &event_data, sizeof(event_data));
+    T_LOGI(TAG, "Tally 상태 변경 이벤트 발행");
+}
+
+// ============================================================================
+// 버튼 롱프레스 콜백 - 카메라 ID 변경
+// ============================================================================
+
+static esp_err_t on_button_long_press(const event_data_t* event) {
+    (void)event;  // 미사용
+
+    // 현재 카메라 ID 읽기
+    uint8_t current_id = config_service_get_camera_id();
+
+    // 다음 ID 계산 (1-20 cycle)
+    uint8_t new_id = current_id + 1;
+    if (new_id > 20) {
+        new_id = 1;
+    }
+
+    // 저장
+    esp_err_t ret = config_service_set_camera_id(new_id);
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "카메라 ID 변경: %d → %d", current_id, new_id);
+
+        // 드라이버에도 적용
+        ws2812_set_camera_id(new_id);
+
+        // 이벤트 발행
+        event_bus_publish(EVT_CAMERA_ID_CHANGED, &new_id, sizeof(new_id));
+    } else {
+        T_LOGE(TAG, "카메라 ID 저장 실패: %s", esp_err_to_name(ret));
+    }
+
+    return ESP_OK;
 }
 
 // ============================================================================
@@ -145,6 +207,25 @@ bool tally_rx_app_init(const tally_rx_config_t* config) {
     // 수신 콜백 등록
     lora_service_set_receive_callback(on_lora_receive);
 
+    // WS2812 LED 초기화 (드라이버에서 PinConfig.h 사용, NVS에서 camera_id 로드)
+    uint8_t camera_id = config_service_get_camera_id();
+    esp_err_t led_ret = ws2812_driver_init(-1, 0, camera_id);
+    if (led_ret == ESP_OK) {
+        T_LOGI(TAG, "WS2812 초기화 완료 (카메라 ID: %d)", camera_id);
+    } else {
+        T_LOGW(TAG, "WS2812 초기화 실패: %s", esp_err_to_name(led_ret));
+    }
+
+    // 버튼 롱프레스 이벤트 구독 (카메라 ID 변경)
+    event_bus_subscribe(EVT_BUTTON_LONG_PRESS, on_button_long_press);
+    T_LOGI(TAG, "버튼 롱프레스 이벤트 구독 완료 (카메라 ID 변경)");
+
+    // 버튼 폴링 초기화
+    esp_err_t ret = button_poll_init();
+    if (ret != ESP_OK) {
+        T_LOGW(TAG, "버튼 폴링 초기화 실패: %s", esp_err_to_name(ret));
+    }
+
     s_app.initialized = true;
     T_LOGI(TAG, "Tally 수신 앱 초기화 완료");
 
@@ -175,6 +256,10 @@ void tally_rx_app_start(void) {
     // LoRa 시작
     lora_service_start();
 
+    // 버튼 폴링 시작
+    button_poll_start();
+    T_LOGI(TAG, "버튼 폴링 시작");
+
     s_app.running = true;
     T_LOGI(TAG, "Tally 수신 앱 시작");
 }
@@ -183,6 +268,9 @@ void tally_rx_app_stop(void) {
     if (!s_app.running) {
         return;
     }
+
+    // 버튼 폴링 정지
+    button_poll_stop();
 
     // LoRa 정지
     lora_service_stop();
@@ -193,6 +281,9 @@ void tally_rx_app_stop(void) {
 
 void tally_rx_app_deinit(void) {
     tally_rx_app_stop();
+
+    // WS2812 정리
+    ws2812_deinit();
 
     // LoRa 정리
     lora_service_deinit();

@@ -11,7 +11,7 @@
  */
 
 #include "TxPage.h"
-#include "../../icons/icons.h"
+#include "icons.h"
 #include "t_log.h"
 #include <string.h>
 #include <stdio.h>
@@ -409,6 +409,10 @@ static void draw_system_page(u8g2_t* u8g2)
     char temp_str[10];
     snprintf(temp_str, sizeof(temp_str), "%.1f C", s_system_data.temperature);
     u8g2_DrawStr(u8g2, 35, 61, temp_str);
+
+    // Device ID (오른쪽 정렬)
+    int id_width = u8g2_GetStrWidth(u8g2, s_system_data.device_id);
+    u8g2_DrawStr(u8g2, 126 - id_width, 61, s_system_data.device_id);
 }
 
 // ============================================================================
@@ -573,6 +577,17 @@ extern "C" void tx_page_set_device_id(const char* device_id)
 extern "C" void tx_page_set_uptime(uint64_t uptime_sec)
 {
     s_system_data.uptime_sec = uptime_sec;
+}
+
+// RSSI/SNR (TX 모드에서는 사용하지 않음 - API 호환용)
+extern "C" void tx_page_set_rssi(int16_t rssi)
+{
+    (void)rssi;  // 미사용
+}
+
+extern "C" void tx_page_set_snr(float snr)
+{
+    (void)snr;  // 미사용
 }
 
 // ========== 페이지 제어 ==========

@@ -65,6 +65,13 @@ void prod_tx_app_print_status(void);
  */
 bool prod_tx_app_is_running(void);
 
+/**
+ * @brief 스위처 연결 상태 확인
+ *
+ * @return true 연결됨, false 연결 안됨
+ */
+bool prod_tx_app_is_connected(void);
+
 #ifdef __cplusplus
 }
 #endif

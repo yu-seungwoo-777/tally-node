@@ -178,6 +178,18 @@ void tx_page_set_device_id(const char* device_id);
  */
 void tx_page_set_uptime(uint64_t uptime_sec);
 
+/**
+ * @brief LoRa RSSI 설정
+ * @param rssi RSSI 값 (dBm)
+ */
+void tx_page_set_rssi(int16_t rssi);
+
+/**
+ * @brief LoRa SNR 설정
+ * @param snr SNR 값 (dB)
+ */
+void tx_page_set_snr(float snr);
+
 // ========== 페이지 제어 ==========
 
 /**

@@ -22,6 +22,7 @@ extern "C" {
  * @brief Tally 수신 앱 설정
  */
 typedef struct {
+    // LoRa 설정
     float frequency;          ///< LoRa 주파수 (MHz)
     uint8_t spreading_factor; ///< Spreading Factor (7-12)
     uint8_t coding_rate;      ///< Coding Rate (5-8)

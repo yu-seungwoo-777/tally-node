@@ -5,6 +5,10 @@
  * 2개 페이지:
  * - Page 1: Tally 정보 (PGM/PVW 채널 목록)
  * - Page 2: 시스템 정보 (3x2 테이블)
+ *
+ * 페이지 상태:
+ * - PAGE_STATE_NORMAL: 일반 페이지 (Tally/System 전환)
+ * - PAGE_STATE_CAMERA_ID: 카메라 ID 변경 팝업
  */
 
 #ifndef RX_PAGE_H
@@ -21,6 +25,12 @@ typedef enum {
     TALLY_STATE_PVW,
     TALLY_STATE_PGM
 } tally_state_t;
+
+// RxPage 상태
+typedef enum {
+    RX_PAGE_STATE_NORMAL = 0,     // 일반 페이지 상태
+    RX_PAGE_STATE_CAMERA_ID       // 카메라 ID 변경 팝업 상태
+} rx_page_state_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -123,6 +133,67 @@ void rx_page_switch_page(uint8_t page);
  * @return 페이지 번호 (1: Tally, 2: System)
  */
 uint8_t rx_page_get_current_page(void);
+
+// ========== 카메라 ID 변경 팝업 제어 ==========
+
+/**
+ * @brief 페이지 상태 설정
+ * @param state 페이지 상태 (RX_PAGE_STATE_NORMAL, RX_PAGE_STATE_CAMERA_ID)
+ */
+void rx_page_set_state(rx_page_state_t state);
+
+/**
+ * @brief 페이지 상태 가져오기
+ * @return 현재 페이지 상태
+ */
+rx_page_state_t rx_page_get_state(void);
+
+/**
+ * @brief 카메라 ID 변경 팝업 표시 시작
+ */
+void rx_page_show_camera_id_popup(void);
+
+/**
+ * @brief 카메라 ID 변경 팝업 표시 시작 (최대값 지정)
+ * @param max_camera_num 최대 카메라 번호
+ */
+void rx_page_show_camera_id_popup_with_max(uint8_t max_camera_num);
+
+/**
+ * @brief 카메라 ID 변경 팝업 숨김 (일반 페이지로 복귀)
+ */
+void rx_page_hide_camera_id_popup(void);
+
+/**
+ * @brief 현재 표시 중인 카메라 ID 가져오기
+ * @return 현재 카메라 ID
+ */
+uint8_t rx_page_get_display_camera_id(void);
+
+/**
+ * @brief 표시용 카메라 ID 직접 설정 (롱프레스 중 자동 변경용)
+ * @param cam_id 카메라 ID (1-max_camera_num)
+ */
+void rx_page_set_display_camera_id(uint8_t cam_id);
+
+/**
+ * @brief 카메라 ID 변경 중 여부 설정
+ * @param changing true: 변경 중, false: 정지
+ */
+void rx_page_set_camera_id_changing(bool changing);
+
+/**
+ * @brief 카메라 ID 변경 중인지 확인
+ * @return true: 변경 중, false: 정지됨
+ */
+bool rx_page_is_camera_id_changing(void);
+
+/**
+ * @brief 카메라 ID 변경 타이머 콜백 (0.8초마다 호출)
+ * @param max_camera_num 최대 카메라 번호
+ * @return 다음 카메라 ID
+ */
+uint8_t rx_page_cycle_camera_id(uint8_t max_camera_num);
 
 #ifdef __cplusplus
 }

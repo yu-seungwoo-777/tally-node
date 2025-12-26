@@ -214,7 +214,8 @@ extern "C" void display_manager_set_page(display_page_t page_id)
     T_LOGD(TAG, "페이지 전환: %d -> %d", s_mgr.previous_page, s_mgr.current_page);
 
     handle_page_transition();
-    display_manager_force_refresh();
+    // 페이지 전환 시 즉시 렌더링 (플래그 방식 사용 안 함)
+    render_current_page();
 }
 
 extern "C" display_page_t display_manager_get_current_page(void)
@@ -423,3 +424,55 @@ extern "C" void display_manager_update_system(const char* device_id, uint8_t bat
 #undef PAGE_SET_BATTERY
 #undef PAGE_SET_VOLTAGE
 #undef PAGE_SET_TEMPERATURE
+
+// ============================================================================
+// RSSI/SNR 업데이트 API
+// ============================================================================
+
+// 페이지별 RSSI/SNR 매크로
+#ifdef DEVICE_MODE_TX
+    #define PAGE_SET_RSSI(rssi)       tx_page_set_rssi(rssi)
+    #define PAGE_SET_SNR(snr)         tx_page_set_snr(snr)
+#elif defined(DEVICE_MODE_RX)
+    #define PAGE_SET_RSSI(rssi)       rx_page_set_rssi(rssi)
+    #define PAGE_SET_SNR(snr)         rx_page_set_snr(snr)
+#endif
+
+extern "C" void display_manager_update_rssi(int16_t rssi, float snr)
+{
+    PAGE_SET_RSSI(rssi);
+    PAGE_SET_SNR(snr);
+}
+
+// 매크로 정의 해제
+#undef PAGE_SET_RSSI
+#undef PAGE_SET_SNR
+
+// ============================================================================
+// PGM/PVW 채널 업데이트 (RX 모드만)
+// ============================================================================
+
+#ifdef DEVICE_MODE_RX
+
+extern "C" void display_manager_update_tally(const uint8_t* pgm_channels, uint8_t pgm_count,
+                                              const uint8_t* pvw_channels, uint8_t pvw_count)
+{
+    if (pgm_channels && pgm_count > 0) {
+        rx_page_set_pgm_channels(pgm_channels, pgm_count);
+    } else {
+        // PGM 채널 없으면 빈 배열로 설정
+        rx_page_set_pgm_channels(nullptr, 0);
+    }
+
+    if (pvw_channels && pvw_count > 0) {
+        rx_page_set_pvw_channels(pvw_channels, pvw_count);
+    } else {
+        // PVW 채널 없으면 빈 배열로 설정
+        rx_page_set_pvw_channels(nullptr, 0);
+    }
+
+    // PGM/PVW 리스트는 즉시 갱신
+    render_current_page();
+}
+
+#endif // DEVICE_MODE_RX

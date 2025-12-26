@@ -15,13 +15,14 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "event_bus.h"
 #include "TallyTypes.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-// LoRa 칩 타입 (driver와 동일)
+// LoRa 칩 타입 (내부용, event_bus.h의 lora_chip_type_t와 동일한 값)
 typedef enum {
     LORA_SERVICE_CHIP_UNKNOWN = 0,
     LORA_SERVICE_CHIP_SX1262 = 1,   // 868/915MHz
@@ -39,7 +40,7 @@ typedef struct {
 } lora_service_config_t;
 
 // LoRa Service 상태
-typedef struct {
+typedef struct __attribute__((packed)) {
     bool is_running;
     bool is_initialized;
     lora_service_chip_type_t chip_type;
@@ -49,16 +50,6 @@ typedef struct {
     uint32_t packets_sent;      // 송신 패킷 수
     uint32_t packets_received;  // 수신 패킷 수
 } lora_service_status_t;
-
-// 수신 패킷 이벤트 데이터 (event_bus용)
-#define LORA_MAX_PACKET_SIZE 256
-
-typedef struct {
-    uint8_t data[LORA_MAX_PACKET_SIZE];
-    size_t length;
-    int16_t rssi;
-    float snr;
-} lora_packet_event_t;
 
 // 수신 콜백 (레거시, event_bus 권장)
 typedef void (*lora_service_receive_callback_t)(const uint8_t* data, size_t length);
@@ -112,18 +103,6 @@ esp_err_t lora_service_send_string(const char* str);
  * @return ESP_OK 성공
  */
 esp_err_t lora_service_send_tally(const packed_data_t* tally);
-
-// ============================================================================
-// Tally 패킷 해석 (수신)
-// ============================================================================
-
-/**
- * @brief Tally 패킷 헤더에서 채널 수 추출
- *
- * @param header 패킷 헤더 (0xF1~0xF4)
- * @return 채널 수 (0=잘못된 헤더)
- */
-uint8_t lora_service_tally_get_channel_count(uint8_t header);
 
 /**
  * @brief 수신 콜백 설정

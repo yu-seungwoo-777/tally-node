@@ -13,11 +13,56 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include "esp_err.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// ============================================================================
+// 이벤트 데이터 구조체 (공통)
+// ============================================================================
+
+/**
+ * @brief LoRa RSSI/SNR 이벤트 데이터 (EVT_LORA_RSSI_CHANGED용)
+ *
+ * @note packed 속성으로 패딩 방지 (모든 컴파일러에서 동일한 레이아웃 보장)
+ */
+typedef struct __attribute__((packed)) {
+    bool is_running;
+    bool is_initialized;
+    uint8_t chip_type;       // 0=Unknown, 1=SX1262, 2=SX1268
+    float frequency;         // MHz
+    int16_t rssi;            // dBm
+    int8_t snr;              // dB
+} lora_rssi_event_t;
+
+#define LORA_MAX_PACKET_SIZE 256
+
+/**
+ * @brief LoRa 패킷 이벤트 데이터 (EVT_LORA_PACKET_RECEIVED용)
+ */
+typedef struct {
+    uint8_t data[LORA_MAX_PACKET_SIZE];  // 패킷 데이터
+    size_t length;           // 데이터 길이
+    int16_t rssi;            // dBm
+    float snr;               // dB
+} lora_packet_event_t;
+
+/**
+ * @brief Tally 상태 이벤트 데이터 (EVT_TALLY_STATE_CHANGED용)
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t source;          // 스위처 소스 (0=Primary, 1=Secondary)
+    uint8_t channel_count;   // 채널 수 (1-20)
+    uint8_t tally_data[8];   // Packed 데이터 (최대 20채널 = 5바이트)
+    uint64_t tally_value;    // 64비트 packed 값
+} tally_event_data_t;
+
+// ============================================================================
+// 이벤트 타입 정의
+// ============================================================================
 
 /**
  * @brief 이벤트 타입 정의
@@ -39,7 +84,8 @@ typedef enum {
 
     // LoRa 이벤트 (03_service)
     EVT_LORA_STATUS_CHANGED,
-    EVT_LORA_PACKET_RECEIVED,
+    EVT_LORA_RSSI_CHANGED,         ///< RSSI/SNR 변경 (data: lora_rssi_event_t)
+    EVT_LORA_PACKET_RECEIVED,      ///< 패킷 수신 (data: lora_packet_event_t)
     EVT_LORA_PACKET_SENT,
 
     // 네트워크 이벤트 (03_service)
@@ -50,7 +96,7 @@ typedef enum {
     // 스위처 이벤트 (03_service)
     EVT_SWITCHER_CONNECTED,
     EVT_SWITCHER_DISCONNECTED,
-    EVT_TALLY_STATE_CHANGED,      // 핵심: Tally 상태 변경
+    EVT_TALLY_STATE_CHANGED,      ///< Tally 상태 변경 (data: tally_event_data_t)
 
     // UI 이벤트 (02_presentation)
     EVT_DISPLAY_UPDATE_REQUEST,

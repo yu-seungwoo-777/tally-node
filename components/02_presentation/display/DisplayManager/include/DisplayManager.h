@@ -212,6 +212,25 @@ uint8_t display_manager_cycle_camera_id(uint8_t max_camera_num);
 void display_manager_update_system(const char* device_id, uint8_t battery,
                                    float voltage, float temperature);
 
+/**
+ * @brief RSSI/SNR 업데이트 (RX 페이지 안테나 아이콘용)
+ *
+ * @param rssi RSSI (dBm)
+ * @param snr SNR (dB)
+ */
+void display_manager_update_rssi(int16_t rssi, float snr);
+
+/**
+ * @brief PGM/PVW 채널 업데이트 (RX 페이지 Tally 표시용)
+ *
+ * @param pgm_channels PGM 채널 배열
+ * @param pgm_count PGM 채널 수
+ * @param pvw_channels PVW 채널 배열
+ * @param pvw_count PVW 채널 수
+ */
+void display_manager_update_tally(const uint8_t* pgm_channels, uint8_t pgm_count,
+                                  const uint8_t* pvw_channels, uint8_t pvw_count);
+
 // ============================================================================
 // 디스플레이 갱신
 // ============================================================================

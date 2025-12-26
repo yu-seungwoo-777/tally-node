@@ -22,7 +22,14 @@ static const char* TAG = "ConfigService";
 // System 상태 (RAM, 전역 변수)
 // ============================================================================
 
-static config_system_t s_system_state = {0};
+static config_system_t s_system_state = {
+    .device_id = {0},
+    .battery = 0,
+    .uptime = 0,
+    .stopped = false,
+    .rssi = -120,
+    .snr = 0.0f
+};
 static bool s_device_id_initialized = false;
 
 // ============================================================================
@@ -67,6 +74,11 @@ public:
     static void incUptime(void);
     static void initDeviceId(void);
 
+    // LoRa RSSI/SNR (이벤트 핸들러로 업데이트)
+    static void onRssiChanged(const event_data_t* event);
+    static int16_t getRssi(void);
+    static float getSnr(void);
+
     // 기본값
     static esp_err_t loadDefaults(config_all_t* config);
     static esp_err_t factoryReset(void);
@@ -80,6 +92,9 @@ private:
 
     // 정적 멤버
     static bool s_initialized;
+
+    // 이벤트 핸들러 등록 (extern "C"에서 접근)
+    static esp_err_t eventHandler(const event_data_t* event);
 };
 
 // ============================================================================
@@ -116,6 +131,8 @@ esp_err_t ConfigServiceClass::init(void)
     // System 상태 기본값
     s_system_state.uptime = 0;
     s_system_state.stopped = false;
+    s_system_state.rssi = -120;  // 기본값 (신호 없음)
+    s_system_state.snr = 0.0f;   // 기본값
 
     // NVS 초기화
     esp_err_t ret = nvs_flash_init();
@@ -126,6 +143,9 @@ esp_err_t ConfigServiceClass::init(void)
     ESP_ERROR_CHECK(ret);
 
     s_initialized = true;
+
+    // LoRa RSSI/SNR 이벤트 구독
+    event_bus_subscribe(EVT_LORA_RSSI_CHANGED, eventHandler);
 
     T_LOGI(TAG, "Config Service 초기화 완료");
     return ESP_OK;
@@ -616,6 +636,41 @@ uint8_t ConfigServiceClass::updateBattery(void)
 }
 
 // ============================================================================
+// LoRa RSSI/SNR (이벤트 핸들러)
+// ============================================================================
+
+// 정적 이벤트 핸들러 (event_bus용)
+esp_err_t ConfigServiceClass::eventHandler(const event_data_t* event)
+{
+    if (event->type == EVT_LORA_RSSI_CHANGED) {
+        onRssiChanged(event);
+    }
+    return ESP_OK;
+}
+
+void ConfigServiceClass::onRssiChanged(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return;
+    }
+
+    // event_bus.h의 lora_rssi_event_t 사용
+    const lora_rssi_event_t* status = (const lora_rssi_event_t*)event->data;
+    s_system_state.rssi = status->rssi;
+    s_system_state.snr = (float)status->snr;
+}
+
+int16_t ConfigServiceClass::getRssi(void)
+{
+    return s_system_state.rssi;
+}
+
+float ConfigServiceClass::getSnr(void)
+{
+    return s_system_state.snr;
+}
+
+// ============================================================================
 // C 인터페이스 (extern "C")
 // ============================================================================
 
@@ -762,6 +817,16 @@ void config_service_set_stopped(bool stopped)
 void config_service_inc_uptime(void)
 {
     ConfigServiceClass::incUptime();
+}
+
+int16_t config_service_get_rssi(void)
+{
+    return ConfigServiceClass::getRssi();
+}
+
+float config_service_get_snr(void)
+{
+    return ConfigServiceClass::getSnr();
 }
 
 // ============================================================================

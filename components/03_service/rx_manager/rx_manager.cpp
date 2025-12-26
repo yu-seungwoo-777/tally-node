@@ -32,7 +32,7 @@ static bool s_initialized = false;
 static bool s_started = false;
 
 // 디바이스 목록 (RAM, 실시간 상태)
-static rx_device_t s_devices[RX_MANAGER_MAX_DEVICES] = {0};
+static rx_device_t s_devices[RX_MANAGER_MAX_DEVICES];  // init에서 memset로 초기화
 static uint8_t s_device_count = 0;
 
 // 등록된 디바이스 (NVS 저장, 영구적)
@@ -82,9 +82,8 @@ static int find_empty_registered_slot(void) {
  * @brief 미등록 디바이스에 STOP 명령 전송
  */
 static void send_stop_to_unregistered(const uint8_t* device_id) {
-    lora_cmd_stop_t cmd = {
-        .header = LORA_HDR_STOP,
-    };
+    lora_cmd_stop_t cmd;
+    cmd.header = LORA_HDR_STOP;
     memcpy(cmd.device_id, device_id, LORA_DEVICE_ID_LEN);
 
     esp_err_t ret = lora_service_send(reinterpret_cast<const uint8_t*>(&cmd), sizeof(cmd));
