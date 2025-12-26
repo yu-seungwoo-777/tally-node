@@ -151,9 +151,9 @@ check_venv() {
     fi
 }
 
-# 클린 후 빌드 (업로드 안함)
+# 클린만 (빌드 안함)
 clean_build_only() {
-    log_info "빌드 캐시를 정리하고 $ENV_TX/$ENV_RX를 빌드합니다..."
+    log_info "빌드 캐시를 정리합니다..."
 
     # 프로젝트 폴더로 이동
     cd "$PROJECT_DIR" || exit 1
@@ -169,31 +169,11 @@ clean_build_only() {
         source "$PROJECT_DIR/$VENV_DIR/bin/activate"
     fi
 
-    # 빌드 캐시 정리
-    rm -rf .pio/
+    # 빌드 캐시 정리 (모든 환경)
+    pio run -e eora_s3_tx -t clean
+    pio run -e eora_s3_rx -t clean
 
-    # TX 빌드
-    log_info "$ENV_TX 환경 빌드 중..."
-    pio run -e "$ENV_TX"
-
-    if [ $? -eq 0 ]; then
-        log_success "$ENV_TX 빌드가 완료되었습니다."
-    else
-        log_error "$ENV_TX 빌드에 실패했습니다."
-        return 1
-    fi
-
-    # RX 빌드
-    log_info "$ENV_RX 환경 빌드 중..."
-    pio run -e "$ENV_RX"
-
-    if [ $? -eq 0 ]; then
-        log_success "$ENV_RX 빌드가 완료되었습니다."
-        log_success "모든 빌드가 성공적으로 완료되었습니다."
-    else
-        log_error "$ENV_RX 빌드에 실패했습니다."
-        return 1
-    fi
+    log_success "모든 빌드 캐시를 정리했습니다."
 }
 
 # 빌드 및 업로드
@@ -261,8 +241,9 @@ clean_build() {
     cd "$PROJECT_DIR" || exit 1
     check_venv
 
-    # .pio 디렉토리 완전 삭제
-    rm -rf .pio/
+    # PlatformIO 클린 (모든 환경)
+    pio run -e eora_s3_tx -t clean
+    pio run -e eora_s3_rx -t clean
 
     log_success "모든 빌드 캐시를 정리했습니다."
 }
@@ -280,7 +261,7 @@ show_menu() {
     echo "  2. 디바이스 모니터 시작"
     echo "  3. TX 환경 빌드 및 업로드 (클린 안함)"
     echo "  4. RX 환경 빌드 및 업로드 (클린 안함)"
-    echo "  5. 클린 후 TX/RX 빌드 (업로드 안함)"
+    echo "  5. 모든 환경 클린"
     echo "  6. 종료"
     echo "======================================================"
 }
