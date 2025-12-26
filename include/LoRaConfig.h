@@ -35,7 +35,7 @@
 // Bandwidth (kHz)
 // 125, 250, 500 중 선택
 // 125kHz: 감도 좋음, 250kHz: 속도 빠름
-#define LORA_DEFAULT_BW         125.0f    // 125kHz (장거리용)
+#define LORA_DEFAULT_BW         250.0f    // 125kHz (장거리용)
 
 // 송신 전력 (dBm)
 // 최대 +22dBm (E22 모듈)

@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "esp_err.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,10 +62,10 @@ esp_err_t tx_command_set_camera_id(const uint8_t* device_id, uint8_t camera_id);
 esp_err_t tx_command_set_rf(const uint8_t* device_id, float frequency, uint8_t sync_word);
 
 /**
- * @brief 기능 정지 (Uni/Broadcast)
+ * @brief 기능 정지 명령 전송 (Uni/Broadcast)
  * @param device_id 타겟 RX device_id (4바이트), nullptr이면 broadcast
  */
-esp_err_t tx_command_stop(const uint8_t* device_id);
+esp_err_t tx_command_send_stop(const uint8_t* device_id);
 
 /**
  * @brief 재부팅 (Unicast)

@@ -26,13 +26,13 @@ extern "C" {
 #define LORA_HDR_TALLY_20CH    0xF4   // 20채널
 
 // TX → RX 명령
-#define LORA_HDR_STATUS_REQ    0xE0   // 상태 요청 (Broadcast)
+#define LORA_HDR_STATUS_REQ    0xE0   // 상태 요청 (Broadcast) - 모든 RX가 응답
 #define LORA_HDR_SET_BRIGHTNESS 0xE1  // 밝기 설정 (Unicast)
 #define LORA_HDR_SET_CAMERA_ID 0xE2   // 카메라 ID 설정 (Unicast)
 #define LORA_HDR_SET_RF        0xE3   // 주파수+SyncWord 설정 (Unicast)
 #define LORA_HDR_STOP          0xE4   // 기능 정지 (Uni/Broadcast)
 #define LORA_HDR_REBOOT        0xE5   // 재부팅 (Unicast)
-#define LORA_HDR_PING          0xE6   // 지연시간 테스트 (Unicast)
+#define LORA_HDR_PING          0xE6   // 지연시간 테스트 (Unicast) - 등록된 디바이스 개별 체크
 
 // RX → TX 응답
 #define LORA_HDR_STATUS        0xD0   // 상태 정보
@@ -92,15 +92,6 @@ typedef struct __attribute__((packed)) {
 } lora_cmd_reboot_t;
 
 /**
- * @brief PING 명령 (0xE6)
- */
-typedef struct __attribute__((packed)) {
-    uint8_t header;                  // 0xE6
-    uint8_t device_id[LORA_DEVICE_ID_LEN];
-    uint32_t timestamp;              // 송신 시간 (ms)
-} lora_cmd_ping_t;
-
-/**
  * @brief 상태 응답 (0xD0)
  * @note RSSI/SNR은 수신 시 패킷에서 직접 취득
  */
@@ -134,13 +125,21 @@ typedef struct __attribute__((packed)) {
 #define LORA_ACK_ERR_FAILED    0x03
 
 /**
- * @brief PONG 응답 (0xD2)
+ * @brief PING 명령 (0xE6) - 간소화 버전
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t header;                  // 0xE6
+    uint8_t device_id[LORA_DEVICE_ID_LEN];
+    uint16_t timestamp_low;          // 송신 시간 하위 2바이트 (ms)
+} lora_cmd_ping_t;
+
+/**
+ * @brief PONG 응답 (0xD2) - 간소화 버전
  */
 typedef struct __attribute__((packed)) {
     uint8_t header;                  // 0xD2
     uint8_t device_id[LORA_DEVICE_ID_LEN];
-    uint32_t tx_timestamp;           // PING의 timestamp
-    uint32_t rx_timestamp;           // 수신 시간 (ms)
+    uint16_t tx_timestamp_low;       // PING의 timestamp 하위 2바이트
 } lora_msg_pong_t;
 
 // ============================================================================

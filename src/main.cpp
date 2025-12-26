@@ -19,10 +19,11 @@
 // 앱 모드 선택 (0 또는 1로 설정, 하나만 1로 활성화)
 // ============================================================================
 
-#define RUN_DISPLAY_TEST    1   // 디스플레이 테스트 (OLED)
+#define RUN_DISPLAY_TEST    0   // 디스플레이 테스트 (OLED)
 #define RUN_ETH_TEST        0   // 이더넷 테스트 모드 (W5500만)
 #define RUN_TALLY_TX_APP    0   // Tally TX 앱 (스위처 연결 + LoRa 송신)
 #define RUN_TALLY_RX_APP    0   // Tally RX 앱 (LoRa 수신)
+#define RUN_LORA_TEST_APP   1   // LoRa 송수신 테스트 앱
 
 #if RUN_DISPLAY_TEST
     #include "display_test_app.h"
@@ -33,9 +34,11 @@
     #include "tally_tx_app.h"
 #elif RUN_TALLY_RX_APP
     #include "tally_rx_app.h"
+#elif RUN_LORA_TEST_APP
+    #include "lora_test_app.h"
 #endif
 
-static const char* TAG = "MAIN";
+static const char* TAG __attribute__((unused)) = "MAIN";
 
 extern "C" void app_main(void)
 {
@@ -49,6 +52,8 @@ extern "C" void app_main(void)
     T_LOGI(TAG, "앱: Tally TX (스위처 연결 + LoRa 송신)");
 #elif RUN_TALLY_RX_APP
     T_LOGI(TAG, "앱: Tally RX (LoRa 수신)");
+#elif RUN_LORA_TEST_APP
+    T_LOGI(TAG, "앱: LoRa 송수신 테스트");
 #endif
     T_LOGI(TAG, "========================================");
 
@@ -151,6 +156,29 @@ extern "C" void app_main(void)
     tally_rx_app_start();
 
     T_LOGI(TAG, "LoRa 수신 대기 중...");
+
+#elif RUN_LORA_TEST_APP
+
+    // ============================================================================
+    // LoRa 송수신 테스트 앱
+    // ============================================================================
+
+    T_LOGI(TAG, "");
+    T_LOGI(TAG, "===== LoRa 송수신 테스트 앱 =====");
+    T_LOGI(TAG, "");
+
+    // LoRa 테스트 앱 초기화 및 시작
+    ret = lora_test_app_init();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "LoRa 테스트 앱 초기화 실패: %s", esp_err_to_name(ret));
+        return;
+    }
+
+    ret = lora_test_app_start();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "LoRa 테스트 앱 시작 실패: %s", esp_err_to_name(ret));
+        return;
+    }
 
 #endif
 

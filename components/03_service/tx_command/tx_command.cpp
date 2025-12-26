@@ -87,10 +87,9 @@ esp_err_t tx_command_set_brightness(const uint8_t* device_id, uint8_t brightness
         return ESP_ERR_INVALID_ARG;
     }
 
-    lora_cmd_brightness_t cmd = {
-        .header = LORA_HDR_SET_BRIGHTNESS,
-        .brightness = brightness,
-    };
+    lora_cmd_brightness_t cmd;
+    cmd.header = LORA_HDR_SET_BRIGHTNESS;
+    cmd.brightness = brightness;
     memcpy(cmd.device_id, device_id, LORA_DEVICE_ID_LEN);
 
     char id_str[5];
@@ -105,10 +104,9 @@ esp_err_t tx_command_set_camera_id(const uint8_t* device_id, uint8_t camera_id) 
         return ESP_ERR_INVALID_ARG;
     }
 
-    lora_cmd_camera_id_t cmd = {
-        .header = LORA_HDR_SET_CAMERA_ID,
-        .camera_id = camera_id,
-    };
+    lora_cmd_camera_id_t cmd;
+    cmd.header = LORA_HDR_SET_CAMERA_ID;
+    cmd.camera_id = camera_id;
     memcpy(cmd.device_id, device_id, LORA_DEVICE_ID_LEN);
 
     char id_str[5];
@@ -123,11 +121,10 @@ esp_err_t tx_command_set_rf(const uint8_t* device_id, float frequency, uint8_t s
         return ESP_ERR_INVALID_ARG;
     }
 
-    lora_cmd_rf_t cmd = {
-        .header = LORA_HDR_SET_RF,
-        .frequency = frequency,
-        .sync_word = sync_word,
-    };
+    lora_cmd_rf_t cmd;
+    cmd.header = LORA_HDR_SET_RF;
+    cmd.frequency = frequency;
+    cmd.sync_word = sync_word;
     memcpy(cmd.device_id, device_id, LORA_DEVICE_ID_LEN);
 
     char id_str[5];
@@ -137,10 +134,9 @@ esp_err_t tx_command_set_rf(const uint8_t* device_id, float frequency, uint8_t s
     return send_packet(&cmd, sizeof(cmd));
 }
 
-esp_err_t tx_command_stop(const uint8_t* device_id) {
-    lora_cmd_stop_t cmd = {
-        .header = LORA_HDR_STOP,
-    };
+esp_err_t tx_command_send_stop(const uint8_t* device_id) {
+    lora_cmd_stop_t cmd;
+    cmd.header = LORA_HDR_STOP;
 
     if (device_id == nullptr) {
         // Broadcast
@@ -162,9 +158,8 @@ esp_err_t tx_command_reboot(const uint8_t* device_id) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    lora_cmd_reboot_t cmd = {
-        .header = LORA_HDR_REBOOT,
-    };
+    lora_cmd_reboot_t cmd;
+    cmd.header = LORA_HDR_REBOOT;
     memcpy(cmd.device_id, device_id, LORA_DEVICE_ID_LEN);
 
     char id_str[5];
@@ -179,15 +174,14 @@ esp_err_t tx_command_ping(const uint8_t* device_id, uint32_t timestamp) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    lora_cmd_ping_t cmd = {
-        .header = LORA_HDR_PING,
-        .timestamp = timestamp,
-    };
+    lora_cmd_ping_t cmd;
+    cmd.header = LORA_HDR_PING;
+    cmd.timestamp_low = (uint16_t)(timestamp & 0xFFFF);  // 하위 2바이트만
     memcpy(cmd.device_id, device_id, LORA_DEVICE_ID_LEN);
 
     char id_str[5];
     lora_device_id_to_str(device_id, id_str);
-    T_LOGD(TAG, "PING: id=%s, ts=%u", id_str, timestamp);
+    T_LOGD(TAG, "PING: id=%s, ts=%u (low=%u)", id_str, timestamp, cmd.timestamp_low);
 
     return send_packet(&cmd, sizeof(cmd));
 }

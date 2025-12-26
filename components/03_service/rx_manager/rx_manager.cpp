@@ -14,7 +14,7 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 
-static const char* TAG = "RxManager";
+static const char* TAG __attribute__((unused)) = "RxManager";
 
 // ============================================================================
 // NVS 설정
@@ -243,14 +243,24 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
             // 디바이스 찾기
             int idx = rx_manager_find_device(msg->device_id);
             if (idx >= 0) {
-                // 지연시간 계산
+                // 지연시간 계산 (2바이트 timestamp)
                 uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-                uint32_t ping_ms = now - msg->tx_timestamp;
+                uint16_t now_low = (uint16_t)(now & 0xFFFF);
+                uint16_t tx_low = msg->tx_timestamp_low;
+
+                // 오버플로우 고려
+                uint16_t ping_ms;
+                if (now_low >= tx_low) {
+                    ping_ms = now_low - tx_low;
+                } else {
+                    ping_ms = now_low + 0x10000 - tx_low;  // 오버플로우 보정
+                }
+
                 s_devices[idx].ping_ms = ping_ms;
                 s_devices[idx].last_seen = xTaskGetTickCount();
 
-                T_LOGD(TAG, "  PONG: id=%s, tx_time=%u, rx_time=%u, ping=%ums",
-                       id_str, msg->tx_timestamp, msg->rx_timestamp, ping_ms);
+                T_LOGI(TAG, "  PONG 수신: id=%s, tx_low=%u, now_low=%u, ping=%ums",
+                       id_str, tx_low, now_low, ping_ms);
 
                 if (s_event_callback) {
                     s_event_callback();

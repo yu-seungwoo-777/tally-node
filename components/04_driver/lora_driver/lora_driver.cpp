@@ -91,12 +91,12 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
         return ESP_OK;
     }
 
-    // 기본 설정
-    uint8_t sf = config ? config->spreading_factor : 7;
-    uint8_t cr = config ? config->coding_rate : 7;
-    float bw = config ? config->bandwidth : 125.0f;  // 125kHz 기본값
-    int8_t txp = config ? config->tx_power : 22;
-    uint8_t sw = config ? config->sync_word : 0x12;
+    // 기본 설정 (LoRaConfig.h 매크로 사용)
+    uint8_t sf = config ? config->spreading_factor : LORA_DEFAULT_SF;
+    uint8_t cr = config ? config->coding_rate : LORA_DEFAULT_CR;
+    float bw = config ? config->bandwidth : LORA_DEFAULT_BW;
+    int8_t txp = config ? config->tx_power : LORA_DEFAULT_TX_POWER;
+    uint8_t sw = config ? config->sync_word : LORA_DEFAULT_SYNC_WORD;
 
     T_LOGI(TAG, "LoRa 드라이버 초기화 중...");
     T_LOGI(TAG, "  SF=%d, BW=%.0fkHz, CR=4/%d, TXP=%ddBm, SW=0x%02X",
@@ -123,7 +123,7 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     // 칩 자동 감지: SX1262 (868MHz) 먼저 시도 (900TB 모듈)
     T_LOGI(TAG, "SX1262 (868MHz) 감지 시도...");
     SX1262* radio_1262 = new SX1262(s_module);
-    int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+    int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);  // Preamble=8
 
     if (state == RADIOLIB_ERR_NONE) {
         s_radio = radio_1262;
@@ -137,7 +137,7 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
         // SX1268 (433MHz) 시도 (400TB 모듈)
         T_LOGI(TAG, "SX1268 (433MHz) 감지 시도...");
         SX1268* radio_1268 = new SX1268(s_module);
-        state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+        state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);  // Preamble=8
 
         if (state == RADIOLIB_ERR_NONE) {
             s_radio = radio_1268;
@@ -285,7 +285,7 @@ esp_err_t lora_driver_transmit(const uint8_t* data, size_t length) {
         return ESP_ERR_TIMEOUT;
     }
 
-    T_LOGI(TAG, "→ 송신: %d bytes", length);
+    T_LOGD(TAG, "→ 송신: %d bytes", length);
 
     // 비동기 송신 시작
     s_is_transmitting = false;
@@ -361,7 +361,7 @@ void lora_driver_check_received(void) {
             // 콜백 호출 전 뮤텍스 해제 (데드락 방지)
             xSemaphoreGive(s_spi_mutex);
 
-            T_LOGI(TAG, "← 수신: %d bytes (RSSI: %.1f dBm, SNR: %.1f dB)",
+            T_LOGD(TAG, "← 수신: %d bytes (RSSI: %.1f dBm, SNR: %.1f dB)",
                      num_bytes, rssi, snr);
 
             if (s_receive_callback) {
@@ -390,7 +390,7 @@ void lora_driver_check_transmitted(void) {
             return;
         }
 
-        T_LOGI(TAG, "✓ 송신 완료");
+        T_LOGD(TAG, "✓ 송신 완료");
 
         s_radio->finishTransmit();
 

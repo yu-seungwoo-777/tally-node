@@ -33,7 +33,7 @@ static rx_command_get_status_callback_t s_get_status_cb = nullptr;
 
 static void send_ack(uint8_t cmd_header, uint8_t result);
 static void send_status(void);
-static void send_pong(uint32_t tx_timestamp);
+static void send_pong(uint16_t tx_timestamp_low);
 
 // ============================================================================
 // 내부 함수 구현
@@ -59,6 +59,7 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
 
     // TX→RX 명령만 처리
     if (!lora_header_is_tx_command(header)) {
+        T_LOGI(TAG, "RX 패킷 무시: header=0x%02X (TX 명령 아님)", header);
         return ESP_OK;
     }
 
@@ -67,7 +68,7 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
 
     switch (header) {
         case LORA_HDR_STATUS_REQ: {
-            T_LOGD(TAG, "  STATUS_REQ (broadcast)");
+            T_LOGI(TAG, "STATUS_REQ 수신");
             send_status();
             break;
         }
@@ -89,7 +90,8 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
                 return ESP_OK;
             }
 
-            T_LOGD(TAG, "  SET_BRIGHTNESS: id=%s, brightness=%d%%", id_str, cmd->brightness);
+            T_LOGI(TAG, "SET_BRIGHTNESS 수신");
+            T_LOGD(TAG, "  id=%s, brightness=%d%%", id_str, cmd->brightness);
 
             // TODO: 실제 밝기 설정 적용
             send_ack(LORA_HDR_SET_BRIGHTNESS, LORA_ACK_SUCCESS);
@@ -112,7 +114,8 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
                 return ESP_OK;
             }
 
-            T_LOGD(TAG, "  SET_CAMERA_ID: id=%s, camera_id=%d", id_str, cmd->camera_id);
+            T_LOGI(TAG, "SET_CAMERA_ID 수신");
+            T_LOGD(TAG, "  id=%s, camera_id=%d", id_str, cmd->camera_id);
 
             // TODO: 실제 카메라 ID 설정 적용
             send_ack(LORA_HDR_SET_CAMERA_ID, LORA_ACK_SUCCESS);
@@ -135,7 +138,8 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
                 return ESP_OK;
             }
 
-            T_LOGD(TAG, "  SET_RF: id=%s, freq=%.1fMHz, sync=0x%02X",
+            T_LOGI(TAG, "SET_RF 수신");
+            T_LOGD(TAG, "  id=%s, freq=%.1fMHz, sync=0x%02X",
                    id_str, cmd->frequency, cmd->sync_word);
 
             // TODO: 실제 RF 설정 적용
@@ -161,7 +165,8 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
                 return ESP_OK;
             }
 
-            T_LOGD(TAG, "  STOP: id=%s", id_str);
+            T_LOGI(TAG, "STOP 수신");
+            T_LOGD(TAG, "  id=%s", id_str);
             s_stopped = true;
 
             // TODO: 실제 기능 정지 적용
@@ -185,7 +190,8 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
                 return ESP_OK;
             }
 
-            T_LOGD(TAG, "  REBOOT: id=%s", id_str);
+            T_LOGI(TAG, "REBOOT 수신");
+            T_LOGD(TAG, "  id=%s", id_str);
 
             send_ack(LORA_HDR_REBOOT, LORA_ACK_SUCCESS);
 
@@ -203,15 +209,18 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
             const auto* cmd = reinterpret_cast<const lora_cmd_ping_t*>(data);
 
             char id_str[5];
+            char my_id_str[5];
             lora_device_id_to_str(cmd->device_id, id_str);
+            lora_device_id_to_str(s_device_id, my_id_str);
 
             if (!lora_device_id_equals(cmd->device_id, s_device_id)) {
-                T_LOGD(TAG, "  PING: not for me (target=%s)", id_str);
+                T_LOGD(TAG, "PING 무시: 대상이 아님 (target=%s, my_id=%s)", id_str, my_id_str);
                 return ESP_OK;
             }
 
-            T_LOGD(TAG, "  PING: id=%s, timestamp=%u", id_str, cmd->timestamp);
-            send_pong(cmd->timestamp);
+            T_LOGI(TAG, "PING 수신");
+            T_LOGD(TAG, "  ts_low=%u", cmd->timestamp_low);
+            send_pong(cmd->timestamp_low);
             break;
         }
 
@@ -272,19 +281,17 @@ static void send_status(void) {
 
 /**
  * @brief PONG 응답 전송
+ * @param tx_timestamp_low PING의 timestamp 하위 2바이트
  */
-static void send_pong(uint32_t tx_timestamp) {
-    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-
+static void send_pong(uint16_t tx_timestamp_low) {
     lora_msg_pong_t pong;
     pong.header = LORA_HDR_PONG;
-    pong.tx_timestamp = tx_timestamp;
-    pong.rx_timestamp = now;
+    pong.tx_timestamp_low = tx_timestamp_low;  // 받은 그대로 반환
     memcpy(pong.device_id, s_device_id, LORA_DEVICE_ID_LEN);
 
     esp_err_t ret = lora_service_send(reinterpret_cast<const uint8_t*>(&pong), sizeof(pong));
     if (ret == ESP_OK) {
-        T_LOGD(TAG, "PONG sent");
+        T_LOGI(TAG, "  PONG 송신: ts_low=%u", tx_timestamp_low);
     } else {
         T_LOGW(TAG, "PONG send failed: %d", ret);
     }
