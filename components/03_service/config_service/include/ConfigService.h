@@ -6,6 +6,8 @@
  * - WiFi AP 설정
  * - WiFi STA 설정
  * - Ethernet 설정
+ * - Device 설정 (brightness, camera_id, RF)
+ * - System 상태 (device_id, battery, uptime, stopped)
  * - 설정 로드/저장
  * - 기본값 관리
  */
@@ -49,11 +51,33 @@ typedef struct {
     bool enabled;
 } config_ethernet_t;
 
+// RF 설정 (LoRa 주파수 + Sync Word)
+typedef struct {
+    float frequency;     // MHz (예: 868.0f)
+    uint8_t sync_word;   // Sync Word (예: 0x12)
+} config_rf_t;
+
+// Device 설정 (NVS 저장)
+typedef struct {
+    uint8_t brightness;      // 0-100
+    uint8_t camera_id;       // 카메라 ID
+    config_rf_t rf;          // RF 설정
+} config_device_t;
+
+// System 상태 (RAM, 저장 안 함)
+typedef struct {
+    char device_id[5];       // 디바이스 ID (4자리 hex 문자열, 읽기 전용)
+    uint8_t battery;         // 배터리 %
+    uint32_t uptime;         // 업타임 (초)
+    bool stopped;            // 기능 정지 상태
+} config_system_t;
+
 // 전체 설정
 typedef struct {
     config_wifi_ap_t wifi_ap;
     config_wifi_sta_t wifi_sta;
     config_ethernet_t ethernet;
+    config_device_t device;      // Device 설정 (NVS 저장)
 } config_all_t;
 
 // ============================================================================
@@ -104,6 +128,73 @@ esp_err_t config_service_get_ethernet(config_ethernet_t* config);
  * @brief Ethernet 설정 저장
  */
 esp_err_t config_service_set_ethernet(const config_ethernet_t* config);
+
+// ============================================================================
+// Device 설정 API
+// ============================================================================
+
+/**
+ * @brief Device 설정 로드
+ */
+esp_err_t config_service_get_device(config_device_t* config);
+
+/**
+ * @brief Device 설정 저장
+ */
+esp_err_t config_service_set_device(const config_device_t* config);
+
+/**
+ * @brief 밝기 설정
+ */
+esp_err_t config_service_set_brightness(uint8_t brightness);
+
+/**
+ * @brief 카메라 ID 설정
+ */
+esp_err_t config_service_set_camera_id(uint8_t camera_id);
+
+/**
+ * @brief RF 설정 (주파수 + Sync Word)
+ */
+esp_err_t config_service_set_rf(float frequency, uint8_t sync_word);
+
+// ============================================================================
+// System 상태 API
+// ============================================================================
+
+/**
+ * @brief Device ID 가져오기 (4자리 hex 문자열)
+ */
+const char* config_service_get_device_id(void);
+
+/**
+ * @brief System 상태 가져오기
+ */
+void config_service_get_system(config_system_t* status);
+
+/**
+ * @brief Battery 설정
+ */
+void config_service_set_battery(uint8_t battery);
+
+/**
+ * @brief Battery ADC로 읽기 (백분율 반환)
+ */
+uint8_t config_service_update_battery(void);
+
+/**
+ * @brief Stopped 상태 설정
+ */
+void config_service_set_stopped(bool stopped);
+
+/**
+ * @brief Uptime 증가 (1초 타이머 호출용)
+ */
+void config_service_inc_uptime(void);
+
+// ============================================================================
+// 기존 API
+// ============================================================================
 
 /**
  * @brief 기본값 로드

@@ -23,7 +23,8 @@
 #define RUN_ETH_TEST        0   // 이더넷 테스트 모드 (W5500만)
 #define RUN_TALLY_TX_APP    0   // Tally TX 앱 (스위처 연결 + LoRa 송신)
 #define RUN_TALLY_RX_APP    0   // Tally RX 앱 (LoRa 수신)
-#define RUN_LORA_TEST_APP   1   // LoRa 송수신 테스트 앱
+#define RUN_LORA_TEST_APP   0   // LoRa 송수신 테스트 앱
+#define RUN_CONFIG_TEST     1   // ConfigService 조회 테스트
 
 #if RUN_DISPLAY_TEST
     #include "display_test_app.h"
@@ -36,6 +37,8 @@
     #include "tally_rx_app.h"
 #elif RUN_LORA_TEST_APP
     #include "lora_test_app.h"
+#elif RUN_CONFIG_TEST
+    #include "config_test.h"
 #endif
 
 static const char* TAG __attribute__((unused)) = "MAIN";
@@ -54,6 +57,8 @@ extern "C" void app_main(void)
     T_LOGI(TAG, "앱: Tally RX (LoRa 수신)");
 #elif RUN_LORA_TEST_APP
     T_LOGI(TAG, "앱: LoRa 송수신 테스트");
+#elif RUN_CONFIG_TEST
+    T_LOGI(TAG, "앱: ConfigService 조회 테스트");
 #endif
     T_LOGI(TAG, "========================================");
 
@@ -180,13 +185,33 @@ extern "C" void app_main(void)
         return;
     }
 
+#elif RUN_CONFIG_TEST
+
+    // ============================================================================
+    // ConfigService 조회 테스트 앱
+    // ============================================================================
+
+    T_LOGI(TAG, "");
+    T_LOGI(TAG, "===== ConfigService 조회 테스트 앱 =====");
+    T_LOGI(TAG, "");
+
+    // ConfigService 테스트 앱 초기화 (테스트 실행 포함)
+    ret = config_test_app_init();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "ConfigService 테스트 앱 초기화 실패: %s", esp_err_to_name(ret));
+        return;
+    }
+
 #endif
 
     T_LOGI(TAG, "시스템 시작 완료");
 
     // 메인 루프
     while (1) {
-#if RUN_ETH_TEST
+#if RUN_CONFIG_TEST
+        // 1초마다 배터리/업타임 표시
+        config_test_app_tick();
+#elif RUN_ETH_TEST
         // 이더넷 상태 주기적 출력 (5초 간격)
         static int cnt = 0;
         if (++cnt >= 5) {
