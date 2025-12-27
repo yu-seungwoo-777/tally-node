@@ -215,6 +215,9 @@ void HardwareService::hw_monitor_task(void* arg)
         // uptime 증가
         s_system.uptime++;
 
+        // 하드웨어 정보 이벤트 발행
+        event_bus_publish(EVT_INFO_UPDATED, &s_system, sizeof(s_system));
+
         vTaskDelay(pdMS_TO_TICKS(MONITOR_INTERVAL_MS));
     }
 
