@@ -77,6 +77,14 @@ typedef struct __attribute__((packed)) {
     uint64_t tally_value;    // 64비트 packed 값
 } tally_event_data_t;
 
+/**
+ * @brief RF 설정 이벤트 데이터 (EVT_RF_CHANGED용)
+ */
+typedef struct {
+    float frequency;    ///< 주파수 (MHz)
+    uint8_t sync_word;  ///< Sync Word
+} lora_rf_event_t;
+
 // ============================================================================
 // 이벤트 타입 정의
 // ============================================================================
@@ -90,6 +98,8 @@ typedef enum {
     EVT_CONFIG_CHANGED,
     EVT_BRIGHTNESS_CHANGED,     ///< 밝기 설정 변경 (data: uint8_t, 0-255)
     EVT_CAMERA_ID_CHANGED,      ///< 카메라 ID 변경 (data: uint8_t, 1-20)
+    EVT_RF_CHANGED,             ///< RF 설정 변경 (data: lora_rf_event_t)
+    EVT_STOP_CHANGED,           ///< 기능 정지 상태 변경 (data: bool, true=정지)
 
     // 버튼 이벤트 (03_service → 01_app)
     EVT_BUTTON_SINGLE_CLICK,    ///< 버튼 단일 클릭 (짧게 눌름)

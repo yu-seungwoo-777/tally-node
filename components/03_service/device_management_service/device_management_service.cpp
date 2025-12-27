@@ -387,7 +387,10 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
             T_LOGI(TAG, "SET_BRIGHTNESS 수신");
             T_LOGD(TAG, "  id=%s, brightness=%d%%", id_str, cmd->brightness);
 
-            // TODO: 실제 밝기 설정 적용
+            // event_bus로 밝기 변경 이벤트 발행 (0-100 → 0-255 변환)
+            uint8_t brightness_255 = (cmd->brightness * 255) / 100;
+            event_bus_publish(EVT_BRIGHTNESS_CHANGED, &brightness_255, sizeof(brightness_255));
+
             send_ack(LORA_HDR_SET_BRIGHTNESS, LORA_ACK_SUCCESS);
             break;
         }
@@ -411,7 +414,9 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
             T_LOGI(TAG, "SET_CAMERA_ID 수신");
             T_LOGD(TAG, "  id=%s, camera_id=%d", id_str, cmd->camera_id);
 
-            // TODO: 실제 카메라 ID 설정 적용
+            // event_bus로 카메라 ID 변경 이벤트 발행
+            event_bus_publish(EVT_CAMERA_ID_CHANGED, &cmd->camera_id, sizeof(cmd->camera_id));
+
             send_ack(LORA_HDR_SET_CAMERA_ID, LORA_ACK_SUCCESS);
             break;
         }
@@ -436,7 +441,13 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
             T_LOGD(TAG, "  id=%s, freq=%.1fMHz, sync=0x%02X",
                    id_str, cmd->frequency, cmd->sync_word);
 
-            // TODO: 실제 RF 설정 적용
+            // event_bus로 RF 설정 변경 이벤트 발행
+            lora_rf_event_t rf_event = {
+                .frequency = cmd->frequency,
+                .sync_word = cmd->sync_word
+            };
+            event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
+
             send_ack(LORA_HDR_SET_RF, LORA_ACK_SUCCESS);
             break;
         }
@@ -462,7 +473,10 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
             T_LOGD(TAG, "  id=%s", id_str);
             s_stopped = true;
 
-            // TODO: 실제 기능 정지 적용
+            // event_bus로 정지 상태 변경 이벤트 발행
+            bool stopped = true;
+            event_bus_publish(EVT_STOP_CHANGED, &stopped, sizeof(stopped));
+
             send_ack(LORA_HDR_STOP, LORA_ACK_SUCCESS);
             break;
         }

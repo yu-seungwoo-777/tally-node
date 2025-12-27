@@ -74,6 +74,7 @@ private:
 
     static void initDeviceId(void);
     static esp_err_t onRssiEvent(const event_data_t* event);
+    static esp_err_t onStopEvent(const event_data_t* event);
     static void hw_monitor_task(void* arg);
 
     static bool s_initialized;
@@ -140,6 +141,20 @@ esp_err_t HardwareService::onRssiEvent(const event_data_t* event)
     return ESP_OK;
 }
 
+esp_err_t HardwareService::onStopEvent(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    bool stopped = *(const bool*)event->data;
+    s_system.stopped = stopped;
+
+    T_LOGI(TAG, "정지 상태 변경: %s", stopped ? "정지" : "동작");
+
+    return ESP_OK;
+}
+
 // ============================================================================
 // 공개 API
 // ============================================================================
@@ -174,6 +189,9 @@ esp_err_t HardwareService::init(void)
     // LoRa RSSI/SNR 이벤트 구독
     event_bus_subscribe(EVT_LORA_RSSI_CHANGED, onRssiEvent);
 
+    // 정지 상태 변경 이벤트 구독
+    event_bus_subscribe(EVT_STOP_CHANGED, onStopEvent);
+
     s_initialized = true;
     T_LOGI(TAG, "HardwareService 초기화 완료");
 
@@ -191,6 +209,7 @@ void HardwareService::deinit(void)
 
     // 이벤트 구독 취소
     event_bus_unsubscribe(EVT_LORA_RSSI_CHANGED, onRssiEvent);
+    event_bus_unsubscribe(EVT_STOP_CHANGED, onStopEvent);
 
     s_initialized = false;
     T_LOGI(TAG, "HardwareService 정리 완료");
