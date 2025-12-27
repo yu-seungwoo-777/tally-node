@@ -9,7 +9,9 @@
 #include "t_log.h"
 
 // 앱 헤더
-#ifdef DEVICE_MODE_TX
+#ifdef TEST_MODE
+#include "eth_test_app.h"
+#elif defined(DEVICE_MODE_TX)
 #include "prod_tx_app.h"
 #else
 #include "prod_rx_app.h"
@@ -19,7 +21,22 @@ static const char* TAG = "main";
 
 extern "C" void app_main(void)
 {
-#ifdef DEVICE_MODE_TX
+#ifdef TEST_MODE
+    T_LOGI(TAG, "Mode: Ethernet Test");
+
+    if (eth_test_app_init() != ESP_OK) {
+        T_LOGE(TAG, "Eth test app init failed");
+        return;
+    }
+    eth_test_app_start();
+
+    while (1) {
+        eth_test_app_loop();
+    }
+
+    eth_test_app_deinit();
+
+#elif defined(DEVICE_MODE_TX)
     T_LOGI(TAG, "Mode: TX");
 
     if (!prod_tx_app_init(NULL)) {
