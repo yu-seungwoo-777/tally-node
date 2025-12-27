@@ -3,10 +3,10 @@
  * @brief 네트워크 통합 관리 서비스 구현 (C++)
  */
 
-#include "NetworkService.h"
-#include "ConfigService.h"
-#include "WiFiDriver.h"
-#include "EthernetDriver.h"
+#include "network_service.h"
+#include "config_service.h"
+#include "wifi_driver.h"
+#include "ethernet_driver.h"
 #include "t_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"

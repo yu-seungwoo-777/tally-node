@@ -122,15 +122,14 @@ components/
 │   │       └── TxPage/
 │   └── web_server/
 ├── 03_service/
-│   ├── button_handler/
-│   ├── button_poll/
+│   ├── button_service/
 │   ├── config_service/
+│   ├── device_management_service/
+│   ├── hardware_service/
+│   ├── led_service/
 │   ├── lora_service/
 │   ├── network_service/
-│   ├── rx_command/
-│   ├── rx_manager/
-│   ├── switcher_service/
-│   └── tx_command/
+│   └── switcher_service/
 ├── 04_driver/
 │   ├── battery_driver/
 │   ├── display_driver/
@@ -199,6 +198,56 @@ X 잘못된 예 (건너뛰기):
 - 하위 계층: `event_bus_publish(EVT_LORA_PACKET_RECEIVED, &data, size);`
 - 상위 계층: `event_bus_subscribe(EVT_LORA_PACKET_RECEIVED, callback);`
 
+### 3. 서비스 레이어 규칙
+
+#### 3.1 서비스 간 직접 호출 금지
+
+같은 계층(03_service) 간 직접 호출은 금지합니다.
+
+```
+X 잘못된 예:
+led_service → config_service (직접 호출)
+network_service → config_service (직접 호출)
+device_management_service → hardware_service (직접 호출)
+
+O 올바른 예:
+01_app → config_service → 01_app → led_service (App이 중개)
+서비스 → event_bus → 서비스 (이벤트 기반 통신)
+```
+
+#### 3.2 NVS 접근 규칙
+
+모든 NVS(Non-Volatile Storage) 접근은 **ConfigService만** 수행해야 합니다.
+
+```
+X 잘못된 예:
+device_management_service → nvs_flash (직접 NVS 접근)
+기타 서비스 → nvs_flash
+
+O 올바른 예:
+서비스 → ConfigService API → NVS
+또는
+서비스 → event_bus → ConfigService → NVS
+```
+
+**ConfigService가 관리하는 데이터:**
+- WiFi AP/STA 설정
+- Ethernet 설정
+- Device 설정 (brightness, camera_id, RF)
+- Switcher 설정 (Primary/Secondary)
+- LED 색상 설정
+- **등록된 디바이스 목록** (device_management_service에서 이동 예정)
+
+#### 3.3 통신 방식 가이드
+
+| 통신 방향 | 방식 | 예시 |
+|-----------|------|------|
+| App → Service | 직접 호출 | `config_service_init()` |
+| Service → App | event_bus | `EVT_LORA_PACKET_RECEIVED` |
+| Service → Service | event_bus (금지: 직접 호출) | `EVT_TALLY_STATE_CHANGED` |
+| Service → Driver | 직접 호출 (하위 의존 허용) | `lora_service_send()` |
+| Service → NVS | ConfigService API (금지: 직접 접근) | `config_service_set_camera_id()` |
+
 ---
 
 ## 컴포넌트 상세
@@ -247,15 +296,18 @@ X 잘못된 예 (건너뛰기):
 
 | 컴포넌트 | 역할 | 의존성 | 상태 |
 |---------|------|--------|------|
-| button_handler | 버튼 핸들러 (이벤트 버스 연동) | event_bus | ✅ |
-| button_poll | 버튼 폴링 (상태 머신) | driver, esp_timer | ✅ |
-| lora_service | LoRa 통신 서비스 | lora_driver, event_bus | ✅ |
-| network_service | 네트워크 통합 관리 (C++) | wifi_driver, ethernet_driver, config_service | ✅ |
+| button_service | 버튼 서비스 (폴링 + 상태 머신) | esp_timer, event_bus | ✅ |
 | config_service | NVS 설정 관리 (C++) | nvs_flash | ✅ |
-| switcher_service | 스위처 연결 서비스 (C++) | switcher_driver, event_bus | ✅ |
-| tx_command | TX 명령 처리 | lora_service | ✅ |
-| rx_command | RX 명령 처리 | lora_service | ✅ |
-| rx_manager | RX 상태 관리 | rx_command, event_bus | ✅ |
+| device_management_service | 디바이스 관리 (TX/RX 통합) | lora_service, lora_protocol, event_bus | ✅ |
+| hardware_service | 하드웨어 모니터링 (배터리, 온도, RSSI/SNR) | battery_driver, temperature_driver | ✅ |
+| led_service | WS2812 LED 서비스 | ws2812_driver, config_service | ⚠️ |
+| lora_service | LoRa 통신 서비스 | lora_driver, event_bus | ✅ |
+| network_service | 네트워크 통합 관리 (C++) | wifi_driver, ethernet_driver, config_service | ⚠️ |
+| switcher_service | 스위처 연결 서비스 (C++) | switcher_driver, event_bus, tally_types | ✅ |
+
+**⚠️ 리팩토링 예정:**
+- `led_service`: config_service 직접 호출 제거
+- `network_service`: config_service 직접 호출 제거
 
 ### 04_driver - 드라이버
 

@@ -3,7 +3,7 @@
  * @brief 온도 센서 드라이버 구현 (C++)
  */
 
-#include "TemperatureDriver.h"
+#include "temperature_driver.h"
 #include "temperature_hal.h"
 #include "t_log.h"
 

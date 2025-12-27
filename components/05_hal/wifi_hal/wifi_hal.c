@@ -3,7 +3,7 @@
  * @brief WiFi HAL 구현
  */
 
-#include "WiFiHal.h"
+#include "wifi_hal.h"
 #include "t_log.h"
 #include "esp_wifi.h"
 #include "esp_event.h"

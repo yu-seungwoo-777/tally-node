@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "LedService.cpp"
+    SRCS "led_service.cpp"
     INCLUDE_DIRS "include"
     REQUIRES ws2812_driver config_service
 )

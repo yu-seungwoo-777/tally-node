@@ -3,8 +3,8 @@
  * @brief Ethernet Driver 구현 (C++)
  */
 
-#include "EthernetDriver.h"
-#include "EthernetHal.h"
+#include "ethernet_driver.h"
+#include "ethernet_hal.h"
 #include "event_bus.h"
 #include "t_log.h"
 #include "esp_event.h"

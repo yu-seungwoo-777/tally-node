@@ -5,7 +5,7 @@
  * 역할: OBS WebSocket 프로토콜 로직 구현
  */
 
-#include "ObsDriver.h"
+#include "obs_driver.h"
 #include "t_log.h"
 #include <sys/socket.h>
 

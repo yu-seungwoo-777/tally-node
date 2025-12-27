@@ -5,7 +5,7 @@
  * U8g2 기반 SSD1306 OLED 디스플레이 드라이버 구현
  */
 
-#include "DisplayDriver.h"
+#include "display_driver.h"
 #include "display_hal.h"
 #include "u8g2.h"
 #include "u8g2_esp32_hal.h"

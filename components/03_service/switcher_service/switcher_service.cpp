@@ -3,14 +3,14 @@
  * @brief Switcher 서비스 구현 (이름 기반: Primary/Secondary)
  */
 
-#include "SwitcherService.h"
+#include "switcher_service.h"
 #include "t_log.h"
 #include "event_bus.h"
-#include "AtemDriver.h"
-#include "VmixDriver.h"
-#include "ObsDriver.h"
-#include "WiFiDriver.h"
-#include "EthernetDriver.h"
+#include "atem_driver.h"
+#include "vmix_driver.h"
+#include "obs_driver.h"
+#include "wifi_driver.h"
+#include "ethernet_driver.h"
 #include <cstring>
 
 // =============================================================================

@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "ConfigService.cpp"
+    SRCS "config_service.cpp"
     INCLUDE_DIRS "include"
     REQUIRES nvs_flash t_log battery_driver temperature_driver event_bus
 )

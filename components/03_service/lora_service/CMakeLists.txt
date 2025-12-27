@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "LoRaService.cpp"
+    SRCS "lora_service.cpp"
     INCLUDE_DIRS "include"
     REQUIRES
         lora_driver

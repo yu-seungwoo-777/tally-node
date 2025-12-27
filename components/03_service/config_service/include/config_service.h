@@ -7,9 +7,13 @@
  * - WiFi STA 설정
  * - Ethernet 설정
  * - Device 설정 (brightness, camera_id, RF)
- * - System 상태 (device_id, battery, uptime, stopped)
+ * - Switcher 설정 (Primary/Secondary)
+ * - LED 색상 설정
  * - 설정 로드/저장
  * - 기본값 관리
+ *
+ * @note 하드웨어 정보 수집 (battery, voltage, temperature, RSSI/SNR)은
+ *       HardwareService를 사용하세요
  */
 
 #ifndef CONFIG_SERVICE_H
@@ -92,16 +96,6 @@ typedef struct {
     uint8_t camera_id;       // 카메라 ID
     config_rf_t rf;          // RF 설정
 } config_device_t;
-
-// System 상태 (RAM, 저장 안 함)
-typedef struct {
-    char device_id[5];       // 디바이스 ID (4자리 hex 문자열, 읽기 전용)
-    uint8_t battery;         // 배터리 %
-    uint32_t uptime;         // 업타임 (초)
-    bool stopped;            // 기능 정지 상태
-    int16_t rssi;            // LoRa RSSI (dBm)
-    float snr;               // LoRa SNR (dB)
-} config_system_t;
 
 // 전체 설정
 typedef struct {
@@ -247,64 +241,6 @@ uint8_t config_service_get_max_camera_num(void);
  * @brief RF 설정 (주파수 + Sync Word)
  */
 esp_err_t config_service_set_rf(float frequency, uint8_t sync_word);
-
-// ============================================================================
-// System 상태 API
-// ============================================================================
-
-/**
- * @brief Device ID 가져오기 (4자리 hex 문자열)
- */
-const char* config_service_get_device_id(void);
-
-/**
- * @brief System 상태 가져오기
- */
-void config_service_get_system(config_system_t* status);
-
-/**
- * @brief Battery 설정
- */
-void config_service_set_battery(uint8_t battery);
-
-/**
- * @brief Battery ADC로 읽기 (백분율 반환)
- */
-uint8_t config_service_update_battery(void);
-
-/**
- * @brief 전압 가져오기 (V)
- * @return 전압 (V)
- */
-float config_service_get_voltage(void);
-
-/**
- * @brief 온도 가져오기 (°C)
- * @return 온도 (°C)
- */
-float config_service_get_temperature(void);
-
-/**
- * @brief RSSI 가져오기 (dBm)
- * @return RSSI (dBm)
- */
-int16_t config_service_get_rssi(void);
-
-/**
- * @brief SNR 가져오기 (dB)
- * @return SNR (dB)
- */
-float config_service_get_snr(void);
-
-/**
- * @brief Stopped 상태 설정
- */
-void config_service_set_stopped(bool stopped);
-
-/**
- * @brief Uptime 증가 (1초 타이머 호출용)
- */
-void config_service_inc_uptime(void);
 
 // ============================================================================
 // LED 색상 설정 API

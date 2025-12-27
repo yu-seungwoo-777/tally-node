@@ -7,7 +7,7 @@
  * - tx_task → 큐에서 패킷 가져와서 송신
  */
 
-#include "LoRaService.h"
+#include "lora_service.h"
 #include "lora_driver.h"
 #include "event_bus.h"
 #include "t_log.h"

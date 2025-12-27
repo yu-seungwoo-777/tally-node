@@ -3,33 +3,15 @@
  * @brief NVS 설정 관리 서비스 구현 (C++)
  */
 
-#include "ConfigService.h"
+#include "config_service.h"
 #include "NVSConfig.h"
-#include "battery_driver.h"
-#include "TemperatureDriver.h"
 #include "event_bus.h"
 #include "t_log.h"
 #include "nvs_flash.h"
 #include "nvs.h"
-#include "esp_system.h"
-#include "esp_mac.h"
 #include <cstring>
 
 static const char* TAG = "ConfigService";
-
-// ============================================================================
-// System 상태 (RAM, 전역 변수)
-// ============================================================================
-
-static config_system_t s_system_state = {
-    .device_id = {0},
-    .battery = 0,
-    .uptime = 0,
-    .stopped = false,
-    .rssi = -120,
-    .snr = 0.0f
-};
-static bool s_device_id_initialized = false;
 
 // ============================================================================
 // ConfigService 클래스 (싱글톤)
@@ -56,27 +38,13 @@ public:
     static esp_err_t getEthernet(config_ethernet_t* config);
     static esp_err_t setEthernet(const config_ethernet_t* config);
 
-    // Device 설정 (추가)
+    // Device 설정
     static esp_err_t getDevice(config_device_t* config);
     static esp_err_t setDevice(const config_device_t* config);
     static esp_err_t setBrightness(uint8_t brightness);
     static esp_err_t setCameraId(uint8_t camera_id);
     static uint8_t getCameraId(void);
     static esp_err_t setRf(float frequency, uint8_t sync_word);
-
-    // System 상태 (추가)
-    static const char* getDeviceId(void);
-    static void getSystem(config_system_t* status);
-    static void setBattery(uint8_t battery);
-    static uint8_t updateBattery(void);  // battery_driver 호출
-    static void setStopped(bool stopped);
-    static void incUptime(void);
-    static void initDeviceId(void);
-
-    // LoRa RSSI/SNR (이벤트 핸들러로 업데이트)
-    static void onRssiChanged(const event_data_t* event);
-    static int16_t getRssi(void);
-    static float getSnr(void);
 
     // Switcher 설정
     static esp_err_t getPrimary(config_switcher_t* config);
@@ -109,9 +77,6 @@ private:
 
     // 정적 멤버
     static bool s_initialized;
-
-    // 이벤트 핸들러 등록 (extern "C"에서 접근)
-    static esp_err_t eventHandler(const event_data_t* event);
 };
 
 // ============================================================================
@@ -133,24 +98,6 @@ esp_err_t ConfigServiceClass::init(void)
 
     T_LOGI(TAG, "Config Service 초기화 중...");
 
-    // Device ID 초기화 (eFuse MAC 읽기)
-    initDeviceId();
-
-    // 배터리 드라이버 초기화
-    battery_driver_init();
-
-    // 온도 센서 드라이버 초기화
-    TemperatureDriver_init();
-
-    // 배터리 읽기
-    s_system_state.battery = updateBattery();
-
-    // System 상태 기본값
-    s_system_state.uptime = 0;
-    s_system_state.stopped = false;
-    s_system_state.rssi = -120;  // 기본값 (신호 없음)
-    s_system_state.snr = 0.0f;   // 기본값
-
     // NVS 초기화
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -160,10 +107,6 @@ esp_err_t ConfigServiceClass::init(void)
     ESP_ERROR_CHECK(ret);
 
     s_initialized = true;
-
-    // LoRa RSSI/SNR 이벤트 구독
-    event_bus_subscribe(EVT_LORA_RSSI_CHANGED, eventHandler);
-
     T_LOGI(TAG, "Config Service 초기화 완료");
     return ESP_OK;
 }
@@ -654,108 +597,6 @@ esp_err_t ConfigServiceClass::setRf(float frequency, uint8_t sync_word)
 }
 
 // ============================================================================
-// System 상태
-// ============================================================================
-
-void ConfigServiceClass::initDeviceId(void)
-{
-    if (s_device_id_initialized) {
-        return;
-    }
-
-    // eFuse MAC 읽기 (WiFi STA MAC)
-    uint8_t mac[6];
-    esp_read_mac(mac, ESP_MAC_WIFI_STA);
-
-    // MAC 뒤 4자리 사용 - 상위 nibble만 사용하여 4자리 hex 문자열 생성
-    s_system_state.device_id[0] = "0123456789ABCDEF"[(mac[2] >> 4) & 0x0F];
-    s_system_state.device_id[1] = "0123456789ABCDEF"[(mac[3] >> 4) & 0x0F];
-    s_system_state.device_id[2] = "0123456789ABCDEF"[(mac[4] >> 4) & 0x0F];
-    s_system_state.device_id[3] = "0123456789ABCDEF"[(mac[5] >> 4) & 0x0F];
-    s_system_state.device_id[4] = '\0';
-
-    s_device_id_initialized = true;
-
-    T_LOGI(TAG, "Device ID: %s (from MAC)", s_system_state.device_id);
-}
-
-const char* ConfigServiceClass::getDeviceId(void)
-{
-    if (!s_device_id_initialized) {
-        initDeviceId();
-    }
-    return s_system_state.device_id;
-}
-
-void ConfigServiceClass::getSystem(config_system_t* status)
-{
-    if (status) {
-        memcpy(status, &s_system_state, sizeof(config_system_t));
-    }
-}
-
-void ConfigServiceClass::setBattery(uint8_t battery)
-{
-    s_system_state.battery = battery;
-}
-
-void ConfigServiceClass::setStopped(bool stopped)
-{
-    s_system_state.stopped = stopped;
-}
-
-void ConfigServiceClass::incUptime(void)
-{
-    s_system_state.uptime++;
-}
-
-// ============================================================================
-// 배터리
-// ============================================================================
-
-uint8_t ConfigServiceClass::updateBattery(void)
-{
-    uint8_t percent = battery_driver_update_percent();
-    s_system_state.battery = percent;
-    return percent;
-}
-
-// ============================================================================
-// LoRa RSSI/SNR (이벤트 핸들러)
-// ============================================================================
-
-// 정적 이벤트 핸들러 (event_bus용)
-esp_err_t ConfigServiceClass::eventHandler(const event_data_t* event)
-{
-    if (event->type == EVT_LORA_RSSI_CHANGED) {
-        onRssiChanged(event);
-    }
-    return ESP_OK;
-}
-
-void ConfigServiceClass::onRssiChanged(const event_data_t* event)
-{
-    if (!event || !event->data) {
-        return;
-    }
-
-    // event_bus.h의 lora_rssi_event_t 사용
-    const lora_rssi_event_t* status = (const lora_rssi_event_t*)event->data;
-    s_system_state.rssi = status->rssi;
-    s_system_state.snr = (float)status->snr;
-}
-
-int16_t ConfigServiceClass::getRssi(void)
-{
-    return s_system_state.rssi;
-}
-
-float ConfigServiceClass::getSnr(void)
-{
-    return s_system_state.snr;
-}
-
-// ============================================================================
 // Switcher 설정
 // ============================================================================
 
@@ -1225,64 +1066,6 @@ uint8_t config_service_get_max_camera_num(void)
 esp_err_t config_service_set_rf(float frequency, uint8_t sync_word)
 {
     return ConfigServiceClass::setRf(frequency, sync_word);
-}
-
-// ============================================================================
-// System 상태 API
-// ============================================================================
-
-const char* config_service_get_device_id(void)
-{
-    return ConfigServiceClass::getDeviceId();
-}
-
-void config_service_get_system(config_system_t* status)
-{
-    ConfigServiceClass::getSystem(status);
-}
-
-void config_service_set_battery(uint8_t battery)
-{
-    ConfigServiceClass::setBattery(battery);
-}
-
-uint8_t config_service_update_battery(void)
-{
-    return ConfigServiceClass::updateBattery();
-}
-
-float config_service_get_voltage(void)
-{
-    float voltage = 3.7f;  // 기본값
-    battery_driver_get_voltage(&voltage);
-    return voltage;
-}
-
-float config_service_get_temperature(void)
-{
-    float temp = 25.0f;  // 기본값
-    TemperatureDriver_getCelsius(&temp);
-    return temp;
-}
-
-void config_service_set_stopped(bool stopped)
-{
-    ConfigServiceClass::setStopped(stopped);
-}
-
-void config_service_inc_uptime(void)
-{
-    ConfigServiceClass::incUptime();
-}
-
-int16_t config_service_get_rssi(void)
-{
-    return ConfigServiceClass::getRssi();
-}
-
-float config_service_get_snr(void)
-{
-    return ConfigServiceClass::getSnr();
 }
 
 // ============================================================================

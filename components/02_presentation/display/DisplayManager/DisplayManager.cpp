@@ -4,7 +4,7 @@
  */
 
 #include "DisplayManager.h"
-#include "DisplayDriver.h"
+#include "display_driver.h"
 #include "BootPage.h"
 #include "TxPage.h"
 #include "RxPage.h"

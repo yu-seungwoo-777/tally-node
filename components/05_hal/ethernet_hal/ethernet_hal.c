@@ -3,7 +3,7 @@
  * @brief W5500 Ethernet HAL 구현 (ESP-IDF 5.5.0)
  */
 
-#include "EthernetHal.h"
+#include "ethernet_hal.h"
 #include "PinConfig.h"
 #include "t_log.h"
 #include <string.h>

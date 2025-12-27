@@ -7,13 +7,14 @@
 #include "t_log.h"
 #include "nvs_flash.h"
 #include "event_bus.h"
-#include "ConfigService.h"
+#include "config_service.h"
+#include "hardware_service.h"
 #include "DisplayManager.h"
 #include "TxPage.h"
-#include "ButtonService.h"
-#include "SwitcherService.h"
-#include "NetworkService.h"
-#include "LoRaService.h"
+#include "button_service.h"
+#include "switcher_service.h"
+#include "network_service.h"
+#include "lora_service.h"
 #include "TallyTypes.h"
 #include "esp_netif.h"
 #include "esp_event.h"
@@ -244,6 +245,13 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     ret = config_service_init();
     if (ret != ESP_OK) {
         T_LOGE(TAG, "ConfigService init failed: %s", esp_err_to_name(ret));
+        return false;
+    }
+
+    // HardwareService 초기화
+    ret = hardware_service_init();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "HardwareService init failed: %s", esp_err_to_name(ret));
         return false;
     }
 
@@ -515,16 +523,16 @@ void prod_tx_app_loop(void)
     if (now - last_sys_update >= 1000) {
         last_sys_update = now;
 
-        // ========== ConfigService: System 데이터 ==========
-        config_system_t sys;
-        config_service_get_system(&sys);
-        config_service_update_battery();  // ADC 읽기 (내부에서 battery 갱신)
-        config_service_get_system(&sys);  // 갱신된 battery 다시 읽기
+        // ========== HardwareService: System 데이터 ==========
+        hardware_system_t sys;
+        hardware_service_get_system(&sys);
+        hardware_service_update_battery();  // ADC 읽기 (내부에서 battery 갱신)
+        hardware_service_get_system(&sys);  // 갱신된 battery 다시 읽기
 
         // DisplayManager에 개별 파라미터 전달
         display_manager_update_system(sys.device_id, sys.battery,
-                                      config_service_get_voltage(),
-                                      config_service_get_temperature());
+                                      hardware_service_get_voltage(),
+                                      hardware_service_get_temperature());
 
         // ========== ConfigService: RF 설정 ==========
         config_device_t device;

@@ -7,11 +7,12 @@
 #include "t_log.h"
 #include "nvs_flash.h"
 #include "event_bus.h"
-#include "ConfigService.h"
+#include "config_service.h"
+#include "hardware_service.h"
 #include "DisplayManager.h"
-#include "ButtonService.h"
-#include "LoRaService.h"
-#include "LedService.h"
+#include "button_service.h"
+#include "lora_service.h"
+#include "led_service.h"
 #include "TallyTypes.h"
 
 #include "freertos/FreeRTOS.h"
@@ -350,6 +351,13 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
         return false;
     }
 
+    // HardwareService 초기화
+    ret = hardware_service_init();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "HardwareService init failed: %s", esp_err_to_name(ret));
+        return false;
+    }
+
     // LoRa 초기화 (ConfigService에서 RF 설정 가져오기)
     config_device_t device_config;
     config_service_get_device(&device_config);
@@ -523,20 +531,20 @@ void prod_rx_app_loop(void)
     if (now - last_sys_update >= 1000) {
         last_sys_update = now;
 
-        // ConfigService에서 System 데이터 읽기
-        config_system_t sys;
-        config_service_get_system(&sys);
-        config_service_update_battery();  // ADC 읽기 (내부에서 battery 갱신)
-        config_service_get_system(&sys);  // 갱신된 battery 다시 읽기
+        // HardwareService에서 System 데이터 읽기
+        hardware_system_t sys;
+        hardware_service_get_system(&sys);
+        hardware_service_update_battery();  // ADC 읽기 (내부에서 battery 갱신)
+        hardware_service_get_system(&sys);  // 갱신된 battery 다시 읽기
 
         // DisplayManager에 개별 파라미터 전달
         display_manager_update_system(sys.device_id, sys.battery,
-                                      config_service_get_voltage(),
-                                      config_service_get_temperature());
+                                      hardware_service_get_voltage(),
+                                      hardware_service_get_temperature());
 
         // RSSI/SNR은 LoRaService 이벤트로 업데이트됨
-        display_manager_update_rssi(config_service_get_rssi(),
-                                   config_service_get_snr());
+        display_manager_update_rssi(hardware_service_get_rssi(),
+                                   hardware_service_get_snr());
     }
 }
 

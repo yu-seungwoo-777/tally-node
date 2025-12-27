@@ -3,8 +3,8 @@
  * @brief WiFi Driver 구현 (C++)
  */
 
-#include "WiFiDriver.h"
-#include "WiFiHal.h"
+#include "wifi_driver.h"
+#include "wifi_hal.h"
 #include "event_bus.h"
 #include "t_log.h"
 #include "esp_wifi.h"

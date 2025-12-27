@@ -5,7 +5,7 @@
  * 역할: ATEM 프로토콜 로직 구현
  */
 
-#include "AtemDriver.h"
+#include "atem_driver.h"
 #include "event_bus.h"
 #include "t_log.h"
 

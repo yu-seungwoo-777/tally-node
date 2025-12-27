@@ -5,7 +5,7 @@
  * 역할: vMix XML 프로토콜 로직 구현
  */
 
-#include "VmixDriver.h"
+#include "vmix_driver.h"
 #include "t_log.h"
 #include <sys/socket.h>
 
