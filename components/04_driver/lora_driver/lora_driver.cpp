@@ -89,8 +89,8 @@ static void IRAM_ATTR rx_isr_handler(void) {
 // LoRa 전용 태스크
 // =============================================================================
 
-static void lora_task(void* param) {
-    T_LOGI(TAG, "LoRa 전용 태스크 시작");
+static void lora_isr_task(void* param) {
+    T_LOGI(TAG, "LoRa ISR 처리 태스크 시작");
 
     while (1) {
         // 시마포로 깨어나면 모든 플래그 처리 (놓치는 이벤트 없음)
@@ -204,8 +204,8 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
 
     // 태스크 생성
     BaseType_t task_ret = xTaskCreatePinnedToCore(
-        lora_task,
-        "lora_task",
+        lora_isr_task,
+        "lora_isr_task",
         4096,
         nullptr,
         6,  // 우선순위 (중간)

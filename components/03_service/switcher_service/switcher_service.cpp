@@ -254,8 +254,8 @@ bool SwitcherService::start() {
 
     // 정적 태스크 생성
     task_handle_ = xTaskCreateStatic(
-        taskFunction,             // 태스크 함수
-        "switcher_svc",           // 태스크 이름
+        switcher_task,            // 태스크 함수
+        "switcher_task",          // 태스크 이름
         4096,                     // 스택 크기
         this,                     // 파라미터 (this 포인터)
         8,                        // 우선순위 (lwIP보다 높게)
@@ -292,7 +292,7 @@ void SwitcherService::stop() {
     T_LOGI(TAG, "태스크 정지 완료");
 }
 
-void SwitcherService::taskFunction(void* param) {
+void SwitcherService::switcher_task(void* param) {
     SwitcherService* service = static_cast<SwitcherService*>(param);
 
     T_LOGI(TAG, "태스크 루프 시작");

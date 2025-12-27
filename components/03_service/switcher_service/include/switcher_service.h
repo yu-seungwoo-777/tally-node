@@ -412,7 +412,7 @@ private:
      * @brief 태스크 함수 (정적)
      * @param param 파라미터 (this 포인터)
      */
-    static void taskFunction(void* param);
+    static void switcher_task(void* param);
 
     /**
      * @brief 태스크 메인 루프

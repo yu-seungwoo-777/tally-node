@@ -10,11 +10,20 @@
 #include "temperature_driver.h"
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_system.h"
 #include "esp_mac.h"
 #include <cstring>
 
 static const char* TAG = "HardwareSvc";
+
+// ============================================================================
+// 태스크 설정
+// ============================================================================
+
+#define MONITOR_STACK_SIZE   3072
+#define MONITOR_PRIORITY     4
+#define MONITOR_INTERVAL_MS  1000   // 1초
 
 // ============================================================================
 // HardwareService 클래스
@@ -26,6 +35,11 @@ public:
     static void deinit(void);
     static bool isInitialized(void) { return s_initialized; }
 
+    // 태스크 제어
+    static esp_err_t start(void);
+    static void stop(void);
+    static bool isRunning(void) { return s_running; }
+
     // Device ID
     static const char* getDeviceId(void);
 
@@ -35,8 +49,9 @@ public:
     static uint8_t getBattery(void);
     static float getVoltage(void);
 
-    // Temperature
+    // Temperature (캐시된 값 반환)
     static float getTemperature(void);
+    static void updateTemperature(void);  // 내부용: 실제 센서 읽기
 
     // RSSI/SNR
     static void setRssi(int16_t rssi);
@@ -59,10 +74,13 @@ private:
 
     static void initDeviceId(void);
     static esp_err_t onRssiEvent(const event_data_t* event);
+    static void hw_monitor_task(void* arg);
 
     static bool s_initialized;
+    static bool s_running;
     static bool s_device_id_initialized;
     static hardware_system_t s_system;
+    static TaskHandle_t s_task_handle;
 };
 
 // ============================================================================
@@ -70,7 +88,9 @@ private:
 // ============================================================================
 
 bool HardwareService::s_initialized = false;
+bool HardwareService::s_running = false;
 bool HardwareService::s_device_id_initialized = false;
+TaskHandle_t HardwareService::s_task_handle = nullptr;
 hardware_system_t HardwareService::s_system = {
     .device_id = "0000",
     .battery = 100,
@@ -166,11 +186,94 @@ void HardwareService::deinit(void)
         return;
     }
 
+    // 태스크 정지
+    stop();
+
     // 이벤트 구독 취소
     event_bus_unsubscribe(EVT_LORA_RSSI_CHANGED, onRssiEvent);
 
     s_initialized = false;
     T_LOGI(TAG, "HardwareService 정리 완료");
+}
+
+// ============================================================================
+// 태스크 관련
+// ============================================================================
+
+void HardwareService::hw_monitor_task(void* arg)
+{
+    (void)arg;
+    T_LOGI(TAG, "하드웨어 모니터링 태스크 시작 (1초 주기)");
+
+    while (s_running) {
+        // 배터리 업데이트 (ADC 읽기)
+        updateBattery();
+
+        // 온도 업데이트 (실제 센서 읽기, 1초마다 갱신)
+        updateTemperature();
+
+        // uptime 증가
+        s_system.uptime++;
+
+        vTaskDelay(pdMS_TO_TICKS(MONITOR_INTERVAL_MS));
+    }
+
+    T_LOGI(TAG, "모니터링 태스크 종료");
+    vTaskDelete(nullptr);
+}
+
+esp_err_t HardwareService::start(void)
+{
+    if (!s_initialized) {
+        T_LOGE(TAG, "초기화되지 않음");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (s_running) {
+        T_LOGW(TAG, "이미 실행 중");
+        return ESP_OK;
+    }
+
+    s_running = true;
+
+    BaseType_t ret = xTaskCreate(
+        hw_monitor_task,
+        "hw_monitor_task",
+        MONITOR_STACK_SIZE,
+        nullptr,
+        MONITOR_PRIORITY,
+        &s_task_handle
+    );
+
+    if (ret != pdPASS) {
+        T_LOGE(TAG, "태스크 생성 실패");
+        s_running = false;
+        return ESP_FAIL;
+    }
+
+    T_LOGI(TAG, "모니터링 태스크 시작");
+    return ESP_OK;
+}
+
+void HardwareService::stop(void)
+{
+    if (!s_running) {
+        return;
+    }
+
+    s_running = false;
+
+    // 태스크 종료 대기
+    if (s_task_handle != nullptr) {
+        int wait_count = 0;
+        while (eTaskGetState(s_task_handle) != eDeleted && wait_count < 20) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            wait_count++;
+        }
+        s_task_handle = nullptr;
+    }
+
+    T_LOGI(TAG, "모니터링 태스크 정지");
 }
 
 // Device ID
@@ -208,11 +311,18 @@ float HardwareService::getVoltage(void)
 }
 
 // Temperature
-float HardwareService::getTemperature(void)
+void HardwareService::updateTemperature(void)
 {
     float temp = 25.0f;  // 기본값
-    TemperatureDriver_getCelsius(&temp);
-    return temp;
+    if (TemperatureDriver_getCelsius(&temp) == ESP_OK) {
+        s_system.temperature = temp;
+    }
+}
+
+float HardwareService::getTemperature(void)
+{
+    // 캐시된 값 반환 (태스크에서 1초마다 갱신됨)
+    return s_system.temperature;
 }
 
 // RSSI/SNR
@@ -270,6 +380,22 @@ void HardwareService::getSystem(hardware_system_t* status)
 // ============================================================================
 
 extern "C" {
+
+esp_err_t hardware_service_start(void)
+{
+    return HardwareService::start();
+}
+
+esp_err_t hardware_service_stop(void)
+{
+    HardwareService::stop();
+    return ESP_OK;
+}
+
+bool hardware_service_is_running(void)
+{
+    return HardwareService::isRunning();
+}
 
 esp_err_t hardware_service_init(void)
 {

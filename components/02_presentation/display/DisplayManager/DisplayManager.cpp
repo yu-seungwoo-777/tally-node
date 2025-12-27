@@ -16,7 +16,7 @@
 // ============================================================================
 
 static const char* TAG = "DisplayMgr";
-#define DEFAULT_REFRESH_INTERVAL_MS  200  // 5 FPS
+#define DEFAULT_REFRESH_INTERVAL_MS  500  // 2 FPS
 #define MAX_PAGES                     5
 
 // ============================================================================

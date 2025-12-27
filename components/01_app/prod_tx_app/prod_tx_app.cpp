@@ -408,6 +408,10 @@ void prod_tx_app_start(void)
         return;
     }
 
+    // HardwareService 시작 (모니터링 태스크)
+    hardware_service_start();
+    T_LOGI(TAG, "HardwareService 시작");
+
     // LoRa 시작
     lora_service_start();
     T_LOGI(TAG, "LoRa 시작");
@@ -514,25 +518,26 @@ void prod_tx_app_loop(void)
     // SwitcherService 루프 처리는 내부 태스크에서 자동 실행됨
     // Tally 변경 시 on_tally_change() 콜백을 통해 즉시 LoRa 송신
 
-    // 디스플레이 갱신 (200ms 주기, DisplayManager 내부에서 체크)
+    // 디스플레이 갱신 (500ms 주기, DisplayManager 내부에서 체크)
     display_manager_update();
 
-    // System 데이터 1000ms마다 갱신
-    static uint32_t last_sys_update = 0;
+    // System 데이터는 HardwareService 태스크에서 1초마다 갱신됨
+    // 여기서는 주기적으로 DisplayManager에 전파만 수행
+    static uint32_t last_display_update = 0;
     uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    if (now - last_sys_update >= 1000) {
-        last_sys_update = now;
+    if (now - last_display_update >= 1000) {
+        last_display_update = now;
 
         // ========== HardwareService: System 데이터 ==========
         hardware_system_t sys;
         hardware_service_get_system(&sys);
-        hardware_service_update_battery();  // ADC 읽기 (내부에서 battery 갱신)
-        hardware_service_get_system(&sys);  // 갱신된 battery 다시 읽기
 
-        // DisplayManager에 개별 파라미터 전달
+        // DisplayManager에 System 데이터 전파
         display_manager_update_system(sys.device_id, sys.battery,
-                                      hardware_service_get_voltage(),
-                                      hardware_service_get_temperature());
+                                      sys.voltage, sys.temperature);
+
+        // RSSI/SNR 전파
+        display_manager_update_rssi(sys.rssi, sys.snr);
 
         // ========== ConfigService: RF 설정 ==========
         config_device_t device;

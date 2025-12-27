@@ -52,9 +52,6 @@ static uint32_t s_tx_dropped = 0;          // 큐 오버플로우로 폐기된 �
 static QueueHandle_t s_tx_queue = nullptr;
 static TaskHandle_t s_tx_task = nullptr;
 
-// RSSI/SNR 업데이트 타이머
-static uint32_t s_last_rssi_update = 0;
-
 // ============================================================================
 // 내부 함수
 // ============================================================================
@@ -78,6 +75,17 @@ static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, 
 
     event_bus_publish(EVT_LORA_PACKET_RECEIVED, &packet_event, sizeof(packet_event));
 
+    // RSSI/SNR 이벤트도 함께 발행 (패킷 수신 시마다 즉시 갱신)
+    lora_rssi_event_t rssi_event = {
+        .is_running = s_running,
+        .is_initialized = s_initialized,
+        .chip_type = 0,  // 드라이버에서 필요시 읽기
+        .frequency = 0.0f,
+        .rssi = rssi,
+        .snr = (int8_t)snr
+    };
+    event_bus_publish(EVT_LORA_RSSI_CHANGED, &rssi_event, sizeof(rssi_event));
+
     // 사용자 콜백 호출 (레거시 지원)
     if (s_user_callback) {
         s_user_callback(data, length);
@@ -85,19 +93,17 @@ static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, 
 }
 
 /**
- * @brief 송신 태스크
+ * @brief 송신 큐 태스크
  *
  * - 블로킹 없이 주기적으로 큐 체크
  * - 큐에 패킷이 있으면 즉시 송신 → 수신 복귀
  * - 큐가 비어있으면 계속 수신 모드 유지
  */
-static void tx_task(void* arg)
+static void lora_txq_task(void* arg)
 {
-    T_LOGI(TAG, "송신 태스크 시작");
+    T_LOGI(TAG, "LoRa 송신 큐 태스크 시작");
 
     lora_tx_packet_t packet;
-    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    s_last_rssi_update = now;
 
     while (s_running) {
         // 비블로킹으로 큐 체크 (패킷 있으면 즉시 송신)
@@ -121,24 +127,6 @@ static void tx_task(void* arg)
             } else {
                 T_LOGI(TAG, "송신 실패: %d", ret);
             }
-        }
-
-        // 1초마다 RSSI/SNR 이벤트 발행
-        now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-        if (now - s_last_rssi_update >= 1000) {
-            s_last_rssi_update = now;
-
-            // lora_service_status_t → lora_rssi_event_t 변환
-            lora_service_status_t full_status = lora_service_get_status();
-            lora_rssi_event_t event = {
-                .is_running = full_status.is_running,
-                .is_initialized = full_status.is_initialized,
-                .chip_type = (uint8_t)full_status.chip_type,  // enum → uint8_t
-                .frequency = full_status.frequency,
-                .rssi = full_status.rssi,
-                .snr = full_status.snr
-            };
-            event_bus_publish(EVT_LORA_RSSI_CHANGED, &event, sizeof(event));
         }
 
         // 큐가 비어있으면 짧게 대기 후 다시 체크 (수신 모드 유지)
@@ -231,10 +219,10 @@ esp_err_t lora_service_start(void)
         return ret;
     }
 
-    // 송신 태스크 생성
+    // 송신 큐 태스크 생성
     BaseType_t task_ret = xTaskCreatePinnedToCore(
-        tx_task,
-        "lora_tx",
+        lora_txq_task,
+        "lora_txq_task",
         4096,
         nullptr,
         6,  // 우선순위 (중간)

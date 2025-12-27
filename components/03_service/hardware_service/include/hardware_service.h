@@ -63,6 +63,28 @@ esp_err_t hardware_service_deinit(void);
 bool hardware_service_is_initialized(void);
 
 // ============================================================================
+// 태스크 제어
+// ============================================================================
+
+/**
+ * @brief 모니터링 태스크 시작 (1초 주기)
+ * @return ESP_OK 성공
+ */
+esp_err_t hardware_service_start(void);
+
+/**
+ * @brief 모니터링 태스크 정지
+ * @return ESP_OK 성공
+ */
+esp_err_t hardware_service_stop(void);
+
+/**
+ * @brief 태스크 실행 중 여부
+ * @return true 실행 중, false 정지됨
+ */
+bool hardware_service_is_running(void);
+
+// ============================================================================
 // Device ID
 // ============================================================================
 

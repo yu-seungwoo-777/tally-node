@@ -56,7 +56,7 @@ private:
     ~ButtonService() = delete;
 
     static void resetState(void);
-    static void pollingTask(void* arg);
+    static void button_task(void* arg);
 
     static bool s_initialized;
     static bool s_running;
@@ -106,7 +106,7 @@ void ButtonService::resetState(void)
     s_debounce_start = esp_timer_get_time();
 }
 
-void ButtonService::pollingTask(void* arg)
+void ButtonService::button_task(void* arg)
 {
     (void)arg;
 
@@ -248,8 +248,8 @@ void ButtonService::start(void)
     s_running = true;
 
     BaseType_t ret = xTaskCreate(
-        pollingTask,
-        "button_svc",
+        button_task,
+        "button_task",
         4096,
         nullptr,
         5,  // 우선순위
