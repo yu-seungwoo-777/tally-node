@@ -282,7 +282,7 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     }
 
     // NetworkService 초기화 (설정 포함)
-    network_config_all_t net_config;
+    app_network_config_t net_config;
     memset(&net_config, 0, sizeof(net_config));
     memcpy(&net_config.wifi_ap, &current_config.wifi_ap, sizeof(net_config.wifi_ap));
     memcpy(&net_config.wifi_sta, &current_config.wifi_sta, sizeof(net_config.wifi_sta));

@@ -15,7 +15,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
-#include "network_config_types.h"
+#include "app_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,7 +54,7 @@ typedef struct {
  * @param config 네트워크 설정 (WiFi, Ethernet)
  * @return ESP_OK 성공, ESP_ERR_* 실패
  */
-esp_err_t network_service_init_with_config(const network_config_all_t* config);
+esp_err_t network_service_init_with_config(const app_network_config_t* config);
 
 /**
  * @brief Network Service 정리

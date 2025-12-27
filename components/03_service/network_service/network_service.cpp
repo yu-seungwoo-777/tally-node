@@ -20,7 +20,7 @@ static const char* TAG = "NetworkService";
 class NetworkServiceClass {
 public:
     // 초기화/정리
-    static esp_err_t initWithConfig(const network_config_all_t* config);
+    static esp_err_t initWithConfig(const app_network_config_t* config);
     static esp_err_t deinit(void);
 
     // 상태 조회
@@ -29,7 +29,7 @@ public:
     static bool isInitialized(void) { return s_initialized; }
 
     // 설정 업데이트
-    static esp_err_t updateConfig(const network_config_all_t* config);
+    static esp_err_t updateConfig(const app_network_config_t* config);
 
     // 재시작
     static esp_err_t restartWiFi(void);
@@ -43,7 +43,7 @@ private:
     // 정적 멤버
     static bool s_initialized;
 
-    static network_config_all_t s_config;
+    static app_network_config_t s_config;
 };
 
 // ============================================================================
@@ -51,13 +51,13 @@ private:
 // ============================================================================
 
 bool NetworkServiceClass::s_initialized = false;
-network_config_all_t NetworkServiceClass::s_config = {};
+app_network_config_t NetworkServiceClass::s_config = {};
 
 // ============================================================================
 // 초기화/정리
 // ============================================================================
 
-esp_err_t NetworkServiceClass::initWithConfig(const network_config_all_t* config)
+esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config)
 {
     if (s_initialized) {
         T_LOGW(TAG, "이미 초기화됨");
@@ -72,7 +72,7 @@ esp_err_t NetworkServiceClass::initWithConfig(const network_config_all_t* config
     T_LOGI(TAG, "Network Service 초기화 중...");
 
     // 설정 저장
-    memcpy(&s_config, config, sizeof(network_config_all_t));
+    memcpy(&s_config, config, sizeof(app_network_config_t));
 
     // WiFi Driver 초기화
     esp_err_t ret = ESP_OK;
@@ -173,13 +173,13 @@ network_status_t NetworkServiceClass::getStatus(void)
     return status;
 }
 
-esp_err_t NetworkServiceClass::updateConfig(const network_config_all_t* config)
+esp_err_t NetworkServiceClass::updateConfig(const app_network_config_t* config)
 {
     if (config == nullptr) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    memcpy(&s_config, config, sizeof(network_config_all_t));
+    memcpy(&s_config, config, sizeof(app_network_config_t));
     return ESP_OK;
 }
 
@@ -296,7 +296,7 @@ esp_err_t NetworkServiceClass::restartAll(void)
 
 extern "C" {
 
-esp_err_t network_service_init_with_config(const network_config_all_t* config)
+esp_err_t network_service_init_with_config(const app_network_config_t* config)
 {
     return NetworkServiceClass::initWithConfig(config);
 }
