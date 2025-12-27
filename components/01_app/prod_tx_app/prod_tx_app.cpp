@@ -282,7 +282,13 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     }
 
     // NetworkService 초기화 (설정 포함)
-    esp_err_t net_ret = network_service_init_with_config(&current_config);
+    network_config_all_t net_config;
+    memset(&net_config, 0, sizeof(net_config));
+    memcpy(&net_config.wifi_ap, &current_config.wifi_ap, sizeof(net_config.wifi_ap));
+    memcpy(&net_config.wifi_sta, &current_config.wifi_sta, sizeof(net_config.wifi_sta));
+    memcpy(&net_config.ethernet, &current_config.ethernet, sizeof(net_config.ethernet));
+
+    esp_err_t net_ret = network_service_init_with_config(&net_config);
     if (net_ret != ESP_OK) {
         T_LOGE(TAG, "NetworkService 초기화 실패: %s", esp_err_to_name(net_ret));
         return false;

@@ -1,6 +1,6 @@
 /**
  * @file LedService.h
- * @brief LED 서비스 - WS2812Driver 제어
+ * @brief LED 서비스 - WS2812Driver + 내장 LED 제어
  */
 
 #ifndef LED_SERVICE_H
@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "board_led_driver.h"  // board_led_state_t 사용
 
 #ifdef __cplusplus
 extern "C" {
@@ -90,6 +91,42 @@ void led_service_deinit(void);
  * @brief 초기화 여부
  */
 bool led_service_is_initialized(void);
+
+// ============================================================================
+// 내장 LED 제어 (board_led_driver 위임)
+// ============================================================================
+
+/**
+ * @brief 내장 LED 초기화
+ * @return ESP_OK 성공
+ */
+esp_err_t led_service_init_board_led(void);
+
+/**
+ * @brief 내장 LED 해제
+ */
+void led_service_deinit_board_led(void);
+
+/**
+ * @brief 내장 LED 상태 설정
+ * @param state ON/OFF 상태
+ */
+void led_service_set_board_led_state(board_led_state_t state);
+
+/**
+ * @brief 내장 LED 켜기
+ */
+void led_service_board_led_on(void);
+
+/**
+ * @brief 내장 LED 끄기
+ */
+void led_service_board_led_off(void);
+
+/**
+ * @brief 내장 LED 토글
+ */
+void led_service_toggle_board_led(void);
 
 #ifdef __cplusplus
 }

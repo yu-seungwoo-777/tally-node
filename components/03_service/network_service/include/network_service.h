@@ -15,7 +15,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
-#include "config_service.h"  // config_all_t 사용
+#include "network_config_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,14 +54,7 @@ typedef struct {
  * @param config 네트워크 설정 (WiFi, Ethernet)
  * @return ESP_OK 성공, ESP_ERR_* 실패
  */
-esp_err_t network_service_init_with_config(const config_all_t* config);
-
-/**
- * @brief Network Service 초기화 (ConfigService에서 설정 로드 - 레거시)
- * @return ESP_OK 성공, ESP_ERR_* 실패
- * @deprecated App에서 init_with_config 사용 권장
- */
-esp_err_t network_service_init(void);
+esp_err_t network_service_init_with_config(const network_config_all_t* config);
 
 /**
  * @brief Network Service 정리

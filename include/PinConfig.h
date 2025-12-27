@@ -48,8 +48,6 @@
 
 // LED (Tally Light)
 #define EORA_S3_LED_BOARD       GPIO_NUM_37   // 보드 내장 LED
-#define EORA_S3_LED_PGM         GPIO_NUM_38   // Program LED (빨간색)
-#define EORA_S3_LED_PVW         GPIO_NUM_39   // Preview LED (녹색)
 
 // 버튼
 #define EORA_S3_BUTTON          GPIO_NUM_0    // 보드 내장 버튼

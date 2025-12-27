@@ -1,10 +1,11 @@
 /**
  * @file LedService.cpp
- * @brief LED 서비스 구현 - WS2812Driver 제어
+ * @brief LED 서비스 구현 - WS2812Driver + 내장 LED 제어
  */
 
 #include "led_service.h"
 #include "ws2812_driver.h"
+#include "board_led_driver.h"
 #include "t_log.h"
 #include <cstring>
 
@@ -162,6 +163,40 @@ void led_service_deinit(void)
 bool led_service_is_initialized(void)
 {
     return s_service.initialized;
+}
+
+// ============================================================================
+// 내장 LED 제어 (board_led_driver 위임)
+// ============================================================================
+
+esp_err_t led_service_init_board_led(void)
+{
+    return board_led_driver_init();
+}
+
+void led_service_deinit_board_led(void)
+{
+    board_led_driver_deinit();
+}
+
+void led_service_set_board_led_state(board_led_state_t state)
+{
+    board_led_set_state(state);
+}
+
+void led_service_board_led_on(void)
+{
+    board_led_on();
+}
+
+void led_service_board_led_off(void)
+{
+    board_led_off();
+}
+
+void led_service_toggle_board_led(void)
+{
+    board_led_toggle();
 }
 
 } // extern "C"
