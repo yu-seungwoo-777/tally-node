@@ -1,3 +1,5 @@
+실제 폴더 구조와 문서를 비교한 결과, `web_server/` 하위에 `static_embed/` 폴더가 추가로 있어 이를 반영해야 합니다. 수정된 전체 파일 내용을 출력합니다.
+
 # 아키텍처
 
 **작성일**: 2025-12-25
@@ -109,6 +111,7 @@ components/
 │   │       ├── RxPage/
 │   │       └── TxPage/
 │   └── web_server/
+│       └── static_embed/
 ├── 03_service/
 │   ├── button_service/
 │   ├── config_service/
@@ -273,6 +276,7 @@ O 올바른 예:
 | display/pages/RxPage | RX 모드 페이지 | DisplayManager | ✅ |
 | display/pages/TxPage | TX 모드 페이지 | DisplayManager | ✅ |
 | web_server | 웹 설정 서버 | esp_http_server | 🚧 |
+| web_server/static_embed | 웹 정적 리소스 (임베디드) | - | 🚧 |
 
 ### 03_service - 서비스
 
