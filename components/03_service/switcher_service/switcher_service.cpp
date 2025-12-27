@@ -9,8 +9,6 @@
 #include "atem_driver.h"
 #include "vmix_driver.h"
 #include "obs_driver.h"
-#include "wifi_driver.h"
-#include "ethernet_driver.h"
 #include <cstring>
 
 // =============================================================================
