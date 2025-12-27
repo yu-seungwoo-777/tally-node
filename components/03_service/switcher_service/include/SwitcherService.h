@@ -178,6 +178,12 @@ void switcher_service_set_tally_callback(switcher_service_handle_t handle, tally
 void switcher_service_set_connection_callback(switcher_service_handle_t handle, connection_callback_t callback);
 
 /**
+ * @brief 모든 스위처 재연결 시도
+ * @param handle 서비스 핸들
+ */
+void switcher_service_reconnect_all(switcher_service_handle_t handle);
+
+/**
  * @brief 스위처 변경 콜백 설정
  * @param handle 서비스 핸들
  * @param callback 콜백 함수 (role 파라미터)
@@ -339,6 +345,11 @@ public:
      * @brief 연결 상태 변경 콜백 설정
      */
     void setConnectionCallback(connection_callback_t callback);
+
+    /**
+     * @brief 모든 스위처 재연결
+     */
+    void reconnectAll();
 
     /**
      * @brief 스위처 변경 콜백 설정

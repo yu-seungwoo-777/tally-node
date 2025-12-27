@@ -10,7 +10,6 @@
 #include "LoRaService.h"
 #include "lora_driver.h"
 #include "event_bus.h"
-#include "LoRaConfig.h"
 #include "t_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -175,21 +174,19 @@ esp_err_t lora_service_init(const lora_service_config_t* config)
     // 드라이버 설정 구성
     lora_config_t driver_config;
 
-    if (config != nullptr) {
-        driver_config.frequency = config->frequency;
-        driver_config.spreading_factor = config->spreading_factor;
-        driver_config.coding_rate = config->coding_rate;
-        driver_config.bandwidth = config->bandwidth;
-        driver_config.tx_power = config->tx_power;
-        driver_config.sync_word = config->sync_word;
-    } else {
-        driver_config.frequency = LORA_DEFAULT_FREQ;
-        driver_config.spreading_factor = LORA_DEFAULT_SF;
-        driver_config.coding_rate = LORA_DEFAULT_CR;
-        driver_config.bandwidth = LORA_DEFAULT_BW;
-        driver_config.tx_power = LORA_DEFAULT_TX_POWER;
-        driver_config.sync_word = LORA_DEFAULT_SYNC_WORD;
+    if (config == nullptr) {
+        T_LOGE(TAG, "config는 nullptr일 수 없습니다");
+        vQueueDelete(s_tx_queue);
+        s_tx_queue = nullptr;
+        return ESP_ERR_INVALID_ARG;
     }
+
+    driver_config.frequency = config->frequency;
+    driver_config.spreading_factor = config->spreading_factor;
+    driver_config.coding_rate = config->coding_rate;
+    driver_config.bandwidth = config->bandwidth;
+    driver_config.tx_power = config->tx_power;
+    driver_config.sync_word = config->sync_word;
 
     // 드라이버 초기화
     esp_err_t ret = lora_driver_init(&driver_config);

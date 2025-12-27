@@ -16,8 +16,6 @@
 #include "NetworkService.h"
 #include "LoRaService.h"
 #include "TallyTypes.h"
-#include "LoRaConfig.h"
-#include "SwitcherConfig.h"
 #include "esp_netif.h"
 #include "esp_event.h"
 
@@ -114,11 +112,20 @@ static struct {
     bool running;
     bool initialized;
     packed_data_t last_tally;
+    // Switcher 설정 (ConfigService에서 로드)
+    config_switcher_t primary;
+    config_switcher_t secondary;
+    bool dual_mode;
+    uint8_t secondary_offset;
 } s_app = {
     .service = nullptr,
     .running = false,
     .initialized = false,
-    .last_tally = {nullptr, 0, 0}
+    .last_tally = {nullptr, 0, 0},
+    .primary = {},     // zero-initialized (C++ style)
+    .secondary = {},   // zero-initialized (C++ style)
+    .dual_mode = false,
+    .secondary_offset = 4
 };
 
 // ============================================================================
@@ -174,14 +181,20 @@ static esp_err_t handle_switcher_disconnected(const event_data_t* event)
 static esp_err_t handle_network_connected(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "네트워크 연결됨 -> TxPage 갱신");
+    T_LOGI(TAG, "네트워크 연결됨 -> 스위처 재연결");
+    if (s_app.service) {
+        switcher_service_reconnect_all(s_app.service);
+    }
     return ESP_OK;
 }
 
 static esp_err_t handle_network_disconnected(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "네트워크 연결 해제 -> TxPage 갱신");
+    T_LOGI(TAG, "네트워크 연결 해제 -> 스위처 재연결");
+    if (s_app.service) {
+        switcher_service_reconnect_all(s_app.service);
+    }
     return ESP_OK;
 }
 
@@ -224,12 +237,33 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         return false;
     }
 
+    // 네트워크 이벤트 구독 (재연결 트리거)
+    event_bus_subscribe(EVT_NETWORK_DISCONNECTED, handle_network_disconnected);
+    event_bus_subscribe(EVT_NETWORK_CONNECTED, handle_network_connected);
+
     // ConfigService 초기화
     ret = config_service_init();
     if (ret != ESP_OK) {
         T_LOGE(TAG, "ConfigService init failed: %s", esp_err_to_name(ret));
         return false;
     }
+
+    // Switcher 설정 로드
+    config_service_get_primary(&s_app.primary);
+    config_service_get_secondary(&s_app.secondary);
+    s_app.dual_mode = config_service_get_dual_enabled();
+    s_app.secondary_offset = config_service_get_secondary_offset();
+
+    // Switcher 설정 로그
+    T_LOGI(TAG, "Switcher 설정 로드:");
+    T_LOGI(TAG, "  Primary: %s (type=%d, if=%d, port=%d, limit=%d)",
+             s_app.primary.ip, s_app.primary.type, s_app.primary.interface,
+             s_app.primary.port, s_app.primary.camera_limit);
+    T_LOGI(TAG, "  Secondary: %s (type=%d, if=%d, port=%d, limit=%d)",
+             s_app.secondary.ip, s_app.secondary.type, s_app.secondary.interface,
+             s_app.secondary.port, s_app.secondary.camera_limit);
+    T_LOGI(TAG, "  Dual Mode: %s, Offset: %d",
+             s_app.dual_mode ? "Enabled" : "Disabled", s_app.secondary_offset);
 
     // 네트워크 설정 확인 (비어있으면 기본값 저장)
     config_all_t current_config;
@@ -260,35 +294,37 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     switcher_service_set_connection_callback(s_app.service, on_connection_change);
     switcher_service_set_switcher_change_callback(s_app.service, on_switcher_change);
 
-    // Primary 스위처 설정
+    // Primary 스위처 설정 (ConfigService에서 로드한 값 사용)
     if (!switcher_service_set_atem(s_app.service,
                                      SWITCHER_ROLE_PRIMARY,
                                      "Primary",
-                                     SWITCHER_PRIMARY_IP,
-                                     0,  // 0=기본 포트 사용
-                                     SWITCHER_PRIMARY_CAMERA_LIMIT,
-                                     (tally_network_if_t)0)) {  // 0=Auto
+                                     s_app.primary.ip,
+                                     s_app.primary.port,
+                                     s_app.primary.camera_limit,
+                                     (tally_network_if_t)s_app.primary.interface)) {
         T_LOGE(TAG, "Primary 스위처 설정 실패");
         switcher_service_destroy(s_app.service);
         s_app.service = nullptr;
         return false;
     }
+    T_LOGI(TAG, "Primary 스위처 설정 완료: %s:%d (if=%d, limit=%d)",
+             s_app.primary.ip, s_app.primary.port, s_app.primary.interface, s_app.primary.camera_limit);
 
     // Secondary 스위처 설정 (듀얼모드인 경우)
-    if (SWITCHER_DUAL_MODE_ENABLED && SWITCHER_SECONDARY_IP) {
+    if (s_app.dual_mode && s_app.secondary.ip[0] != '\0') {
         if (!switcher_service_set_atem(s_app.service,
                                         SWITCHER_ROLE_SECONDARY,
                                         "Secondary",
-                                        SWITCHER_SECONDARY_IP,
-                                        0,  // 0=기본 포트 사용
-                                        SWITCHER_PRIMARY_CAMERA_LIMIT,
-                                        (tally_network_if_t)0)) {  // 0=Auto
+                                        s_app.secondary.ip,
+                                        s_app.secondary.port,
+                                        s_app.secondary.camera_limit,
+                                        (tally_network_if_t)s_app.secondary.interface)) {
             T_LOGW(TAG, "Secondary 스위처 설정 실패 (싱글모드로 동작)");
         } else {
             // 듀얼모드 설정
             switcher_service_set_dual_mode(s_app.service, true);
-            switcher_service_set_secondary_offset(s_app.service, SWITCHER_DUAL_MODE_OFFSET);
-            T_LOGI(TAG, "듀얼모드 활성화 (offset: %d)", SWITCHER_DUAL_MODE_OFFSET);
+            switcher_service_set_secondary_offset(s_app.service, s_app.secondary_offset);
+            T_LOGI(TAG, "듀얼모드 활성화 (offset: %d)", s_app.secondary_offset);
         }
     }
 
@@ -309,14 +345,17 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     }
     T_LOGI(TAG, "SwitcherService 태스크 시작 (10ms 주기)");
 
-    // LoRa 초기화
+    // LoRa 초기화 (ConfigService에서 RF 설정 가져오기)
+    config_device_t device_config;
+    config_service_get_device(&device_config);
+
     lora_service_config_t lora_config = {
-        .frequency = LORA_DEFAULT_FREQ,
-        .spreading_factor = LORA_DEFAULT_SF,
-        .coding_rate = LORA_DEFAULT_CR,
-        .bandwidth = LORA_DEFAULT_BW,
-        .tx_power = LORA_DEFAULT_TX_POWER,
-        .sync_word = LORA_DEFAULT_SYNC_WORD
+        .frequency = device_config.rf.frequency,
+        .spreading_factor = device_config.rf.sf,
+        .coding_rate = device_config.rf.cr,
+        .bandwidth = device_config.rf.bw,
+        .tx_power = device_config.rf.tx_power,
+        .sync_word = device_config.rf.sync_word
     };
     esp_err_t lora_ret = lora_service_init(&lora_config);
     if (lora_ret != ESP_OK) {
@@ -346,12 +385,7 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     s_app.initialized = true;
     T_LOGI(TAG, "TX app init complete");
 
-    // 설정 로그
-    T_LOGI(TAG, "  Primary: %s:%d", SWITCHER_PRIMARY_IP, 9910);
-    if (SWITCHER_DUAL_MODE_ENABLED && SWITCHER_SECONDARY_IP) {
-        T_LOGI(TAG, "  Secondary: %s:%d (offset: %d)",
-                 SWITCHER_SECONDARY_IP, 9910, SWITCHER_DUAL_MODE_OFFSET);
-    }
+    // 설정 로그 (Switcher는 이미 위에서 출력됨)
     T_LOGI(TAG, "  주파수: %.1f MHz", lora_config.frequency);
     T_LOGI(TAG, "  SF: %d, CR: 4/%d, BW: %.0f kHz",
              lora_config.spreading_factor,
@@ -520,7 +554,7 @@ void prod_tx_app_loop(void)
                 s_app.service, SWITCHER_ROLE_PRIMARY);
             bool s1_connected = (s1_status.state == CONNECTION_STATE_READY ||
                                  s1_status.state == CONNECTION_STATE_CONNECTED);
-            tx_page_set_s1("ATEM", SWITCHER_PRIMARY_IP, 9910, s1_connected);
+            tx_page_set_s1("ATEM", s_app.primary.ip, 9910, s1_connected);
 
             // S2 (Secondary) 상태 (듀얼모드인 경우)
             if (switcher_service_is_dual_mode_enabled(s_app.service)) {
@@ -528,8 +562,9 @@ void prod_tx_app_loop(void)
                     s_app.service, SWITCHER_ROLE_SECONDARY);
                 bool s2_connected = (s2_status.state == CONNECTION_STATE_READY ||
                                      s2_status.state == CONNECTION_STATE_CONNECTED);
-                tx_page_set_s2("ATEM", SWITCHER_SECONDARY_IP ? SWITCHER_SECONDARY_IP : "0.0.0.0",
-                               9910, s2_connected);
+                const char* s2_ip = (s_app.secondary.ip[0] != '\0')
+                                    ? s_app.secondary.ip : "0.0.0.0";
+                tx_page_set_s2("ATEM", s2_ip, 9910, s2_connected);
             }
         }
 

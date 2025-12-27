@@ -9,10 +9,15 @@
 #include "AtemDriver.h"
 #include "VmixDriver.h"
 #include "ObsDriver.h"
-#include "SwitcherConfig.h"
 #include "WiFiDriver.h"
 #include "EthernetDriver.h"
 #include <cstring>
+
+// =============================================================================
+// Switcher 재연결 간격 (하드코딩)
+// =============================================================================
+
+#define SWITCHER_RETRY_INTERVAL_MS   5000    ///< 스위처 재연결 시도 간격 (5초)
 
 // ============================================================================
 // 태그
@@ -299,6 +304,22 @@ void SwitcherService::taskFunction(void* param) {
 
     T_LOGI(TAG, "태스크 루프 종료");
     vTaskDelete(NULL);
+}
+
+// ============================================================================
+// 재연결 API
+// ============================================================================
+
+void SwitcherService::reconnectAll() {
+    T_LOGI(TAG, "스위처 재연결 시작");
+    if (primary_.adapter && primary_.adapter->getConnectionState() == CONNECTION_STATE_DISCONNECTED) {
+        T_LOGI(TAG, "Primary 재연결 시도");
+        primary_.adapter->connect();
+    }
+    if (secondary_.adapter && secondary_.adapter->getConnectionState() == CONNECTION_STATE_DISCONNECTED) {
+        T_LOGI(TAG, "Secondary 재연결 시도");
+        secondary_.adapter->connect();
+    }
 }
 
 void SwitcherService::taskLoop() {
@@ -665,6 +686,11 @@ void switcher_service_set_tally_callback(switcher_service_handle_t handle, tally
 void switcher_service_set_connection_callback(switcher_service_handle_t handle, connection_callback_t callback) {
     if (!handle) return;
     static_cast<SwitcherService*>(handle)->setConnectionCallback(callback);
+}
+
+void switcher_service_reconnect_all(switcher_service_handle_t handle) {
+    if (!handle) return;
+    static_cast<SwitcherService*>(handle)->reconnectAll();
 }
 
 // C 콜백 래퍼 (스태틱 함수로 role을 C 콜백에 전달)

@@ -51,11 +51,40 @@ typedef struct {
     bool enabled;
 } config_ethernet_t;
 
-// RF 설정 (LoRa 주파수 + Sync Word)
+// Switcher 설정
+typedef struct {
+    uint8_t type;          // 0=ATEM, 1=OBS, 2=vMix
+    char ip[16];          // IP 주소
+    uint16_t port;        // 포트 (0=기본값)
+    char password[64];    // 비밀번호
+    uint8_t interface;    // 1=WiFi, 2=Ethernet
+    uint8_t camera_limit; // 카메라 제한 (0=무제한)
+} config_switcher_t;
+
+// RF 설정 (LoRa)
 typedef struct {
     float frequency;     // MHz (예: 868.0f)
     uint8_t sync_word;   // Sync Word (예: 0x12)
+    uint8_t sf;          // Spreading Factor (7-12)
+    uint8_t cr;          // Coding Rate (5-8)
+    float bw;           // Bandwidth kHz (125/250/500)
+    int8_t tx_power;    // TX Power dBm (-22 ~ +22)
 } config_rf_t;
+
+// LED 색상 설정 (RGB)
+typedef struct {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} config_led_color_t;
+
+// LED 색상 설정 (NVS 저장)
+typedef struct {
+    config_led_color_t program;      // PROGRAM 상태 색상 (빨강)
+    config_led_color_t preview;      // PREVIEW 상태 색상 (초록)
+    config_led_color_t off;          // OFF 상태 색상 (검정, 변경 가능)
+    config_led_color_t battery_low;  // BATTERY_LOW 상태 색상 (노랑)
+} config_led_colors_t;
 
 // Device 설정 (NVS 저장)
 typedef struct {
@@ -79,7 +108,11 @@ typedef struct {
     config_wifi_ap_t wifi_ap;
     config_wifi_sta_t wifi_sta;
     config_ethernet_t ethernet;
-    config_device_t device;      // Device 설정 (NVS 저장)
+    config_device_t device;       // Device 설정 (NVS 저장)
+    config_switcher_t primary;    // Primary Switcher (NVS 저장)
+    config_switcher_t secondary;   // Secondary Switcher (NVS 저장)
+    bool dual_enabled;             // Dual Mode 활성화
+    uint8_t secondary_offset;      // Secondary 오프셋 (0~19)
 } config_all_t;
 
 // ============================================================================
@@ -130,6 +163,50 @@ esp_err_t config_service_get_ethernet(config_ethernet_t* config);
  * @brief Ethernet 설정 저장
  */
 esp_err_t config_service_set_ethernet(const config_ethernet_t* config);
+
+// ============================================================================
+// Switcher 설정 API
+// ============================================================================
+
+/**
+ * @brief Primary Switcher 로드
+ */
+esp_err_t config_service_get_primary(config_switcher_t* config);
+
+/**
+ * @brief Primary Switcher 저장
+ */
+esp_err_t config_service_set_primary(const config_switcher_t* config);
+
+/**
+ * @brief Secondary Switcher 로드
+ */
+esp_err_t config_service_get_secondary(config_switcher_t* config);
+
+/**
+ * @brief Secondary Switcher 저장
+ */
+esp_err_t config_service_set_secondary(const config_switcher_t* config);
+
+/**
+ * @brief Dual Mode 활성화 로드
+ */
+bool config_service_get_dual_enabled(void);
+
+/**
+ * @brief Dual Mode 활성화 저장
+ */
+esp_err_t config_service_set_dual_enabled(bool enabled);
+
+/**
+ * @brief Secondary 오프셋 로드
+ */
+uint8_t config_service_get_secondary_offset(void);
+
+/**
+ * @brief Secondary 오프셋 저장
+ */
+esp_err_t config_service_set_secondary_offset(uint8_t offset);
 
 // ============================================================================
 // Device 설정 API
@@ -228,6 +305,40 @@ void config_service_set_stopped(bool stopped);
  * @brief Uptime 증가 (1초 타이머 호출용)
  */
 void config_service_inc_uptime(void);
+
+// ============================================================================
+// LED 색상 설정 API
+// ============================================================================
+
+/**
+ * @brief LED 색상 설정 로드
+ */
+esp_err_t config_service_get_led_colors(config_led_colors_t* config);
+
+/**
+ * @brief LED 색상 설정 저장
+ */
+esp_err_t config_service_set_led_colors(const config_led_colors_t* config);
+
+/**
+ * @brief PROGRAM 색상 가져오기
+ */
+void config_service_get_led_program_color(uint8_t* r, uint8_t* g, uint8_t* b);
+
+/**
+ * @brief PREVIEW 색상 가져오기
+ */
+void config_service_get_led_preview_color(uint8_t* r, uint8_t* g, uint8_t* b);
+
+/**
+ * @brief OFF 색상 가져오기
+ */
+void config_service_get_led_off_color(uint8_t* r, uint8_t* g, uint8_t* b);
+
+/**
+ * @brief BATTERY_LOW 색상 가져오기
+ */
+void config_service_get_led_battery_low_color(uint8_t* r, uint8_t* g, uint8_t* b);
 
 // ============================================================================
 // 기존 API

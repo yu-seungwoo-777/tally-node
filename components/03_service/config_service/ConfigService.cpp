@@ -4,8 +4,7 @@
  */
 
 #include "ConfigService.h"
-#include "NetworkConfig.h"
-#include "LoRaConfig.h"
+#include "NVSConfig.h"
 #include "battery_driver.h"
 #include "TemperatureDriver.h"
 #include "event_bus.h"
@@ -78,6 +77,24 @@ public:
     static void onRssiChanged(const event_data_t* event);
     static int16_t getRssi(void);
     static float getSnr(void);
+
+    // Switcher 설정
+    static esp_err_t getPrimary(config_switcher_t* config);
+    static esp_err_t setPrimary(const config_switcher_t* config);
+    static esp_err_t getSecondary(config_switcher_t* config);
+    static esp_err_t setSecondary(const config_switcher_t* config);
+    static bool getDualEnabled(void);
+    static esp_err_t setDualEnabled(bool enabled);
+    static uint8_t getSecondaryOffset(void);
+    static esp_err_t setSecondaryOffset(uint8_t offset);
+
+    // LED 색상 설정
+    static esp_err_t getLedColors(config_led_colors_t* config);
+    static esp_err_t setLedColors(const config_led_colors_t* config);
+    static void getLedProgramColor(uint8_t* r, uint8_t* g, uint8_t* b);
+    static void getLedPreviewColor(uint8_t* r, uint8_t* g, uint8_t* b);
+    static void getLedOffColor(uint8_t* r, uint8_t* g, uint8_t* b);
+    static void getLedBatteryLowColor(uint8_t* r, uint8_t* g, uint8_t* b);
 
     // 기본값
     static esp_err_t loadDefaults(config_all_t* config);
@@ -172,7 +189,11 @@ esp_err_t ConfigServiceClass::loadAll(config_all_t* config)
 
     getWiFiSTA(&config->wifi_sta);
     getEthernet(&config->ethernet);
-    getDevice(&config->device);  // Device 설정 로드 추가
+    getDevice(&config->device);
+    getPrimary(&config->primary);
+    getSecondary(&config->secondary);
+    config->dual_enabled = getDualEnabled();
+    config->secondary_offset = getSecondaryOffset();
 
     return ESP_OK;
 }
@@ -194,7 +215,19 @@ esp_err_t ConfigServiceClass::saveAll(const config_all_t* config)
     ret = setEthernet(&config->ethernet);
     if (ret != ESP_OK) return ret;
 
-    ret = setDevice(&config->device);  // Device 설정 저장 추가
+    ret = setDevice(&config->device);
+    if (ret != ESP_OK) return ret;
+
+    ret = setPrimary(&config->primary);
+    if (ret != ESP_OK) return ret;
+
+    ret = setSecondary(&config->secondary);
+    if (ret != ESP_OK) return ret;
+
+    ret = setDualEnabled(config->dual_enabled);
+    if (ret != ESP_OK) return ret;
+
+    ret = setSecondaryOffset(config->secondary_offset);
     if (ret != ESP_OK) return ret;
 
     return ESP_OK;
@@ -401,29 +434,53 @@ esp_err_t ConfigServiceClass::loadDefaults(config_all_t* config)
 
     memset(config, 0, sizeof(config_all_t));
 
-    // WiFi AP 기본값 (NetworkConfig.h)
-    strncpy(config->wifi_ap.ssid, WIFI_AP_SSID, sizeof(config->wifi_ap.ssid) - 1);
-    strncpy(config->wifi_ap.password, WIFI_AP_PASSWORD, sizeof(config->wifi_ap.password) - 1);
-    config->wifi_ap.channel = (WIFI_AP_CHANNEL > 0) ? WIFI_AP_CHANNEL : 1;
-    config->wifi_ap.enabled = true;  // AP 활성화
+    // WiFi AP 기본값
+    strncpy(config->wifi_ap.ssid, NVS_WIFI_AP_SSID, sizeof(config->wifi_ap.ssid) - 1);
+    strncpy(config->wifi_ap.password, NVS_WIFI_AP_PASSWORD, sizeof(config->wifi_ap.password) - 1);
+    config->wifi_ap.channel = NVS_WIFI_AP_CHANNEL;
+    config->wifi_ap.enabled = true;
 
-    // WiFi STA 기본값 (NetworkConfig.h, AP+STA 모드)
-    strncpy(config->wifi_sta.ssid, WIFI_STA_SSID, sizeof(config->wifi_sta.ssid) - 1);
-    strncpy(config->wifi_sta.password, WIFI_STA_PASSWORD, sizeof(config->wifi_sta.password) - 1);
+    // WiFi STA 기본값
+    strncpy(config->wifi_sta.ssid, NVS_WIFI_STA_SSID, sizeof(config->wifi_sta.ssid) - 1);
+    strncpy(config->wifi_sta.password, NVS_WIFI_STA_PASSWORD, sizeof(config->wifi_sta.password) - 1);
     config->wifi_sta.enabled = true;
 
-    // Ethernet 기본값 (NetworkConfig.h)
-    config->ethernet.dhcp_enabled = (DHCP_ENABLED != 0);
-    strncpy(config->ethernet.static_ip, STATIC_IP, sizeof(config->ethernet.static_ip) - 1);
-    strncpy(config->ethernet.static_netmask, STATIC_NETMASK, sizeof(config->ethernet.static_netmask) - 1);
-    strncpy(config->ethernet.static_gateway, STATIC_GATEWAY, sizeof(config->ethernet.static_gateway) - 1);
+    // Ethernet 기본값
+    config->ethernet.dhcp_enabled = (NVS_ETHERNET_DHCP_ENABLED != 0);
+    strncpy(config->ethernet.static_ip, NVS_ETHERNET_STATIC_IP, sizeof(config->ethernet.static_ip) - 1);
+    strncpy(config->ethernet.static_netmask, NVS_ETHERNET_STATIC_NETMASK, sizeof(config->ethernet.static_netmask) - 1);
+    strncpy(config->ethernet.static_gateway, NVS_ETHERNET_STATIC_GATEWAY, sizeof(config->ethernet.static_gateway) - 1);
     config->ethernet.enabled = true;
 
-    // Device 기본값 (LoRaConfig.h)
-    config->device.brightness = 128;      // 기본 밝기 50% (128/255)
-    config->device.camera_id = 1;        // 기본 카메라 ID
-    config->device.rf.frequency = LORA_DEFAULT_FREQ;
-    config->device.rf.sync_word = LORA_DEFAULT_SYNC_WORD;
+    // Device 기본값
+    config->device.brightness = NVS_DEVICE_BRIGHTNESS;
+    config->device.camera_id = NVS_DEVICE_CAMERA_ID;
+    config->device.rf.frequency = NVS_LORA_DEFAULT_FREQ;
+    config->device.rf.sync_word = NVS_LORA_DEFAULT_SYNC_WORD;
+    config->device.rf.sf = NVS_LORA_DEFAULT_SF;
+    config->device.rf.cr = NVS_LORA_DEFAULT_CR;
+    config->device.rf.bw = NVS_LORA_DEFAULT_BW;
+    config->device.rf.tx_power = NVS_LORA_DEFAULT_TX_POWER;
+
+    // Switcher 기본값 - Primary
+    config->primary.type = NVS_SWITCHER_PRI_TYPE;
+    strncpy(config->primary.ip, NVS_SWITCHER_PRI_IP, sizeof(config->primary.ip) - 1);
+    config->primary.port = NVS_SWITCHER_PRI_PORT;
+    strncpy(config->primary.password, NVS_SWITCHER_PRI_PASSWORD, sizeof(config->primary.password) - 1);
+    config->primary.interface = NVS_SWITCHER_PRI_INTERFACE;
+    config->primary.camera_limit = NVS_SWITCHER_PRI_CAMERA_LIMIT;
+
+    // Switcher 기본값 - Secondary
+    config->secondary.type = NVS_SWITCHER_SEC_TYPE;
+    strncpy(config->secondary.ip, NVS_SWITCHER_SEC_IP, sizeof(config->secondary.ip) - 1);
+    config->secondary.port = NVS_SWITCHER_SEC_PORT;
+    strncpy(config->secondary.password, NVS_SWITCHER_SEC_PASSWORD, sizeof(config->secondary.password) - 1);
+    config->secondary.interface = NVS_SWITCHER_SEC_INTERFACE;
+    config->secondary.camera_limit = NVS_SWITCHER_SEC_CAMERA_LIMIT;
+
+    // Dual 모드 설정
+    config->dual_enabled = NVS_DUAL_ENABLED;
+    config->secondary_offset = NVS_DUAL_OFFSET;
 
     T_LOGI(TAG, "기본값 로드됨");
     return ESP_OK;
@@ -451,11 +508,15 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config)
 
     memset(config, 0, sizeof(config_device_t));
 
-    // 기본값 설정
-    config->brightness = 128;  // 50%
-    config->camera_id = 1;
-    config->rf.frequency = LORA_DEFAULT_FREQ;
-    config->rf.sync_word = LORA_DEFAULT_SYNC_WORD;
+    // 기본값 설정 (NVSConfig)
+    config->brightness = NVS_DEVICE_BRIGHTNESS;
+    config->camera_id = NVS_DEVICE_CAMERA_ID;
+    config->rf.frequency = NVS_LORA_DEFAULT_FREQ;
+    config->rf.sync_word = NVS_LORA_DEFAULT_SYNC_WORD;
+    config->rf.sf = NVS_LORA_DEFAULT_SF;
+    config->rf.cr = NVS_LORA_DEFAULT_CR;
+    config->rf.bw = NVS_LORA_DEFAULT_BW;
+    config->rf.tx_power = NVS_LORA_DEFAULT_TX_POWER;
 
     nvs_handle_t handle;
     esp_err_t ret = nvs_open("config", NVS_READONLY, &handle);
@@ -464,12 +525,12 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config)
         return ESP_OK;
     }
 
-    uint8_t brightness = 128;  // 기본값 50%
+    uint8_t brightness = NVS_DEVICE_BRIGHTNESS;
     if (nvs_get_u8(handle, "dev_brightness", &brightness) == ESP_OK) {
         config->brightness = brightness;
     }
 
-    uint8_t camera_id = 1;
+    uint8_t camera_id = NVS_DEVICE_CAMERA_ID;
     if (nvs_get_u8(handle, "dev_camera_id", &camera_id) == ESP_OK) {
         config->camera_id = camera_id;
     }
@@ -480,9 +541,29 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config)
         config->rf.frequency = freq_int / 10.0f;
     }
 
-    uint8_t sync_word = LORA_DEFAULT_SYNC_WORD;
+    uint8_t sync_word = NVS_LORA_DEFAULT_SYNC_WORD;
     if (nvs_get_u8(handle, "dev_sync_word", &sync_word) == ESP_OK) {
         config->rf.sync_word = sync_word;
+    }
+
+    uint8_t sf = NVS_LORA_DEFAULT_SF;
+    if (nvs_get_u8(handle, "dev_sf", &sf) == ESP_OK) {
+        config->rf.sf = sf;
+    }
+
+    uint8_t cr = NVS_LORA_DEFAULT_CR;
+    if (nvs_get_u8(handle, "dev_cr", &cr) == ESP_OK) {
+        config->rf.cr = cr;
+    }
+
+    uint32_t bw_int = (uint32_t)(NVS_LORA_DEFAULT_BW * 10);  // 250.0 * 10
+    if (nvs_get_u32(handle, "dev_bw", &bw_int) == ESP_OK) {
+        config->rf.bw = bw_int / 10.0f;
+    }
+
+    int8_t tx_power = NVS_LORA_DEFAULT_TX_POWER;
+    if (nvs_get_i8(handle, "dev_tx_power", &tx_power) == ESP_OK) {
+        config->rf.tx_power = tx_power;
     }
 
     nvs_close(handle);
@@ -505,6 +586,10 @@ esp_err_t ConfigServiceClass::setDevice(const config_device_t* config)
     nvs_set_u8(handle, "dev_camera_id", config->camera_id);
     nvs_set_u32(handle, "dev_frequency", (uint32_t)(config->rf.frequency * 10));  // 소수점 저장 위해 *10
     nvs_set_u8(handle, "dev_sync_word", config->rf.sync_word);
+    nvs_set_u8(handle, "dev_sf", config->rf.sf);
+    nvs_set_u8(handle, "dev_cr", config->rf.cr);
+    nvs_set_u32(handle, "dev_bw", (uint32_t)(config->rf.bw * 10));  // 소수점 저장 위해 *10
+    nvs_set_i8(handle, "dev_tx_power", config->rf.tx_power);
 
     nvs_commit(handle);
     nvs_close(handle);
@@ -668,6 +753,377 @@ int16_t ConfigServiceClass::getRssi(void)
 float ConfigServiceClass::getSnr(void)
 {
     return s_system_state.snr;
+}
+
+// ============================================================================
+// Switcher 설정
+// ============================================================================
+
+esp_err_t ConfigServiceClass::getPrimary(config_switcher_t* config)
+{
+    if (!config) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memset(config, 0, sizeof(config_switcher_t));
+
+    // 기본값 설정 (NVSConfig)
+    config->type = NVS_SWITCHER_PRI_TYPE;
+    config->port = NVS_SWITCHER_PRI_PORT;
+    config->interface = NVS_SWITCHER_PRI_INTERFACE;
+    config->camera_limit = NVS_SWITCHER_PRI_CAMERA_LIMIT;
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READONLY, &handle);
+    if (ret != ESP_OK) {
+        // NVS 열기 실패 시 기본값 반환
+        return ESP_OK;
+    }
+
+    uint8_t type = NVS_SWITCHER_PRI_TYPE;
+    if (nvs_get_u8(handle, "sw_pri_type", &type) == ESP_OK) {
+        config->type = type;
+    }
+
+    size_t len = sizeof(config->ip);
+    nvs_get_str(handle, "sw_pri_ip", config->ip, &len);
+
+    uint16_t port = NVS_SWITCHER_PRI_PORT;
+    if (nvs_get_u16(handle, "sw_pri_port", &port) == ESP_OK) {
+        config->port = port;
+    }
+
+    len = sizeof(config->password);
+    nvs_get_str(handle, "sw_pri_pass", config->password, &len);
+
+    uint8_t interface = NVS_SWITCHER_PRI_INTERFACE;
+    if (nvs_get_u8(handle, "sw_pri_if", &interface) == ESP_OK) {
+        config->interface = interface;
+    }
+
+    uint8_t camera_limit = NVS_SWITCHER_PRI_CAMERA_LIMIT;
+    if (nvs_get_u8(handle, "sw_pri_limit", &camera_limit) == ESP_OK) {
+        config->camera_limit = camera_limit;
+    }
+
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+esp_err_t ConfigServiceClass::setPrimary(const config_switcher_t* config)
+{
+    if (!config) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    nvs_set_u8(handle, "sw_pri_type", config->type);
+    nvs_set_str(handle, "sw_pri_ip", config->ip);
+    nvs_set_u16(handle, "sw_pri_port", config->port);
+    nvs_set_str(handle, "sw_pri_pass", config->password);
+    nvs_set_u8(handle, "sw_pri_if", config->interface);
+    nvs_set_u8(handle, "sw_pri_limit", config->camera_limit);
+
+    nvs_commit(handle);
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+esp_err_t ConfigServiceClass::getSecondary(config_switcher_t* config)
+{
+    if (!config) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memset(config, 0, sizeof(config_switcher_t));
+
+    // 기본값 설정 (NVSConfig)
+    config->type = NVS_SWITCHER_SEC_TYPE;
+    config->port = NVS_SWITCHER_SEC_PORT;
+    config->interface = NVS_SWITCHER_SEC_INTERFACE;
+    config->camera_limit = NVS_SWITCHER_SEC_CAMERA_LIMIT;
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READONLY, &handle);
+    if (ret != ESP_OK) {
+        // NVS 열기 실패 시 기본값 반환
+        return ESP_OK;
+    }
+
+    uint8_t type = NVS_SWITCHER_SEC_TYPE;
+    if (nvs_get_u8(handle, "sw_sec_type", &type) == ESP_OK) {
+        config->type = type;
+    }
+
+    size_t len = sizeof(config->ip);
+    nvs_get_str(handle, "sw_sec_ip", config->ip, &len);
+
+    uint16_t port = NVS_SWITCHER_SEC_PORT;
+    if (nvs_get_u16(handle, "sw_sec_port", &port) == ESP_OK) {
+        config->port = port;
+    }
+
+    len = sizeof(config->password);
+    nvs_get_str(handle, "sw_sec_pass", config->password, &len);
+
+    uint8_t interface = NVS_SWITCHER_SEC_INTERFACE;
+    if (nvs_get_u8(handle, "sw_sec_if", &interface) == ESP_OK) {
+        config->interface = interface;
+    }
+
+    uint8_t camera_limit = NVS_SWITCHER_SEC_CAMERA_LIMIT;
+    if (nvs_get_u8(handle, "sw_sec_limit", &camera_limit) == ESP_OK) {
+        config->camera_limit = camera_limit;
+    }
+
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+esp_err_t ConfigServiceClass::setSecondary(const config_switcher_t* config)
+{
+    if (!config) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    nvs_set_u8(handle, "sw_sec_type", config->type);
+    nvs_set_str(handle, "sw_sec_ip", config->ip);
+    nvs_set_u16(handle, "sw_sec_port", config->port);
+    nvs_set_str(handle, "sw_sec_pass", config->password);
+    nvs_set_u8(handle, "sw_sec_if", config->interface);
+    nvs_set_u8(handle, "sw_sec_limit", config->camera_limit);
+
+    nvs_commit(handle);
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+bool ConfigServiceClass::getDualEnabled(void)
+{
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READONLY, &handle);
+    if (ret != ESP_OK) {
+        return NVS_DUAL_ENABLED;  // 기본값
+    }
+
+    uint8_t enabled = 0;
+    nvs_get_u8(handle, "sw_dual_enbl", &enabled);
+
+    nvs_close(handle);
+    return (enabled != 0);
+}
+
+esp_err_t ConfigServiceClass::setDualEnabled(bool enabled)
+{
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    nvs_set_u8(handle, "sw_dual_enbl", enabled ? 1 : 0);
+
+    nvs_commit(handle);
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+uint8_t ConfigServiceClass::getSecondaryOffset(void)
+{
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READONLY, &handle);
+    if (ret != ESP_OK) {
+        return NVS_DUAL_OFFSET;  // 기본값
+    }
+
+    uint8_t offset = NVS_DUAL_OFFSET;
+    nvs_get_u8(handle, "sw_dual_offset", &offset);
+
+    nvs_close(handle);
+    return offset;
+}
+
+esp_err_t ConfigServiceClass::setSecondaryOffset(uint8_t offset)
+{
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    nvs_set_u8(handle, "sw_dual_offset", offset);
+
+    nvs_commit(handle);
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+// ============================================================================
+// LED 색상 설정
+// ============================================================================
+
+esp_err_t ConfigServiceClass::getLedColors(config_led_colors_t* config)
+{
+    if (!config) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memset(config, 0, sizeof(config_led_colors_t));
+
+    // 기본값 설정 (NVSConfig)
+    config->program.r = NVS_LED_PROGRAM_R;
+    config->program.g = NVS_LED_PROGRAM_G;
+    config->program.b = NVS_LED_PROGRAM_B;
+
+    config->preview.r = NVS_LED_PREVIEW_R;
+    config->preview.g = NVS_LED_PREVIEW_G;
+    config->preview.b = NVS_LED_PREVIEW_B;
+
+    config->off.r = NVS_LED_OFF_R;
+    config->off.g = NVS_LED_OFF_G;
+    config->off.b = NVS_LED_OFF_B;
+
+    config->battery_low.r = NVS_LED_BATTERY_LOW_R;
+    config->battery_low.g = NVS_LED_BATTERY_LOW_G;
+    config->battery_low.b = NVS_LED_BATTERY_LOW_B;
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READONLY, &handle);
+    if (ret != ESP_OK) {
+        // NVS 열기 실패 시 기본값 반환
+        return ESP_OK;
+    }
+
+    // PROGRAM 색상
+    uint8_t r = NVS_LED_PROGRAM_R;
+    nvs_get_u8(handle, "led_pgm_r", &r);
+    config->program.r = r;
+    uint8_t g = NVS_LED_PROGRAM_G;
+    nvs_get_u8(handle, "led_pgm_g", &g);
+    config->program.g = g;
+    uint8_t b = NVS_LED_PROGRAM_B;
+    nvs_get_u8(handle, "led_pgm_b", &b);
+    config->program.b = b;
+
+    // PREVIEW 색상
+    r = NVS_LED_PREVIEW_R;
+    nvs_get_u8(handle, "led_pvw_r", &r);
+    config->preview.r = r;
+    g = NVS_LED_PREVIEW_G;
+    nvs_get_u8(handle, "led_pvw_g", &g);
+    config->preview.g = g;
+    b = NVS_LED_PREVIEW_B;
+    nvs_get_u8(handle, "led_pvw_b", &b);
+    config->preview.b = b;
+
+    // OFF 색상
+    r = NVS_LED_OFF_R;
+    nvs_get_u8(handle, "led_off_r", &r);
+    config->off.r = r;
+    g = NVS_LED_OFF_G;
+    nvs_get_u8(handle, "led_off_g", &g);
+    config->off.g = g;
+    b = NVS_LED_OFF_B;
+    nvs_get_u8(handle, "led_off_b", &b);
+    config->off.b = b;
+
+    // BATTERY_LOW 색상
+    r = NVS_LED_BATTERY_LOW_R;
+    nvs_get_u8(handle, "led_bat_r", &r);
+    config->battery_low.r = r;
+    g = NVS_LED_BATTERY_LOW_G;
+    nvs_get_u8(handle, "led_bat_g", &g);
+    config->battery_low.g = g;
+    b = NVS_LED_BATTERY_LOW_B;
+    nvs_get_u8(handle, "led_bat_b", &b);
+    config->battery_low.b = b;
+
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+esp_err_t ConfigServiceClass::setLedColors(const config_led_colors_t* config)
+{
+    if (!config) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // PROGRAM 색상
+    nvs_set_u8(handle, "led_pgm_r", config->program.r);
+    nvs_set_u8(handle, "led_pgm_g", config->program.g);
+    nvs_set_u8(handle, "led_pgm_b", config->program.b);
+
+    // PREVIEW 색상
+    nvs_set_u8(handle, "led_pvw_r", config->preview.r);
+    nvs_set_u8(handle, "led_pvw_g", config->preview.g);
+    nvs_set_u8(handle, "led_pvw_b", config->preview.b);
+
+    // OFF 색상
+    nvs_set_u8(handle, "led_off_r", config->off.r);
+    nvs_set_u8(handle, "led_off_g", config->off.g);
+    nvs_set_u8(handle, "led_off_b", config->off.b);
+
+    // BATTERY_LOW 색상
+    nvs_set_u8(handle, "led_bat_r", config->battery_low.r);
+    nvs_set_u8(handle, "led_bat_g", config->battery_low.g);
+    nvs_set_u8(handle, "led_bat_b", config->battery_low.b);
+
+    nvs_commit(handle);
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+void ConfigServiceClass::getLedProgramColor(uint8_t* r, uint8_t* g, uint8_t* b)
+{
+    config_led_colors_t colors;
+    getLedColors(&colors);
+    if (r) *r = colors.program.r;
+    if (g) *g = colors.program.g;
+    if (b) *b = colors.program.b;
+}
+
+void ConfigServiceClass::getLedPreviewColor(uint8_t* r, uint8_t* g, uint8_t* b)
+{
+    config_led_colors_t colors;
+    getLedColors(&colors);
+    if (r) *r = colors.preview.r;
+    if (g) *g = colors.preview.g;
+    if (b) *b = colors.preview.b;
+}
+
+void ConfigServiceClass::getLedOffColor(uint8_t* r, uint8_t* g, uint8_t* b)
+{
+    config_led_colors_t colors;
+    getLedColors(&colors);
+    if (r) *r = colors.off.r;
+    if (g) *g = colors.off.g;
+    if (b) *b = colors.off.b;
+}
+
+void ConfigServiceClass::getLedBatteryLowColor(uint8_t* r, uint8_t* g, uint8_t* b)
+{
+    config_led_colors_t colors;
+    getLedColors(&colors);
+    if (r) *r = colors.battery_low.r;
+    if (g) *g = colors.battery_low.g;
+    if (b) *b = colors.battery_low.b;
 }
 
 // ============================================================================
@@ -836,6 +1292,84 @@ float config_service_get_snr(void)
 bool config_service_is_initialized(void)
 {
     return ConfigServiceClass::isInitialized();
+}
+
+// ============================================================================
+// Switcher 설정 API
+// ============================================================================
+
+esp_err_t config_service_get_primary(config_switcher_t* config)
+{
+    return ConfigServiceClass::getPrimary(config);
+}
+
+esp_err_t config_service_set_primary(const config_switcher_t* config)
+{
+    return ConfigServiceClass::setPrimary(config);
+}
+
+esp_err_t config_service_get_secondary(config_switcher_t* config)
+{
+    return ConfigServiceClass::getSecondary(config);
+}
+
+esp_err_t config_service_set_secondary(const config_switcher_t* config)
+{
+    return ConfigServiceClass::setSecondary(config);
+}
+
+bool config_service_get_dual_enabled(void)
+{
+    return ConfigServiceClass::getDualEnabled();
+}
+
+esp_err_t config_service_set_dual_enabled(bool enabled)
+{
+    return ConfigServiceClass::setDualEnabled(enabled);
+}
+
+uint8_t config_service_get_secondary_offset(void)
+{
+    return ConfigServiceClass::getSecondaryOffset();
+}
+
+esp_err_t config_service_set_secondary_offset(uint8_t offset)
+{
+    return ConfigServiceClass::setSecondaryOffset(offset);
+}
+
+// ============================================================================
+// LED 색상 설정 API
+// ============================================================================
+
+esp_err_t config_service_get_led_colors(config_led_colors_t* config)
+{
+    return ConfigServiceClass::getLedColors(config);
+}
+
+esp_err_t config_service_set_led_colors(const config_led_colors_t* config)
+{
+    return ConfigServiceClass::setLedColors(config);
+}
+
+void config_service_get_led_program_color(uint8_t* r, uint8_t* g, uint8_t* b)
+{
+    ConfigServiceClass::getLedProgramColor(r, g, b);
+}
+
+void config_service_get_led_preview_color(uint8_t* r, uint8_t* g, uint8_t* b)
+{
+    ConfigServiceClass::getLedPreviewColor(r, g, b);
+}
+
+void config_service_get_led_off_color(uint8_t* r, uint8_t* g, uint8_t* b)
+{
+    ConfigServiceClass::getLedOffColor(r, g, b);
+}
+
+void config_service_get_led_battery_low_color(uint8_t* r, uint8_t* g, uint8_t* b)
+{
+    ConfigServiceClass::getLedBatteryLowColor(r, g, b);
 }
 
 } // extern "C"

@@ -6,9 +6,18 @@
  */
 
 #include "AtemDriver.h"
-#include "SwitcherConfig.h"
 #include "event_bus.h"
 #include "t_log.h"
+
+// =============================================================================
+// Tally 설정 (하드코딩)
+// =============================================================================
+
+#define TALLY_MAX_CHANNELS      20       ///< 최대 Tally 채널 수
+
+// Hello 응답 타임아웃 (AtemProtocol.h에 없는 값만 추가)
+#define ATEM_HELLO_RESPONSE_TIMEOUT_MS  10000   ///< Hello 응답 타임아웃 (10초)
+
 #include <sys/socket.h>
 
 // ============================================================================

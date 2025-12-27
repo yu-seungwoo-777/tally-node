@@ -6,12 +6,11 @@
 #include "tally_rx_app.h"
 #include "t_log.h"
 #include "LoRaService.h"
-#include "ws2812_driver.h"
+#include "LedService.h"
 #include "ConfigService.h"
 #include "button_poll.h"
 #include "TallyTypes.h"
 #include "event_bus.h"
-#include "LoRaConfig.h"
 #include <cstring>
 
 // ============================================================================
@@ -120,7 +119,7 @@ static esp_err_t on_button_long_press(const event_data_t* event) {
         T_LOGI(TAG, "카메라 ID 변경: %d → %d", current_id, new_id);
 
         // 드라이버에도 적용
-        ws2812_set_camera_id(new_id);
+        led_service_set_camera_id(new_id);
 
         // 이벤트 발행
         event_bus_publish(EVT_CAMERA_ID_CHANGED, &new_id, sizeof(new_id));
@@ -143,19 +142,6 @@ static const char* TAG = "tally_rx_app";
 #include "freertos/task.h"
 
 // ============================================================================
-// 기본 설정 (LoRaConfig.h 사용)
-// ============================================================================
-
-const tally_rx_config_t TALLY_RX_DEFAULT_CONFIG = {
-    .frequency = LORA_DEFAULT_FREQ,      // LoRaConfig.h 기본 주파수
-    .spreading_factor = LORA_DEFAULT_SF, // LoRaConfig.h 기본 SF
-    .coding_rate = LORA_DEFAULT_CR,      // LoRaConfig.h 기본 CR
-    .bandwidth = LORA_DEFAULT_BW,        // LoRaConfig.h 기본 BW
-    .tx_power = LORA_DEFAULT_TX_POWER,   // LoRaConfig.h 기본 전력
-    .sync_word = LORA_DEFAULT_SYNC_WORD  // LoRaConfig.h 기본 SyncWord
-};
-
-// ============================================================================
 // 내부 상태
 // ============================================================================
 
@@ -164,7 +150,6 @@ static struct {
     bool running;
     bool initialized;
 } s_app = {
-    .config = TALLY_RX_DEFAULT_CONFIG,
     .running = false,
     .initialized = false
 };
@@ -181,21 +166,18 @@ bool tally_rx_app_init(const tally_rx_config_t* config) {
 
     T_LOGI(TAG, "Tally 수신 앱 초기화 중...");
 
-    // 설정 복사
-    if (config) {
-        s_app.config = *config;
-    } else {
-        s_app.config = TALLY_RX_DEFAULT_CONFIG;
-    }
+    // ConfigService에서 RF 설정 가져오기
+    config_device_t device_config;
+    config_service_get_device(&device_config);
 
     // LoRa 초기화
     lora_service_config_t lora_config = {
-        .frequency = s_app.config.frequency,
-        .spreading_factor = s_app.config.spreading_factor,
-        .coding_rate = s_app.config.coding_rate,
-        .bandwidth = s_app.config.bandwidth,
-        .tx_power = s_app.config.tx_power,
-        .sync_word = s_app.config.sync_word
+        .frequency = device_config.rf.frequency,
+        .spreading_factor = device_config.rf.sf,
+        .coding_rate = device_config.rf.cr,
+        .bandwidth = device_config.rf.bw,
+        .tx_power = device_config.rf.tx_power,
+        .sync_word = device_config.rf.sync_word
     };
 
     esp_err_t lora_ret = lora_service_init(&lora_config);
@@ -209,7 +191,7 @@ bool tally_rx_app_init(const tally_rx_config_t* config) {
 
     // WS2812 LED 초기화 (드라이버에서 PinConfig.h 사용, NVS에서 camera_id 로드)
     uint8_t camera_id = config_service_get_camera_id();
-    esp_err_t led_ret = ws2812_driver_init(-1, 0, camera_id);
+    esp_err_t led_ret = led_service_init(-1, 0, camera_id);
     if (led_ret == ESP_OK) {
         T_LOGI(TAG, "WS2812 초기화 완료 (카메라 ID: %d)", camera_id);
     } else {
@@ -283,7 +265,7 @@ void tally_rx_app_deinit(void) {
     tally_rx_app_stop();
 
     // WS2812 정리
-    ws2812_deinit();
+    led_service_deinit();
 
     // LoRa 정리
     lora_service_deinit();

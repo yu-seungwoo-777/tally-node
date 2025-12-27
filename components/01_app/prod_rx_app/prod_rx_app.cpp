@@ -12,16 +12,15 @@
 #include "button_poll.h"
 #include "button_handler.h"
 #include "LoRaService.h"
-#include "ws2812_driver.h"
+#include "LedService.h"
 #include "TallyTypes.h"
-#include "LoRaConfig.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
 #include <cstring>
 
-// ============================================================================
+// =============================================================================
 // NVS 초기화 헬퍼
 // ============================================================================
 
@@ -285,7 +284,7 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
                 T_LOGI(TAG, "Camera ID 저장: %d -> %d (확인: %d)", old_id, new_id, saved_id);
 
                 // WS2812에도 새 카메라 ID 적용
-                ws2812_set_camera_id(new_id);
+                led_service_set_camera_id(new_id);
             } else {
                 T_LOGE(TAG, "Camera ID 저장 실패: %s", esp_err_to_name(ret));
             }
@@ -352,14 +351,17 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
         return false;
     }
 
-    // LoRa 초기화
+    // LoRa 초기화 (ConfigService에서 RF 설정 가져오기)
+    config_device_t device_config;
+    config_service_get_device(&device_config);
+
     lora_service_config_t lora_config = {
-        .frequency = LORA_DEFAULT_FREQ,
-        .spreading_factor = LORA_DEFAULT_SF,
-        .coding_rate = LORA_DEFAULT_CR,
-        .bandwidth = LORA_DEFAULT_BW,
-        .tx_power = LORA_DEFAULT_TX_POWER,
-        .sync_word = LORA_DEFAULT_SYNC_WORD
+        .frequency = device_config.rf.frequency,
+        .spreading_factor = device_config.rf.sf,
+        .coding_rate = device_config.rf.cr,
+        .bandwidth = device_config.rf.bw,
+        .tx_power = device_config.rf.tx_power,
+        .sync_word = device_config.rf.sync_word
     };
 
     esp_err_t lora_ret = lora_service_init(&lora_config);
@@ -370,7 +372,7 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
 
     // WS2812 LED 초기화
     uint8_t camera_id = config_service_get_camera_id();
-    esp_err_t led_ret = ws2812_driver_init(-1, 0, camera_id);
+    esp_err_t led_ret = led_service_init(-1, 0, camera_id);
     if (led_ret == ESP_OK) {
         T_LOGI(TAG, "WS2812 초기화 완료 (카메라 ID: %d)", camera_id);
     } else {
@@ -509,7 +511,7 @@ void prod_rx_app_deinit(void)
     button_poll_deinit();
 
     // WS2812 정리
-    ws2812_deinit();
+    led_service_deinit();
 
     // LoRa 정리
     lora_service_deinit();

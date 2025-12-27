@@ -6,7 +6,6 @@
 #include "lora_driver.h"
 #include "lora_hal.h"
 #include "PinConfig.h"
-#include "LoRaConfig.h"
 #include "t_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -16,6 +15,29 @@
 #include <string.h>
 
 static const char* TAG __attribute__((unused)) = "LoRaDriver";
+
+// =============================================================================
+// LoRa 기본 상수 (하드코딩)
+// =============================================================================
+
+// Spreading Factor (SF7=빠름/짧은거리, SF12=느림/긴거리)
+#define LORA_DEFAULT_SF         7         // SF7
+
+// Coding Rate (CR: 5=4/5, 6=4/6, 7=4/7, 8=4/8)
+#define LORA_DEFAULT_CR         7         // CR 4/7
+
+// Bandwidth (kHz)
+#define LORA_DEFAULT_BW         250.0f    // 250kHz
+
+// 송신 전력 (dBm)
+#define LORA_DEFAULT_TX_POWER   22
+
+// Sync Word
+#define LORA_DEFAULT_SYNC_WORD  0x12
+
+// 칩 타입 이름 (표시용)
+#define LORA_CHIP_400_NAME      "SX1268 (433MHz)"
+#define LORA_CHIP_900_NAME      "SX1262 (868MHz)"
 
 // =============================================================================
 // 정적 변수

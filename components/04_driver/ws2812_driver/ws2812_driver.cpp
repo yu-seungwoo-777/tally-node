@@ -37,14 +37,14 @@ private:
     static bool s_initialized;
     static uint32_t s_num_leds;
     static uint8_t s_brightness;
-    static uint8_t s_camera_id;      // 현재 카메라 ID (ConfigService에서 로드)
-    static ws2812_state_t s_led_states[8];  // 최대 8개 LED 상태 저장
+    static uint8_t s_camera_id;
+    static ws2812_state_t s_led_states[8];
 };
 
 bool WS2812Driver::s_initialized = false;
 uint32_t WS2812Driver::s_num_leds = 1;
 uint8_t WS2812Driver::s_brightness = 255;
-uint8_t WS2812Driver::s_camera_id = 1;  // 기본값
+uint8_t WS2812Driver::s_camera_id = 1;
 ws2812_state_t WS2812Driver::s_led_states[8] = {WS2812_OFF};
 
 esp_err_t WS2812Driver::init(int gpio_num, uint32_t num_leds, uint8_t camera_id)

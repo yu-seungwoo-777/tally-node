@@ -7,10 +7,9 @@
 #include "t_log.h"
 #include "SwitcherService.h"
 #include "NetworkService.h"
-#include "SwitcherConfig.h"
 #include "LoRaService.h"
 #include "TallyTypes.h"
-#include "LoRaConfig.h"
+#include "ConfigService.h"
 #include "esp_netif.h"
 #include "esp_event.h"
 #include <cstring>
@@ -53,19 +52,19 @@ static const char* TAG = "tally_tx_app";
 #include "freertos/task.h"
 
 // ============================================================================
-// 기본 설정 (SwitcherConfig.h 사용)
+// 기본 설정 (하드코딩)
 // ============================================================================
 
 const tally_tx_config_t TALLY_TX_DEFAULT_CONFIG = {
-    .switcher1_ip = SWITCHER_PRIMARY_IP,
-    .switcher2_ip = SWITCHER_SECONDARY_IP,        // Secondary 기본 IP 사용
-    .switcher_port = SWITCHER_PRIMARY_PORT,       // 0=기본값 사용
-    .camera_limit = SWITCHER_PRIMARY_CAMERA_LIMIT,
-    .dual_mode = SWITCHER_DUAL_MODE_ENABLED,
-    .secondary_offset = SWITCHER_DUAL_MODE_OFFSET,
-    .send_interval_ms = 1000,                     // 1초 간격
-    .switcher1_interface = SWITCHER_PRIMARY_INTERFACE,  // Primary 인터페이스
-    .switcher2_interface = SWITCHER_SECONDARY_INTERFACE, // Secondary 인터페이스
+    .switcher1_ip = "192.168.111.240",
+    .switcher2_ip = "192.168.0.244",
+    .switcher_port = 0,
+    .camera_limit = 0,
+    .dual_mode = false,
+    .secondary_offset = 4,
+    .send_interval_ms = 1000,
+    .switcher1_interface = 2,  // Ethernet
+    .switcher2_interface = 1,  // WiFi
 };
 
 // ============================================================================
@@ -207,14 +206,17 @@ bool tally_tx_app_init(const tally_tx_config_t* config) {
     }
     T_LOGI(TAG, "SwitcherService 태스크 시작 (10ms 주기)");
 
-    // LoRa 초기화
+    // LoRa 초기화 (ConfigService에서 RF 설정 가져오기)
+    config_device_t device_config;
+    config_service_get_device(&device_config);
+
     lora_service_config_t lora_config = {
-        .frequency = LORA_DEFAULT_FREQ,      // LoRaConfig.h 기본 주파수
-        .spreading_factor = LORA_DEFAULT_SF, // LoRaConfig.h 기본 SF
-        .coding_rate = LORA_DEFAULT_CR,      // LoRaConfig.h 기본 CR
-        .bandwidth = LORA_DEFAULT_BW,        // LoRaConfig.h 기본 BW
-        .tx_power = LORA_DEFAULT_TX_POWER,   // LoRaConfig.h 기본 전력
-        .sync_word = LORA_DEFAULT_SYNC_WORD  // LoRaConfig.h 기본 SyncWord
+        .frequency = device_config.rf.frequency,
+        .spreading_factor = device_config.rf.sf,
+        .coding_rate = device_config.rf.cr,
+        .bandwidth = device_config.rf.bw,
+        .tx_power = device_config.rf.tx_power,
+        .sync_word = device_config.rf.sync_word
     };
     esp_err_t lora_ret = lora_service_init(&lora_config);
     if (lora_ret != ESP_OK) {
