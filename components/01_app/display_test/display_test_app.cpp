@@ -153,7 +153,7 @@ esp_err_t display_test_app_start(void)
 
     // ETHERNET 정보 (Page 4)
     tx_page_set_eth_ip("10.0.0.50");
-    tx_page_set_eth_gateway("10.0.0.1");
+    tx_page_set_eth_dhcp_mode(true);
     tx_page_set_eth_connected(true);
 
     // 시스템 정보 (Page 5)

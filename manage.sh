@@ -116,6 +116,7 @@ sync_from_remote() {
     # 다운로드 제외 목록
     EXCLUDE_LIST=(
         --exclude='.pio'
+        --exclude='venv'
         --exclude='examples'
         --exclude='*.pyc'
         --exclude='__pycache__'

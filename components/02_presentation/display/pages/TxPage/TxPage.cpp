@@ -72,11 +72,11 @@ static struct {
 // ETHERNET 정보 (Page 4)
 static struct {
     char eth_ip[16];        // Ethernet IP
-    char eth_gateway[16];   // Gateway
+    bool eth_dhcp_mode;     // true=DHCP, false=Static
     bool eth_connected;
 } s_eth_data = {
     .eth_ip = "",
-    .eth_gateway = "",
+    .eth_dhcp_mode = true,
     .eth_connected = false,
 };
 
@@ -216,19 +216,16 @@ static void draw_switcher_page(u8g2_t* u8g2)
         u8g2_DrawStr(u8g2, 40, 39, "---");
     }
 
-    // S2 (y=50)
+    // S2 (듀얼모드일 때만 표시)
     if (s_switcher_data.dual_mode) {
+        // S2 (y=50)
         u8g2_DrawStr(u8g2, 2, 50, "S2:");
         u8g2_DrawStr(u8g2, 25, 50, s_switcher_data.s2_type);
         int s2_end = 25 + u8g2_GetStrWidth(u8g2, s_switcher_data.s2_type) + 5;
         const char* s2_status = s_switcher_data.s2_connected ? "[OK]" : "[FAIL]";
         u8g2_DrawStr(u8g2, s2_end, 50, s2_status);
-    } else {
-        u8g2_DrawStr(u8g2, 2, 50, "S2: ---");
-    }
 
-    // S2 IP (y=61)
-    if (s_switcher_data.dual_mode) {
+        // S2 IP (y=61)
         u8g2_DrawStr(u8g2, 2, 61, "S2 IP:");
         if (strlen(s_switcher_data.s2_ip) > 0) {
             u8g2_DrawStr(u8g2, 40, 61, s_switcher_data.s2_ip);
@@ -254,7 +251,6 @@ static void draw_ap_page(u8g2_t* u8g2)
 
     // SSID
     u8g2_DrawStr(u8g2, 2, 28, "SSID:");
-    u8g2_DrawStr(u8g2, 2, 39, "PASS:");
 
     // SSID 표시 (자르기)
     char ssid_short[16];
@@ -262,18 +258,9 @@ static void draw_ap_page(u8g2_t* u8g2)
     ssid_short[15] = '\0';
     u8g2_DrawStr(u8g2, 35, 28, ssid_short);
 
-    // 비밀번호 표시 (일부만)
-    char pass_short[16];
-    strncpy(pass_short, s_ap_data.ap_password, 12);
-    for (int i = 0; i < 11 && pass_short[i] != '\0'; i++) {
-        pass_short[i] = '*';
-    }
-    pass_short[11] = '\0';
-    u8g2_DrawStr(u8g2, 35, 39, pass_short);
-
     // IP
-    u8g2_DrawStr(u8g2, 2, 50, "IP:");
-    u8g2_DrawStr(u8g2, 25, 50, s_ap_data.ap_ip);
+    u8g2_DrawStr(u8g2, 2, 39, "IP:");
+    u8g2_DrawStr(u8g2, 25, 39, s_ap_data.ap_ip);
 
     // 상태 표시
     u8g2_DrawStr(u8g2, 2, 61, "ACTIVE");
@@ -295,11 +282,10 @@ static void draw_wifi_page(u8g2_t* u8g2)
 
     // SSID
     u8g2_DrawStr(u8g2, 2, 28, "SSID:");
-    u8g2_DrawStr(u8g2, 2, 39, "PASS:");
 
-    // SSID 표시
+    // SSID 표시 (연결 상태와 무관하게 설정값 표시)
     char ssid_short[16];
-    if (s_wifi_data.wifi_connected && strlen(s_wifi_data.wifi_ssid) > 0) {
+    if (strlen(s_wifi_data.wifi_ssid) > 0) {
         strncpy(ssid_short, s_wifi_data.wifi_ssid, 16);
         ssid_short[15] = '\0';
         u8g2_DrawStr(u8g2, 35, 28, ssid_short);
@@ -307,21 +293,12 @@ static void draw_wifi_page(u8g2_t* u8g2)
         u8g2_DrawStr(u8g2, 35, 28, "---");
     }
 
-    // 비밀번호 표시
-    char pass_short[16];
-    strncpy(pass_short, s_wifi_data.wifi_password, 12);
-    for (int i = 0; i < 11 && pass_short[i] != '\0'; i++) {
-        pass_short[i] = '*';
-    }
-    pass_short[11] = '\0';
-    u8g2_DrawStr(u8g2, 35, 39, pass_short);
-
     // IP
-    u8g2_DrawStr(u8g2, 2, 50, "IP:");
+    u8g2_DrawStr(u8g2, 2, 39, "IP:");
     if (s_wifi_data.wifi_connected && strlen(s_wifi_data.wifi_ip) > 0) {
-        u8g2_DrawStr(u8g2, 25, 50, s_wifi_data.wifi_ip);
+        u8g2_DrawStr(u8g2, 25, 39, s_wifi_data.wifi_ip);
     } else {
-        u8g2_DrawStr(u8g2, 25, 50, "---");
+        u8g2_DrawStr(u8g2, 25, 39, "---");
     }
 
     // 상태 표시
@@ -354,13 +331,8 @@ static void draw_ethernet_page(u8g2_t* u8g2)
         u8g2_DrawStr(u8g2, 25, 28, "---");
     }
 
-    // Gateway
-    u8g2_DrawStr(u8g2, 2, 39, "GATEWAY:");
-    if (s_eth_data.eth_connected && strlen(s_eth_data.eth_gateway) > 0) {
-        u8g2_DrawStr(u8g2, 52, 39, s_eth_data.eth_gateway);
-    } else {
-        u8g2_DrawStr(u8g2, 52, 39, "---");
-    }
+    // 모드 표시
+    u8g2_DrawStr(u8g2, 2, 39, s_eth_data.eth_dhcp_mode ? "DHCP" : "STATIC");
 
     // 상태 표시
     if (s_eth_data.eth_connected) {
@@ -526,12 +498,9 @@ extern "C" void tx_page_set_eth_ip(const char* ip)
     }
 }
 
-extern "C" void tx_page_set_eth_gateway(const char* gateway)
+extern "C" void tx_page_set_eth_dhcp_mode(bool dhcp_mode)
 {
-    if (gateway != nullptr) {
-        strncpy(s_eth_data.eth_gateway, gateway, sizeof(s_eth_data.eth_gateway) - 1);
-        s_eth_data.eth_gateway[sizeof(s_eth_data.eth_gateway) - 1] = '\0';
-    }
+    s_eth_data.eth_dhcp_mode = dhcp_mode;
 }
 
 extern "C" void tx_page_set_eth_connected(bool connected)

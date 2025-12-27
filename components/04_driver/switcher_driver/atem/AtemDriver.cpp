@@ -270,6 +270,11 @@ packed_data_t AtemDriver::getPackedTally() const {
     // 필터링된 채널 수 결정
     uint8_t channel_count = state_.num_cameras;
 
+    // num_cameras가 0이거나 camera_limit가 0이면 기본값 20 사용
+    if (channel_count == 0) {
+        channel_count = (config_.camera_limit > 0) ? config_.camera_limit : TALLY_MAX_CHANNELS;
+    }
+
     // camera_limit 적용
     if (config_.camera_limit > 0 && channel_count > config_.camera_limit) {
         channel_count = config_.camera_limit;

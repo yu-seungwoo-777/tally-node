@@ -17,21 +17,6 @@
 #include <stdbool.h>
 #include "DisplayManager.h"
 
-// 스위처 타입
-typedef enum {
-    SWITCHER_NONE = 0,
-    SWITCHER_ATEM,
-    SWITCHER_OBS,
-    SWITCHER_VMIX
-} switcher_type_t;
-
-// 연결 상태
-typedef enum {
-    TX_STATE_DISCONNECTED = 0,
-    TX_STATE_CONNECTING,
-    TX_STATE_CONNECTED
-} tx_state_t;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -123,10 +108,10 @@ void tx_page_set_wifi_connected(bool connected);
 void tx_page_set_eth_ip(const char* ip);
 
 /**
- * @brief Ethernet 게이트웨이 설정
- * @param gateway 게이트웨이 주소
+ * @brief Ethernet DHCP 모드 설정
+ * @param dhcp_mode true=DHCP, false=Static
  */
-void tx_page_set_eth_gateway(const char* gateway);
+void tx_page_set_eth_dhcp_mode(bool dhcp_mode);
 
 /**
  * @brief Ethernet 연결 상태 설정

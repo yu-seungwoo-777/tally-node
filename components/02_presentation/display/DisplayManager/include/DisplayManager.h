@@ -231,6 +231,13 @@ void display_manager_update_rssi(int16_t rssi, float snr);
 void display_manager_update_tally(const uint8_t* pgm_channels, uint8_t pgm_count,
                                   const uint8_t* pvw_channels, uint8_t pvw_count);
 
+/**
+ * @brief Ethernet DHCP 모드 업데이트 (TX 페이지)
+ *
+ * @param dhcp_mode true=DHCP, false=Static
+ */
+void display_manager_update_ethernet_dhcp_mode(bool dhcp_mode);
+
 // ============================================================================
 // 디스플레이 갱신
 // ============================================================================

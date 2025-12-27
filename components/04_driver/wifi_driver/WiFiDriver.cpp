@@ -137,14 +137,8 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
             case WIFI_EVENT_AP_START:
                 T_LOGI(TAG, "WiFi AP 시작됨");
                 s_ap_started = true;
-
-                if (s_netif_ap) {
-                    esp_netif_ip_info_t ip_info;
-                    if (esp_netif_get_ip_info(s_netif_ap, &ip_info) == ESP_OK) {
-                        snprintf(s_ap_ip, sizeof(s_ap_ip), IPSTR, IP2STR(&ip_info.ip));
-                    }
-                }
-
+                // AP IP는 실제로는 192.168.4.1이지만 이벤트 시점에 아직 할당되지 않을 수 있음
+                // getStatus()에서 실시간 조회로 처리
                 if (s_status_callback) {
                     s_status_callback();
                 }
@@ -383,9 +377,20 @@ WiFiDriver::Status WiFiDriver::getStatus(void)
     status.sta_connected = s_sta_connected;
     status.sta_rssi = s_sta_rssi;
     status.ap_clients = s_ap_clients;
-    strncpy(status.ap_ip, s_ap_ip, sizeof(status.ap_ip));
+
+    // STA IP (이벤트에서 설정된 값 사용)
     strncpy(status.sta_ip, s_sta_ip, sizeof(status.sta_ip));
 
+    // AP IP: 실시간 조회 (이벤트 시점에 IP가 할당되지 않을 수 있음)
+    if (s_ap_started && s_netif_ap) {
+        esp_netif_ip_info_t ip_info;
+        if (esp_netif_get_ip_info(s_netif_ap, &ip_info) == ESP_OK && ip_info.ip.addr != 0) {
+            snprintf(s_ap_ip, sizeof(s_ap_ip), IPSTR, IP2STR(&ip_info.ip));
+        }
+    }
+    strncpy(status.ap_ip, s_ap_ip, sizeof(status.ap_ip));
+
+    // STA RSSI 갱신
     if (s_sta_connected) {
         wifi_ap_record_t ap_info;
         if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {

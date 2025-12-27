@@ -9,6 +9,7 @@
 #include "event_bus.h"
 #include "ConfigService.h"
 #include "DisplayManager.h"
+#include "TxPage.h"
 #include "button_poll.h"
 #include "button_handler.h"
 #include "SwitcherService.h"
@@ -151,6 +152,39 @@ static void on_switcher_change(switcher_role_t role)
     T_LOGI(TAG, "%s 스위처 변경 감지", switcher_role_to_string(role));
 }
 
+// ============================================================================
+// 네트워크/스위처 연결 상태 변경 핸들러 (즉시 TxPage 갱신)
+// ============================================================================
+
+static esp_err_t handle_switcher_connected(const event_data_t* event)
+{
+    (void)event;
+    T_LOGI(TAG, "스위처 연결됨 -> TxPage 갱신");
+    // 주기적 갱신에 의해 처리되므로 즉시 갱신 불필요 (1초 내 반영)
+    return ESP_OK;
+}
+
+static esp_err_t handle_switcher_disconnected(const event_data_t* event)
+{
+    (void)event;
+    T_LOGI(TAG, "스위처 연결 해제 -> TxPage 갱신");
+    return ESP_OK;
+}
+
+static esp_err_t handle_network_connected(const event_data_t* event)
+{
+    (void)event;
+    T_LOGI(TAG, "네트워크 연결됨 -> TxPage 갱신");
+    return ESP_OK;
+}
+
+static esp_err_t handle_network_disconnected(const event_data_t* event)
+{
+    (void)event;
+    T_LOGI(TAG, "네트워크 연결 해제 -> TxPage 갱신");
+    return ESP_OK;
+}
+
 extern "C" {
 
 bool prod_tx_app_init(const prod_tx_config_t* config)
@@ -195,6 +229,15 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     if (ret != ESP_OK) {
         T_LOGE(TAG, "ConfigService init failed: %s", esp_err_to_name(ret));
         return false;
+    }
+
+    // 네트워크 설정 확인 (비어있으면 기본값 저장)
+    config_all_t current_config;
+    ret = config_service_load_all(&current_config);
+    if (ret != ESP_OK || strlen(current_config.wifi_ap.ssid) == 0) {
+        T_LOGI(TAG, "네트워크 설정 없음, 기본값 저장");
+        config_service_load_defaults(&current_config);
+        config_service_save_all(&current_config);
     }
 
     // NetworkService 초기화 (스위처 통신을 위한 네트워크)
@@ -343,6 +386,12 @@ void prod_tx_app_start(void)
     event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
 
+    // 스위처/네트워크 연결 상태 이벤트 구독
+    event_bus_subscribe(EVT_SWITCHER_CONNECTED, handle_switcher_connected);
+    event_bus_subscribe(EVT_SWITCHER_DISCONNECTED, handle_switcher_disconnected);
+    event_bus_subscribe(EVT_NETWORK_CONNECTED, handle_network_connected);
+    event_bus_subscribe(EVT_NETWORK_DISCONNECTED, handle_network_disconnected);
+
     // 버튼 폴링 시작
     button_poll_start();
 
@@ -383,6 +432,12 @@ void prod_tx_app_stop(void)
     event_bus_unsubscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_unsubscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_unsubscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
+
+    // 스위처/네트워크 연결 상태 이벤트 구독 취소
+    event_bus_unsubscribe(EVT_SWITCHER_CONNECTED, handle_switcher_connected);
+    event_bus_unsubscribe(EVT_SWITCHER_DISCONNECTED, handle_switcher_disconnected);
+    event_bus_unsubscribe(EVT_NETWORK_CONNECTED, handle_network_connected);
+    event_bus_unsubscribe(EVT_NETWORK_DISCONNECTED, handle_network_disconnected);
 
     button_handler_stop();
     button_poll_stop();
@@ -438,7 +493,7 @@ void prod_tx_app_loop(void)
     if (now - last_sys_update >= 1000) {
         last_sys_update = now;
 
-        // ConfigService에서 System 데이터 읽기
+        // ========== ConfigService: System 데이터 ==========
         config_system_t sys;
         config_service_get_system(&sys);
         config_service_update_battery();  // ADC 읽기 (내부에서 battery 갱신)
@@ -448,6 +503,58 @@ void prod_tx_app_loop(void)
         display_manager_update_system(sys.device_id, sys.battery,
                                       config_service_get_voltage(),
                                       config_service_get_temperature());
+
+        // ========== ConfigService: RF 설정 ==========
+        config_device_t device;
+        config_service_get_device(&device);
+        tx_page_set_frequency(device.rf.frequency);
+        tx_page_set_sync_word(device.rf.sync_word);
+
+        // ========== SwitcherService: S1/S2 상태 ==========
+        if (s_app.service) {
+            // 듀얼모드 설정
+            tx_page_set_dual_mode(switcher_service_is_dual_mode_enabled(s_app.service));
+
+            // S1 (Primary) 상태
+            switcher_status_t s1_status = switcher_service_get_switcher_status(
+                s_app.service, SWITCHER_ROLE_PRIMARY);
+            bool s1_connected = (s1_status.state == CONNECTION_STATE_READY ||
+                                 s1_status.state == CONNECTION_STATE_CONNECTED);
+            tx_page_set_s1("ATEM", SWITCHER_PRIMARY_IP, 9910, s1_connected);
+
+            // S2 (Secondary) 상태 (듀얼모드인 경우)
+            if (switcher_service_is_dual_mode_enabled(s_app.service)) {
+                switcher_status_t s2_status = switcher_service_get_switcher_status(
+                    s_app.service, SWITCHER_ROLE_SECONDARY);
+                bool s2_connected = (s2_status.state == CONNECTION_STATE_READY ||
+                                     s2_status.state == CONNECTION_STATE_CONNECTED);
+                tx_page_set_s2("ATEM", SWITCHER_SECONDARY_IP ? SWITCHER_SECONDARY_IP : "0.0.0.0",
+                               9910, s2_connected);
+            }
+        }
+
+        // ========== NetworkService: AP/WiFi/Ethernet 상태 ==========
+        network_status_t net_status = network_service_get_status();
+
+        // AP 정보 (Page 2)
+        config_wifi_ap_t ap_config;
+        config_service_get_wifi_ap(&ap_config);
+        tx_page_set_ap_name(ap_config.ssid);
+        tx_page_set_ap_ip(net_status.wifi_ap.ip);
+
+        // WiFi 정보 (Page 3)
+        config_wifi_sta_t wifi_config;
+        config_service_get_wifi_sta(&wifi_config);
+        tx_page_set_wifi_ssid(wifi_config.ssid);
+        tx_page_set_wifi_ip(net_status.wifi_sta.ip);
+        tx_page_set_wifi_connected(net_status.wifi_sta.connected);
+
+        // Ethernet 정보 (Page 4)
+        config_ethernet_t eth_config;
+        config_service_get_ethernet(&eth_config);
+        tx_page_set_eth_ip(net_status.ethernet.ip);
+        display_manager_update_ethernet_dhcp_mode(eth_config.dhcp_enabled);
+        tx_page_set_eth_connected(net_status.ethernet.connected);
     }
 }
 

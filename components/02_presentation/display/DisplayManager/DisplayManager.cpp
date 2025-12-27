@@ -476,3 +476,16 @@ extern "C" void display_manager_update_tally(const uint8_t* pgm_channels, uint8_
 }
 
 #endif // DEVICE_MODE_RX
+
+// ============================================================================
+// Ethernet DHCP 모드 업데이트 (TX 전용)
+// ============================================================================
+
+#ifdef DEVICE_MODE_TX
+
+extern "C" void display_manager_update_ethernet_dhcp_mode(bool dhcp_mode)
+{
+    tx_page_set_eth_dhcp_mode(dhcp_mode);
+}
+
+#endif // DEVICE_MODE_TX

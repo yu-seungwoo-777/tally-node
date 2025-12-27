@@ -345,13 +345,8 @@ void SwitcherService::taskLoop() {
 // ============================================================================
 
 packed_data_t SwitcherService::getCombinedTally() const {
-    if (dual_mode_enabled_ && primary_.adapter && secondary_.adapter) {
-        return combineDualModeTally();
-    }
-
-    // 싱글모드: Primary 데이터 반환
     if (primary_.adapter) {
-        return primary_.adapter->getPackedTally();
+        return combineDualModeTally();
     }
 
     packed_data_t empty = {nullptr, 0, 0};
@@ -359,18 +354,33 @@ packed_data_t SwitcherService::getCombinedTally() const {
 }
 
 packed_data_t SwitcherService::combineDualModeTally() const {
-    if (!primary_.adapter || !secondary_.adapter) {
+    if (!primary_.adapter) {
         packed_data_t empty = {nullptr, 0, 0};
         return empty;
     }
 
-    // Primary와 Secondary 데이터 가져오기
+    // Primary 데이터 가져오기
     packed_data_t primary_data = primary_.adapter->getPackedTally();
-    packed_data_t secondary_data = secondary_.adapter->getPackedTally();
 
-    if (!packed_data_is_valid(&primary_data) || !packed_data_is_valid(&secondary_data)) {
+    if (!packed_data_is_valid(&primary_data)) {
         packed_data_t empty = {nullptr, 0, 0};
         return empty;
+    }
+
+    // 싱글모드: Primary만 반환
+    if (!dual_mode_enabled_) {
+        return primary_data;
+    }
+
+    // 듀얼모드: Secondary 처리
+    if (!secondary_.adapter) {
+        return primary_data;  // Secondary 없으면 Primary만
+    }
+
+    packed_data_t secondary_data = secondary_.adapter->getPackedTally();
+
+    if (!packed_data_is_valid(&secondary_data)) {
+        return primary_data;  // Secondary 데이터 없으면 Primary만
     }
 
     // 전체 채널 수 = min(Primary, offset) + Secondary
