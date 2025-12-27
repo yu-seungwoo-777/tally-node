@@ -92,7 +92,7 @@
 
 // Primary 스위처 기본값
 #define SWITCHER_PRIMARY_TYPE           SWITCHER_TYPE_ATEM  ///< Primary 기본 타입
-#define SWITCHER_PRIMARY_IP             "192.168.0.240"    ///< Primary 기본 IP
+#define SWITCHER_PRIMARY_IP             "192.168.111.240"    ///< Primary 기본 IP
 #define SWITCHER_PRIMARY_PORT           0                  ///< Primary 기본 포트 (0=기본값 사용)
 #define SWITCHER_PRIMARY_PASSWORD       ""                 ///< Primary 기본 비밀번호
 #define SWITCHER_PRIMARY_CAMERA_LIMIT   0                  ///< Primary 카메라 제한 (0=자동)
@@ -107,7 +107,7 @@
 #define SWITCHER_SECONDARY_INTERFACE    1                  ///< Secondary 네트워크 인터페이스 (1=WiFi, 2=Ethernet)
 
 // 듀얼모드 기본값
-#define SWITCHER_DUAL_MODE_ENABLED       true              ///< 듀얼모드 기본값
+#define SWITCHER_DUAL_MODE_ENABLED       false              ///< 듀얼모드 기본값
 #define SWITCHER_DUAL_MODE_OFFSET        4                  ///< Secondary 오프셋 기본값 (5번 채널부터)
 
 // ============================================================================
