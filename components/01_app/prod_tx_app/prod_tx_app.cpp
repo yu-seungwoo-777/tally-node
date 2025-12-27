@@ -15,6 +15,8 @@
 #include "switcher_service.h"
 #include "network_service.h"
 #include "lora_service.h"
+#include "device_management_service.h"
+#include "web_server.h"
 #include "TallyTypes.h"
 #include "esp_netif.h"
 #include "esp_event.h"
@@ -389,6 +391,14 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         T_LOGW(TAG, "Button service init failed: %s", esp_err_to_name(ret));
     }
 
+    // DeviceManagementService 초기화 (TX 모드)
+    ret = device_management_service_init(NULL);  // TX는 상태 콜백 불필요
+    if (ret != ESP_OK) {
+        T_LOGW(TAG, "DeviceManagementService init failed: %s", esp_err_to_name(ret));
+    } else {
+        T_LOGI(TAG, "DeviceManagementService 초기화 완료");
+    }
+
     s_app.initialized = true;
     T_LOGI(TAG, "TX app init complete");
 
@@ -421,6 +431,10 @@ void prod_tx_app_start(void)
     // LoRa 시작
     lora_service_start();
     T_LOGI(TAG, "LoRa 시작");
+
+    // DeviceManagementService 시작
+    device_management_service_start();
+    T_LOGI(TAG, "DeviceManagementService 시작");
 
     // DisplayManager 시작, BootPage로 전환
     display_manager_start();
@@ -460,6 +474,14 @@ void prod_tx_app_start(void)
     // TX 페이지로 전환
     display_manager_boot_complete();
 
+    // WebServer 시작 (switcher 핸들 전달)
+    web_server_set_switcher_handle(s_app.service);
+    if (web_server_init() == ESP_OK) {
+        T_LOGI(TAG, "WebServer 시작");
+    } else {
+        T_LOGW(TAG, "WebServer 시작 실패");
+    }
+
     s_app.running = true;
     T_LOGI(TAG, "TX app started");
 }
@@ -469,6 +491,9 @@ void prod_tx_app_stop(void)
     if (!s_app.running) {
         return;
     }
+
+    // WebServer 중지
+    web_server_stop();
 
     // 버튼 이벤트 구독 취소
     event_bus_unsubscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
@@ -482,6 +507,9 @@ void prod_tx_app_stop(void)
     event_bus_unsubscribe(EVT_NETWORK_DISCONNECTED, handle_network_disconnected);
 
     button_service_stop();
+
+    // DeviceManagementService 정지
+    device_management_service_stop();
 
     // LoRa 정지
     lora_service_stop();

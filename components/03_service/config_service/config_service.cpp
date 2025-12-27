@@ -157,13 +157,24 @@ esp_err_t ConfigServiceClass::init(void)
 
     T_LOGI(TAG, "Config Service 초기화 중...");
 
-    // NVS 초기화
+    // NVS 초기화 (이미 초기화된 경우 무시)
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_erase();
+        if (ret != ESP_OK) {
+            T_LOGE(TAG, "NVS erase 실패: %s", esp_err_to_name(ret));
+            return ret;
+        }
         ret = nvs_flash_init();
     }
-    ESP_ERROR_CHECK(ret);
+
+    // 초기화 결과 확인
+    if (ret == ESP_ERR_INVALID_STATE) {
+        // 이미 초기화됨, 무시
+        T_LOGD(TAG, "NVS 이미 초기화됨");
+    } else if (ret != ESP_OK) {
+        return ret;
+    }
 
     // 디바이스 등록/해제 이벤트 구독
     event_bus_subscribe(EVT_DEVICE_REGISTER, on_device_register_request);
