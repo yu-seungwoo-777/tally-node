@@ -10,8 +10,23 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 #include <cstring>
+#include <cstdio>
 
 static const char* TAG = "ConfigService";
+
+// ============================================================================
+// 내부 헬퍼 함수
+// ============================================================================
+
+// 4바이트 디바이스 ID 비교
+static inline bool device_id_equals(const uint8_t* a, const uint8_t* b) {
+    return (a[0] == b[0] && a[1] == b[1] && a[2] == b[2] && a[3] == b[3]);
+}
+
+// 디바이스 ID를 문자열로 변환 (디버깅용)
+static void device_id_to_str(const uint8_t* id, char* out) {
+    snprintf(out, 5, "%02X%02X", id[0], id[1]);
+}
 
 // ============================================================================
 // ConfigService 클래스 (싱글톤)
@@ -64,6 +79,14 @@ public:
     static void getLedOffColor(uint8_t* r, uint8_t* g, uint8_t* b);
     static void getLedBatteryLowColor(uint8_t* r, uint8_t* g, uint8_t* b);
 
+    // 등록된 디바이스 관리
+    static esp_err_t registerDevice(const uint8_t* device_id);
+    static esp_err_t unregisterDevice(const uint8_t* device_id);
+    static bool isDeviceRegistered(const uint8_t* device_id);
+    static esp_err_t getRegisteredDevices(config_registered_devices_t* devices);
+    static uint8_t getRegisteredDeviceCount(void);
+    static void clearRegisteredDevices(void);
+
     // 기본값
     static esp_err_t loadDefaults(config_all_t* config);
     static esp_err_t factoryReset(void);
@@ -86,6 +109,42 @@ private:
 bool ConfigServiceClass::s_initialized = false;
 
 // ============================================================================
+// 이벤트 핸들러 (등록된 디바이스 관리)
+// ============================================================================
+
+/**
+ * @brief 디바이스 등록 요청 이벤트 핸들러
+ */
+static esp_err_t on_device_register_request(const event_data_t* event) {
+    if (event->type != EVT_DEVICE_REGISTER) {
+        return ESP_OK;
+    }
+
+    const auto* req = reinterpret_cast<const device_register_event_t*>(event->data);
+    if (req == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    return ConfigServiceClass::registerDevice(req->device_id);
+}
+
+/**
+ * @brief 디바이스 등록 해제 요청 이벤트 핸들러
+ */
+static esp_err_t on_device_unregister_request(const event_data_t* event) {
+    if (event->type != EVT_DEVICE_UNREGISTER) {
+        return ESP_OK;
+    }
+
+    const auto* req = reinterpret_cast<const device_register_event_t*>(event->data);
+    if (req == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    return ConfigServiceClass::unregisterDevice(req->device_id);
+}
+
+// ============================================================================
 // 초기화
 // ============================================================================
 
@@ -105,6 +164,10 @@ esp_err_t ConfigServiceClass::init(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    // 디바이스 등록/해제 이벤트 구독
+    event_bus_subscribe(EVT_DEVICE_REGISTER, on_device_register_request);
+    event_bus_subscribe(EVT_DEVICE_UNREGISTER, on_device_unregister_request);
 
     s_initialized = true;
     T_LOGI(TAG, "Config Service 초기화 완료");
@@ -968,6 +1031,211 @@ void ConfigServiceClass::getLedBatteryLowColor(uint8_t* r, uint8_t* g, uint8_t* 
 }
 
 // ============================================================================
+// 등록된 디바이스 관리
+// ============================================================================
+
+// NVS 네임스페이스 및 키
+#define NVS_NAMESPACE_DEVICES "dev_mgmt"
+#define NVS_KEY_DEVICE_COUNT "reg_count"
+#define NVS_KEY_DEVICE_PREFIX "dev_"
+
+esp_err_t ConfigServiceClass::registerDevice(const uint8_t* device_id)
+{
+    if (!device_id) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // 이미 등록되어 있는지 확인
+    if (isDeviceRegistered(device_id)) {
+        return ESP_OK;  // 이미 등록됨
+    }
+
+    // 현재 등록된 디바이스 목록 로드
+    config_registered_devices_t devices;
+    esp_err_t ret = getRegisteredDevices(&devices);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // 용량 초과 확인
+    if (devices.count >= CONFIG_MAX_REGISTERED_DEVICES) {
+        T_LOGE(TAG, "등록된 디바이스 수 초과: %d", devices.count);
+        return ESP_ERR_NO_MEM;
+    }
+
+    // 디바이스 추가
+    memcpy(devices.device_ids[devices.count], device_id, LORA_DEVICE_ID_LEN);
+    devices.count++;
+
+    // NVS 저장
+    nvs_handle_t handle;
+    ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "NVS 열기 실패");
+        return ESP_FAIL;
+    }
+
+    nvs_set_u8(handle, NVS_KEY_DEVICE_COUNT, devices.count);
+
+    char key[16];
+    snprintf(key, sizeof(key), "%s%d", NVS_KEY_DEVICE_PREFIX, devices.count - 1);
+    nvs_set_blob(handle, key, devices.device_ids[devices.count - 1], LORA_DEVICE_ID_LEN);
+
+    ret = nvs_commit(handle);
+    nvs_close(handle);
+
+    if (ret == ESP_OK) {
+        char id_str[5];
+        device_id_to_str(device_id, id_str);
+        T_LOGI(TAG, "디바이스 등록: %s (%d/%d)",
+               id_str, devices.count, CONFIG_MAX_REGISTERED_DEVICES);
+    }
+
+    return ret;
+}
+
+esp_err_t ConfigServiceClass::unregisterDevice(const uint8_t* device_id)
+{
+    if (!device_id) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // 현재 등록된 디바이스 목록 로드
+    config_registered_devices_t devices;
+    esp_err_t ret = getRegisteredDevices(&devices);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // 디바이스 찾기
+    int found_idx = -1;
+    for (uint8_t i = 0; i < devices.count; i++) {
+        if (device_id_equals(devices.device_ids[i], device_id)) {
+            found_idx = i;
+            break;
+        }
+    }
+
+    if (found_idx < 0) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    // 마지막 디바이스를 삭제된 위치로 이동 (빈틈 없애기)
+    if (found_idx < devices.count - 1) {
+        memcpy(devices.device_ids[found_idx],
+               devices.device_ids[devices.count - 1],
+               LORA_DEVICE_ID_LEN);
+    }
+
+    devices.count--;
+
+    // NVS 저장
+    nvs_handle_t handle;
+    ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    nvs_set_u8(handle, NVS_KEY_DEVICE_COUNT, devices.count);
+
+    // 모든 디바이스 다시 저장
+    for (uint8_t i = 0; i < devices.count; i++) {
+        char key[16];
+        snprintf(key, sizeof(key), "%s%d", NVS_KEY_DEVICE_PREFIX, i);
+        nvs_set_blob(handle, key, devices.device_ids[i], LORA_DEVICE_ID_LEN);
+    }
+
+    ret = nvs_commit(handle);
+    nvs_close(handle);
+
+    if (ret == ESP_OK) {
+        char id_str[5];
+        device_id_to_str(device_id, id_str);
+        T_LOGI(TAG, "디바이스 등록 해제: %s", id_str);
+    }
+
+    return ret;
+}
+
+bool ConfigServiceClass::isDeviceRegistered(const uint8_t* device_id)
+{
+    if (!device_id) {
+        return false;
+    }
+
+    config_registered_devices_t devices;
+    if (getRegisteredDevices(&devices) != ESP_OK) {
+        return false;
+    }
+
+    for (uint8_t i = 0; i < devices.count; i++) {
+        if (device_id_equals(devices.device_ids[i], device_id)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+esp_err_t ConfigServiceClass::getRegisteredDevices(config_registered_devices_t* devices)
+{
+    if (!devices) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memset(devices, 0, sizeof(config_registered_devices_t));
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READONLY, &handle);
+    if (ret != ESP_OK) {
+        // NVS 없으면 빈 목록 반환
+        return ESP_OK;
+    }
+
+    uint8_t count = 0;
+    nvs_get_u8(handle, NVS_KEY_DEVICE_COUNT, &count);
+
+    if (count > CONFIG_MAX_REGISTERED_DEVICES) {
+        count = CONFIG_MAX_REGISTERED_DEVICES;
+    }
+
+    devices->count = 0;
+    for (uint8_t i = 0; i < count; i++) {
+        char key[16];
+        snprintf(key, sizeof(key), "%s%d", NVS_KEY_DEVICE_PREFIX, i);
+
+        size_t len = LORA_DEVICE_ID_LEN;
+        ret = nvs_get_blob(handle, key, devices->device_ids[i], &len);
+        if (ret == ESP_OK && len == LORA_DEVICE_ID_LEN) {
+            devices->count++;
+        }
+    }
+
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+uint8_t ConfigServiceClass::getRegisteredDeviceCount(void)
+{
+    config_registered_devices_t devices;
+    if (getRegisteredDevices(&devices) != ESP_OK) {
+        return 0;
+    }
+    return devices.count;
+}
+
+void ConfigServiceClass::clearRegisteredDevices(void)
+{
+    nvs_handle_t handle;
+    if (nvs_open(NVS_NAMESPACE_DEVICES, NVS_READWRITE, &handle) == ESP_OK) {
+        nvs_erase_all(handle);
+        nvs_commit(handle);
+        nvs_close(handle);
+    }
+
+    T_LOGI(TAG, "등록된 모든 디바이스 삭제");
+}
+
+// ============================================================================
 // C 인터페이스 (extern "C")
 // ============================================================================
 
@@ -1153,6 +1421,40 @@ void config_service_get_led_off_color(uint8_t* r, uint8_t* g, uint8_t* b)
 void config_service_get_led_battery_low_color(uint8_t* r, uint8_t* g, uint8_t* b)
 {
     ConfigServiceClass::getLedBatteryLowColor(r, g, b);
+}
+
+// ============================================================================
+// 등록된 디바이스 관리 API
+// ============================================================================
+
+esp_err_t config_service_register_device(const uint8_t* device_id)
+{
+    return ConfigServiceClass::registerDevice(device_id);
+}
+
+esp_err_t config_service_unregister_device(const uint8_t* device_id)
+{
+    return ConfigServiceClass::unregisterDevice(device_id);
+}
+
+bool config_service_is_device_registered(const uint8_t* device_id)
+{
+    return ConfigServiceClass::isDeviceRegistered(device_id);
+}
+
+esp_err_t config_service_get_registered_devices(config_registered_devices_t* devices)
+{
+    return ConfigServiceClass::getRegisteredDevices(devices);
+}
+
+uint8_t config_service_get_registered_device_count(void)
+{
+    return ConfigServiceClass::getRegisteredDeviceCount();
+}
+
+void config_service_clear_registered_devices(void)
+{
+    ConfigServiceClass::clearRegisteredDevices();
 }
 
 } // extern "C"

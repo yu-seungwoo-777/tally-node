@@ -8,24 +8,12 @@
 
 #include "device_management_service.h"
 #include "lora_protocol.h"
-#include "lora_service.h"
 #include "event_bus.h"
 #include "t_log.h"
 #include <cstring>
 #include <cstdio>
 
-#include "nvs_flash.h"
-#include "nvs.h"
-
 #include "freertos/FreeRTOS.h"
-
-// ============================================================================
-// NVS 설정
-// ============================================================================
-
-#define NVS_NAMESPACE "dev_mgmt"
-#define NVS_KEY_COUNT "reg_count"
-#define NVS_KEY_PREFIX "dev_"
 
 // ============================================================================
 // 내부 상태
@@ -68,18 +56,6 @@ static int find_registered_index(const uint8_t* device_id) {
     return -1;
 }
 
-static int find_empty_registered_slot(void) {
-    for (uint8_t i = 0; i < DEVICE_MGMT_MAX_REGISTERED; i++) {
-        if (s_registered_devices[i][0] == 0 &&
-            s_registered_devices[i][1] == 0 &&
-            s_registered_devices[i][2] == 0 &&
-            s_registered_devices[i][3] == 0) {
-            return i;
-        }
-    }
-    return -1;
-}
-
 static int find_empty_slot(void) {
     for (uint8_t i = 0; i < DEVICE_MGMT_MAX_DEVICES; i++) {
         if (!s_devices[i].is_online) {
@@ -94,7 +70,12 @@ static void send_stop_to_unregistered(const uint8_t* device_id) {
     cmd.header = LORA_HDR_STOP;
     memcpy(cmd.device_id, device_id, LORA_DEVICE_ID_LEN);
 
-    esp_err_t ret = lora_service_send(reinterpret_cast<const uint8_t*>(&cmd), sizeof(cmd));
+    // event_bus를 통해 LoRa 송신 요청 발행
+    lora_send_request_t req = {
+        .data = reinterpret_cast<const uint8_t*>(&cmd),
+        .length = sizeof(cmd)
+    };
+    esp_err_t ret = event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
     if (ret == ESP_OK) {
         char id_str[5];
         lora_device_id_to_str(device_id, id_str);
@@ -106,7 +87,12 @@ static esp_err_t send_packet(const void* data, size_t length) {
     if (!s_started) {
         return ESP_ERR_INVALID_STATE;
     }
-    return lora_service_send(static_cast<const uint8_t*>(data), length);
+    // event_bus를 통해 LoRa 송신 요청 발행
+    lora_send_request_t req = {
+        .data = static_cast<const uint8_t*>(data),
+        .length = length
+    };
+    return event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
 }
 
 #endif // DEVICE_MODE_TX
@@ -124,7 +110,12 @@ static void send_ack(uint8_t cmd_header, uint8_t result) {
     ack.result = result;
     memcpy(ack.device_id, s_device_id, LORA_DEVICE_ID_LEN);
 
-    esp_err_t ret = lora_service_send(reinterpret_cast<const uint8_t*>(&ack), sizeof(ack));
+    // event_bus를 통해 LoRa 송신 요청 발행
+    lora_send_request_t req = {
+        .data = reinterpret_cast<const uint8_t*>(&ack),
+        .length = sizeof(ack)
+    };
+    esp_err_t ret = event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
     if (ret == ESP_OK) {
         T_LOGD(TAG, "ACK sent: cmd=0x%02X, result=%d", cmd_header, result);
     } else {
@@ -150,7 +141,12 @@ static void send_status(void) {
     msg.flags = s_stopped ? static_cast<uint8_t>(LORA_STATUS_FLAG_STOPPED) : static_cast<uint8_t>(0);
     memcpy(msg.device_id, s_device_id, LORA_DEVICE_ID_LEN);
 
-    esp_err_t ret = lora_service_send(reinterpret_cast<const uint8_t*>(&msg), sizeof(msg));
+    // event_bus를 통해 LoRa 송신 요청 발행
+    lora_send_request_t req = {
+        .data = reinterpret_cast<const uint8_t*>(&msg),
+        .length = sizeof(msg)
+    };
+    esp_err_t ret = event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
     if (ret == ESP_OK) {
         T_LOGD(TAG, "STATUS sent");
     } else {
@@ -164,7 +160,12 @@ static void send_pong(uint16_t tx_timestamp_low) {
     pong.tx_timestamp_low = tx_timestamp_low;
     memcpy(pong.device_id, s_device_id, LORA_DEVICE_ID_LEN);
 
-    esp_err_t ret = lora_service_send(reinterpret_cast<const uint8_t*>(&pong), sizeof(pong));
+    // event_bus를 통해 LoRa 송신 요청 발행
+    lora_send_request_t req = {
+        .data = reinterpret_cast<const uint8_t*>(&pong),
+        .length = sizeof(pong)
+    };
+    esp_err_t ret = event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
     if (ret == ESP_OK) {
         T_LOGI(TAG, "  PONG 송신: ts_low=%u", tx_timestamp_low);
     } else {
@@ -794,7 +795,7 @@ void device_mgmt_set_event_callback(device_mgmt_event_callback_t callback) {
 }
 
 // ============================================================================
-// TX 전용 API: 등록된 디바이스 관리 (NVS 저장)
+// TX 전용 API: 등록된 디바이스 관리 (event_bus 사용)
 // ============================================================================
 
 esp_err_t device_mgmt_register_device(const uint8_t* device_id) {
@@ -802,19 +803,22 @@ esp_err_t device_mgmt_register_device(const uint8_t* device_id) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (find_registered_index(device_id) >= 0) {
-        return ESP_OK;
+    // event_bus를 통해 디바이스 등록 이벤트 발행
+    device_register_event_t event;
+    memcpy(event.device_id, device_id, LORA_DEVICE_ID_LEN);
+    esp_err_t ret = event_bus_publish(EVT_DEVICE_REGISTER, &event, sizeof(event));
+
+    if (ret == ESP_OK) {
+        // 메모리 캐시 업데이트
+        if (find_registered_index(device_id) < 0) {
+            if (s_registered_count < DEVICE_MGMT_MAX_REGISTERED) {
+                memcpy(s_registered_devices[s_registered_count], device_id, LORA_DEVICE_ID_LEN);
+                s_registered_count++;
+            }
+        }
     }
 
-    int slot = find_empty_registered_slot();
-    if (slot < 0) {
-        return ESP_ERR_NO_MEM;
-    }
-
-    memcpy(s_registered_devices[slot], device_id, LORA_DEVICE_ID_LEN);
-    s_registered_count++;
-
-    return device_mgmt_save_registered();
+    return ret;
 }
 
 esp_err_t device_mgmt_unregister_device(const uint8_t* device_id) {
@@ -827,22 +831,32 @@ esp_err_t device_mgmt_unregister_device(const uint8_t* device_id) {
         return ESP_ERR_NOT_FOUND;
     }
 
-    if (idx < s_registered_count - 1) {
-        memcpy(s_registered_devices[idx], s_registered_devices[s_registered_count - 1],
-               LORA_DEVICE_ID_LEN);
+    // event_bus를 통해 디바이스 등록 해제 이벤트 발행
+    device_register_event_t event;
+    memcpy(event.device_id, device_id, LORA_DEVICE_ID_LEN);
+    esp_err_t ret = event_bus_publish(EVT_DEVICE_UNREGISTER, &event, sizeof(event));
+
+    if (ret == ESP_OK) {
+        // 메모리 캐시 업데이트
+        if (idx < s_registered_count - 1) {
+            memcpy(s_registered_devices[idx], s_registered_devices[s_registered_count - 1],
+                   LORA_DEVICE_ID_LEN);
+        }
+
+        memset(s_registered_devices[s_registered_count - 1], 0, LORA_DEVICE_ID_LEN);
+        s_registered_count--;
     }
 
-    memset(s_registered_devices[s_registered_count - 1], 0, LORA_DEVICE_ID_LEN);
-    s_registered_count--;
-
-    return device_mgmt_save_registered();
+    return ret;
 }
 
 bool device_mgmt_is_registered(const uint8_t* device_id) {
+    // 메모리 캐시에서 확인
     return find_registered_index(device_id) >= 0;
 }
 
 uint8_t device_mgmt_get_registered_count(void) {
+    // 메모리 캐시에서 가져오기
     return s_registered_count;
 }
 
@@ -851,6 +865,7 @@ uint8_t device_mgmt_get_registered_devices(uint8_t* device_ids) {
         return 0;
     }
 
+    // 메모리 캐시에서 가져오기
     for (uint8_t i = 0; i < s_registered_count; i++) {
         memcpy(&device_ids[i * LORA_DEVICE_ID_LEN], s_registered_devices[i],
                LORA_DEVICE_ID_LEN);
@@ -859,84 +874,28 @@ uint8_t device_mgmt_get_registered_devices(uint8_t* device_ids) {
 }
 
 esp_err_t device_mgmt_load_registered(void) {
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-    if (err != ESP_OK) {
-        T_LOGD(TAG, "No saved devices found");
-        return ESP_OK;
-    }
-
-    uint8_t count = 0;
-    err = nvs_get_u8(handle, NVS_KEY_COUNT, &count);
-    if (err != ESP_OK) {
-        nvs_close(handle);
-        T_LOGD(TAG, "No device count found");
-        return ESP_OK;
-    }
-
-    if (count > DEVICE_MGMT_MAX_REGISTERED) {
-        count = DEVICE_MGMT_MAX_REGISTERED;
-    }
-
-    s_registered_count = 0;
-    for (uint8_t i = 0; i < count; i++) {
-        char key[16];
-        snprintf(key, sizeof(key), "%s%d", NVS_KEY_PREFIX, i);
-
-        size_t len = LORA_DEVICE_ID_LEN;
-        err = nvs_get_blob(handle, key, s_registered_devices[i], &len);
-        if (err == ESP_OK && len == LORA_DEVICE_ID_LEN) {
-            s_registered_count++;
-        }
-    }
-
-    nvs_close(handle);
-
-    if (s_registered_count > 0) {
-        T_LOGI(TAG, "Loaded %d registered devices", s_registered_count);
-    }
-
+    // NVS에서 로드하는 대신 빈 함수로 유지
+    // 등록된 디바이스는 이벤트를 통해 ConfigService가 관리
+    T_LOGD(TAG, "device_mgmt_load_registered: event_bus 기반으로 변경됨");
     return ESP_OK;
 }
 
 esp_err_t device_mgmt_save_registered(void) {
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (err != ESP_OK) {
-        T_LOGE(TAG, "Failed to open NVS");
-        return ESP_FAIL;
-    }
-
-    nvs_set_u8(handle, NVS_KEY_COUNT, s_registered_count);
-
-    for (uint8_t i = 0; i < s_registered_count; i++) {
-        char key[16];
-        snprintf(key, sizeof(key), "%s%d", NVS_KEY_PREFIX, i);
-        nvs_set_blob(handle, key, s_registered_devices[i], LORA_DEVICE_ID_LEN);
-    }
-
-    err = nvs_commit(handle);
-    nvs_close(handle);
-
-    if (err == ESP_OK) {
-        T_LOGD(TAG, "Saved %d registered devices", s_registered_count);
-    } else {
-        T_LOGE(TAG, "Failed to save devices");
-    }
-
-    return err;
+    // event_bus를 통해 저장하므로 별도 저장 불필요
+    return ESP_OK;
 }
 
 void device_mgmt_clear_registered(void) {
+    // 모든 등록된 디바이스를 해제 이벤트 발행
+    for (int i = s_registered_count - 1; i >= 0; i--) {
+        device_register_event_t event;
+        memcpy(event.device_id, s_registered_devices[i], LORA_DEVICE_ID_LEN);
+        event_bus_publish(EVT_DEVICE_UNREGISTER, &event, sizeof(event));
+    }
+
+    // 메모리 캐시 초기화
     memset(s_registered_devices, 0, sizeof(s_registered_devices));
     s_registered_count = 0;
-
-    nvs_handle_t handle;
-    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) == ESP_OK) {
-        nvs_erase_all(handle);
-        nvs_commit(handle);
-        nvs_close(handle);
-    }
 
     T_LOGI(TAG, "Cleared all registered devices");
 }

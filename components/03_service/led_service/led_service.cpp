@@ -1,11 +1,10 @@
 /**
  * @file LedService.cpp
- * @brief LED 서비스 구현 - ConfigService 색상을 WS2812Driver에 적용
+ * @brief LED 서비스 구현 - WS2812Driver 제어
  */
 
 #include "led_service.h"
 #include "ws2812_driver.h"
-#include "config_service.h"
 #include "t_log.h"
 #include <cstring>
 
@@ -19,42 +18,16 @@ static struct {
 };
 
 // ============================================================================
-// 색상 캐시 (ConfigService에서 로드)
+// 색상 캐시 (App에서 설정)
 // ============================================================================
 
-static struct {
-    uint8_t program_r, program_g, program_b;
-    uint8_t preview_r, preview_g, preview_b;
-    uint8_t off_r, off_g, off_b;
-    uint8_t battery_low_r, battery_low_g, battery_low_b;
-} s_colors = {
+static led_colors_t s_colors = {
     // 기본값: R G OFF (빨강, 초록, 검정)
     .program_r = 255, .program_g = 0, .program_b = 0,
     .preview_r = 0, .preview_g = 255, .preview_b = 0,
     .off_r = 0, .off_g = 0, .off_b = 0,
     .battery_low_r = 255, .battery_low_g = 255, .battery_low_b = 0
 };
-
-// ============================================================================
-// 내부 함수
-// ============================================================================
-
-/**
- * @brief ConfigService에서 색상 로드
- */
-static void load_colors_from_nvs(void)
-{
-    config_service_get_led_program_color(&s_colors.program_r, &s_colors.program_g, &s_colors.program_b);
-    config_service_get_led_preview_color(&s_colors.preview_r, &s_colors.preview_g, &s_colors.preview_b);
-    config_service_get_led_off_color(&s_colors.off_r, &s_colors.off_g, &s_colors.off_b);
-    config_service_get_led_battery_low_color(&s_colors.battery_low_r, &s_colors.battery_low_g, &s_colors.battery_low_b);
-
-    T_LOGI(TAG, "색상 로드: PGM(%d,%d,%d) PVW(%d,%d,%d) OFF(%d,%d,%d) BAT(%d,%d,%d)",
-             s_colors.program_r, s_colors.program_g, s_colors.program_b,
-             s_colors.preview_r, s_colors.preview_g, s_colors.preview_b,
-             s_colors.off_r, s_colors.off_g, s_colors.off_b,
-             s_colors.battery_low_r, s_colors.battery_low_g, s_colors.battery_low_b);
-}
 
 // ============================================================================
 // 공개 API
@@ -64,6 +37,11 @@ extern "C" {
 
 esp_err_t led_service_init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
 {
+    return led_service_init_with_colors(gpio_num, num_leds, camera_id, nullptr);
+}
+
+esp_err_t led_service_init_with_colors(int gpio_num, uint32_t num_leds, uint8_t camera_id, const led_colors_t* colors)
+{
     if (s_service.initialized) {
         T_LOGW(TAG, "이미 초기화됨");
         return ESP_OK;
@@ -71,8 +49,10 @@ esp_err_t led_service_init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
 
     T_LOGI(TAG, "LED 서비스 초기화 중...");
 
-    // ConfigService에서 색상 로드
-    load_colors_from_nvs();
+    // 색상 설정
+    if (colors != nullptr) {
+        memcpy(&s_colors, colors, sizeof(led_colors_t));
+    }
 
     // WS2812Driver 초기화
     esp_err_t ret = ws2812_driver_init(gpio_num, num_leds, camera_id);
@@ -83,6 +63,23 @@ esp_err_t led_service_init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
 
     s_service.initialized = true;
     T_LOGI(TAG, "LED 서비스 초기화 완료");
+    return ESP_OK;
+}
+
+esp_err_t led_service_set_colors(const led_colors_t* colors)
+{
+    if (colors == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memcpy(&s_colors, colors, sizeof(led_colors_t));
+
+    T_LOGI(TAG, "색상 설정: PGM(%d,%d,%d) PVW(%d,%d,%d) OFF(%d,%d,%d) BAT(%d,%d,%d)",
+             s_colors.program_r, s_colors.program_g, s_colors.program_b,
+             s_colors.preview_r, s_colors.preview_g, s_colors.preview_b,
+             s_colors.off_r, s_colors.off_g, s_colors.off_b,
+             s_colors.battery_low_r, s_colors.battery_low_g, s_colors.battery_low_b);
+
     return ESP_OK;
 }
 
@@ -165,15 +162,6 @@ void led_service_deinit(void)
 bool led_service_is_initialized(void)
 {
     return s_service.initialized;
-}
-
-void led_service_load_colors(void)
-{
-    if (!s_service.initialized) {
-        return;
-    }
-    load_colors_from_nvs();
-    T_LOGI(TAG, "색상 다시 로드됨");
 }
 
 } // extern "C"

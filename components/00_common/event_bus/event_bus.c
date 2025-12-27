@@ -49,6 +49,7 @@ static const char* EVENT_NAMES[] = {
     "EVT_LORA_STATUS_CHANGED",
     "EVT_LORA_PACKET_RECEIVED",
     "EVT_LORA_PACKET_SENT",
+    "EVT_LORA_SEND_REQUEST",
     "EVT_NETWORK_STATUS_CHANGED",
     "EVT_NETWORK_CONNECTED",
     "EVT_NETWORK_DISCONNECTED",
@@ -57,6 +58,8 @@ static const char* EVENT_NAMES[] = {
     "EVT_TALLY_STATE_CHANGED",
     "EVT_DISPLAY_UPDATE_REQUEST",
     "EVT_LED_STATE_CHANGED",
+    "EVT_DEVICE_REGISTER",
+    "EVT_DEVICE_UNREGISTER",
 };
 
 const char* event_type_to_string(event_type_t type) {

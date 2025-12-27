@@ -41,6 +41,23 @@ typedef struct __attribute__((packed)) {
 #define LORA_MAX_PACKET_SIZE 256
 
 /**
+ * @brief LoRa 송신 요청 이벤트 데이터 (EVT_LORA_SEND_REQUEST용)
+ */
+typedef struct {
+    const uint8_t* data;     // 패킷 데이터 (상수 포인터 - 발행 후 해제 가능)
+    size_t length;           // 데이터 길이
+} lora_send_request_t;
+
+#define LORA_DEVICE_ID_LEN 4
+
+/**
+ * @brief 디바이스 등록 이벤트 데이터 (EVT_DEVICE_REGISTER용)
+ */
+typedef struct {
+    uint8_t device_id[LORA_DEVICE_ID_LEN];  // 4바이트 디바이스 ID
+} device_register_event_t;
+
+/**
  * @brief LoRa 패킷 이벤트 데이터 (EVT_LORA_PACKET_RECEIVED용)
  */
 typedef struct {
@@ -87,6 +104,7 @@ typedef enum {
     EVT_LORA_RSSI_CHANGED,         ///< RSSI/SNR 변경 (data: lora_rssi_event_t)
     EVT_LORA_PACKET_RECEIVED,      ///< 패킷 수신 (data: lora_packet_event_t)
     EVT_LORA_PACKET_SENT,
+    EVT_LORA_SEND_REQUEST,         ///< 송신 요청 (data: lora_send_request_t)
 
     // 네트워크 이벤트 (03_service)
     EVT_NETWORK_STATUS_CHANGED,
@@ -103,6 +121,10 @@ typedef enum {
 
     // LED 이벤트 (02_presentation)
     EVT_LED_STATE_CHANGED,
+
+    // 디바이스 관리 이벤트 (03_service → ConfigService)
+    EVT_DEVICE_REGISTER,         ///< 디바이스 등록 요청 (data: device_register_event_t)
+    EVT_DEVICE_UNREGISTER,       ///< 디바이스 등록 해제 요청 (data: device_register_event_t)
 
     // 최대 이벤트 수
    _EVT_MAX

@@ -57,6 +57,23 @@ static TaskHandle_t s_tx_task = nullptr;
 // ============================================================================
 
 /**
+ * @brief LoRa 송신 요청 이벤트 핸들러
+ */
+static esp_err_t on_lora_send_request(const event_data_t* event) {
+    if (event->type != EVT_LORA_SEND_REQUEST) {
+        return ESP_OK;
+    }
+
+    const auto* req = reinterpret_cast<const lora_send_request_t*>(event->data);
+    if (req == nullptr || req->data == nullptr) {
+        T_LOGW(TAG, "Invalid send request (null data)");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    return lora_service_send(req->data, req->length);
+}
+
+/**
  * @brief 드라이버 수신 콜백 (내부)
  */
 static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, float snr)
@@ -212,10 +229,18 @@ esp_err_t lora_service_start(void)
 
     T_LOGI(TAG, "LoRa Service 시작 중...");
 
+    // 송신 요청 이벤트 구독
+    esp_err_t ret = event_bus_subscribe(EVT_LORA_SEND_REQUEST, on_lora_send_request);
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "송신 요청 이벤트 구독 실패");
+        return ret;
+    }
+
     // 수신 모드 시작
-    esp_err_t ret = lora_driver_start_receive();
+    ret = lora_driver_start_receive();
     if (ret != ESP_OK) {
         T_LOGI(TAG, "수신 모드 시작 실패");
+        event_bus_unsubscribe(EVT_LORA_SEND_REQUEST, on_lora_send_request);
         return ret;
     }
 
@@ -232,6 +257,7 @@ esp_err_t lora_service_start(void)
 
     if (task_ret != pdPASS) {
         T_LOGI(TAG, "송신 태스크 생성 실패");
+        event_bus_unsubscribe(EVT_LORA_SEND_REQUEST, on_lora_send_request);
         return ESP_FAIL;
     }
 
@@ -253,6 +279,9 @@ void lora_service_stop(void)
 
     T_LOGI(TAG, "LoRa Service 정지 중...");
     s_running = false;
+
+    // 송신 요청 이벤트 구독 취소
+    event_bus_unsubscribe(EVT_LORA_SEND_REQUEST, on_lora_send_request);
 
     // 태스크 종료 대기
     if (s_tx_task) {

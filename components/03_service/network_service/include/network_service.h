@@ -3,7 +3,6 @@
  * @brief 네트워크 통합 관리 서비스 (C++)
  *
  * 역할: WiFi와 Ethernet 통합 관리
- * - ConfigService에서 설정 로드
  * - WiFi Driver 제어
  * - Ethernet Driver 제어
  * - 전체 네트워크 상태 관리
@@ -16,6 +15,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "config_service.h"  // config_all_t 사용
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,8 +50,16 @@ typedef struct {
 // ============================================================================
 
 /**
- * @brief Network Service 초기화 (ConfigService에서 설정 로드)
+ * @brief Network Service 초기화 (설정 포함)
+ * @param config 네트워크 설정 (WiFi, Ethernet)
  * @return ESP_OK 성공, ESP_ERR_* 실패
+ */
+esp_err_t network_service_init_with_config(const config_all_t* config);
+
+/**
+ * @brief Network Service 초기화 (ConfigService에서 설정 로드 - 레거시)
+ * @return ESP_OK 성공, ESP_ERR_* 실패
+ * @deprecated App에서 init_with_config 사용 권장
  */
 esp_err_t network_service_init(void);
 

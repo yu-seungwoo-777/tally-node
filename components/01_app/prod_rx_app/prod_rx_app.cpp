@@ -377,9 +377,29 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
         return false;
     }
 
-    // WS2812 LED 초기화
+    // WS2812 LED 초기화 (색상 포함)
     uint8_t camera_id = config_service_get_camera_id();
-    esp_err_t led_ret = led_service_init(-1, 0, camera_id);
+
+    // ConfigService에서 색상 로드
+    config_led_colors_t config_colors;
+    config_service_get_led_colors(&config_colors);
+
+    led_colors_t led_colors = {
+        .program_r = config_colors.program.r,
+        .program_g = config_colors.program.g,
+        .program_b = config_colors.program.b,
+        .preview_r = config_colors.preview.r,
+        .preview_g = config_colors.preview.g,
+        .preview_b = config_colors.preview.b,
+        .off_r = config_colors.off.r,
+        .off_g = config_colors.off.g,
+        .off_b = config_colors.off.b,
+        .battery_low_r = config_colors.battery_low.r,
+        .battery_low_g = config_colors.battery_low.g,
+        .battery_low_b = config_colors.battery_low.b
+    };
+
+    esp_err_t led_ret = led_service_init_with_colors(-1, 0, camera_id, &led_colors);
     if (led_ret == ESP_OK) {
         T_LOGI(TAG, "WS2812 초기화 완료 (카메라 ID: %d)", camera_id);
     } else {

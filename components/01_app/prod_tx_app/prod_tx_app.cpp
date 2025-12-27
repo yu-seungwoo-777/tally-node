@@ -281,8 +281,8 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         config_service_save_all(&current_config);
     }
 
-    // NetworkService 초기화 (스위처 통신을 위한 네트워크)
-    esp_err_t net_ret = network_service_init();
+    // NetworkService 초기화 (설정 포함)
+    esp_err_t net_ret = network_service_init_with_config(&current_config);
     if (net_ret != ESP_OK) {
         T_LOGE(TAG, "NetworkService 초기화 실패: %s", esp_err_to_name(net_ret));
         return false;

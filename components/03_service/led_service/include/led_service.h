@@ -1,6 +1,6 @@
 /**
  * @file LedService.h
- * @brief LED 서비스 - ConfigService 색상을 WS2812Driver에 적용
+ * @brief LED 서비스 - WS2812Driver 제어
  */
 
 #ifndef LED_SERVICE_H
@@ -15,13 +15,40 @@ extern "C" {
 #endif
 
 /**
+ * @brief LED 색상 설정 구조체
+ */
+typedef struct {
+    uint8_t program_r, program_g, program_b;
+    uint8_t preview_r, preview_g, preview_b;
+    uint8_t off_r, off_g, off_b;
+    uint8_t battery_low_r, battery_low_g, battery_low_b;
+} led_colors_t;
+
+/**
  * @brief LED 서비스 초기화
  * @param gpio_num GPIO 핀 번호 (-1=PinConfig.h 사용)
  * @param num_leds LED 개수 (0=기본값 8)
- * @param camera_id 카메라 ID (0=ConfigService에서 로드)
+ * @param camera_id 카메라 ID
  * @return ESP_OK 성공
  */
 esp_err_t led_service_init(int gpio_num, uint32_t num_leds, uint8_t camera_id);
+
+/**
+ * @brief LED 서비스 초기화 (색상 포함)
+ * @param gpio_num GPIO 핀 번호
+ * @param num_leds LED 개수
+ * @param camera_id 카메라 ID
+ * @param colors 색상 설정 (NULL=기본값 사용)
+ * @return ESP_OK 성공
+ */
+esp_err_t led_service_init_with_colors(int gpio_num, uint32_t num_leds, uint8_t camera_id, const led_colors_t* colors);
+
+/**
+ * @brief LED 색상 설정
+ * @param colors 색상 설정
+ * @return ESP_OK 성공
+ */
+esp_err_t led_service_set_colors(const led_colors_t* colors);
 
 /**
  * @brief LED 상태 설정 (WS2812Driver 위임)
@@ -63,11 +90,6 @@ void led_service_deinit(void);
  * @brief 초기화 여부
  */
 bool led_service_is_initialized(void);
-
-/**
- * @brief 색상 ConfigService에서 다시 로드하여 WS2812Driver에 적용
- */
-void led_service_load_colors(void);
 
 #ifdef __cplusplus
 }

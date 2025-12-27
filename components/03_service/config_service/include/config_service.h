@@ -82,6 +82,14 @@ typedef struct {
     uint8_t b;
 } config_led_color_t;
 
+// 등록된 디바이스 설정 (NVS 저장)
+#define CONFIG_MAX_REGISTERED_DEVICES 20
+
+typedef struct {
+    uint8_t device_ids[CONFIG_MAX_REGISTERED_DEVICES][4];  // 4바이트 디바이스 ID
+    uint8_t count;
+} config_registered_devices_t;
+
 // LED 색상 설정 (NVS 저장)
 typedef struct {
     config_led_color_t program;      // PROGRAM 상태 색상 (빨강)
@@ -275,6 +283,46 @@ void config_service_get_led_off_color(uint8_t* r, uint8_t* g, uint8_t* b);
  * @brief BATTERY_LOW 색상 가져오기
  */
 void config_service_get_led_battery_low_color(uint8_t* r, uint8_t* g, uint8_t* b);
+
+// ============================================================================
+// 등록된 디바이스 관리 API
+// ============================================================================
+
+/**
+ * @brief 디바이스 등록
+ * @param device_id 4바이트 디바이스 ID
+ */
+esp_err_t config_service_register_device(const uint8_t* device_id);
+
+/**
+ * @brief 디바이스 등록 해제
+ * @param device_id 4바이트 디바이스 ID
+ */
+esp_err_t config_service_unregister_device(const uint8_t* device_id);
+
+/**
+ * @brief 디바이스 등록 여부 확인
+ * @param device_id 4바이트 디바이스 ID
+ * @return true 등록됨, false 등록되지 않음
+ */
+bool config_service_is_device_registered(const uint8_t* device_id);
+
+/**
+ * @brief 등록된 디바이스 목록 가져오기
+ * @param devices[out] 디바이스 목록을 저장할 구조체
+ * @return ESP_OK 성공
+ */
+esp_err_t config_service_get_registered_devices(config_registered_devices_t* devices);
+
+/**
+ * @brief 등록된 디바이스 수 가져오기
+ */
+uint8_t config_service_get_registered_device_count(void);
+
+/**
+ * @brief 등록된 모든 디바이스 삭제
+ */
+void config_service_clear_registered_devices(void);
 
 // ============================================================================
 // 기존 API

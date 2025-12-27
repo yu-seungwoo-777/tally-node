@@ -4,7 +4,6 @@
  */
 
 #include "network_service.h"
-#include "config_service.h"
 #include "wifi_driver.h"
 #include "ethernet_driver.h"
 #include "t_log.h"
@@ -21,13 +20,17 @@ static const char* TAG = "NetworkService";
 class NetworkServiceClass {
 public:
     // 초기화/정리
-    static esp_err_t init(void);
+    static esp_err_t initWithConfig(const config_all_t* config);
+    static esp_err_t init(void);  // 레거시 (ConfigService 사용)
     static esp_err_t deinit(void);
 
     // 상태 조회
     static network_status_t getStatus(void);
     static void printStatus(void);
     static bool isInitialized(void) { return s_initialized; }
+
+    // 설정 업데이트
+    static esp_err_t updateConfig(const config_all_t* config);
 
     // 재시작
     static esp_err_t restartWiFi(void);
@@ -55,30 +58,25 @@ config_all_t NetworkServiceClass::s_config = {};
 // 초기화/정리
 // ============================================================================
 
-esp_err_t NetworkServiceClass::init(void)
+esp_err_t NetworkServiceClass::initWithConfig(const config_all_t* config)
 {
     if (s_initialized) {
         T_LOGW(TAG, "이미 초기화됨");
         return ESP_OK;
     }
 
+    if (config == nullptr) {
+        T_LOGE(TAG, "config가 null");
+        return ESP_ERR_INVALID_ARG;
+    }
+
     T_LOGI(TAG, "Network Service 초기화 중...");
 
-    // ConfigService 초기화
-    esp_err_t ret = config_service_init();
-    if (ret != ESP_OK) {
-        T_LOGE(TAG, "ConfigService 초기화 실패");
-        return ret;
-    }
-
-    // 설정 로드
-    ret = config_service_load_all(&s_config);
-    if (ret != ESP_OK) {
-        T_LOGW(TAG, "설정 로드 실패, 기본값 사용");
-        config_service_load_defaults(&s_config);
-    }
+    // 설정 저장
+    memcpy(&s_config, config, sizeof(config_all_t));
 
     // WiFi Driver 초기화
+    esp_err_t ret = ESP_OK;
     if (s_config.wifi_ap.enabled || s_config.wifi_sta.enabled) {
         const char* ap_ssid = s_config.wifi_ap.enabled ? s_config.wifi_ap.ssid : nullptr;
         const char* ap_pass = s_config.wifi_ap.enabled ? s_config.wifi_ap.password : nullptr;
@@ -110,6 +108,36 @@ esp_err_t NetworkServiceClass::init(void)
 
     T_LOGI(TAG, "Network Service 초기화 완료");
     return ESP_OK;
+}
+
+esp_err_t NetworkServiceClass::init(void)
+{
+    if (s_initialized) {
+        T_LOGW(TAG, "이미 초기화됨");
+        return ESP_OK;
+    }
+
+    T_LOGW(TAG, "network_service_init()는 레거시 API입니다. App에서 init_with_config 사용을 권장합니다.");
+
+    // 레거시: ConfigService 직접 호출
+    // (헤더 include 없이 extern 선언)
+    extern esp_err_t config_service_init(void);
+    extern esp_err_t config_service_load_all(config_all_t*);
+    extern esp_err_t config_service_load_defaults(config_all_t*);
+
+    esp_err_t ret = config_service_init();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "ConfigService 초기화 실패");
+        return ret;
+    }
+
+    ret = config_service_load_all(&s_config);
+    if (ret != ESP_OK) {
+        T_LOGW(TAG, "설정 로드 실패, 기본값 사용");
+        config_service_load_defaults(&s_config);
+    }
+
+    return initWithConfig(&s_config);
 }
 
 esp_err_t NetworkServiceClass::deinit(void)
@@ -176,6 +204,16 @@ network_status_t NetworkServiceClass::getStatus(void)
     return status;
 }
 
+esp_err_t NetworkServiceClass::updateConfig(const config_all_t* config)
+{
+    if (config == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    memcpy(&s_config, config, sizeof(config_all_t));
+    return ESP_OK;
+}
+
 void NetworkServiceClass::printStatus(void)
 {
     if (!s_initialized) {
@@ -236,10 +274,7 @@ esp_err_t NetworkServiceClass::restartWiFi(void)
     wifi_driver_deinit();
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    // 설정 재로드
-    config_service_load_all(&s_config);
-
-    // WiFi 재시작
+    // WiFi 재시작 (저장된 설정 사용)
     const char* ap_ssid = s_config.wifi_ap.enabled ? s_config.wifi_ap.ssid : nullptr;
     const char* ap_pass = s_config.wifi_ap.enabled ? s_config.wifi_ap.password : nullptr;
     const char* sta_ssid = s_config.wifi_sta.enabled ? s_config.wifi_sta.ssid : nullptr;
@@ -260,10 +295,7 @@ esp_err_t NetworkServiceClass::restartEthernet(void)
     ethernet_driver_deinit();
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    // 설정 재로드
-    config_service_load_all(&s_config);
-
-    // Ethernet 재시작
+    // Ethernet 재시작 (저장된 설정 사용)
     return ethernet_driver_init(
         s_config.ethernet.dhcp_enabled,
         s_config.ethernet.static_ip,
@@ -294,6 +326,11 @@ esp_err_t NetworkServiceClass::restartAll(void)
 // ============================================================================
 
 extern "C" {
+
+esp_err_t network_service_init_with_config(const config_all_t* config)
+{
+    return NetworkServiceClass::initWithConfig(config);
+}
 
 esp_err_t network_service_init(void)
 {
