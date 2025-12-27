@@ -11,8 +11,7 @@
 #include "DisplayManager.h"
 #include "TxPage.h"
 #include "RxPage.h"
-#include "button_poll.h"
-#include "button_handler.h"
+#include "ButtonService.h"
 #include "t_log.h"
 
 #include "freertos/FreeRTOS.h"
@@ -59,19 +58,11 @@ esp_err_t display_test_app_init(void)
     }
     T_LOGI(TAG, "페이지 등록 완료");
 
-    // 버튼 폴링 초기화
-    T_LOGI(TAG, "버튼 폴링 초기화 중...");
-    esp_err_t ret = button_poll_init();
+    // 버튼 서비스 초기화
+    T_LOGI(TAG, "버튼 서비스 초기화 중...");
+    esp_err_t ret = button_service_init();
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "버튼 폴링 초기화 실패: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    // 버튼 핸들러 초기화
-    T_LOGI(TAG, "버튼 핸들러 초기화 중...");
-    ret = button_handler_init();
-    if (ret != ESP_OK) {
-        T_LOGE(TAG, "버튼 핸들러 초기화 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "버튼 서비스 초기화 실패: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -95,15 +86,9 @@ esp_err_t display_test_app_start(void)
     display_manager_set_page(PAGE_BOOT);
 
     // 버튼 폴링 시작
-    esp_err_t ret = button_poll_start();
+    esp_err_t ret = button_service_start();
     if (ret != ESP_OK) {
-        T_LOGW(TAG, "버튼 폴링 시작 실패: %s", esp_err_to_name(ret));
-    }
-
-    // 버튼 핸들러 시작
-    ret = button_handler_start();
-    if (ret != ESP_OK) {
-        T_LOGW(TAG, "버튼 핸들러 시작 실패: %s", esp_err_to_name(ret));
+        T_LOGW(TAG, "버튼 서비스 시작 실패: %s", esp_err_to_name(ret));
     }
 
     s_running = true;

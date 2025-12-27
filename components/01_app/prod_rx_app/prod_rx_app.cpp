@@ -9,8 +9,7 @@
 #include "event_bus.h"
 #include "ConfigService.h"
 #include "DisplayManager.h"
-#include "button_poll.h"
-#include "button_handler.h"
+#include "ButtonService.h"
 #include "LoRaService.h"
 #include "LedService.h"
 #include "TallyTypes.h"
@@ -385,16 +384,10 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
         return false;
     }
 
-    // 버튼 폴링 초기화
-    ret = button_poll_init();
+    // 버튼 서비스 초기화
+    ret = button_service_init();
     if (ret != ESP_OK) {
-        T_LOGW(TAG, "Button poll init failed: %s", esp_err_to_name(ret));
-    }
-
-    // 버튼 핸들러 초기화
-    ret = button_handler_init();
-    if (ret != ESP_OK) {
-        T_LOGW(TAG, "Button handler init failed: %s", esp_err_to_name(ret));
+        T_LOGW(TAG, "Button service init failed: %s", esp_err_to_name(ret));
     }
 
     s_app.initialized = true;
@@ -441,11 +434,8 @@ void prod_rx_app_start(void)
     event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
 
-    // 버튼 폴링 시작
-    button_poll_start();
-
-    // 버튼 핸들러 시작
-    button_handler_start();
+    // 버튼 서비스 시작
+    button_service_start();
 
     // 부팅 시나리오
     const char* boot_messages[] = {
@@ -489,8 +479,7 @@ void prod_rx_app_stop(void)
     event_bus_unsubscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_unsubscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
 
-    button_handler_stop();
-    button_poll_stop();
+    button_service_stop();
 
     // LoRa 정지
     lora_service_stop();
@@ -507,8 +496,7 @@ void prod_rx_app_deinit(void)
 {
     prod_rx_app_stop();
 
-    button_handler_deinit();
-    button_poll_deinit();
+    button_service_deinit();
 
     // WS2812 정리
     led_service_deinit();

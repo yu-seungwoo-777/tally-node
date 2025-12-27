@@ -10,8 +10,7 @@
 #include "ConfigService.h"
 #include "DisplayManager.h"
 #include "TxPage.h"
-#include "button_poll.h"
-#include "button_handler.h"
+#include "ButtonService.h"
 #include "SwitcherService.h"
 #include "NetworkService.h"
 #include "LoRaService.h"
@@ -370,16 +369,10 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         return false;
     }
 
-    // 버튼 폴링 초기화
-    ret = button_poll_init();
+    // 버튼 서비스 초기화
+    ret = button_service_init();
     if (ret != ESP_OK) {
-        T_LOGW(TAG, "Button poll init failed: %s", esp_err_to_name(ret));
-    }
-
-    // 버튼 핸들러 초기화
-    ret = button_handler_init();
-    if (ret != ESP_OK) {
-        T_LOGW(TAG, "Button handler init failed: %s", esp_err_to_name(ret));
+        T_LOGW(TAG, "Button service init failed: %s", esp_err_to_name(ret));
     }
 
     s_app.initialized = true;
@@ -426,11 +419,8 @@ void prod_tx_app_start(void)
     event_bus_subscribe(EVT_NETWORK_CONNECTED, handle_network_connected);
     event_bus_subscribe(EVT_NETWORK_DISCONNECTED, handle_network_disconnected);
 
-    // 버튼 폴링 시작
-    button_poll_start();
-
-    // 버튼 핸들러 시작
-    button_handler_start();
+    // 버튼 서비스 시작
+    button_service_start();
 
     // 부팅 시나리오
     const char* boot_messages[] = {
@@ -473,8 +463,7 @@ void prod_tx_app_stop(void)
     event_bus_unsubscribe(EVT_NETWORK_CONNECTED, handle_network_connected);
     event_bus_unsubscribe(EVT_NETWORK_DISCONNECTED, handle_network_disconnected);
 
-    button_handler_stop();
-    button_poll_stop();
+    button_service_stop();
 
     // LoRa 정지
     lora_service_stop();
@@ -487,8 +476,7 @@ void prod_tx_app_deinit(void)
 {
     prod_tx_app_stop();
 
-    button_handler_deinit();
-    button_poll_deinit();
+    button_service_deinit();
 
     if (s_app.service) {
         switcher_service_destroy(s_app.service);

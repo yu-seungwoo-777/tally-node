@@ -8,7 +8,7 @@
 #include "LoRaService.h"
 #include "LedService.h"
 #include "ConfigService.h"
-#include "button_poll.h"
+#include "ButtonService.h"
 #include "TallyTypes.h"
 #include "event_bus.h"
 #include <cstring>
@@ -202,10 +202,10 @@ bool tally_rx_app_init(const tally_rx_config_t* config) {
     event_bus_subscribe(EVT_BUTTON_LONG_PRESS, on_button_long_press);
     T_LOGI(TAG, "버튼 롱프레스 이벤트 구독 완료 (카메라 ID 변경)");
 
-    // 버튼 폴링 초기화
-    esp_err_t ret = button_poll_init();
+    // 버튼 서비스 초기화
+    esp_err_t ret = button_service_init();
     if (ret != ESP_OK) {
-        T_LOGW(TAG, "버튼 폴링 초기화 실패: %s", esp_err_to_name(ret));
+        T_LOGW(TAG, "버튼 서비스 초기화 실패: %s", esp_err_to_name(ret));
     }
 
     s_app.initialized = true;
@@ -238,9 +238,9 @@ void tally_rx_app_start(void) {
     // LoRa 시작
     lora_service_start();
 
-    // 버튼 폴링 시작
-    button_poll_start();
-    T_LOGI(TAG, "버튼 폴링 시작");
+    // 버튼 서비스 시작
+    button_service_start();
+    T_LOGI(TAG, "버튼 서비스 시작");
 
     s_app.running = true;
     T_LOGI(TAG, "Tally 수신 앱 시작");
@@ -251,8 +251,8 @@ void tally_rx_app_stop(void) {
         return;
     }
 
-    // 버튼 폴링 정지
-    button_poll_stop();
+    // 버튼 서비스 정지
+    button_service_stop();
 
     // LoRa 정지
     lora_service_stop();
