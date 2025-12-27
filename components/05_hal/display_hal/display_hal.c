@@ -47,5 +47,4 @@ int display_hal_get_i2c_port(void)
 void display_hal_set_power(bool on)
 {
     s_power_on = on;
-    // TODO: 필요시 디스플레이 리셋 핀 제어
 }
