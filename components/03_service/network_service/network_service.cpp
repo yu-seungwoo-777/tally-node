@@ -249,8 +249,9 @@ void NetworkServiceClass::publishStatus(void)
                        strncmp(s_last_status.wifi_sta.ip, status.wifi_sta.ip, sizeof(s_last_status.wifi_sta.ip)) != 0);
     bool eth_changed = (s_last_status.ethernet.connected != status.ethernet.connected ||
                        strncmp(s_last_status.ethernet.ip, status.ethernet.ip, sizeof(s_last_status.ethernet.ip)) != 0);
+    bool ap_changed = (strncmp(s_last_status.wifi_ap.ip, status.wifi_ap.ip, sizeof(s_last_status.wifi_ap.ip)) != 0);
 
-    if (sta_changed || eth_changed) {
+    if (sta_changed || eth_changed || ap_changed) {
         // 이벤트 발행용 정적 변수 (지역 변수 사용 시 데이터가 소실됨)
         static network_status_event_t s_event;
         memset(&s_event, 0, sizeof(s_event));

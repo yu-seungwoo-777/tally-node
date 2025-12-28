@@ -324,6 +324,12 @@ static esp_err_t api_config_get_handler(httpd_req_t* req)
     cJSON_AddStringToObject(wifi_ap, "ssid", config.wifi_ap.ssid);
     cJSON_AddNumberToObject(wifi_ap, "channel", config.wifi_ap.channel);
     cJSON_AddBoolToObject(wifi_ap, "enabled", config.wifi_ap.enabled);
+    // AP IP (현재 상태에서 가져옴)
+    if (s_cache.network_valid) {
+        cJSON_AddStringToObject(wifi_ap, "ip", s_cache.network.ap_ip);
+    } else {
+        cJSON_AddStringToObject(wifi_ap, "ip", "--");
+    }
     cJSON_AddItemToObject(network, "wifiAp", wifi_ap);
 
     cJSON* wifi_sta = cJSON_CreateObject();
