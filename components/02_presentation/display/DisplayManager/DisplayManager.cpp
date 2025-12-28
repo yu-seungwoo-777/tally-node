@@ -26,17 +26,10 @@ static const char* TAG = "DisplayMgr";
 // 내부 상태
 // ============================================================================
 
-// 통합 데이터 저장 구조체
+// 통합 데이터 저장 구조체 (event_bus 구조체 그대로 사용)
 typedef struct {
-    // 시스템 정보 (EVT_INFO_UPDATED)
-    struct {
-        char device_id[5];
-        uint8_t battery;
-        float voltage;
-        float temperature;
-        uint32_t uptime;
-        bool valid;
-    } system;
+    system_info_event_t system;    // EVT_INFO_UPDATED
+    bool system_valid;
 
     // LoRa 정보 (EVT_LORA_RSSI_CHANGED)
     struct {
@@ -54,39 +47,14 @@ typedef struct {
         bool valid;
     } tally;
 
-    // Switcher 정보 (EVT_SWITCHER_STATUS_CHANGED, TX 전용)
-    struct {
-        bool dual_mode;
-        bool s1_connected;
-        bool s2_connected;
-        char s1_type[8];
-        char s2_type[8];
-        char s1_ip[16];
-        char s2_ip[16];
-        uint16_t s1_port;
-        uint16_t s2_port;
-        bool valid;
-    } switcher;
+    switcher_status_event_t switcher;  // EVT_SWITCHER_STATUS_CHANGED
+    bool switcher_valid;
 
-    // Network 정보 (EVT_NETWORK_STATUS_CHANGED, TX 전용)
-    struct {
-        char ap_ssid[33];
-        char ap_ip[16];
-        char sta_ssid[33];
-        char sta_ip[16];
-        char eth_ip[16];
-        bool sta_connected;
-        bool eth_connected;
-        bool eth_dhcp;
-        bool valid;
-    } network;
+    network_status_event_t network;    // EVT_NETWORK_STATUS_CHANGED
+    bool network_valid;
 
-    // RF 정보 (EVT_RF_CHANGED, TX 전용)
-    struct {
-        float frequency;
-        uint8_t sync_word;
-        bool valid;
-    } rf;
+    lora_rf_event_t rf;               // EVT_RF_CHANGED
+    bool rf_valid;
 } display_data_t;
 
 static struct {
@@ -197,8 +165,8 @@ static void print_status_log(void)
     T_LOGI(TAG, "────────────────────────────────────────");
 
     // 시스템 정보
-    if (s_mgr.data.system.valid) {
-        T_LOGI(TAG, "[System] ID:%s Bat:%d%% %.1fV %d°C Up:%us",
+    if (s_mgr.data.system_valid) {
+        T_LOGI(TAG, "[System] ID:%s Bat:%d%% %.1fV %.1f°C Up:%us",
                s_mgr.data.system.device_id,
                s_mgr.data.system.battery,
                s_mgr.data.system.voltage,
@@ -222,7 +190,7 @@ static void print_status_log(void)
     }
 #elif defined(DEVICE_MODE_TX)
     // Switcher 정보 (TX)
-    if (s_mgr.data.switcher.valid) {
+    if (s_mgr.data.switcher_valid) {
         if (s_mgr.data.switcher.dual_mode) {
             T_LOGI(TAG, "[Switcher] S1:%s@%s:%d%c S2:%s@%s:%d%c",
                    s_mgr.data.switcher.s1_type,
@@ -240,7 +208,7 @@ static void print_status_log(void)
     }
 
     // Network 정보 (TX)
-    if (s_mgr.data.network.valid) {
+    if (s_mgr.data.network_valid) {
         if (s_mgr.data.network.sta_connected) {
             T_LOGI(TAG, "[Network] WiFi:%s@%s ETH:%s",
                    s_mgr.data.network.sta_ssid, s_mgr.data.network.sta_ip,
@@ -252,7 +220,7 @@ static void print_status_log(void)
     }
 
     // RF 정보 (TX)
-    if (s_mgr.data.rf.valid) {
+    if (s_mgr.data.rf_valid) {
         T_LOGI(TAG, "[RF] %.1fMHz Sync:0x%02X",
                s_mgr.data.rf.frequency,
                s_mgr.data.rf.sync_word);
@@ -278,13 +246,9 @@ static esp_err_t on_info_updated(const event_data_t* event)
 
     const system_info_event_t* info = (const system_info_event_t*)event->data;
 
-    // 데이터 저장
-    strncpy(s_mgr.data.system.device_id, info->device_id, sizeof(s_mgr.data.system.device_id) - 1);
-    s_mgr.data.system.battery = info->battery;
-    s_mgr.data.system.voltage = info->voltage;
-    s_mgr.data.system.temperature = info->temperature;
-    s_mgr.data.system.uptime = info->uptime;
-    s_mgr.data.system.valid = true;
+    // 데이터 저장 (구조체 그대로 복사)
+    s_mgr.data.system = *info;
+    s_mgr.data.system_valid = true;
 
     // 페이지별 데이터 설정
 #ifdef DEVICE_MODE_TX
@@ -399,17 +363,9 @@ static esp_err_t on_switcher_status_changed(const event_data_t* event)
 
     const switcher_status_event_t* sw = (const switcher_status_event_t*)event->data;
 
-    // 데이터 저장
-    s_mgr.data.switcher.dual_mode = sw->dual_mode;
-    s_mgr.data.switcher.s1_connected = sw->s1_connected;
-    s_mgr.data.switcher.s2_connected = sw->s2_connected;
-    s_mgr.data.switcher.s1_port = sw->s1_port;
-    s_mgr.data.switcher.s2_port = sw->s2_port;
-    strncpy(s_mgr.data.switcher.s1_type, sw->s1_type, sizeof(s_mgr.data.switcher.s1_type) - 1);
-    strncpy(s_mgr.data.switcher.s2_type, sw->s2_type, sizeof(s_mgr.data.switcher.s2_type) - 1);
-    strncpy(s_mgr.data.switcher.s1_ip, sw->s1_ip, sizeof(s_mgr.data.switcher.s1_ip) - 1);
-    strncpy(s_mgr.data.switcher.s2_ip, sw->s2_ip, sizeof(s_mgr.data.switcher.s2_ip) - 1);
-    s_mgr.data.switcher.valid = true;
+    // 데이터 저장 (구조체 그대로 복사)
+    s_mgr.data.switcher = *sw;
+    s_mgr.data.switcher_valid = true;
 
     // TxPage에 상태 설정
     tx_page_set_dual_mode(sw->dual_mode);
@@ -434,16 +390,9 @@ static esp_err_t on_network_status_changed(const event_data_t* event)
 
     const network_status_event_t* net = (const network_status_event_t*)event->data;
 
-    // 데이터 저장
-    strncpy(s_mgr.data.network.ap_ssid, net->ap_ssid, sizeof(s_mgr.data.network.ap_ssid) - 1);
-    strncpy(s_mgr.data.network.ap_ip, net->ap_ip, sizeof(s_mgr.data.network.ap_ip) - 1);
-    strncpy(s_mgr.data.network.sta_ssid, net->sta_ssid, sizeof(s_mgr.data.network.sta_ssid) - 1);
-    strncpy(s_mgr.data.network.sta_ip, net->sta_ip, sizeof(s_mgr.data.network.sta_ip) - 1);
-    strncpy(s_mgr.data.network.eth_ip, net->eth_ip, sizeof(s_mgr.data.network.eth_ip) - 1);
-    s_mgr.data.network.sta_connected = net->sta_connected;
-    s_mgr.data.network.eth_connected = net->eth_connected;
-    s_mgr.data.network.eth_dhcp = net->eth_dhcp;
-    s_mgr.data.network.valid = true;
+    // 데이터 저장 (구조체 그대로 복사)
+    s_mgr.data.network = *net;
+    s_mgr.data.network_valid = true;
 
     // TxPage에 상태 설정
     tx_page_set_ap_name(net->ap_ssid);
@@ -474,7 +423,7 @@ static esp_err_t on_rf_changed(const event_data_t* event)
     // 데이터 저장
     s_mgr.data.rf.frequency = rf->frequency;
     s_mgr.data.rf.sync_word = rf->sync_word;
-    s_mgr.data.rf.valid = true;
+    s_mgr.data.rf_valid = true;
 
     tx_page_set_frequency(rf->frequency);
     tx_page_set_sync_word(rf->sync_word);

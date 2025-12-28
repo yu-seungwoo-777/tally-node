@@ -234,6 +234,14 @@ void HardwareService::hw_monitor_task(void* arg)
         // uptime 증가
         s_system.uptime++;
 
+        // 디버그: 주요 값 출력
+        static int dbg_cnt = 0;
+        if (++dbg_cnt >= 5) {
+            T_LOGI(TAG, "[DBG] temp=%f uptime=%u volt=%f bat=%d",
+                   s_system.temperature, s_system.uptime, s_system.voltage, s_system.battery);
+            dbg_cnt = 0;
+        }
+
         // 하드웨어 정보 이벤트 발행 (s_system은 system_info_event_t와 동일)
         event_bus_publish(EVT_INFO_UPDATED, &s_system, sizeof(s_system));
 
