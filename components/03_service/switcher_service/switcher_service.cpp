@@ -421,6 +421,16 @@ void SwitcherService::taskLoop() {
         secondary_.adapter->loop();
         checkSwitcherChange(SWITCHER_ROLE_SECONDARY);
     }
+
+    // ============================================================================
+    // 주기적 상태 발행 (1초마다 체크, 5초마다 발행)
+    // ============================================================================
+    static uint32_t s_last_status_publish = 0;
+    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+    if (now - s_last_status_publish > 5000) {
+        publishSwitcherStatus();
+        s_last_status_publish = now;
+    }
 }
 
 // ============================================================================
