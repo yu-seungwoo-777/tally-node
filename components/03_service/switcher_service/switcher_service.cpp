@@ -208,6 +208,9 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
     T_LOGI(TAG, "%s ATEM 스위처 설정됨: %s (%s:%d, if=%s)",
              switcher_role_to_string(role), config.name.c_str(), config.ip.c_str(), config.port, if_str);
 
+    // 설정 변경 후 상태 이벤트 발행
+    publishSwitcherStatus();
+
     return true;
 }
 
@@ -539,6 +542,9 @@ void SwitcherService::setDualMode(bool enabled) {
     if (!enabled) {
         packed_data_cleanup(&combined_packed_);
     }
+
+    // 설정 변경 후 상태 이벤트 발행
+    publishSwitcherStatus();
 }
 
 void SwitcherService::setSecondaryOffset(uint8_t offset) {

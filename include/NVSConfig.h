@@ -65,7 +65,7 @@
 #define NVS_SWITCHER_SEC_CAMERA_LIMIT 0
 
 // Dual Mode
-#define NVS_DUAL_ENABLED              false
+#define NVS_DUAL_ENABLED              true
 #define NVS_DUAL_OFFSET               4
 
 // ============================================================================
