@@ -112,6 +112,8 @@ esp_err_t wifi_hal_init(void)
     }
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
                                                      &wifi_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID,
+                                                     &wifi_event_handler, NULL));
 
     // WiFi 슬립 모드 비활성화 (최고 성능)
     esp_wifi_set_ps(WIFI_PS_NONE);

@@ -124,7 +124,14 @@ void t_log_output(t_log_level_t level, const char* tag, const char* fmt, ...) {
     // 가변 인자 처리
     va_list args;
     va_start(args, fmt);
-    vsnprintf(log_buf + len, sizeof(log_buf) - len, fmt, args);
+
+    // fmt null 체크
+    if (fmt != NULL) {
+        vsnprintf(log_buf + len, sizeof(log_buf) - len, fmt, args);
+    } else {
+        snprintf(log_buf + len, sizeof(log_buf) - len, "(null fmt)");
+    }
+
     va_end(args);
 
     // 출력 (개행 보장)

@@ -85,6 +85,61 @@ typedef struct {
     uint8_t sync_word;  ///< Sync Word
 } lora_rf_event_t;
 
+/**
+ * @brief 시스템 정보 이벤트 데이터 (EVT_INFO_UPDATED용)
+ *
+ * hardware_service에서 발행하는 시스템 상태 정보
+ */
+typedef struct __attribute__((packed)) {
+    char device_id[5];       ///< 디바이스 ID (4자리 hex 문자열)
+    uint8_t battery;         ///< 배터리 % (0-100)
+    float voltage;           ///< 전압 (V)
+    float temperature;       ///< 온도 (°C)
+    int16_t rssi;            ///< LoRa RSSI (dBm)
+    float snr;               ///< LoRa SNR (dB)
+    uint32_t uptime;         ///< 업타임 (초)
+    bool stopped;            ///< 기능 정지 상태
+} system_info_event_t;
+
+/**
+ * @brief 스위처 상태 이벤트 데이터 (EVT_SWITCHER_STATUS_CHANGED용)
+ *
+ * switcher_service에서 발행하는 스위처 연결 상태 정보
+ */
+typedef struct __attribute__((packed)) {
+    bool dual_mode;          ///< 듀얼 모드 활성화 여부
+    bool s1_connected;       ///< Primary 연결 여부
+    bool s2_connected;       ///< Secondary 연결 여부
+    char s1_type[8];         ///< Primary 타입 ("ATEM", "OBS", "vMix", "NONE")
+    char s2_type[8];         ///< Secondary 타입
+    char s1_ip[16];          ///< Primary IP 주소
+    char s2_ip[16];          ///< Secondary IP 주소
+    uint16_t s1_port;        ///< Primary 포트
+    uint16_t s2_port;        ///< Secondary 포트
+} switcher_status_event_t;
+
+/**
+ * @brief 네트워크 상태 이벤트 데이터 (EVT_NETWORK_STATUS_CHANGED용)
+ *
+ * network_service에서 발행하는 네트워크 상태 정보
+ */
+typedef struct __attribute__((packed)) {
+    // WiFi AP (Page 2)
+    char ap_ssid[33];        ///< AP SSID
+    char ap_ip[16];          ///< AP IP 주소
+    bool ap_enabled;         ///< AP 활성화 여부
+
+    // WiFi STA (Page 3)
+    char sta_ssid[33];       ///< STA SSID
+    char sta_ip[16];         ///< STA IP 주소
+    bool sta_connected;      ///< STA 연결 여부
+
+    // Ethernet (Page 4)
+    char eth_ip[16];         ///< Ethernet IP 주소
+    bool eth_connected;      ///< Ethernet 연결 여부
+    bool eth_dhcp;           ///< Ethernet DHCP 모드
+} network_status_event_t;
+
 // ============================================================================
 // 이벤트 타입 정의
 // ============================================================================
@@ -117,13 +172,14 @@ typedef enum {
     EVT_LORA_SEND_REQUEST,         ///< 송신 요청 (data: lora_send_request_t)
 
     // 네트워크 이벤트 (03_service)
-    EVT_NETWORK_STATUS_CHANGED,
+    EVT_NETWORK_STATUS_CHANGED,   ///< 네트워크 상태 변경 (data: network_status_event_t)
     EVT_NETWORK_CONNECTED,
     EVT_NETWORK_DISCONNECTED,
 
     // 스위처 이벤트 (03_service)
     EVT_SWITCHER_CONNECTED,
     EVT_SWITCHER_DISCONNECTED,
+    EVT_SWITCHER_STATUS_CHANGED,  ///< 스위처 상태 변경 (data: switcher_status_event_t)
     EVT_TALLY_STATE_CHANGED,      ///< Tally 상태 변경 (data: tally_event_data_t)
 
     // UI 이벤트 (02_presentation)

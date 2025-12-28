@@ -356,6 +356,11 @@ public:
      */
     void setSwitcherChangeCallback(SwitcherChangeCallback callback);
 
+    /**
+     * @brief 스위처 상태 이벤트 발행
+     */
+    void publishSwitcherStatus();
+
 private:
     struct SwitcherInfo {
         std::unique_ptr<ISwitcherPort> adapter;
@@ -363,8 +368,13 @@ private:
         bool has_changed;
         bool change_notified;       // 콜백 중복 방지 플래그
         uint32_t last_reconnect_attempt;
+        uint32_t last_packed_change_time;  ///< 마지막 Packed 데이터 변화 시간 (health refresh용)
+        bool is_connected;         ///< 연결 상태 (이벤트 발행용)
+        char type[8];              ///< 스위처 타입 ("ATEM", "OBS", "vMix")
+        char ip[16];               ///< IP 주소
+        uint16_t port;             ///< 포트 번호
 
-        SwitcherInfo() : adapter(nullptr), last_packed{nullptr, 0, 0}, has_changed(false), change_notified(false), last_reconnect_attempt(0) {}
+        SwitcherInfo() : adapter(nullptr), last_packed{nullptr, 0, 0}, has_changed(false), change_notified(false), last_reconnect_attempt(0), last_packed_change_time(0), is_connected(false), type(""), ip(""), port(0) {}
 
         void cleanup() {
             adapter.reset();
@@ -376,6 +386,8 @@ private:
             }
             has_changed = false;
             change_notified = false;
+            last_packed_change_time = 0;  // 타이머 초기화
+            is_connected = false;
         }
     };
 

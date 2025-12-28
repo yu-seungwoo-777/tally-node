@@ -83,6 +83,13 @@ void network_service_print_status(void);
  */
 bool network_service_is_initialized(void);
 
+/**
+ * @brief 네트워크 상태 이벤트 발행
+ *
+ * 상태가 변경된 경우 EVT_NETWORK_STATUS_CHANGED 이벤트 발행
+ */
+void network_service_publish_status(void);
+
 // ============================================================================
 // 재시작 (설정 변경 후)
 // ============================================================================

@@ -12,6 +12,7 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include <cstring>
+#include <cmath>
 
 static const char* TAG = "WebServer";
 static httpd_handle_t s_server = nullptr;
@@ -301,8 +302,9 @@ static esp_err_t api_status_handler(httpd_req_t* req)
     if (s_cache.system_valid) {
         cJSON_AddStringToObject(system, "deviceId", s_cache.system.device_id);
         cJSON_AddNumberToObject(system, "battery", s_cache.system.battery);
-        cJSON_AddNumberToObject(system, "voltage", s_cache.system.voltage);
-        cJSON_AddNumberToObject(system, "temperature", s_cache.system.temperature);
+        // 소수점 한 자리로 제한 (4.2, 52.8)
+        cJSON_AddNumberToObject(system, "voltage", (round(s_cache.system.voltage * 10) / 10));
+        cJSON_AddNumberToObject(system, "temperature", (round(s_cache.system.temperature * 10) / 10));
         cJSON_AddNumberToObject(system, "uptime", s_cache.system.uptime);
         cJSON_AddBoolToObject(system, "stopped", s_cache.system.stopped);
     } else {

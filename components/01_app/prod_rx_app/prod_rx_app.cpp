@@ -156,8 +156,7 @@ static esp_err_t on_lora_packet_event(const event_data_t* event)
 
     event_bus_publish(EVT_TALLY_STATE_CHANGED, &s_tally_event, sizeof(s_tally_event));
 
-    // DisplayManager에 Tally 데이터 업데이트 (즉시 갱신됨)
-    display_manager_update_tally(pgm_channels, pgm_count, pvw_channels, pvw_count);
+    // DisplayManager는 EVT_TALLY_STATE_CHANGED 이벤트를 구독하여 자동 갱신됨
 
     return ESP_OK;
 }
@@ -549,23 +548,8 @@ void prod_rx_app_loop(void)
     // 디스플레이 갱신 (500ms 주기, DisplayManager 내부에서 체크)
     display_manager_update();
 
-    // System 데이터는 HardwareService 태스크에서 1초마다 갱신됨
-    // 여기서는 주기적으로 DisplayManager에 전파만 수행
-    static uint32_t last_display_update = 0;
-    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    if (now - last_display_update >= 1000) {
-        last_display_update = now;
-
-        hardware_system_t sys;
-        hardware_service_get_system(&sys);
-
-        // DisplayManager에 System 데이터 전파
-        display_manager_update_system(sys.device_id, sys.battery,
-                                      sys.voltage, sys.temperature);
-
-        // RSSI/SNR 전파
-        display_manager_update_rssi(sys.rssi, sys.snr);
-    }
+    // System 데이터는 HardwareService가 EVT_INFO_UPDATED로 발행 (1초마다)
+    // DisplayManager가 이벤트를 구독하여 자동 갱신됨
 }
 
 void prod_rx_app_print_status(void)
