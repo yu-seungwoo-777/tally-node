@@ -30,17 +30,11 @@ typedef struct {
     system_info_event_t system;       // EVT_INFO_UPDATED
     bool system_valid;
 
-    lora_rssi_event_t lora_rf;        // EVT_LORA_RSSI_CHANGED
-    bool lora_rf_valid;
-
     switcher_status_event_t switcher; // EVT_SWITCHER_STATUS_CHANGED
     bool switcher_valid;
 
     network_status_event_t network;   // EVT_NETWORK_STATUS_CHANGED
     bool network_valid;
-
-    tally_event_data_t tally;         // EVT_TALLY_STATE_CHANGED
-    bool tally_valid;
 } web_server_data_t;
 
 static web_server_data_t s_cache;
@@ -50,10 +44,8 @@ static void init_cache(void)
 {
     memset(&s_cache, 0, sizeof(s_cache));
     s_cache.system_valid = false;
-    s_cache.lora_rf_valid = false;
     s_cache.switcher_valid = false;
     s_cache.network_valid = false;
-    s_cache.tally_valid = false;
 }
 
 // ============================================================================
@@ -72,22 +64,6 @@ static esp_err_t onSystemInfoEvent(const event_data_t* event)
     const system_info_event_t* info = (const system_info_event_t*)event->data;
     memcpy(&s_cache.system, info, sizeof(system_info_event_t));
     s_cache.system_valid = true;
-
-    return ESP_OK;
-}
-
-/**
- * @brief LoRa RSSI 이벤트 핸들러 (EVT_LORA_RSSI_CHANGED)
- */
-static esp_err_t onLoraRssiEvent(const event_data_t* event)
-{
-    if (!event || !event->data) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    const lora_rssi_event_t* rf = (const lora_rssi_event_t*)event->data;
-    memcpy(&s_cache.lora_rf, rf, sizeof(lora_rssi_event_t));
-    s_cache.lora_rf_valid = true;
 
     return ESP_OK;
 }
@@ -124,66 +100,6 @@ static esp_err_t onNetworkStatusEvent(const event_data_t* event)
     return ESP_OK;
 }
 
-/**
- * @brief Tally 상태 이벤트 핸들러 (EVT_TALLY_STATE_CHANGED)
- */
-static esp_err_t onTallyStateEvent(const event_data_t* event)
-{
-    if (!event || !event->data) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    const tally_event_data_t* tally = (const tally_event_data_t*)event->data;
-    memcpy(&s_cache.tally, tally, sizeof(tally_event_data_t));
-    s_cache.tally_valid = true;
-
-    return ESP_OK;
-}
-
-// ============================================================================
-// Tally 상태 헬퍼 함수
-// ============================================================================
-
-/**
- * @brief packed 데이터에서 채널 상태 가져오기
- * @param tally tally 데이터
- * @param channel 채널 번호 (1-20)
- * @return 0=off, 1=live, 2=preview, 3=live+preview
- */
-static uint8_t get_tally_state(const tally_event_data_t* tally, uint8_t channel)
-{
-    if (!tally || channel < 1 || channel > tally->channel_count) {
-        return 0;
-    }
-
-    // packed 데이터: 2비트 per channel
-    // 00=off, 01=live, 10=preview, 11=both
-    uint8_t byte_idx = (channel - 1) / 4;
-    uint8_t bit_idx = ((channel - 1) % 4) * 2;
-
-    if (byte_idx >= 8) {
-        return 0;
-    }
-
-    return (tally->tally_data[byte_idx] >> bit_idx) & 0x03;
-}
-
-/**
- * @brief 채널 상태 문자열 반환
- */
-static const char* tally_state_to_string(uint8_t state)
-{
-    switch (state) {
-        case 1:
-        case 3:
-            return "live";
-        case 2:
-            return "preview";
-        default:
-            return "off";
-    }
-}
-
 // ============================================================================
 // API 핸들러
 // ============================================================================
@@ -195,29 +111,8 @@ static esp_err_t api_status_handler(httpd_req_t* req)
 {
     cJSON* root = cJSON_CreateObject();
 
-    // LoRa (EVT_LORA_RSSI_CHANGED)
-    cJSON* lora = cJSON_CreateObject();
-    if (s_cache.lora_rf_valid) {
-        cJSON_AddNumberToObject(lora, "rssi", s_cache.lora_rf.rssi);
-        cJSON_AddNumberToObject(lora, "snr", s_cache.lora_rf.snr);
-        cJSON_AddBoolToObject(lora, "running", s_cache.lora_rf.is_running);
-        cJSON_AddNumberToObject(lora, "chipType", s_cache.lora_rf.chip_type);
-        cJSON_AddNumberToObject(lora, "frequency", s_cache.lora_rf.frequency);
-    } else {
-        cJSON_AddNumberToObject(lora, "rssi", -120);
-        cJSON_AddNumberToObject(lora, "snr", 0);
-        cJSON_AddBoolToObject(lora, "running", false);
-        cJSON_AddNumberToObject(lora, "chipType", 0);
-        cJSON_AddNumberToObject(lora, "frequency", 0);
-    }
-    // tx/rx는 이벤트에 없으므로 0으로 표시
-    cJSON_AddNumberToObject(lora, "tx", 0);
-    cJSON_AddNumberToObject(lora, "rx", 0);
-    cJSON_AddItemToObject(root, "lora", lora);
-
     // Network (EVT_NETWORK_STATUS_CHANGED)
     cJSON* network = cJSON_CreateObject();
-    cJSON_AddStringToObject(network, "mode", "TX");
 
     cJSON* wifi = cJSON_CreateObject();
     if (s_cache.network_valid) {
@@ -240,18 +135,6 @@ static esp_err_t api_status_handler(httpd_req_t* req)
         cJSON_AddStringToObject(ethernet, "ip", "--");
     }
     cJSON_AddItemToObject(network, "ethernet", ethernet);
-
-    cJSON* wifi_ap = cJSON_CreateObject();
-    if (s_cache.network_valid) {
-        cJSON_AddBoolToObject(wifi_ap, "enabled", s_cache.network.ap_enabled);
-        cJSON_AddStringToObject(wifi_ap, "ssid", s_cache.network.ap_ssid);
-        cJSON_AddStringToObject(wifi_ap, "ip", s_cache.network.ap_enabled ? s_cache.network.ap_ip : "--");
-    } else {
-        cJSON_AddBoolToObject(wifi_ap, "enabled", false);
-        cJSON_AddStringToObject(wifi_ap, "ssid", "--");
-        cJSON_AddStringToObject(wifi_ap, "ip", "--");
-    }
-    cJSON_AddItemToObject(network, "wifiAp", wifi_ap);
 
     cJSON_AddItemToObject(root, "network", network);
 
@@ -280,23 +163,6 @@ static esp_err_t api_status_handler(httpd_req_t* req)
     }
     cJSON_AddItemToObject(root, "switcher", switcher);
 
-    // Tally (EVT_TALLY_STATE_CHANGED)
-    cJSON* tally_json = cJSON_CreateObject();
-    cJSON* channels = cJSON_CreateArray();
-
-    uint8_t channel_count = s_cache.tally_valid ? s_cache.tally.channel_count : 0;
-    for (int i = 0; i < 20; i++) {
-        uint8_t state = 0;
-        if (s_cache.tally_valid && i < channel_count) {
-            state = get_tally_state(&s_cache.tally, i + 1);
-        }
-        cJSON_AddItemToArray(channels, cJSON_CreateString(tally_state_to_string(state)));
-    }
-
-    cJSON_AddItemToObject(tally_json, "channels", channels);
-    cJSON_AddNumberToObject(tally_json, "source", s_cache.tally_valid ? s_cache.tally.source : 0);
-    cJSON_AddItemToObject(root, "tally", tally_json);
-
     // System (EVT_INFO_UPDATED)
     cJSON* system = cJSON_CreateObject();
     if (s_cache.system_valid) {
@@ -306,17 +172,13 @@ static esp_err_t api_status_handler(httpd_req_t* req)
         cJSON_AddNumberToObject(system, "voltage", (round(s_cache.system.voltage * 10) / 10));
         cJSON_AddNumberToObject(system, "temperature", (round(s_cache.system.temperature * 10) / 10));
         cJSON_AddNumberToObject(system, "uptime", s_cache.system.uptime);
-        cJSON_AddBoolToObject(system, "stopped", s_cache.system.stopped);
     } else {
         cJSON_AddStringToObject(system, "deviceId", "0000");
         cJSON_AddNumberToObject(system, "battery", 0);
         cJSON_AddNumberToObject(system, "voltage", 0);
         cJSON_AddNumberToObject(system, "temperature", 0);
         cJSON_AddNumberToObject(system, "uptime", 0);
-        cJSON_AddBoolToObject(system, "stopped", false);
     }
-    cJSON_AddNumberToObject(system, "freeHeap", esp_get_free_heap_size());
-    cJSON_AddStringToObject(system, "version", "0.1.0");
     cJSON_AddItemToObject(root, "system", system);
 
     char* json_str = cJSON_Print(root);
@@ -740,10 +602,8 @@ esp_err_t web_server_init(void)
 
     // 이벤트 구독
     event_bus_subscribe(EVT_INFO_UPDATED, onSystemInfoEvent);
-    event_bus_subscribe(EVT_LORA_RSSI_CHANGED, onLoraRssiEvent);
     event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, onSwitcherStatusEvent);
     event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
-    event_bus_subscribe(EVT_TALLY_STATE_CHANGED, onTallyStateEvent);
 
     ESP_LOGI(TAG, "Web server started on port 80");
     return ESP_OK;
@@ -759,17 +619,13 @@ esp_err_t web_server_stop(void)
 
     // 이벤트 구독 해제
     event_bus_unsubscribe(EVT_INFO_UPDATED, onSystemInfoEvent);
-    event_bus_unsubscribe(EVT_LORA_RSSI_CHANGED, onLoraRssiEvent);
     event_bus_unsubscribe(EVT_SWITCHER_STATUS_CHANGED, onSwitcherStatusEvent);
     event_bus_unsubscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
-    event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, onTallyStateEvent);
 
     // 캐시 무효화
     s_cache.system_valid = false;
-    s_cache.lora_rf_valid = false;
     s_cache.switcher_valid = false;
     s_cache.network_valid = false;
-    s_cache.tally_valid = false;
 
     esp_err_t ret = httpd_stop(s_server);
     s_server = nullptr;
