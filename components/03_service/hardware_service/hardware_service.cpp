@@ -226,7 +226,6 @@ void HardwareService::hw_monitor_task(void* arg)
 
     // 이벤트 발행용 정적 변수 (지역 변수 사용 시 데이터가 소실됨)
     static system_info_event_t s_event_info;
-    memset(&s_event_info, 0, sizeof(s_event_info));
 
     while (s_running) {
         // 배터리 업데이트 (ADC 읽기)
@@ -237,6 +236,9 @@ void HardwareService::hw_monitor_task(void* arg)
 
         // uptime 증가
         s_system.uptime++;
+
+        // 정적 변수 초기화 (매 루프마다)
+        memset(&s_event_info, 0, sizeof(s_event_info));
 
         // 하드웨어 정보 이벤트 발행 (system_info_event_t로 변환)
         strncpy(s_event_info.device_id, s_system.device_id, sizeof(s_event_info.device_id) - 1);
