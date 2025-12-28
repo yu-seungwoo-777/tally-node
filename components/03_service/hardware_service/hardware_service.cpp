@@ -224,9 +224,6 @@ void HardwareService::hw_monitor_task(void* arg)
     (void)arg;
     T_LOGI(TAG, "하드웨어 모니터링 태스크 시작 (1초 주기)");
 
-    // 이벤트 발행용 정적 변수 (지역 변수 사용 시 데이터가 소실됨)
-    static system_info_event_t s_event_info;
-
     while (s_running) {
         // 배터리 업데이트 (ADC 읽기)
         updateBattery();
@@ -237,20 +234,8 @@ void HardwareService::hw_monitor_task(void* arg)
         // uptime 증가
         s_system.uptime++;
 
-        // 정적 변수 초기화 (매 루프마다)
-        memset(&s_event_info, 0, sizeof(s_event_info));
-
-        // 하드웨어 정보 이벤트 발행 (system_info_event_t로 변환)
-        strncpy(s_event_info.device_id, s_system.device_id, sizeof(s_event_info.device_id) - 1);
-        s_event_info.device_id[sizeof(s_event_info.device_id) - 1] = '\0';
-        s_event_info.battery = s_system.battery;
-        s_event_info.voltage = s_system.voltage;
-        s_event_info.temperature = s_system.temperature;
-        s_event_info.rssi = s_system.rssi;
-        s_event_info.snr = s_system.snr;
-        s_event_info.uptime = s_system.uptime;
-        s_event_info.stopped = s_system.stopped;
-        event_bus_publish(EVT_INFO_UPDATED, &s_event_info, sizeof(s_event_info));
+        // 하드웨어 정보 이벤트 발행 (s_system은 system_info_event_t와 동일)
+        event_bus_publish(EVT_INFO_UPDATED, &s_system, sizeof(s_system));
 
         vTaskDelay(pdMS_TO_TICKS(MONITOR_INTERVAL_MS));
     }

@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "event_bus.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,19 +27,8 @@ extern "C" {
 // 시스템 상태 구조체
 // ============================================================================
 
-/**
- * @brief 시스템 상태 (RAM, 저장 안 함)
- */
-typedef struct {
-    char device_id[5];       ///< 디바이스 ID (4자리 hex 문자열, 읽기 전용)
-    uint8_t battery;         ///< 배터리 %
-    float voltage;           ///< 전압 (V)
-    float temperature;       ///< 온도 (°C)
-    int16_t rssi;            ///< LoRa RSSI (dBm)
-    float snr;               ///< LoRa SNR (dB)
-    uint32_t uptime;         ///< 업타임 (초)
-    bool stopped;            ///< 기능 정지 상태
-} hardware_system_t;
+// event_bus.h의 system_info_event_t를 그대로 사용
+#define hardware_system_t system_info_event_t
 
 // ============================================================================
 // 초기화/정리
