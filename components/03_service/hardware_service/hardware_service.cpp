@@ -234,8 +234,17 @@ void HardwareService::hw_monitor_task(void* arg)
         // uptime 증가
         s_system.uptime++;
 
-        // 하드웨어 정보 이벤트 발행
-        event_bus_publish(EVT_INFO_UPDATED, &s_system, sizeof(s_system));
+        // 하드웨어 정보 이벤트 발행 (system_info_event_t로 변환)
+        system_info_event_t info;
+        strncpy(info.device_id, s_system.device_id, sizeof(info.device_id) - 1);
+        info.battery = s_system.battery;
+        info.voltage = s_system.voltage;
+        info.temperature = s_system.temperature;
+        info.rssi = s_system.rssi;
+        info.snr = s_system.snr;
+        info.uptime = s_system.uptime;
+        info.stopped = s_system.stopped;
+        event_bus_publish(EVT_INFO_UPDATED, &info, sizeof(info));
 
         vTaskDelay(pdMS_TO_TICKS(MONITOR_INTERVAL_MS));
     }
@@ -317,6 +326,13 @@ uint8_t HardwareService::updateBattery(void)
 {
     uint8_t percent = battery_driver_update_percent();
     s_system.battery = percent;
+
+    // 전압도 함께 업데이트
+    float voltage = 3.7f;  // 기본값
+    if (battery_driver_get_voltage(&voltage) == ESP_OK) {
+        s_system.voltage = voltage;
+    }
+
     return percent;
 }
 
