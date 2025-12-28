@@ -9,6 +9,8 @@
 #include "TxPage.h"
 #include "RxPage.h"
 #include "t_log.h"
+#include "event_bus.h"
+#include "TallyTypes.h"
 #include <string.h>
 
 // ============================================================================
@@ -18,17 +20,83 @@
 static const char* TAG = "DisplayMgr";
 #define DEFAULT_REFRESH_INTERVAL_MS  500  // 2 FPS
 #define MAX_PAGES                     5
+#define STATUS_LOG_INTERVAL_MS       5000  // 상태 로그 출력 주기 (5초)
 
 // ============================================================================
 // 내부 상태
 // ============================================================================
 
+// 통합 데이터 저장 구조체
+typedef struct {
+    // 시스템 정보 (EVT_INFO_UPDATED)
+    struct {
+        char device_id[5];
+        uint8_t battery;
+        float voltage;
+        float temperature;
+        uint32_t uptime;
+        bool valid;
+    } system;
+
+    // LoRa 정보 (EVT_LORA_RSSI_CHANGED)
+    struct {
+        int16_t rssi;
+        float snr;
+        bool valid;
+    } lora;
+
+    // Tally 정보 (EVT_TALLY_STATE_CHANGED, RX 전용)
+    struct {
+        uint8_t pgm_channels[20];
+        uint8_t pvw_channels[20];
+        uint8_t pgm_count;
+        uint8_t pvw_count;
+        bool valid;
+    } tally;
+
+    // Switcher 정보 (EVT_SWITCHER_STATUS_CHANGED, TX 전용)
+    struct {
+        bool dual_mode;
+        bool s1_connected;
+        bool s2_connected;
+        char s1_type[8];
+        char s2_type[8];
+        char s1_ip[16];
+        char s2_ip[16];
+        uint16_t s1_port;
+        uint16_t s2_port;
+        bool valid;
+    } switcher;
+
+    // Network 정보 (EVT_NETWORK_STATUS_CHANGED, TX 전용)
+    struct {
+        char ap_ssid[33];
+        char ap_ip[16];
+        char sta_ssid[33];
+        char sta_ip[16];
+        char eth_ip[16];
+        bool sta_connected;
+        bool eth_connected;
+        bool eth_dhcp;
+        bool valid;
+    } network;
+
+    // RF 정보 (EVT_RF_CHANGED, TX 전용)
+    struct {
+        float frequency;
+        uint8_t sync_word;
+        bool valid;
+    } rf;
+} display_data_t;
+
 static struct {
     bool initialized;
     bool running;
     bool power_on;
+    bool events_subscribed;    ///< 이벤트 구독 여부
     uint32_t refresh_interval_ms;
     uint32_t last_refresh_ms;
+    uint32_t last_status_log_ms;  ///< 마지막 상태 로그 출력 시간
 
     display_page_t current_page;
     display_page_t previous_page;
@@ -36,16 +104,22 @@ static struct {
     // 등록된 페이지 목록
     const display_page_interface_t* pages[MAX_PAGES];
     int page_count;
+
+    // 통합 데이터 저장
+    display_data_t data;
 } s_mgr = {
     .initialized = false,
     .running = false,
     .power_on = true,
+    .events_subscribed = false,
     .refresh_interval_ms = DEFAULT_REFRESH_INTERVAL_MS,
     .last_refresh_ms = 0,
+    .last_status_log_ms = 0,
     .current_page = PAGE_NONE,
     .previous_page = PAGE_NONE,
     .pages = {nullptr},
     .page_count = 0,
+    .data = {}
 };
 
 // ============================================================================
@@ -113,6 +187,302 @@ static void handle_page_transition(void)
     }
 }
 
+/**
+ * @brief 통합 상태 로그 출력
+ *
+ * 저장된 모든 데이터를 한 번에 출력
+ */
+static void print_status_log(void)
+{
+    T_LOGI(TAG, "────────────────────────────────────────");
+
+    // 시스템 정보
+    if (s_mgr.data.system.valid) {
+        T_LOGI(TAG, "[System] ID:%s Bat:%d%% %.1fV %d°C Up:%us",
+               s_mgr.data.system.device_id,
+               s_mgr.data.system.battery,
+               s_mgr.data.system.voltage,
+               s_mgr.data.system.temperature,
+               s_mgr.data.system.uptime);
+    }
+
+    // LoRa 정보
+    if (s_mgr.data.lora.valid) {
+        T_LOGI(TAG, "[LoRa] RSSI:%ddB SNR:%.0fdB",
+               s_mgr.data.lora.rssi,
+               s_mgr.data.lora.snr);
+    }
+
+#ifdef DEVICE_MODE_RX
+    // Tally 정보 (RX)
+    if (s_mgr.data.tally.valid) {
+        T_LOGI(TAG, "[Tally] PGM:%dch PVW:%dch",
+               s_mgr.data.tally.pgm_count,
+               s_mgr.data.tally.pvw_count);
+    }
+#elif defined(DEVICE_MODE_TX)
+    // Switcher 정보 (TX)
+    if (s_mgr.data.switcher.valid) {
+        if (s_mgr.data.switcher.dual_mode) {
+            T_LOGI(TAG, "[Switcher] S1:%s@%s:%d%c S2:%s@%s:%d%c",
+                   s_mgr.data.switcher.s1_type,
+                   s_mgr.data.switcher.s1_ip[0] ? s_mgr.data.switcher.s1_ip : "?",
+                   s_mgr.data.switcher.s1_port, s_mgr.data.switcher.s1_connected ? 'Y' : 'N',
+                   s_mgr.data.switcher.s2_type,
+                   s_mgr.data.switcher.s2_ip[0] ? s_mgr.data.switcher.s2_ip : "?",
+                   s_mgr.data.switcher.s2_port, s_mgr.data.switcher.s2_connected ? 'Y' : 'N');
+        } else {
+            T_LOGI(TAG, "[Switcher] S1:%s@%s:%d%c",
+                   s_mgr.data.switcher.s1_type,
+                   s_mgr.data.switcher.s1_ip[0] ? s_mgr.data.switcher.s1_ip : "?",
+                   s_mgr.data.switcher.s1_port, s_mgr.data.switcher.s1_connected ? 'Y' : 'N');
+        }
+    }
+
+    // Network 정보 (TX)
+    if (s_mgr.data.network.valid) {
+        if (s_mgr.data.network.sta_connected) {
+            T_LOGI(TAG, "[Network] WiFi:%s@%s ETH:%s",
+                   s_mgr.data.network.sta_ssid, s_mgr.data.network.sta_ip,
+                   s_mgr.data.network.eth_connected ? s_mgr.data.network.eth_ip : "N/A");
+        } else {
+            T_LOGI(TAG, "[Network] WiFi:- ETH:%s",
+                   s_mgr.data.network.eth_connected ? s_mgr.data.network.eth_ip : "N/A");
+        }
+    }
+
+    // RF 정보 (TX)
+    if (s_mgr.data.rf.valid) {
+        T_LOGI(TAG, "[RF] %.1fMHz Sync:0x%02X",
+               s_mgr.data.rf.frequency,
+               s_mgr.data.rf.sync_word);
+    }
+#endif
+    T_LOGI(TAG, "────────────────────────────────────────");
+}
+
+// ============================================================================
+// 이벤트 핸들러
+// ============================================================================
+
+/**
+ * @brief EVT_INFO_UPDATED 핸들러
+ *
+ * hardware_service에서 1초마다 발행하는 시스템 정보를 저장
+ */
+static esp_err_t on_info_updated(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_OK;
+    }
+
+    const system_info_event_t* info = (const system_info_event_t*)event->data;
+
+    // 데이터 저장
+    strncpy(s_mgr.data.system.device_id, info->device_id, sizeof(s_mgr.data.system.device_id) - 1);
+    s_mgr.data.system.battery = info->battery;
+    s_mgr.data.system.voltage = info->voltage;
+    s_mgr.data.system.temperature = info->temperature;
+    s_mgr.data.system.uptime = info->uptime;
+    s_mgr.data.system.valid = true;
+
+    // 페이지별 데이터 설정
+#ifdef DEVICE_MODE_TX
+    tx_page_set_device_id(info->device_id);
+    tx_page_set_battery(info->battery);
+    tx_page_set_voltage(info->voltage);
+    tx_page_set_temperature(info->temperature);
+#elif defined(DEVICE_MODE_RX)
+    rx_page_set_device_id(info->device_id);
+    rx_page_set_battery(info->battery);
+    rx_page_set_voltage(info->voltage);
+    rx_page_set_temperature(info->temperature);
+#endif
+
+    return ESP_OK;
+}
+
+/**
+ * @brief EVT_LORA_RSSI_CHANGED 핸들러
+ *
+ * LoRa RSSI/SNR 변경 시 저장
+ */
+static esp_err_t on_lora_rssi_changed(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_OK;
+    }
+
+    const lora_rssi_event_t* rssi_event = (const lora_rssi_event_t*)event->data;
+
+    // 데이터 저장
+    s_mgr.data.lora.rssi = rssi_event->rssi;
+    s_mgr.data.lora.snr = (float)rssi_event->snr;
+    s_mgr.data.lora.valid = true;
+
+    // 페이지별 데이터 설정
+#ifdef DEVICE_MODE_TX
+    tx_page_set_rssi(rssi_event->rssi);
+    tx_page_set_snr((float)rssi_event->snr);
+#elif defined(DEVICE_MODE_RX)
+    rx_page_set_rssi(rssi_event->rssi);
+    rx_page_set_snr((float)rssi_event->snr);
+#endif
+
+    return ESP_OK;
+}
+
+#ifdef DEVICE_MODE_RX
+/**
+ * @brief EVT_TALLY_STATE_CHANGED 핸들러 (RX 전용)
+ *
+ * Tally 상태 변경 시 PGM/PVW 채널 추출하여 저장
+ */
+static esp_err_t on_tally_state_changed(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_OK;
+    }
+
+    const tally_event_data_t* tally_evt = (const tally_event_data_t*)event->data;
+
+    // packed_data_t 구조체 생성
+    packed_data_t tally = {
+        .data = (uint8_t*)tally_evt->tally_data,
+        .data_size = static_cast<uint8_t>((tally_evt->channel_count + 3) / 4),
+        .channel_count = tally_evt->channel_count
+    };
+
+    // PGM/PVW 채널 추출
+    uint8_t pgm_channels[20];
+    uint8_t pvw_channels[20];
+    uint8_t pgm_count = 0;
+    uint8_t pvw_count = 0;
+
+    for (uint8_t i = 0; i < tally.channel_count && i < 20; i++) {
+        uint8_t status = packed_data_get_channel(&tally, i + 1);
+        if (status == TALLY_STATUS_PROGRAM || status == TALLY_STATUS_BOTH) {
+            pgm_channels[pgm_count++] = i + 1;
+        }
+        if (status == TALLY_STATUS_PREVIEW || status == TALLY_STATUS_BOTH) {
+            pvw_channels[pvw_count++] = i + 1;
+        }
+    }
+
+    // 데이터 저장
+    s_mgr.data.tally.pgm_count = pgm_count;
+    s_mgr.data.tally.pvw_count = pvw_count;
+    memcpy(s_mgr.data.tally.pgm_channels, pgm_channels, sizeof(uint8_t) * pgm_count);
+    memcpy(s_mgr.data.tally.pvw_channels, pvw_channels, sizeof(uint8_t) * pvw_count);
+    s_mgr.data.tally.valid = true;
+
+    // RxPage에 PGM/PVW 채널 설정 및 즉시 갱신
+    rx_page_set_pgm_channels(pgm_channels, pgm_count);
+    rx_page_set_pvw_channels(pvw_channels, pvw_count);
+    render_current_page();
+
+    return ESP_OK;
+}
+#endif // DEVICE_MODE_RX
+
+#ifdef DEVICE_MODE_TX
+/**
+ * @brief EVT_SWITCHER_STATUS_CHANGED 핸들러 (TX 전용)
+ *
+ * 스위처 상태 변경 시 저장
+ */
+static esp_err_t on_switcher_status_changed(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_OK;
+    }
+
+    const switcher_status_event_t* sw = (const switcher_status_event_t*)event->data;
+
+    // 데이터 저장
+    s_mgr.data.switcher.dual_mode = sw->dual_mode;
+    s_mgr.data.switcher.s1_connected = sw->s1_connected;
+    s_mgr.data.switcher.s2_connected = sw->s2_connected;
+    s_mgr.data.switcher.s1_port = sw->s1_port;
+    s_mgr.data.switcher.s2_port = sw->s2_port;
+    strncpy(s_mgr.data.switcher.s1_type, sw->s1_type, sizeof(s_mgr.data.switcher.s1_type) - 1);
+    strncpy(s_mgr.data.switcher.s2_type, sw->s2_type, sizeof(s_mgr.data.switcher.s2_type) - 1);
+    strncpy(s_mgr.data.switcher.s1_ip, sw->s1_ip, sizeof(s_mgr.data.switcher.s1_ip) - 1);
+    strncpy(s_mgr.data.switcher.s2_ip, sw->s2_ip, sizeof(s_mgr.data.switcher.s2_ip) - 1);
+    s_mgr.data.switcher.valid = true;
+
+    // TxPage에 상태 설정
+    tx_page_set_dual_mode(sw->dual_mode);
+    tx_page_set_s1(sw->s1_type, sw->s1_ip, sw->s1_port, sw->s1_connected);
+    if (sw->dual_mode) {
+        tx_page_set_s2(sw->s2_type, sw->s2_ip, sw->s2_port, sw->s2_connected);
+    }
+
+    return ESP_OK;
+}
+
+/**
+ * @brief EVT_NETWORK_STATUS_CHANGED 핸들러 (TX 전용)
+ *
+ * 네트워크 상태 변경 시 저장
+ */
+static esp_err_t on_network_status_changed(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_OK;
+    }
+
+    const network_status_event_t* net = (const network_status_event_t*)event->data;
+
+    // 데이터 저장
+    strncpy(s_mgr.data.network.ap_ssid, net->ap_ssid, sizeof(s_mgr.data.network.ap_ssid) - 1);
+    strncpy(s_mgr.data.network.ap_ip, net->ap_ip, sizeof(s_mgr.data.network.ap_ip) - 1);
+    strncpy(s_mgr.data.network.sta_ssid, net->sta_ssid, sizeof(s_mgr.data.network.sta_ssid) - 1);
+    strncpy(s_mgr.data.network.sta_ip, net->sta_ip, sizeof(s_mgr.data.network.sta_ip) - 1);
+    strncpy(s_mgr.data.network.eth_ip, net->eth_ip, sizeof(s_mgr.data.network.eth_ip) - 1);
+    s_mgr.data.network.sta_connected = net->sta_connected;
+    s_mgr.data.network.eth_connected = net->eth_connected;
+    s_mgr.data.network.eth_dhcp = net->eth_dhcp;
+    s_mgr.data.network.valid = true;
+
+    // TxPage에 상태 설정
+    tx_page_set_ap_name(net->ap_ssid);
+    tx_page_set_ap_ip(net->ap_ip);
+    tx_page_set_wifi_ssid(net->sta_ssid);
+    tx_page_set_wifi_ip(net->sta_ip);
+    tx_page_set_wifi_connected(net->sta_connected);
+    tx_page_set_eth_ip(net->eth_ip);
+    display_manager_update_ethernet_dhcp_mode(net->eth_dhcp);
+    tx_page_set_eth_connected(net->eth_connected);
+
+    return ESP_OK;
+}
+
+/**
+ * @brief EVT_RF_CHANGED 핸들러 (TX 전용)
+ *
+ * RF 설정 변경 시 저장
+ */
+static esp_err_t on_rf_changed(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_OK;
+    }
+
+    const lora_rf_event_t* rf = (const lora_rf_event_t*)event->data;
+
+    // 데이터 저장
+    s_mgr.data.rf.frequency = rf->frequency;
+    s_mgr.data.rf.sync_word = rf->sync_word;
+    s_mgr.data.rf.valid = true;
+
+    tx_page_set_frequency(rf->frequency);
+    tx_page_set_sync_word(rf->sync_word);
+
+    return ESP_OK;
+}
+#endif // DEVICE_MODE_TX
+
 // ============================================================================
 // 공개 API 구현
 // ============================================================================
@@ -156,6 +526,32 @@ extern "C" void display_manager_start(void)
     if (!s_mgr.initialized) {
         T_LOGE(TAG, "초기화되지 않음");
         return;
+    }
+
+    // 이벤트 구독 (최초 1회)
+    if (!s_mgr.events_subscribed) {
+        // 공통 이벤트
+        event_bus_subscribe(EVT_INFO_UPDATED, on_info_updated);
+        event_bus_subscribe(EVT_LORA_RSSI_CHANGED, on_lora_rssi_changed);
+
+#ifdef DEVICE_MODE_RX
+        // RX 전용 이벤트
+        event_bus_subscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
+#elif defined(DEVICE_MODE_TX)
+        // TX 전용 이벤트
+        event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, on_switcher_status_changed);
+        event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, on_network_status_changed);
+        event_bus_subscribe(EVT_RF_CHANGED, on_rf_changed);
+#endif
+
+        s_mgr.events_subscribed = true;
+        T_LOGI(TAG, "이벤트 구독 완료: EVT_INFO_UPDATED, EVT_LORA_RSSI_CHANGED"
+#ifdef DEVICE_MODE_RX
+               ", EVT_TALLY_STATE_CHANGED"
+#elif defined(DEVICE_MODE_TX)
+               ", EVT_SWITCHER_STATUS_CHANGED, EVT_NETWORK_STATUS_CHANGED, EVT_RF_CHANGED"
+#endif
+        );
     }
 
     s_mgr.running = true;
@@ -275,14 +671,19 @@ extern "C" void display_manager_update(void)
         return;
     }
 
-    // 갱신 주기 체크
     uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    if (now - s_mgr.last_refresh_ms < s_mgr.refresh_interval_ms) {
-        return;
+
+    // 갱신 주기 체크
+    if (now - s_mgr.last_refresh_ms >= s_mgr.refresh_interval_ms) {
+        s_mgr.last_refresh_ms = now;
+        render_current_page();
     }
 
-    s_mgr.last_refresh_ms = now;
-    render_current_page();
+    // 상태 로그 주기 체크 (5초마다)
+    if (now - s_mgr.last_status_log_ms >= STATUS_LOG_INTERVAL_MS) {
+        s_mgr.last_status_log_ms = now;
+        print_status_log();
+    }
 }
 
 // ============================================================================
