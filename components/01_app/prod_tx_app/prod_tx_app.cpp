@@ -505,8 +505,7 @@ void prod_tx_app_start(void)
     // TX 페이지로 전환
     display_manager_boot_complete();
 
-    // WebServer 시작 (switcher 핸들 전달)
-    web_server_set_switcher_handle(s_app.service);
+    // WebServer 시작 (이벤트 기반)
     if (web_server_init() == ESP_OK) {
         T_LOGI(TAG, "WebServer 시작");
     } else {

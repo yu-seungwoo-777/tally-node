@@ -1,6 +1,6 @@
 /**
  * @file web_server.h
- * @brief Web Server for Tally Node Control Interface
+ * @brief Web Server for Tally Node Control Interface (Event-based)
  */
 
 #ifndef TALLY_WEB_SERVER_H
@@ -12,17 +12,6 @@ extern "C" {
 
 #include <stdbool.h>
 #include <esp_err.h>
-#include <stddef.h>
-#include <stdint.h>
-
-// 전방 선언
-typedef void* switcher_service_handle_t;
-
-/**
- * @brief Switcher Service 핸들 설정
- * @param handle switcher_service 핸들
- */
-void web_server_set_switcher_handle(switcher_service_handle_t handle);
 
 /**
  * @brief 웹 서버 초기화 및 시작

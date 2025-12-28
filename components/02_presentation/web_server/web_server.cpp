@@ -1,14 +1,11 @@
 /**
  * @file web_server.cpp
- * @brief Web Server Implementation - REST API
+ * @brief Web Server Implementation - REST API (Event-based)
  */
 
 #include "web_server.h"
 #include "config_service.h"
-#include "lora_service.h"
-#include "network_service.h"
-#include "switcher_service.h"
-#include "TallyTypes.h"
+#include "event_bus.h"
 #include "cJSON.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
@@ -19,106 +16,304 @@
 static const char* TAG = "WebServer";
 static httpd_handle_t s_server = nullptr;
 
-// 외부에서 제공받을 switcher_service 핸들
-// main.cpp에서 web_server_set_switcher_handle()로 설정
-static switcher_service_handle_t s_switcher_handle = nullptr;
-
 // ============================================================================
 // 정적 파일 (임베디드) - web/ 폴더에서 build 시 생성됨
 // ============================================================================
 #include "static_files.h"
 
 // ============================================================================
+// 내부 데이터 캐시 (event_bus 구조체 그대로 사용)
+// ============================================================================
+
+typedef struct {
+    system_info_event_t system;       // EVT_INFO_UPDATED
+    bool system_valid;
+
+    lora_rssi_event_t lora_rf;        // EVT_LORA_RSSI_CHANGED
+    bool lora_rf_valid;
+
+    switcher_status_event_t switcher; // EVT_SWITCHER_STATUS_CHANGED
+    bool switcher_valid;
+
+    network_status_event_t network;   // EVT_NETWORK_STATUS_CHANGED
+    bool network_valid;
+
+    tally_event_data_t tally;         // EVT_TALLY_STATE_CHANGED
+    bool tally_valid;
+} web_server_data_t;
+
+static web_server_data_t s_cache;
+
+// 초기화를 위한 정적 함수
+static void init_cache(void)
+{
+    memset(&s_cache, 0, sizeof(s_cache));
+    s_cache.system_valid = false;
+    s_cache.lora_rf_valid = false;
+    s_cache.switcher_valid = false;
+    s_cache.network_valid = false;
+    s_cache.tally_valid = false;
+}
+
+// ============================================================================
+// 이벤트 핸들러
+// ============================================================================
+
+/**
+ * @brief 시스템 정보 이벤트 핸들러 (EVT_INFO_UPDATED)
+ */
+static esp_err_t onSystemInfoEvent(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const system_info_event_t* info = (const system_info_event_t*)event->data;
+    memcpy(&s_cache.system, info, sizeof(system_info_event_t));
+    s_cache.system_valid = true;
+
+    return ESP_OK;
+}
+
+/**
+ * @brief LoRa RSSI 이벤트 핸들러 (EVT_LORA_RSSI_CHANGED)
+ */
+static esp_err_t onLoraRssiEvent(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const lora_rssi_event_t* rf = (const lora_rssi_event_t*)event->data;
+    memcpy(&s_cache.lora_rf, rf, sizeof(lora_rssi_event_t));
+    s_cache.lora_rf_valid = true;
+
+    return ESP_OK;
+}
+
+/**
+ * @brief 스위처 상태 이벤트 핸들러 (EVT_SWITCHER_STATUS_CHANGED)
+ */
+static esp_err_t onSwitcherStatusEvent(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const switcher_status_event_t* status = (const switcher_status_event_t*)event->data;
+    memcpy(&s_cache.switcher, status, sizeof(switcher_status_event_t));
+    s_cache.switcher_valid = true;
+
+    return ESP_OK;
+}
+
+/**
+ * @brief 네트워크 상태 이벤트 핸들러 (EVT_NETWORK_STATUS_CHANGED)
+ */
+static esp_err_t onNetworkStatusEvent(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const network_status_event_t* status = (const network_status_event_t*)event->data;
+    memcpy(&s_cache.network, status, sizeof(network_status_event_t));
+    s_cache.network_valid = true;
+
+    return ESP_OK;
+}
+
+/**
+ * @brief Tally 상태 이벤트 핸들러 (EVT_TALLY_STATE_CHANGED)
+ */
+static esp_err_t onTallyStateEvent(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const tally_event_data_t* tally = (const tally_event_data_t*)event->data;
+    memcpy(&s_cache.tally, tally, sizeof(tally_event_data_t));
+    s_cache.tally_valid = true;
+
+    return ESP_OK;
+}
+
+// ============================================================================
+// Tally 상태 헬퍼 함수
+// ============================================================================
+
+/**
+ * @brief packed 데이터에서 채널 상태 가져오기
+ * @param tally tally 데이터
+ * @param channel 채널 번호 (1-20)
+ * @return 0=off, 1=live, 2=preview, 3=live+preview
+ */
+static uint8_t get_tally_state(const tally_event_data_t* tally, uint8_t channel)
+{
+    if (!tally || channel < 1 || channel > tally->channel_count) {
+        return 0;
+    }
+
+    // packed 데이터: 2비트 per channel
+    // 00=off, 01=live, 10=preview, 11=both
+    uint8_t byte_idx = (channel - 1) / 4;
+    uint8_t bit_idx = ((channel - 1) % 4) * 2;
+
+    if (byte_idx >= 8) {
+        return 0;
+    }
+
+    return (tally->tally_data[byte_idx] >> bit_idx) & 0x03;
+}
+
+/**
+ * @brief 채널 상태 문자열 반환
+ */
+static const char* tally_state_to_string(uint8_t state)
+{
+    switch (state) {
+        case 1:
+        case 3:
+            return "live";
+        case 2:
+            return "preview";
+        default:
+            return "off";
+    }
+}
+
+// ============================================================================
 // API 핸들러
 // ============================================================================
 
 /**
- * @brief GET /api/status - 전체 상태 반환
+ * @brief GET /api/status - 전체 상태 반환 (캐시 데이터 사용)
  */
 static esp_err_t api_status_handler(httpd_req_t* req)
 {
     cJSON* root = cJSON_CreateObject();
 
-    // LoRa
-    lora_service_status_t lora_status = lora_service_get_status();
+    // LoRa (EVT_LORA_RSSI_CHANGED)
     cJSON* lora = cJSON_CreateObject();
-    cJSON_AddNumberToObject(lora, "rssi", lora_status.rssi);
-    cJSON_AddNumberToObject(lora, "snr", lora_status.snr);
-    cJSON_AddNumberToObject(lora, "tx", lora_status.packets_sent);
-    cJSON_AddNumberToObject(lora, "rx", lora_status.packets_received);
-    cJSON_AddBoolToObject(lora, "running", lora_status.is_running);
+    if (s_cache.lora_rf_valid) {
+        cJSON_AddNumberToObject(lora, "rssi", s_cache.lora_rf.rssi);
+        cJSON_AddNumberToObject(lora, "snr", s_cache.lora_rf.snr);
+        cJSON_AddBoolToObject(lora, "running", s_cache.lora_rf.is_running);
+        cJSON_AddNumberToObject(lora, "chipType", s_cache.lora_rf.chip_type);
+        cJSON_AddNumberToObject(lora, "frequency", s_cache.lora_rf.frequency);
+    } else {
+        cJSON_AddNumberToObject(lora, "rssi", -120);
+        cJSON_AddNumberToObject(lora, "snr", 0);
+        cJSON_AddBoolToObject(lora, "running", false);
+        cJSON_AddNumberToObject(lora, "chipType", 0);
+        cJSON_AddNumberToObject(lora, "frequency", 0);
+    }
+    // tx/rx는 이벤트에 없으므로 0으로 표시
+    cJSON_AddNumberToObject(lora, "tx", 0);
+    cJSON_AddNumberToObject(lora, "rx", 0);
     cJSON_AddItemToObject(root, "lora", lora);
 
-    // Network
-    network_status_t net_status = network_service_get_status();
+    // Network (EVT_NETWORK_STATUS_CHANGED)
     cJSON* network = cJSON_CreateObject();
     cJSON_AddStringToObject(network, "mode", "TX");
 
     cJSON* wifi = cJSON_CreateObject();
-    cJSON_AddBoolToObject(wifi, "connected", net_status.wifi_sta.connected);
-    cJSON_AddStringToObject(wifi, "ip", net_status.wifi_sta.connected ? net_status.wifi_sta.ip : "--");
+    if (s_cache.network_valid) {
+        cJSON_AddBoolToObject(wifi, "connected", s_cache.network.sta_connected);
+        cJSON_AddStringToObject(wifi, "ssid", s_cache.network.sta_ssid);
+        cJSON_AddStringToObject(wifi, "ip", s_cache.network.sta_connected ? s_cache.network.sta_ip : "--");
+    } else {
+        cJSON_AddBoolToObject(wifi, "connected", false);
+        cJSON_AddStringToObject(wifi, "ssid", "--");
+        cJSON_AddStringToObject(wifi, "ip", "--");
+    }
     cJSON_AddItemToObject(network, "wifi", wifi);
 
     cJSON* ethernet = cJSON_CreateObject();
-    cJSON_AddBoolToObject(ethernet, "connected", net_status.ethernet.connected);
-    cJSON_AddStringToObject(ethernet, "ip", net_status.ethernet.connected ? net_status.ethernet.ip : "--");
+    if (s_cache.network_valid) {
+        cJSON_AddBoolToObject(ethernet, "connected", s_cache.network.eth_connected);
+        cJSON_AddStringToObject(ethernet, "ip", s_cache.network.eth_connected ? s_cache.network.eth_ip : "--");
+    } else {
+        cJSON_AddBoolToObject(ethernet, "connected", false);
+        cJSON_AddStringToObject(ethernet, "ip", "--");
+    }
     cJSON_AddItemToObject(network, "ethernet", ethernet);
+
+    cJSON* wifi_ap = cJSON_CreateObject();
+    if (s_cache.network_valid) {
+        cJSON_AddBoolToObject(wifi_ap, "enabled", s_cache.network.ap_enabled);
+        cJSON_AddStringToObject(wifi_ap, "ssid", s_cache.network.ap_ssid);
+        cJSON_AddStringToObject(wifi_ap, "ip", s_cache.network.ap_enabled ? s_cache.network.ap_ip : "--");
+    } else {
+        cJSON_AddBoolToObject(wifi_ap, "enabled", false);
+        cJSON_AddStringToObject(wifi_ap, "ssid", "--");
+        cJSON_AddStringToObject(wifi_ap, "ip", "--");
+    }
+    cJSON_AddItemToObject(network, "wifiAp", wifi_ap);
+
     cJSON_AddItemToObject(root, "network", network);
 
-    // Switcher & Tally
+    // Switcher (EVT_SWITCHER_STATUS_CHANGED)
     cJSON* switcher = cJSON_CreateObject();
-    bool switcher_connected = false;
-    const char* switcher_type = "--";
-    uint8_t program = 0;
-    uint8_t preview = 0;
+    if (s_cache.switcher_valid) {
+        cJSON_AddBoolToObject(switcher, "dualEnabled", s_cache.switcher.dual_mode);
+        cJSON_AddStringToObject(switcher, "s1Type", s_cache.switcher.s1_type);
+        cJSON_AddStringToObject(switcher, "s1Ip", s_cache.switcher.s1_ip);
+        cJSON_AddNumberToObject(switcher, "s1Port", s_cache.switcher.s1_port);
+        cJSON_AddBoolToObject(switcher, "s1Connected", s_cache.switcher.s1_connected);
+        cJSON_AddStringToObject(switcher, "s2Type", s_cache.switcher.s2_type);
+        cJSON_AddStringToObject(switcher, "s2Ip", s_cache.switcher.s2_ip);
+        cJSON_AddNumberToObject(switcher, "s2Port", s_cache.switcher.s2_port);
+        cJSON_AddBoolToObject(switcher, "s2Connected", s_cache.switcher.s2_connected);
+    } else {
+        cJSON_AddBoolToObject(switcher, "dualEnabled", false);
+        cJSON_AddStringToObject(switcher, "s1Type", "--");
+        cJSON_AddStringToObject(switcher, "s1Ip", "--");
+        cJSON_AddNumberToObject(switcher, "s1Port", 0);
+        cJSON_AddBoolToObject(switcher, "s1Connected", false);
+        cJSON_AddStringToObject(switcher, "s2Type", "--");
+        cJSON_AddStringToObject(switcher, "s2Ip", "--");
+        cJSON_AddNumberToObject(switcher, "s2Port", 0);
+        cJSON_AddBoolToObject(switcher, "s2Connected", false);
+    }
+    cJSON_AddItemToObject(root, "switcher", switcher);
 
-    // Tally JSON (먼저 생성)
+    // Tally (EVT_TALLY_STATE_CHANGED)
     cJSON* tally_json = cJSON_CreateObject();
     cJSON* channels = cJSON_CreateArray();
 
-    if (s_switcher_handle != nullptr) {
-        switcher_status_t primary_status = switcher_service_get_switcher_status(
-            s_switcher_handle, SWITCHER_ROLE_PRIMARY);
-        switcher_connected = (primary_status.state == CONNECTION_STATE_CONNECTED);
-        // TODO: switcher_type는 config_service에서 가져와야 함
-
-        packed_data_t packed_tally = switcher_service_get_combined_tally(s_switcher_handle);
-        // Packed 데이터에서 program/preview 추출 (채널 1만 예시)
-        if (packed_tally.channel_count > 0) {
-            uint8_t state1 = switcher_service_get_tally_state(&packed_tally, 1);
-            program = (state1 == 1 || state1 == 3) ? 1 : 0;
-            preview = (state1 == 2 || state1 == 3) ? 1 : 0;
+    uint8_t channel_count = s_cache.tally_valid ? s_cache.tally.channel_count : 0;
+    for (int i = 0; i < 20; i++) {
+        uint8_t state = 0;
+        if (s_cache.tally_valid && i < channel_count) {
+            state = get_tally_state(&s_cache.tally, i + 1);
         }
-
-        // Tally 채널 배열
-        for (int i = 1; i <= 16; i++) {
-            uint8_t state = switcher_service_get_tally_state(&packed_tally, i);
-            const char* state_str = (state == 1 || state == 3) ? "live" :
-                                   (state == 2 || state == 3) ? "preview" : "off";
-            cJSON_AddItemToArray(channels, cJSON_CreateString(state_str));
-        }
-    } else {
-        // 핸들이 없으면 모두 off
-        for (int i = 0; i < 16; i++) {
-            cJSON_AddItemToArray(channels, cJSON_CreateString("off"));
-        }
+        cJSON_AddItemToArray(channels, cJSON_CreateString(tally_state_to_string(state)));
     }
 
     cJSON_AddItemToObject(tally_json, "channels", channels);
-    cJSON_AddNumberToObject(tally_json, "source", 0);  // TODO: 듀얼모드 시 소스 표시
+    cJSON_AddNumberToObject(tally_json, "source", s_cache.tally_valid ? s_cache.tally.source : 0);
     cJSON_AddItemToObject(root, "tally", tally_json);
 
-    cJSON_AddBoolToObject(switcher, "connected", switcher_connected);
-    cJSON_AddStringToObject(switcher, "type", switcher_type);
-    cJSON_AddNumberToObject(switcher, "program", program);
-    cJSON_AddNumberToObject(switcher, "preview", preview);
-    cJSON_AddItemToObject(root, "switcher", switcher);
-
-    // System
+    // System (EVT_INFO_UPDATED)
     cJSON* system = cJSON_CreateObject();
-    cJSON_AddNumberToObject(system, "uptime", xTaskGetTickCount() * portTICK_PERIOD_MS / 1000);
+    if (s_cache.system_valid) {
+        cJSON_AddStringToObject(system, "deviceId", s_cache.system.device_id);
+        cJSON_AddNumberToObject(system, "battery", s_cache.system.battery);
+        cJSON_AddNumberToObject(system, "voltage", s_cache.system.voltage);
+        cJSON_AddNumberToObject(system, "temperature", s_cache.system.temperature);
+        cJSON_AddNumberToObject(system, "uptime", s_cache.system.uptime);
+        cJSON_AddBoolToObject(system, "stopped", s_cache.system.stopped);
+    } else {
+        cJSON_AddStringToObject(system, "deviceId", "0000");
+        cJSON_AddNumberToObject(system, "battery", 0);
+        cJSON_AddNumberToObject(system, "voltage", 0);
+        cJSON_AddNumberToObject(system, "temperature", 0);
+        cJSON_AddNumberToObject(system, "uptime", 0);
+        cJSON_AddBoolToObject(system, "stopped", false);
+    }
     cJSON_AddNumberToObject(system, "freeHeap", esp_get_free_heap_size());
-    cJSON_AddNumberToObject(system, "battery", 0);  // TODO: battery service
     cJSON_AddStringToObject(system, "version", "0.1.0");
     cJSON_AddItemToObject(root, "system", system);
 
@@ -344,6 +539,48 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
             config_service_set_secondary_offset((uint8_t)offset->valueint);
         }
     }
+    else if (strncmp(path, "network/wifi", 13) == 0) {
+        config_wifi_sta_t wifi;
+        config_service_get_wifi_sta(&wifi);
+
+        cJSON* ssid = cJSON_GetObjectItem(root, "ssid");
+        cJSON* enabled = cJSON_GetObjectItem(root, "enabled");
+
+        if (ssid && cJSON_IsString(ssid)) {
+            strncpy(wifi.ssid, ssid->valuestring, sizeof(wifi.ssid) - 1);
+        }
+        if (enabled) {
+            wifi.enabled = cJSON_IsTrue(enabled);
+        } else {
+            wifi.enabled = true;
+        }
+
+        result = config_service_set_wifi_sta(&wifi);
+    }
+    else if (strncmp(path, "network/ethernet", 16) == 0) {
+        config_ethernet_t eth;
+        config_service_get_ethernet(&eth);
+
+        cJSON* ip = cJSON_GetObjectItem(root, "staticIp");
+        cJSON* gateway = cJSON_GetObjectItem(root, "gateway");
+        cJSON* netmask = cJSON_GetObjectItem(root, "netmask");
+        cJSON* dhcp = cJSON_GetObjectItem(root, "dhcp");
+
+        if (ip && cJSON_IsString(ip)) {
+            strncpy(eth.static_ip, ip->valuestring, sizeof(eth.static_ip) - 1);
+        }
+        if (gateway && cJSON_IsString(gateway)) {
+            strncpy(eth.static_gateway, gateway->valuestring, sizeof(eth.static_gateway) - 1);
+        }
+        if (netmask && cJSON_IsString(netmask)) {
+            strncpy(eth.static_netmask, netmask->valuestring, sizeof(eth.static_netmask) - 1);
+        }
+        if (dhcp) {
+            eth.dhcp_enabled = cJSON_IsTrue(dhcp);
+        }
+
+        result = config_service_set_ethernet(&eth);
+    }
     else {
         result = ESP_FAIL;
         response_msg = "Unknown config path";
@@ -468,17 +705,11 @@ static const httpd_uri_t uri_js = {
 
 extern "C" {
 
-/**
- * @brief Switcher Service 핸들 설정
- * @param handle switcher_service 핸들
- */
-void web_server_set_switcher_handle(switcher_service_handle_t handle)
-{
-    s_switcher_handle = handle;
-}
-
 esp_err_t web_server_init(void)
 {
+    // 캐시 초기화
+    init_cache();
+
     if (s_server != nullptr) {
         ESP_LOGW(TAG, "Web server already initialized");
         return ESP_OK;
@@ -505,6 +736,13 @@ esp_err_t web_server_init(void)
     httpd_register_uri_handler(s_server, &uri_api_reboot);
     httpd_register_uri_handler(s_server, &uri_api_config_post);
 
+    // 이벤트 구독
+    event_bus_subscribe(EVT_INFO_UPDATED, onSystemInfoEvent);
+    event_bus_subscribe(EVT_LORA_RSSI_CHANGED, onLoraRssiEvent);
+    event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, onSwitcherStatusEvent);
+    event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
+    event_bus_subscribe(EVT_TALLY_STATE_CHANGED, onTallyStateEvent);
+
     ESP_LOGI(TAG, "Web server started on port 80");
     return ESP_OK;
 }
@@ -516,6 +754,20 @@ esp_err_t web_server_stop(void)
     }
 
     ESP_LOGI(TAG, "Stopping web server");
+
+    // 이벤트 구독 해제
+    event_bus_unsubscribe(EVT_INFO_UPDATED, onSystemInfoEvent);
+    event_bus_unsubscribe(EVT_LORA_RSSI_CHANGED, onLoraRssiEvent);
+    event_bus_unsubscribe(EVT_SWITCHER_STATUS_CHANGED, onSwitcherStatusEvent);
+    event_bus_unsubscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
+    event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, onTallyStateEvent);
+
+    // 캐시 무효화
+    s_cache.system_valid = false;
+    s_cache.lora_rf_valid = false;
+    s_cache.switcher_valid = false;
+    s_cache.network_valid = false;
+    s_cache.tally_valid = false;
 
     esp_err_t ret = httpd_stop(s_server);
     s_server = nullptr;
