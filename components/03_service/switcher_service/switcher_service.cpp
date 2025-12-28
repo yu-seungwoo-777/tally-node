@@ -15,7 +15,8 @@
 // Switcher 재연결 간격 (하드코딩)
 // =============================================================================
 
-#define SWITCHER_RETRY_INTERVAL_MS   5000    ///< 스위처 재연결 시도 간격 (5초)
+#define SWITCHER_RETRY_INTERVAL_MS   5000        ///< 스위처 재연결 시도 간격 (5초)
+#define SWITCHER_REFRESH_NO_CHANGE_MS 3600000    ///< Packed 변화 없을 때 refresh 간격 (1시간)
 
 // ============================================================================
 // 태그
@@ -124,6 +125,10 @@ bool SwitcherService::initialize() {
     }
 
     T_LOGI(TAG, "SwitcherService 초기화 완료");
+
+    // 초기 상태 이벤트 발행
+    publishSwitcherStatus();
+
     return true;
 }
 
@@ -161,6 +166,20 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
     driver->setConnectionCallback([this, role](connection_state_t state) {
         T_LOGD(TAG, "%s 연결 상태: %s", switcher_role_to_string(role),
                  connection_state_to_string(state));
+
+        // 연결 상태 저장
+        SwitcherInfo* info = getSwitcherInfo(role);
+        if (info) {
+            bool was_connected = info->is_connected;
+            bool now_connected = (state == CONNECTION_STATE_READY || state == CONNECTION_STATE_CONNECTED);
+            info->is_connected = now_connected;
+
+            // 상태 변경 시 이벤트 발행
+            if (was_connected != now_connected) {
+                publishSwitcherStatus();
+            }
+        }
+
         if (connection_callback_) {
             connection_callback_(state);
         }
@@ -173,6 +192,13 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
     info->last_packed.channel_count = 0;
     info->has_changed = false;
     info->last_reconnect_attempt = 0;
+    info->last_packed_change_time = 0;  // 첫 Tally 데이터 받을 때까지 대기
+    info->is_connected = false;
+
+    // 설정 정보 저장 (이벤트 발행용)
+    strncpy(info->type, "ATEM", sizeof(info->type) - 1);
+    strncpy(info->ip, config.ip.c_str(), sizeof(info->ip) - 1);
+    info->port = config.port;
 
     // 인터페이스 로그
     const char* if_str = "Auto";
@@ -329,14 +355,31 @@ void SwitcherService::taskLoop() {
     if (primary_.adapter) {
         // 연결 상태 확인 및 자동 재연결
         connection_state_t state = primary_.adapter->getConnectionState();
+        uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+
         if (state == CONNECTION_STATE_DISCONNECTED) {
-            uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+            // 비정상 연결 끊김 → 5초마다 재연결 시도
             if (now - primary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
                 T_LOGD(TAG, "Primary 재연결 시도");
                 primary_.adapter->connect();
                 primary_.last_reconnect_attempt = now;
             }
         }
+        else if (state == CONNECTION_STATE_CONNECTED || state == CONNECTION_STATE_READY) {
+            // 정상 연결 상태 → Packed 변화 없으면 health refresh
+            if (primary_.last_packed_change_time > 0) {
+                uint32_t no_change_duration = now - primary_.last_packed_change_time;
+                if (no_change_duration > SWITCHER_REFRESH_NO_CHANGE_MS) {
+                    T_LOGI(TAG, "Primary: %d분 동안 Tally 변화 없음 → Health refresh",
+                           no_change_duration / 60000);
+                    primary_.adapter->disconnect();
+                    primary_.adapter->connect();
+                    primary_.last_packed_change_time = now;
+                    primary_.last_reconnect_attempt = now;
+                }
+            }
+        }
+
         // 어댑터 루프 처리
         primary_.adapter->loop();
         // packed 데이터 변경 감지
@@ -345,15 +388,33 @@ void SwitcherService::taskLoop() {
 
     // Secondary 처리
     if (secondary_.adapter) {
+        // 연결 상태 확인 및 자동 재연결
         connection_state_t state = secondary_.adapter->getConnectionState();
+        uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+
         if (state == CONNECTION_STATE_DISCONNECTED) {
-            uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+            // 비정상 연결 끊김 → 5초마다 재연결 시도
             if (now - secondary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
                 T_LOGD(TAG, "Secondary 재연결 시도");
                 secondary_.adapter->connect();
                 secondary_.last_reconnect_attempt = now;
             }
         }
+        else if (state == CONNECTION_STATE_CONNECTED || state == CONNECTION_STATE_READY) {
+            // 정상 연결 상태 → Packed 변화 없으면 health refresh
+            if (secondary_.last_packed_change_time > 0) {
+                uint32_t no_change_duration = now - secondary_.last_packed_change_time;
+                if (no_change_duration > SWITCHER_REFRESH_NO_CHANGE_MS) {
+                    T_LOGI(TAG, "Secondary: %d분 동안 Tally 변화 없음 → Health refresh",
+                           no_change_duration / 60000);
+                    secondary_.adapter->disconnect();
+                    secondary_.adapter->connect();
+                    secondary_.last_packed_change_time = now;
+                    secondary_.last_reconnect_attempt = now;
+                }
+            }
+        }
+
         secondary_.adapter->loop();
         checkSwitcherChange(SWITCHER_ROLE_SECONDARY);
     }
@@ -520,6 +581,9 @@ void SwitcherService::checkSwitcherChange(switcher_role_t role) {
         packed_data_copy(&info->last_packed, &current_packed);
         info->has_changed = true;
 
+        // Health refresh 타이머 리셋 (Tally 변화 있으면 reset)
+        info->last_packed_change_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
+
         // hex 문자열 생성
         if (current_packed.data && current_packed.data_size > 0) {
             char hex_str[64] = "";
@@ -564,6 +628,31 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
     if (tally_callback_) {
         tally_callback_();
     }
+}
+
+void SwitcherService::publishSwitcherStatus() {
+    // 이벤트 발행용 정적 변수 (지역 변수 사용 시 데이터가 소실됨)
+    static switcher_status_event_t s_status;
+    memset(&s_status, 0, sizeof(s_status));
+
+    // 스위처 상태 이벤트 발행
+    s_status.dual_mode = dual_mode_enabled_;
+    s_status.s1_connected = primary_.is_connected;
+    s_status.s2_connected = secondary_.is_connected;
+    s_status.s1_port = primary_.port;
+    s_status.s2_port = secondary_.port;
+
+    // 문자열 복사 시 null termination 보장
+    strncpy(s_status.s1_type, primary_.type, sizeof(s_status.s1_type) - 1);
+    s_status.s1_type[sizeof(s_status.s1_type) - 1] = '\0';
+    strncpy(s_status.s2_type, secondary_.type, sizeof(s_status.s2_type) - 1);
+    s_status.s2_type[sizeof(s_status.s2_type) - 1] = '\0';
+    strncpy(s_status.s1_ip, primary_.ip, sizeof(s_status.s1_ip) - 1);
+    s_status.s1_ip[sizeof(s_status.s1_ip) - 1] = '\0';
+    strncpy(s_status.s2_ip, secondary_.ip, sizeof(s_status.s2_ip) - 1);
+    s_status.s2_ip[sizeof(s_status.s2_ip) - 1] = '\0';
+
+    event_bus_publish(EVT_SWITCHER_STATUS_CHANGED, &s_status, sizeof(s_status));
 }
 
 // ============================================================================

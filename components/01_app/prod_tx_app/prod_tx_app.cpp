@@ -183,20 +183,43 @@ static esp_err_t handle_switcher_disconnected(const event_data_t* event)
 static esp_err_t handle_network_connected(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "네트워크 연결됨 -> 스위처 재연결");
+    T_LOGI(TAG, "네트워크 연결됨 -> 스위처 재연결, 디스플레이 갱신");
     if (s_app.service) {
         switcher_service_reconnect_all(s_app.service);
     }
+
+    // 디스플레이에 네트워크 상태 갱신
+    network_status_t net_status = network_service_get_status();
+
+    // WiFi STA 연결 시 디스플레이 갱신
+    if (net_status.wifi_sta.connected) {
+        tx_page_set_wifi_ip(net_status.wifi_sta.ip);
+        tx_page_set_wifi_connected(true);
+    }
+
+    // Ethernet 연결 시 디스플레이 갱신
+    if (net_status.ethernet.connected) {
+        tx_page_set_eth_ip(net_status.ethernet.ip);
+        tx_page_set_eth_connected(true);
+    }
+
     return ESP_OK;
 }
 
 static esp_err_t handle_network_disconnected(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "네트워크 연결 해제 -> 스위처 재연결");
+    T_LOGI(TAG, "네트워크 연결 해제 -> 디스플레이 갱신");
+
+    // 디스플레이에 네트워크 상태 갱신
+    tx_page_set_wifi_connected(false);
+    tx_page_set_eth_connected(false);
+
+    // 스위처 재연결 시도
     if (s_app.service) {
         switcher_service_reconnect_all(s_app.service);
     }
+
     return ESP_OK;
 }
 
@@ -454,6 +477,14 @@ void prod_tx_app_start(void)
     // 버튼 서비스 시작
     button_service_start();
 
+    // RF 설정 이벤트 발행 (초기 상태)
+    static lora_rf_event_t s_rf_event;
+    config_device_t device;
+    config_service_get_device(&device);
+    s_rf_event.frequency = device.rf.frequency;
+    s_rf_event.sync_word = device.rf.sync_word;
+    event_bus_publish(EVT_RF_CHANGED, &s_rf_event, sizeof(s_rf_event));
+
     // 부팅 시나리오
     const char* boot_messages[] = {
         "Init NVS",
@@ -555,76 +586,16 @@ void prod_tx_app_loop(void)
     // 디스플레이 갱신 (500ms 주기, DisplayManager 내부에서 체크)
     display_manager_update();
 
-    // System 데이터는 HardwareService 태스크에서 1초마다 갱신됨
-    // 여기서는 주기적으로 DisplayManager에 전파만 수행
-    static uint32_t last_display_update = 0;
+    // System 데이터는 HardwareService가 EVT_INFO_UPDATED로 발행 (1초마다)
+    // Switcher/Network 데이터는 상태 변경 시 이벤트 발행
+    // DisplayManager가 이벤트를 구독하여 자동 갱신됨
+
+    // 네트워크 상태 이벤트 발행 (주기적 확인)
+    static uint32_t last_network_check = 0;
     uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    if (now - last_display_update >= 1000) {
-        last_display_update = now;
-
-        // ========== HardwareService: System 데이터 ==========
-        hardware_system_t sys;
-        hardware_service_get_system(&sys);
-
-        // DisplayManager에 System 데이터 전파
-        display_manager_update_system(sys.device_id, sys.battery,
-                                      sys.voltage, sys.temperature);
-
-        // RSSI/SNR 전파
-        display_manager_update_rssi(sys.rssi, sys.snr);
-
-        // ========== ConfigService: RF 설정 ==========
-        config_device_t device;
-        config_service_get_device(&device);
-        tx_page_set_frequency(device.rf.frequency);
-        tx_page_set_sync_word(device.rf.sync_word);
-
-        // ========== SwitcherService: S1/S2 상태 ==========
-        if (s_app.service) {
-            // 듀얼모드 설정
-            tx_page_set_dual_mode(switcher_service_is_dual_mode_enabled(s_app.service));
-
-            // S1 (Primary) 상태
-            switcher_status_t s1_status = switcher_service_get_switcher_status(
-                s_app.service, SWITCHER_ROLE_PRIMARY);
-            bool s1_connected = (s1_status.state == CONNECTION_STATE_READY ||
-                                 s1_status.state == CONNECTION_STATE_CONNECTED);
-            tx_page_set_s1("ATEM", s_app.primary.ip, 9910, s1_connected);
-
-            // S2 (Secondary) 상태 (듀얼모드인 경우)
-            if (switcher_service_is_dual_mode_enabled(s_app.service)) {
-                switcher_status_t s2_status = switcher_service_get_switcher_status(
-                    s_app.service, SWITCHER_ROLE_SECONDARY);
-                bool s2_connected = (s2_status.state == CONNECTION_STATE_READY ||
-                                     s2_status.state == CONNECTION_STATE_CONNECTED);
-                const char* s2_ip = (s_app.secondary.ip[0] != '\0')
-                                    ? s_app.secondary.ip : "0.0.0.0";
-                tx_page_set_s2("ATEM", s2_ip, 9910, s2_connected);
-            }
-        }
-
-        // ========== NetworkService: AP/WiFi/Ethernet 상태 ==========
-        network_status_t net_status = network_service_get_status();
-
-        // AP 정보 (Page 2)
-        config_wifi_ap_t ap_config;
-        config_service_get_wifi_ap(&ap_config);
-        tx_page_set_ap_name(ap_config.ssid);
-        tx_page_set_ap_ip(net_status.wifi_ap.ip);
-
-        // WiFi 정보 (Page 3)
-        config_wifi_sta_t wifi_config;
-        config_service_get_wifi_sta(&wifi_config);
-        tx_page_set_wifi_ssid(wifi_config.ssid);
-        tx_page_set_wifi_ip(net_status.wifi_sta.ip);
-        tx_page_set_wifi_connected(net_status.wifi_sta.connected);
-
-        // Ethernet 정보 (Page 4)
-        config_ethernet_t eth_config;
-        config_service_get_ethernet(&eth_config);
-        tx_page_set_eth_ip(net_status.ethernet.ip);
-        display_manager_update_ethernet_dhcp_mode(eth_config.dhcp_enabled);
-        tx_page_set_eth_connected(net_status.ethernet.connected);
+    if (now - last_network_check >= 1000) {
+        last_network_check = now;
+        network_service_publish_status();
     }
 }
 

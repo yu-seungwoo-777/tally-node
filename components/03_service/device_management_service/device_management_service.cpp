@@ -442,11 +442,10 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
                    id_str, cmd->frequency, cmd->sync_word);
 
             // event_bus로 RF 설정 변경 이벤트 발행
-            lora_rf_event_t rf_event = {
-                .frequency = cmd->frequency,
-                .sync_word = cmd->sync_word
-            };
-            event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
+            static lora_rf_event_t s_rf_event;
+            s_rf_event.frequency = cmd->frequency;
+            s_rf_event.sync_word = cmd->sync_word;
+            event_bus_publish(EVT_RF_CHANGED, &s_rf_event, sizeof(s_rf_event));
 
             send_ack(LORA_HDR_SET_RF, LORA_ACK_SUCCESS);
             break;

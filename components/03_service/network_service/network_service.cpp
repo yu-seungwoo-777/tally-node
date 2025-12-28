@@ -7,6 +7,7 @@
 #include "wifi_driver.h"
 #include "ethernet_driver.h"
 #include "t_log.h"
+#include "event_bus.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cstring>
@@ -28,6 +29,9 @@ public:
     static void printStatus(void);
     static bool isInitialized(void) { return s_initialized; }
 
+    // 상태 이벤트 발행
+    static void publishStatus(void);
+
     // 설정 업데이트
     static esp_err_t updateConfig(const app_network_config_t* config);
 
@@ -42,8 +46,8 @@ private:
 
     // 정적 멤버
     static bool s_initialized;
-
     static app_network_config_t s_config;
+    static network_status_t s_last_status;  // 이전 상태 (변경 감지용)
 };
 
 // ============================================================================
@@ -52,6 +56,7 @@ private:
 
 bool NetworkServiceClass::s_initialized = false;
 app_network_config_t NetworkServiceClass::s_config = {};
+network_status_t NetworkServiceClass::s_last_status = {};
 
 // ============================================================================
 // 초기화/정리
@@ -139,8 +144,8 @@ network_status_t NetworkServiceClass::getStatus(void)
     }
 
     // WiFi AP 상태
-    if (s_config.wifi_ap.enabled) {
-        status.wifi_ap.active = true;
+    if (wifi_driver_is_initialized()) {
+        status.wifi_ap.active = s_config.wifi_ap.enabled;
         status.wifi_ap.connected = wifi_driver_ap_is_started();
 
         wifi_driver_status_t wifi_status = wifi_driver_get_status();
@@ -149,9 +154,9 @@ network_status_t NetworkServiceClass::getStatus(void)
         strncpy(status.wifi_ap.gateway, "192.168.4.1", sizeof(status.wifi_ap.gateway));
     }
 
-    // WiFi STA 상태
-    if (s_config.wifi_sta.enabled) {
-        status.wifi_sta.active = true;
+    // WiFi STA 상태 (드라이버 초기화된 경우 항상 확인)
+    if (wifi_driver_is_initialized()) {
+        status.wifi_sta.active = s_config.wifi_sta.enabled;
         status.wifi_sta.connected = wifi_driver_sta_is_connected();
 
         wifi_driver_status_t wifi_status = wifi_driver_get_status();
@@ -161,7 +166,7 @@ network_status_t NetworkServiceClass::getStatus(void)
     }
 
     // Ethernet 상태
-    if (s_config.ethernet.enabled) {
+    if (ethernet_driver_is_initialized()) {
         ethernet_driver_status_t eth_status = ethernet_driver_get_status();
         status.ethernet.active = eth_status.initialized;
         status.ethernet.connected = eth_status.link_up && eth_status.got_ip;
@@ -225,6 +230,53 @@ void NetworkServiceClass::printStatus(void)
     }
 
     T_LOGI(TAG, "=========================");
+}
+
+// ============================================================================
+// 상태 이벤트 발행
+// ============================================================================
+
+void NetworkServiceClass::publishStatus(void)
+{
+    if (!s_initialized) {
+        return;
+    }
+
+    network_status_t status = getStatus();
+
+    // 상태 변경 확인 (연결 상태 또는 IP 변경)
+    bool sta_changed = (s_last_status.wifi_sta.connected != status.wifi_sta.connected ||
+                       strncmp(s_last_status.wifi_sta.ip, status.wifi_sta.ip, sizeof(s_last_status.wifi_sta.ip)) != 0);
+    bool eth_changed = (s_last_status.ethernet.connected != status.ethernet.connected ||
+                       strncmp(s_last_status.ethernet.ip, status.ethernet.ip, sizeof(s_last_status.ethernet.ip)) != 0);
+
+    if (sta_changed || eth_changed) {
+        // 이벤트 발행용 정적 변수 (지역 변수 사용 시 데이터가 소실됨)
+        static network_status_event_t s_event;
+        memset(&s_event, 0, sizeof(s_event));
+
+        // 이벤트 데이터 생성
+        s_event.ap_enabled = s_config.wifi_ap.enabled;
+        s_event.sta_connected = status.wifi_sta.connected;
+        s_event.eth_connected = status.ethernet.connected;
+        s_event.eth_dhcp = s_config.ethernet.dhcp_enabled;
+
+        strncpy(s_event.ap_ssid, s_config.wifi_ap.ssid, sizeof(s_event.ap_ssid) - 1);
+        s_event.ap_ssid[sizeof(s_event.ap_ssid) - 1] = '\0';
+        strncpy(s_event.ap_ip, status.wifi_ap.ip, sizeof(s_event.ap_ip) - 1);
+        s_event.ap_ip[sizeof(s_event.ap_ip) - 1] = '\0';
+        strncpy(s_event.sta_ssid, s_config.wifi_sta.ssid, sizeof(s_event.sta_ssid) - 1);
+        s_event.sta_ssid[sizeof(s_event.sta_ssid) - 1] = '\0';
+        strncpy(s_event.sta_ip, status.wifi_sta.ip, sizeof(s_event.sta_ip) - 1);
+        s_event.sta_ip[sizeof(s_event.sta_ip) - 1] = '\0';
+        strncpy(s_event.eth_ip, status.ethernet.ip, sizeof(s_event.eth_ip) - 1);
+        s_event.eth_ip[sizeof(s_event.eth_ip) - 1] = '\0';
+
+        event_bus_publish(EVT_NETWORK_STATUS_CHANGED, &s_event, sizeof(s_event));
+
+        // 현재 상태 저장
+        s_last_status = status;
+    }
 }
 
 // ============================================================================
@@ -334,6 +386,11 @@ esp_err_t network_service_restart_ethernet(void)
 esp_err_t network_service_restart_all(void)
 {
     return NetworkServiceClass::restartAll();
+}
+
+void network_service_publish_status(void)
+{
+    NetworkServiceClass::publishStatus();
 }
 
 } // extern "C"
