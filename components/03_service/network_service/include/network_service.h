@@ -16,6 +16,7 @@
 #include <stdbool.h>
 #include "esp_err.h"
 #include "app_types.h"
+#include "event_bus.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -99,6 +100,14 @@ void network_service_publish_status(void);
  * @return ESP_OK 성공, ESP_ERR_* 실패
  */
 esp_err_t network_service_restart_wifi(void);
+
+/**
+ * @brief WiFi STA만 재연결 (AP는 유지)
+ * @param ssid 새 SSID
+ * @param password 새 비밀번호
+ * @return ESP_OK 성공, ESP_ERR_* 실패
+ */
+esp_err_t network_service_reconnect_wifi_sta(const char* ssid, const char* password);
 
 /**
  * @brief Ethernet 재시작

@@ -30,14 +30,6 @@ typedef struct {
     uint8_t ap_clients;
 } wifi_driver_status_t;
 
-// 스캔 결과
-typedef struct {
-    char ssid[33];
-    uint8_t channel;
-    int8_t rssi;
-    uint8_t auth_mode;
-} wifi_driver_scan_result_t;
-
 // 상태 변경 콜백
 typedef void (*wifi_driver_status_callback_t)(void);
 
@@ -79,21 +71,6 @@ wifi_driver_status_t wifi_driver_get_status(void);
 bool wifi_driver_is_initialized(void);
 
 // ============================================================================
-// 스캔
-// ============================================================================
-
-/**
- * @brief WiFi 스캔 (동기)
- * @param results 결과를 받을 배열
- * @param max_count 배열 최대 크기
- * @param out_count 실제 발견된 AP 개수
- * @return ESP_OK 성공, ESP_ERR_* 실패
- */
-esp_err_t wifi_driver_scan(wifi_driver_scan_result_t* results,
-                           uint16_t max_count,
-                           uint16_t* out_count);
-
-// ============================================================================
 // STA 제어
 // ============================================================================
 
@@ -108,6 +85,14 @@ esp_err_t wifi_driver_sta_reconnect(void);
  * @return ESP_OK 성공, ESP_ERR_* 실패
  */
 esp_err_t wifi_driver_sta_disconnect(void);
+
+/**
+ * @brief STA 설정 변경 후 재연결 (AP는 유지)
+ * @param ssid 새 SSID
+ * @param password 새 비밀번호 (NULL: 열린 네트워크)
+ * @return ESP_OK 성공, ESP_ERR_* 실패
+ */
+esp_err_t wifi_driver_sta_reconfig(const char* ssid, const char* password);
 
 /**
  * @brief STA 연결 여부

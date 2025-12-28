@@ -37,12 +37,17 @@ public:
 
     // 재시작
     static esp_err_t restartWiFi(void);
+    static esp_err_t reconnectWiFiSTA(const char* ssid, const char* password);
     static esp_err_t restartEthernet(void);
     static esp_err_t restartAll(void);
 
 private:
     NetworkServiceClass() = delete;
     ~NetworkServiceClass() = delete;
+
+    // 이벤트 핸들러
+    static esp_err_t onRestartRequest(const event_data_t* event);
+    static esp_err_t onConfigDataEvent(const event_data_t* event);
 
     // 정적 멤버
     static bool s_initialized;
@@ -108,6 +113,10 @@ esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config
         }
     }
 
+    // 이벤트 버스 구독 (재시작 요청, 설정 데이터 변경)
+    event_bus_subscribe(EVT_NETWORK_RESTART_REQUEST, onRestartRequest);
+    event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
+
     s_initialized = true;
 
     T_LOGI(TAG, "Network Service 초기화 완료");
@@ -121,6 +130,10 @@ esp_err_t NetworkServiceClass::deinit(void)
     }
 
     T_LOGI(TAG, "Network Service 정리 중...");
+
+    // 이벤트 버스 구독 해제
+    event_bus_unsubscribe(EVT_NETWORK_RESTART_REQUEST, onRestartRequest);
+    event_bus_unsubscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
 
     wifi_driver_deinit();
     ethernet_driver_deinit();
@@ -305,6 +318,32 @@ esp_err_t NetworkServiceClass::restartWiFi(void)
     return wifi_driver_init(ap_ssid, ap_pass, sta_ssid, sta_pass);
 }
 
+esp_err_t NetworkServiceClass::reconnectWiFiSTA(const char* ssid, const char* password)
+{
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    T_LOGI(TAG, "WiFi STA 재연결 중 (AP 유지)...");
+
+    // STA만 재설정/재연결
+    esp_err_t ret = wifi_driver_sta_reconfig(ssid, password);
+    if (ret == ESP_OK) {
+        // 내부 설정도 업데이트
+        if (ssid) {
+            strncpy(s_config.wifi_sta.ssid, ssid, sizeof(s_config.wifi_sta.ssid) - 1);
+            s_config.wifi_sta.ssid[sizeof(s_config.wifi_sta.ssid) - 1] = '\0';
+            s_config.wifi_sta.enabled = true;
+        }
+        if (password) {
+            strncpy(s_config.wifi_sta.password, password, sizeof(s_config.wifi_sta.password) - 1);
+            s_config.wifi_sta.password[sizeof(s_config.wifi_sta.password) - 1] = '\0';
+        }
+    }
+
+    return ret;
+}
+
 esp_err_t NetworkServiceClass::restartEthernet(void)
 {
     if (!s_initialized) {
@@ -313,11 +352,13 @@ esp_err_t NetworkServiceClass::restartEthernet(void)
 
     T_LOGI(TAG, "Ethernet 재시작 중...");
 
+    // s_config는 EVT_CONFIG_DATA_CHANGED 이벤트로 이미 업데이트됨
+
     // Ethernet 정리
     ethernet_driver_deinit();
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    // Ethernet 재시작 (저장된 설정 사용)
+    // Ethernet 재시작 (s_config 사용)
     return ethernet_driver_init(
         s_config.ethernet.dhcp_enabled,
         s_config.ethernet.static_ip,
@@ -339,6 +380,77 @@ esp_err_t NetworkServiceClass::restartAll(void)
     if (ret != ESP_OK) {
         T_LOGW(TAG, "Ethernet 재시작 실패");
     }
+
+    return ESP_OK;
+}
+
+// ============================================================================
+// 이벤트 핸들러
+// ============================================================================
+
+esp_err_t NetworkServiceClass::onRestartRequest(const event_data_t* event)
+{
+    if (event == nullptr || event->data == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    auto* req = (network_restart_request_t*) event->data;
+
+    switch (req->type) {
+        case NETWORK_RESTART_WIFI_AP:
+            T_LOGI(TAG, "이벤트 수신: WiFi AP 재시작 요청");
+            return restartWiFi();
+
+        case NETWORK_RESTART_WIFI_STA:
+            T_LOGI(TAG, "이벤트 수신: WiFi STA 재연결 요청 (AP 유지)");
+            return reconnectWiFiSTA(req->ssid, req->password);
+
+        case NETWORK_RESTART_ETHERNET:
+            T_LOGI(TAG, "이벤트 수신: Ethernet 재시작 요청");
+            return restartEthernet();
+
+        case NETWORK_RESTART_ALL:
+            T_LOGI(TAG, "이벤트 수신: 전체 네트워크 재시작 요청");
+            return restartAll();
+
+        default:
+            T_LOGW(TAG, "알 수 없는 재시작 타입: %d", req->type);
+            return ESP_ERR_INVALID_ARG;
+    }
+}
+
+esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // DisplayManager 패턴: 구조체 통째로 복사 (정적 버퍼)
+    static config_data_event_t s_config_event;
+    s_config_event = *(const config_data_event_t*)event->data;
+
+    // WiFi AP 설정 업데이트
+    s_config.wifi_ap.enabled = s_config_event.wifi_ap_enabled;
+    s_config.wifi_ap.channel = s_config_event.wifi_ap_channel;
+    strncpy(s_config.wifi_ap.ssid, s_config_event.wifi_ap_ssid, sizeof(s_config.wifi_ap.ssid) - 1);
+    s_config.wifi_ap.ssid[sizeof(s_config.wifi_ap.ssid) - 1] = '\0';
+
+    // WiFi STA 설정 업데이트
+    s_config.wifi_sta.enabled = s_config_event.wifi_sta_enabled;
+    strncpy(s_config.wifi_sta.ssid, s_config_event.wifi_sta_ssid, sizeof(s_config.wifi_sta.ssid) - 1);
+    s_config.wifi_sta.ssid[sizeof(s_config.wifi_sta.ssid) - 1] = '\0';
+
+    // Ethernet 설정 업데이트
+    s_config.ethernet.dhcp_enabled = s_config_event.eth_dhcp_enabled;
+    strncpy(s_config.ethernet.static_ip, s_config_event.eth_static_ip, sizeof(s_config.ethernet.static_ip) - 1);
+    s_config.ethernet.static_ip[sizeof(s_config.ethernet.static_ip) - 1] = '\0';
+    strncpy(s_config.ethernet.static_netmask, s_config_event.eth_static_netmask, sizeof(s_config.ethernet.static_netmask) - 1);
+    s_config.ethernet.static_netmask[sizeof(s_config.ethernet.static_netmask) - 1] = '\0';
+    strncpy(s_config.ethernet.static_gateway, s_config_event.eth_static_gateway, sizeof(s_config.ethernet.static_gateway) - 1);
+    s_config.ethernet.static_gateway[sizeof(s_config.ethernet.static_gateway) - 1] = '\0';
+    s_config.ethernet.enabled = s_config_event.eth_enabled;
+
+    T_LOGI(TAG, "설정 데이터 업데이트됨 (이벤트)");
 
     return ESP_OK;
 }
@@ -377,6 +489,11 @@ bool network_service_is_initialized(void)
 esp_err_t network_service_restart_wifi(void)
 {
     return NetworkServiceClass::restartWiFi();
+}
+
+esp_err_t network_service_reconnect_wifi_sta(const char* ssid, const char* password)
+{
+    return NetworkServiceClass::reconnectWiFiSTA(ssid, password);
 }
 
 esp_err_t network_service_restart_ethernet(void)

@@ -32,14 +32,6 @@ public:
         uint8_t ap_clients = 0;
     };
 
-    // 스캔 결과
-    struct ScanResult {
-        char ssid[33];
-        uint8_t channel;
-        int8_t rssi;
-        uint8_t auth_mode;
-    };
-
     // 콜백 타입
     using StatusCallback = void (*)();
 
@@ -54,12 +46,10 @@ public:
     static Status getStatus(void);
     static bool isInitialized(void) { return s_initialized; }
 
-    // 스캔
-    static esp_err_t scan(ScanResult* results, uint16_t max_count, uint16_t* out_count);
-
     // STA 제어
     static esp_err_t reconnectSTA(void);
     static esp_err_t disconnectSTA(void);
+    static esp_err_t reconfigSTA(const char* ssid, const char* password);
     static bool isSTAConnected(void) { return s_sta_connected; }
 
     // AP 제어
@@ -319,12 +309,14 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
         }
 
         wifi_config_t sta_config = {};
-        sta_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-        strncpy((char*)sta_config.sta.ssid, s_sta_ssid, sizeof(sta_config.sta.ssid) - 1);
-
+        // 빈 비밀번호면 open network, 아니면 WPA2_PSK
         if (s_sta_password[0] != '\0') {
+            sta_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
             strncpy((char*)sta_config.sta.password, s_sta_password, sizeof(sta_config.sta.password) - 1);
+        } else {
+            sta_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
         }
+        strncpy((char*)sta_config.sta.ssid, s_sta_ssid, sizeof(sta_config.sta.ssid) - 1);
 
         wifi_hal_set_config(WIFI_IF_STA, &sta_config);
     }
@@ -403,57 +395,6 @@ WiFiDriver::Status WiFiDriver::getStatus(void)
 }
 
 // ============================================================================
-// 스캔
-// ============================================================================
-
-esp_err_t WiFiDriver::scan(ScanResult* results, uint16_t max_count, uint16_t* out_count)
-{
-    if (!s_initialized || !s_sta_enabled) {
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    esp_err_t ret = wifi_hal_scan_start();
-    if (ret != ESP_OK) {
-        T_LOGE(TAG, "스캔 시작 실패: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    // 스캔 완료 대기
-    int retry = 100;
-    while (retry-- > 0) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-        uint16_t ap_count = 0;
-        esp_wifi_scan_get_ap_num(&ap_count);
-        if (ap_count > 0) {
-            break;
-        }
-    }
-
-    uint16_t actual_count = 0;
-    wifi_ap_record_t* ap_records = (wifi_ap_record_t*)calloc(max_count, sizeof(wifi_ap_record_t));
-    if (!ap_records) {
-        return ESP_ERR_NO_MEM;
-    }
-
-    ret = wifi_hal_scan_get_results(ap_records, max_count, &actual_count);
-
-    if (ret == ESP_OK && out_count) {
-        *out_count = (actual_count < max_count) ? actual_count : max_count;
-
-        for (uint16_t i = 0; i < *out_count; i++) {
-            strncpy(results[i].ssid, (char*)ap_records[i].ssid, sizeof(results[i].ssid) - 1);
-            results[i].ssid[sizeof(results[i].ssid) - 1] = '\0';
-            results[i].channel = ap_records[i].primary;
-            results[i].rssi = ap_records[i].rssi;
-            results[i].auth_mode = ap_records[i].authmode;
-        }
-    }
-
-    free(ap_records);
-    return ret;
-}
-
-// ============================================================================
 // STA 제어
 // ============================================================================
 
@@ -476,6 +417,65 @@ esp_err_t WiFiDriver::disconnectSTA(void)
 
     T_LOGI(TAG, "STA 연결 해제");
     return wifi_hal_disconnect();
+}
+
+esp_err_t WiFiDriver::reconfigSTA(const char* ssid, const char* password)
+{
+    if (!s_initialized) {
+        T_LOGE(TAG, "초기화되지 않음");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (!ssid) {
+        T_LOGE(TAG, "SSID가 null");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    T_LOGI(TAG, "STA 재설정: SSID=%s", ssid);
+
+    // 새 SSID/Password 저장
+    strncpy(s_sta_ssid, ssid, sizeof(s_sta_ssid) - 1);
+    s_sta_ssid[sizeof(s_sta_ssid) - 1] = '\0';
+    s_sta_enabled = true;
+
+    if (password) {
+        strncpy(s_sta_password, password, sizeof(s_sta_password) - 1);
+        s_sta_password[sizeof(s_sta_password) - 1] = '\0';
+    } else {
+        s_sta_password[0] = '\0';
+    }
+
+    // STA 연결 해제
+    wifi_hal_disconnect();
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    // 새 STA 설정 적용
+    wifi_config_t sta_config = {};
+    // 빈 비밀번호면 open network, 아니면 WPA2_PSK
+    if (s_sta_password[0] != '\0') {
+        sta_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+        strncpy((char*)sta_config.sta.password, s_sta_password, sizeof(sta_config.sta.password) - 1);
+    } else {
+        sta_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
+    }
+    strncpy((char*)sta_config.sta.ssid, s_sta_ssid, sizeof(sta_config.sta.ssid) - 1);
+
+    esp_err_t ret = wifi_hal_set_config(WIFI_IF_STA, &sta_config);
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "STA 설정 변경 실패");
+        return ret;
+    }
+
+    // STA 재연결 (재시도 카운트 초기화)
+    s_sta_retry_count = 0;
+    ret = wifi_hal_connect();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "STA 연결 실패");
+        return ret;
+    }
+
+    T_LOGI(TAG, "STA 재설정 완료");
+    return ESP_OK;
 }
 
 // ============================================================================
@@ -513,13 +513,6 @@ bool wifi_driver_is_initialized(void)
     return WiFiDriver::isInitialized();
 }
 
-esp_err_t wifi_driver_scan(wifi_driver_scan_result_t* results,
-                           uint16_t max_count,
-                           uint16_t* out_count)
-{
-    return WiFiDriver::scan((WiFiDriver::ScanResult*)results, max_count, out_count);
-}
-
 esp_err_t wifi_driver_sta_reconnect(void)
 {
     return WiFiDriver::reconnectSTA();
@@ -528,6 +521,11 @@ esp_err_t wifi_driver_sta_reconnect(void)
 esp_err_t wifi_driver_sta_disconnect(void)
 {
     return WiFiDriver::disconnectSTA();
+}
+
+esp_err_t wifi_driver_sta_reconfig(const char* ssid, const char* password)
+{
+    return WiFiDriver::reconfigSTA(ssid, password);
 }
 
 bool wifi_driver_sta_is_connected(void)

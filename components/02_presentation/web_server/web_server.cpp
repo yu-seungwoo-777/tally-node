@@ -4,7 +4,6 @@
  */
 
 #include "web_server.h"
-#include "config_service.h"
 #include "event_bus.h"
 #include "cJSON.h"
 #include "esp_http_server.h"
@@ -35,6 +34,9 @@ typedef struct {
 
     network_status_event_t network;   // EVT_NETWORK_STATUS_CHANGED
     bool network_valid;
+
+    config_data_event_t config;       // EVT_CONFIG_DATA_CHANGED
+    bool config_valid;
 } web_server_data_t;
 
 static web_server_data_t s_cache;
@@ -46,6 +48,7 @@ static void init_cache(void)
     s_cache.system_valid = false;
     s_cache.switcher_valid = false;
     s_cache.network_valid = false;
+    s_cache.config_valid = false;
 }
 
 // ============================================================================
@@ -100,6 +103,23 @@ static esp_err_t onNetworkStatusEvent(const event_data_t* event)
     return ESP_OK;
 }
 
+/**
+ * @brief 설정 데이터 이벤트 핸들러 (EVT_CONFIG_DATA_CHANGED)
+ */
+static esp_err_t onConfigDataEvent(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // DisplayManager 패턴: 구조체 그대로 복사
+    const config_data_event_t* config = (const config_data_event_t*)event->data;
+    s_cache.config = *config;
+    s_cache.config_valid = true;
+
+    return ESP_OK;
+}
+
 // ============================================================================
 // Packed 데이터 → PGM/PVW 리스트 변환
 // ============================================================================
@@ -145,22 +165,64 @@ static esp_err_t api_status_handler(httpd_req_t* req)
 {
     cJSON* root = cJSON_CreateObject();
 
-    // Network (EVT_NETWORK_STATUS_CHANGED)
+    // Network (상태 + 설정 통합)
     cJSON* network = cJSON_CreateObject();
 
+    // AP (상태 + 설정)
+    cJSON* ap = cJSON_CreateObject();
+    if (s_cache.config_valid) {
+        cJSON_AddBoolToObject(ap, "enabled", s_cache.config.wifi_ap_enabled);
+        cJSON_AddStringToObject(ap, "ssid", s_cache.config.wifi_ap_ssid);
+        cJSON_AddNumberToObject(ap, "channel", s_cache.config.wifi_ap_channel);
+        // AP IP는 상태에서 (시작 후 할당됨)
+        if (s_cache.network_valid) {
+            cJSON_AddStringToObject(ap, "ip", (s_cache.config.wifi_ap_enabled && s_cache.network.ap_ip[0] != '\0') ? s_cache.network.ap_ip : "--");
+        } else {
+            cJSON_AddStringToObject(ap, "ip", "--");
+        }
+    } else {
+        cJSON_AddBoolToObject(ap, "enabled", false);
+        cJSON_AddStringToObject(ap, "ssid", "--");
+        cJSON_AddNumberToObject(ap, "channel", 1);
+        cJSON_AddStringToObject(ap, "ip", "--");
+    }
+    cJSON_AddItemToObject(network, "ap", ap);
+
+    // WiFi STA (상태 + 설정)
     cJSON* wifi = cJSON_CreateObject();
+    if (s_cache.config_valid) {
+        cJSON_AddBoolToObject(wifi, "enabled", s_cache.config.wifi_sta_enabled);
+        cJSON_AddStringToObject(wifi, "ssid", s_cache.config.wifi_sta_ssid);
+    } else {
+        cJSON_AddBoolToObject(wifi, "enabled", false);
+        cJSON_AddStringToObject(wifi, "ssid", "--");
+    }
+    // 연결 상태는 network 이벤트에서
     if (s_cache.network_valid) {
         cJSON_AddBoolToObject(wifi, "connected", s_cache.network.sta_connected);
-        cJSON_AddStringToObject(wifi, "ssid", s_cache.network.sta_ssid);
         cJSON_AddStringToObject(wifi, "ip", s_cache.network.sta_connected ? s_cache.network.sta_ip : "--");
     } else {
         cJSON_AddBoolToObject(wifi, "connected", false);
-        cJSON_AddStringToObject(wifi, "ssid", "--");
         cJSON_AddStringToObject(wifi, "ip", "--");
     }
     cJSON_AddItemToObject(network, "wifi", wifi);
 
+    // Ethernet (상태 + 설정)
     cJSON* ethernet = cJSON_CreateObject();
+    if (s_cache.config_valid) {
+        cJSON_AddBoolToObject(ethernet, "enabled", s_cache.config.eth_enabled);
+        cJSON_AddBoolToObject(ethernet, "dhcp", s_cache.config.eth_dhcp_enabled);
+        cJSON_AddStringToObject(ethernet, "staticIp", s_cache.config.eth_static_ip);
+        cJSON_AddStringToObject(ethernet, "netmask", s_cache.config.eth_static_netmask);
+        cJSON_AddStringToObject(ethernet, "gateway", s_cache.config.eth_static_gateway);
+    } else {
+        cJSON_AddBoolToObject(ethernet, "enabled", false);
+        cJSON_AddBoolToObject(ethernet, "dhcp", true);
+        cJSON_AddStringToObject(ethernet, "staticIp", "");
+        cJSON_AddStringToObject(ethernet, "netmask", "");
+        cJSON_AddStringToObject(ethernet, "gateway", "");
+    }
+    // 연결 상태와 IP는 network 이벤트에서
     if (s_cache.network_valid) {
         cJSON_AddBoolToObject(ethernet, "connected", s_cache.network.eth_connected);
         cJSON_AddStringToObject(ethernet, "ip", s_cache.network.eth_connected ? s_cache.network.eth_ip : "--");
@@ -175,104 +237,129 @@ static esp_err_t api_status_handler(httpd_req_t* req)
     // Switcher (EVT_SWITCHER_STATUS_CHANGED)
     cJSON* switcher = cJSON_CreateObject();
 
-    // S1 (Primary)
-    cJSON* s1 = cJSON_CreateObject();
+    // Primary (상태 + 설정 병합)
+    cJSON* primary = cJSON_CreateObject();
     if (s_cache.switcher_valid) {
-        cJSON_AddBoolToObject(s1, "connected", s_cache.switcher.s1_connected);
-        cJSON_AddStringToObject(s1, "type", s_cache.switcher.s1_type);
-        cJSON_AddStringToObject(s1, "ip", s_cache.switcher.s1_ip);
-        cJSON_AddNumberToObject(s1, "port", s_cache.switcher.s1_port);
+        cJSON_AddBoolToObject(primary, "connected", s_cache.switcher.s1_connected);
+        cJSON_AddStringToObject(primary, "type", s_cache.switcher.s1_type);
+        cJSON_AddStringToObject(primary, "ip", s_cache.switcher.s1_ip);
+        cJSON_AddNumberToObject(primary, "port", s_cache.switcher.s1_port);
+        // 설정 (config에서)
+        if (s_cache.config_valid) {
+            cJSON_AddNumberToObject(primary, "interface", s_cache.config.primary_interface);
+            cJSON_AddNumberToObject(primary, "cameraLimit", s_cache.config.primary_camera_limit);
+        } else {
+            cJSON_AddNumberToObject(primary, "interface", 2);
+            cJSON_AddNumberToObject(primary, "cameraLimit", 0);
+        }
 
-        // Tally S1
-        cJSON* s1_tally = cJSON_CreateObject();
-        cJSON* s1_pgm = cJSON_CreateArray();
-        cJSON* s1_pvw = cJSON_CreateArray();
-        uint8_t s1_count = s_cache.switcher.s1_channel_count;
-        for (uint8_t i = 0; i < s1_count && i < 20; i++) {
+        // Tally Primary
+        cJSON* p_tally = cJSON_CreateObject();
+        cJSON* p_pgm = cJSON_CreateArray();
+        cJSON* p_pvw = cJSON_CreateArray();
+        uint8_t p_count = s_cache.switcher.s1_channel_count;
+        for (uint8_t i = 0; i < p_count && i < 20; i++) {
             uint8_t state = get_channel_state(s_cache.switcher.s1_tally_data, i + 1);
             if (state == 1 || state == 3) {  // pgm or both
-                cJSON_AddItemToArray(s1_pgm, cJSON_CreateNumber(i + 1));
+                cJSON_AddItemToArray(p_pgm, cJSON_CreateNumber(i + 1));
             }
             if (state == 2 || state == 3) {  // pvw or both
-                cJSON_AddItemToArray(s1_pvw, cJSON_CreateNumber(i + 1));
+                cJSON_AddItemToArray(p_pvw, cJSON_CreateNumber(i + 1));
             }
         }
-        cJSON_AddItemToObject(s1_tally, "pgm", s1_pgm);
-        cJSON_AddItemToObject(s1_tally, "pvw", s1_pvw);
+        cJSON_AddItemToObject(p_tally, "pgm", p_pgm);
+        cJSON_AddItemToObject(p_tally, "pvw", p_pvw);
 
         // Raw hex (JS 해석용)
-        char s1_hex[17] = {0};
-        uint8_t s1_bytes = (s1_count + 3) / 4;
-        packed_to_hex(s_cache.switcher.s1_tally_data, s1_bytes, s1_hex, sizeof(s1_hex));
-        cJSON_AddStringToObject(s1_tally, "raw", s1_hex);
-        cJSON_AddNumberToObject(s1_tally, "channels", s1_count);
+        char p_hex[17] = {0};
+        uint8_t p_bytes = (p_count + 3) / 4;
+        packed_to_hex(s_cache.switcher.s1_tally_data, p_bytes, p_hex, sizeof(p_hex));
+        cJSON_AddStringToObject(p_tally, "raw", p_hex);
+        cJSON_AddNumberToObject(p_tally, "channels", p_count);
 
-        cJSON_AddItemToObject(s1, "tally", s1_tally);
+        cJSON_AddItemToObject(primary, "tally", p_tally);
     } else {
-        cJSON_AddBoolToObject(s1, "connected", false);
-        cJSON_AddStringToObject(s1, "type", "--");
-        cJSON_AddStringToObject(s1, "ip", "--");
-        cJSON_AddNumberToObject(s1, "port", 0);
+        cJSON_AddBoolToObject(primary, "connected", false);
+        cJSON_AddStringToObject(primary, "type", "--");
+        cJSON_AddStringToObject(primary, "ip", "--");
+        cJSON_AddNumberToObject(primary, "port", 0);
+        cJSON_AddNumberToObject(primary, "interface", 2);
+        cJSON_AddNumberToObject(primary, "cameraLimit", 0);
 
-        cJSON* s1_tally = cJSON_CreateObject();
-        cJSON_AddItemToObject(s1_tally, "pgm", cJSON_CreateArray());
-        cJSON_AddItemToObject(s1_tally, "pvw", cJSON_CreateArray());
-        cJSON_AddStringToObject(s1_tally, "raw", "");
-        cJSON_AddNumberToObject(s1_tally, "channels", 0);
-        cJSON_AddItemToObject(s1, "tally", s1_tally);
+        cJSON* p_tally = cJSON_CreateObject();
+        cJSON_AddItemToObject(p_tally, "pgm", cJSON_CreateArray());
+        cJSON_AddItemToObject(p_tally, "pvw", cJSON_CreateArray());
+        cJSON_AddStringToObject(p_tally, "raw", "");
+        cJSON_AddNumberToObject(p_tally, "channels", 0);
+        cJSON_AddItemToObject(primary, "tally", p_tally);
     }
-    cJSON_AddItemToObject(switcher, "s1", s1);
+    cJSON_AddItemToObject(switcher, "primary", primary);
 
-    // S2 (Secondary)
-    cJSON* s2 = cJSON_CreateObject();
+    // Secondary (상태 + 설정 병합)
+    cJSON* secondary = cJSON_CreateObject();
     if (s_cache.switcher_valid) {
-        cJSON_AddBoolToObject(s2, "connected", s_cache.switcher.s2_connected);
-        cJSON_AddStringToObject(s2, "type", s_cache.switcher.s2_type);
-        cJSON_AddStringToObject(s2, "ip", s_cache.switcher.s2_ip);
-        cJSON_AddNumberToObject(s2, "port", s_cache.switcher.s2_port);
+        cJSON_AddBoolToObject(secondary, "connected", s_cache.switcher.s2_connected);
+        cJSON_AddStringToObject(secondary, "type", s_cache.switcher.s2_type);
+        cJSON_AddStringToObject(secondary, "ip", s_cache.switcher.s2_ip);
+        cJSON_AddNumberToObject(secondary, "port", s_cache.switcher.s2_port);
+        // 설정 (config에서)
+        if (s_cache.config_valid) {
+            cJSON_AddNumberToObject(secondary, "interface", s_cache.config.secondary_interface);
+            cJSON_AddNumberToObject(secondary, "cameraLimit", s_cache.config.secondary_camera_limit);
+        } else {
+            cJSON_AddNumberToObject(secondary, "interface", 1);
+            cJSON_AddNumberToObject(secondary, "cameraLimit", 0);
+        }
 
-        // Tally S2
-        cJSON* s2_tally = cJSON_CreateObject();
-        cJSON* s2_pgm = cJSON_CreateArray();
-        cJSON* s2_pvw = cJSON_CreateArray();
-        uint8_t s2_count = s_cache.switcher.s2_channel_count;
-        for (uint8_t i = 0; i < s2_count && i < 20; i++) {
+        // Tally Secondary
+        cJSON* s_tally = cJSON_CreateObject();
+        cJSON* s_pgm = cJSON_CreateArray();
+        cJSON* s_pvw = cJSON_CreateArray();
+        uint8_t s_count = s_cache.switcher.s2_channel_count;
+        for (uint8_t i = 0; i < s_count && i < 20; i++) {
             uint8_t state = get_channel_state(s_cache.switcher.s2_tally_data, i + 1);
             if (state == 1 || state == 3) {  // pgm or both
-                cJSON_AddItemToArray(s2_pgm, cJSON_CreateNumber(i + 1));
+                cJSON_AddItemToArray(s_pgm, cJSON_CreateNumber(i + 1));
             }
             if (state == 2 || state == 3) {  // pvw or both
-                cJSON_AddItemToArray(s2_pvw, cJSON_CreateNumber(i + 1));
+                cJSON_AddItemToArray(s_pvw, cJSON_CreateNumber(i + 1));
             }
         }
-        cJSON_AddItemToObject(s2_tally, "pgm", s2_pgm);
-        cJSON_AddItemToObject(s2_tally, "pvw", s2_pvw);
+        cJSON_AddItemToObject(s_tally, "pgm", s_pgm);
+        cJSON_AddItemToObject(s_tally, "pvw", s_pvw);
 
         // Raw hex (JS 해석용)
-        char s2_hex[17] = {0};
-        uint8_t s2_bytes = (s2_count + 3) / 4;
-        packed_to_hex(s_cache.switcher.s2_tally_data, s2_bytes, s2_hex, sizeof(s2_hex));
-        cJSON_AddStringToObject(s2_tally, "raw", s2_hex);
-        cJSON_AddNumberToObject(s2_tally, "channels", s2_count);
+        char s_hex[17] = {0};
+        uint8_t s_bytes = (s_count + 3) / 4;
+        packed_to_hex(s_cache.switcher.s2_tally_data, s_bytes, s_hex, sizeof(s_hex));
+        cJSON_AddStringToObject(s_tally, "raw", s_hex);
+        cJSON_AddNumberToObject(s_tally, "channels", s_count);
 
-        cJSON_AddItemToObject(s2, "tally", s2_tally);
+        cJSON_AddItemToObject(secondary, "tally", s_tally);
     } else {
-        cJSON_AddBoolToObject(s2, "connected", false);
-        cJSON_AddStringToObject(s2, "type", "--");
-        cJSON_AddStringToObject(s2, "ip", "--");
-        cJSON_AddNumberToObject(s2, "port", 0);
+        cJSON_AddBoolToObject(secondary, "connected", false);
+        cJSON_AddStringToObject(secondary, "type", "--");
+        cJSON_AddStringToObject(secondary, "ip", "--");
+        cJSON_AddNumberToObject(secondary, "port", 0);
+        cJSON_AddNumberToObject(secondary, "interface", 1);
+        cJSON_AddNumberToObject(secondary, "cameraLimit", 0);
 
-        cJSON* s2_tally = cJSON_CreateObject();
-        cJSON_AddItemToObject(s2_tally, "pgm", cJSON_CreateArray());
-        cJSON_AddItemToObject(s2_tally, "pvw", cJSON_CreateArray());
-        cJSON_AddStringToObject(s2_tally, "raw", "");
-        cJSON_AddNumberToObject(s2_tally, "channels", 0);
-        cJSON_AddItemToObject(s2, "tally", s2_tally);
+        cJSON* s_tally = cJSON_CreateObject();
+        cJSON_AddItemToObject(s_tally, "pgm", cJSON_CreateArray());
+        cJSON_AddItemToObject(s_tally, "pvw", cJSON_CreateArray());
+        cJSON_AddStringToObject(s_tally, "raw", "");
+        cJSON_AddNumberToObject(s_tally, "channels", 0);
+        cJSON_AddItemToObject(secondary, "tally", s_tally);
     }
-    cJSON_AddItemToObject(switcher, "s2", s2);
+    cJSON_AddItemToObject(switcher, "secondary", secondary);
 
     // 공통 필드
     cJSON_AddBoolToObject(switcher, "dualEnabled", s_cache.switcher_valid ? s_cache.switcher.dual_mode : false);
+    if (s_cache.config_valid) {
+        cJSON_AddNumberToObject(switcher, "secondaryOffset", s_cache.config.secondary_offset);
+    } else {
+        cJSON_AddNumberToObject(switcher, "secondaryOffset", 4);
+    }
 
     cJSON_AddItemToObject(root, "switcher", switcher);
 
@@ -294,99 +381,33 @@ static esp_err_t api_status_handler(httpd_req_t* req)
     }
     cJSON_AddItemToObject(root, "system", system);
 
-    char* json_str = cJSON_Print(root);
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, json_str, strlen(json_str));
-
-    cJSON_free(json_str);
-    cJSON_Delete(root);
-    return ESP_OK;
-}
-
-/**
- * @brief GET /api/config - 설정 조회
- */
-static esp_err_t api_config_get_handler(httpd_req_t* req)
-{
-    config_all_t config;
-    esp_err_t ret = config_service_load_all(&config);
-    if (ret != ESP_OK) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to load config");
-        return ESP_FAIL;
-    }
-
-    cJSON* root = cJSON_CreateObject();
-
-    // Network
-    cJSON* network = cJSON_CreateObject();
-
-    cJSON* wifi_ap = cJSON_CreateObject();
-    cJSON_AddStringToObject(wifi_ap, "ssid", config.wifi_ap.ssid);
-    cJSON_AddNumberToObject(wifi_ap, "channel", config.wifi_ap.channel);
-    cJSON_AddBoolToObject(wifi_ap, "enabled", config.wifi_ap.enabled);
-    // AP IP (현재 상태에서 가져옴)
-    if (s_cache.network_valid) {
-        cJSON_AddStringToObject(wifi_ap, "ip", s_cache.network.ap_ip);
-    } else {
-        cJSON_AddStringToObject(wifi_ap, "ip", "--");
-    }
-    cJSON_AddItemToObject(network, "wifiAp", wifi_ap);
-
-    cJSON* wifi_sta = cJSON_CreateObject();
-    cJSON_AddStringToObject(wifi_sta, "ssid", config.wifi_sta.ssid);
-    cJSON_AddBoolToObject(wifi_sta, "enabled", config.wifi_sta.enabled);
-    cJSON_AddItemToObject(network, "wifiSta", wifi_sta);
-
-    cJSON* ethernet = cJSON_CreateObject();
-    cJSON_AddBoolToObject(ethernet, "dhcp", config.ethernet.dhcp_enabled);
-    cJSON_AddStringToObject(ethernet, "staticIp", config.ethernet.static_ip);
-    cJSON_AddStringToObject(ethernet, "netmask", config.ethernet.static_netmask);
-    cJSON_AddStringToObject(ethernet, "gateway", config.ethernet.static_gateway);
-    cJSON_AddBoolToObject(ethernet, "enabled", config.ethernet.enabled);
-    cJSON_AddItemToObject(network, "ethernet", ethernet);
-
-    cJSON_AddItemToObject(root, "network", network);
-
-    // Switcher
-    cJSON* switcher = cJSON_CreateObject();
-
-    cJSON* primary = cJSON_CreateObject();
-    const char* type_str = (config.primary.type == 0) ? "ATEM" :
-                          (config.primary.type == 1) ? "OBS" : "vMix";
-    cJSON_AddStringToObject(primary, "type", type_str);
-    cJSON_AddStringToObject(primary, "ip", config.primary.ip);
-    cJSON_AddNumberToObject(primary, "port", config.primary.port);
-    cJSON_AddNumberToObject(primary, "interface", config.primary.interface);
-    cJSON_AddNumberToObject(primary, "cameraLimit", config.primary.camera_limit);
-    cJSON_AddItemToObject(switcher, "primary", primary);
-
-    cJSON* secondary = cJSON_CreateObject();
-    type_str = (config.secondary.type == 0) ? "ATEM" :
-               (config.secondary.type == 1) ? "OBS" : "vMix";
-    cJSON_AddStringToObject(secondary, "type", type_str);
-    cJSON_AddStringToObject(secondary, "ip", config.secondary.ip);
-    cJSON_AddNumberToObject(secondary, "port", config.secondary.port);
-    cJSON_AddNumberToObject(secondary, "interface", config.secondary.interface);
-    cJSON_AddNumberToObject(secondary, "cameraLimit", config.secondary.camera_limit);
-    cJSON_AddItemToObject(switcher, "secondary", secondary);
-
-    cJSON_AddBoolToObject(switcher, "dualEnabled", config.dual_enabled);
-    cJSON_AddNumberToObject(switcher, "secondaryOffset", config.secondary_offset);
-    cJSON_AddItemToObject(root, "switcher", switcher);
-
-    // Device (LoRa RF)
+    // Device 설정 (config에서)
     cJSON* device = cJSON_CreateObject();
-    cJSON_AddNumberToObject(device, "brightness", config.device.brightness);
-    cJSON_AddNumberToObject(device, "cameraId", config.device.camera_id);
+    if (s_cache.config_valid) {
+        cJSON_AddNumberToObject(device, "brightness", s_cache.config.device_brightness);
+        cJSON_AddNumberToObject(device, "cameraId", s_cache.config.device_camera_id);
 
-    cJSON* rf = cJSON_CreateObject();
-    cJSON_AddNumberToObject(rf, "frequency", config.device.rf.frequency);
-    cJSON_AddNumberToObject(rf, "syncWord", config.device.rf.sync_word);
-    cJSON_AddNumberToObject(rf, "spreadingFactor", config.device.rf.sf);
-    cJSON_AddNumberToObject(rf, "codingRate", config.device.rf.cr);
-    cJSON_AddNumberToObject(rf, "bandwidth", config.device.rf.bw);
-    cJSON_AddNumberToObject(rf, "txPower", config.device.rf.tx_power);
-    cJSON_AddItemToObject(device, "rf", rf);
+        cJSON* rf = cJSON_CreateObject();
+        cJSON_AddNumberToObject(rf, "frequency", s_cache.config.device_rf_frequency);
+        cJSON_AddNumberToObject(rf, "syncWord", s_cache.config.device_rf_sync_word);
+        cJSON_AddNumberToObject(rf, "spreadingFactor", s_cache.config.device_rf_sf);
+        cJSON_AddNumberToObject(rf, "codingRate", s_cache.config.device_rf_cr);
+        cJSON_AddNumberToObject(rf, "bandwidth", s_cache.config.device_rf_bw);
+        cJSON_AddNumberToObject(rf, "txPower", s_cache.config.device_rf_tx_power);
+        cJSON_AddItemToObject(device, "rf", rf);
+    } else {
+        cJSON_AddNumberToObject(device, "brightness", 128);
+        cJSON_AddNumberToObject(device, "cameraId", 1);
+
+        cJSON* rf = cJSON_CreateObject();
+        cJSON_AddNumberToObject(rf, "frequency", 868);
+        cJSON_AddNumberToObject(rf, "syncWord", 0x12);
+        cJSON_AddNumberToObject(rf, "spreadingFactor", 7);
+        cJSON_AddNumberToObject(rf, "codingRate", 7);
+        cJSON_AddNumberToObject(rf, "bandwidth", 250);
+        cJSON_AddNumberToObject(rf, "txPower", 22);
+        cJSON_AddItemToObject(device, "rf", rf);
+    }
     cJSON_AddItemToObject(root, "device", device);
 
     char* json_str = cJSON_Print(root);
@@ -399,7 +420,7 @@ static esp_err_t api_config_get_handler(httpd_req_t* req)
 }
 
 /**
- * @brief POST /api/config/path - 설정 저장 (와일드카드 매칭)
+ * @brief POST /api/config/path - 설정 저장 (이벤트 기반)
  */
 static esp_err_t api_config_post_handler(httpd_req_t* req)
 {
@@ -433,156 +454,202 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
         return ESP_FAIL;
     }
 
-    esp_err_t result = ESP_OK;
-    const char* response_msg = "OK";
+    // 설정 저장 요청 이벤트 데이터
+    config_save_request_t save_req = {};
 
     // 경로별 처리
     if (strncmp(path, "device/brightness", 16) == 0) {
         cJSON* item = cJSON_GetObjectItem(root, "value");
         if (item && cJSON_IsNumber(item)) {
-            uint8_t brightness = (uint8_t)item->valueint;
-            result = config_service_set_brightness(brightness);
+            save_req.type = CONFIG_SAVE_DEVICE_BRIGHTNESS;
+            save_req.brightness = (uint8_t)item->valueint;
         } else {
-            result = ESP_FAIL;
-            response_msg = "Missing or invalid 'value'";
+            cJSON_Delete(root);
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing or invalid 'value'");
+            return ESP_FAIL;
         }
     }
     else if (strncmp(path, "device/camera_id", 15) == 0) {
         cJSON* item = cJSON_GetObjectItem(root, "value");
         if (item && cJSON_IsNumber(item)) {
-            uint8_t camera_id = (uint8_t)item->valueint;
-            result = config_service_set_camera_id(camera_id);
+            save_req.type = CONFIG_SAVE_DEVICE_CAMERA_ID;
+            save_req.camera_id = (uint8_t)item->valueint;
         } else {
-            result = ESP_FAIL;
-            response_msg = "Missing or invalid 'value'";
+            cJSON_Delete(root);
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing or invalid 'value'");
+            return ESP_FAIL;
         }
     }
     else if (strncmp(path, "device/rf", 9) == 0) {
         cJSON* freq = cJSON_GetObjectItem(root, "frequency");
         cJSON* sync = cJSON_GetObjectItem(root, "syncWord");
         if (freq && sync && cJSON_IsNumber(freq) && cJSON_IsNumber(sync)) {
-            result = config_service_set_rf((float)freq->valuedouble,
-                                          (uint8_t)sync->valueint);
+            save_req.type = CONFIG_SAVE_DEVICE_RF;
+            save_req.rf_frequency = (float)freq->valuedouble;
+            save_req.rf_sync_word = (uint8_t)sync->valueint;
         } else {
-            result = ESP_FAIL;
-            response_msg = "Missing 'frequency' or 'syncWord'";
+            cJSON_Delete(root);
+            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing 'frequency' or 'syncWord'");
+            return ESP_FAIL;
         }
     }
     else if (strncmp(path, "switcher/primary", 16) == 0) {
-        config_switcher_t sw;
-        config_service_get_primary(&sw);
-
         cJSON* type = cJSON_GetObjectItem(root, "type");
         cJSON* ip = cJSON_GetObjectItem(root, "ip");
         cJSON* port = cJSON_GetObjectItem(root, "port");
 
-        if (type) {
-            const char* type_str = type->valuestring;
-            sw.type = (strcmp(type_str, "ATEM") == 0) ? 0 :
-                      (strcmp(type_str, "OBS") == 0) ? 1 : 2;
+        save_req.type = CONFIG_SAVE_SWITCHER_PRIMARY;
+        if (type && type->valuestring) {
+            strncpy(save_req.switcher_type, type->valuestring, sizeof(save_req.switcher_type) - 1);
         }
         if (ip && cJSON_IsString(ip)) {
-            strncpy(sw.ip, ip->valuestring, sizeof(sw.ip) - 1);
+            strncpy(save_req.switcher_ip, ip->valuestring, sizeof(save_req.switcher_ip) - 1);
         }
         if (port && cJSON_IsNumber(port)) {
-            sw.port = (uint16_t)port->valueint;
+            save_req.switcher_port = (uint16_t)port->valueint;
         }
-        result = config_service_set_primary(&sw);
     }
     else if (strncmp(path, "switcher/secondary", 18) == 0) {
-        config_switcher_t sw;
-        config_service_get_secondary(&sw);
-
         cJSON* type = cJSON_GetObjectItem(root, "type");
         cJSON* ip = cJSON_GetObjectItem(root, "ip");
         cJSON* port = cJSON_GetObjectItem(root, "port");
 
-        if (type) {
-            const char* type_str = type->valuestring;
-            sw.type = (strcmp(type_str, "ATEM") == 0) ? 0 :
-                      (strcmp(type_str, "OBS") == 0) ? 1 : 2;
+        save_req.type = CONFIG_SAVE_SWITCHER_SECONDARY;
+        if (type && type->valuestring) {
+            strncpy(save_req.switcher_type, type->valuestring, sizeof(save_req.switcher_type) - 1);
         }
         if (ip && cJSON_IsString(ip)) {
-            strncpy(sw.ip, ip->valuestring, sizeof(sw.ip) - 1);
+            strncpy(save_req.switcher_ip, ip->valuestring, sizeof(save_req.switcher_ip) - 1);
         }
         if (port && cJSON_IsNumber(port)) {
-            sw.port = (uint16_t)port->valueint;
+            save_req.switcher_port = (uint16_t)port->valueint;
         }
-        result = config_service_set_secondary(&sw);
     }
     else if (strncmp(path, "switcher/dual", 13) == 0) {
         cJSON* enabled = cJSON_GetObjectItem(root, "enabled");
         cJSON* offset = cJSON_GetObjectItem(root, "offset");
 
+        save_req.type = CONFIG_SAVE_SWITCHER_DUAL;
         if (enabled && cJSON_IsBool(enabled)) {
-            bool dual_enabled = cJSON_IsTrue(enabled);
-            result = config_service_set_dual_enabled(dual_enabled);
+            save_req.switcher_dual_enabled = cJSON_IsTrue(enabled);
         }
         if (offset && cJSON_IsNumber(offset)) {
-            config_service_set_secondary_offset((uint8_t)offset->valueint);
+            save_req.switcher_secondary_offset = (uint8_t)offset->valueint;
         }
     }
-    else if (strncmp(path, "network/wifi", 13) == 0) {
-        config_wifi_sta_t wifi;
-        config_service_get_wifi_sta(&wifi);
-
+    else if (strncmp(path, "network/ap", 11) == 0) {
         cJSON* ssid = cJSON_GetObjectItem(root, "ssid");
+        cJSON* password = cJSON_GetObjectItem(root, "password");
+        cJSON* channel = cJSON_GetObjectItem(root, "channel");
         cJSON* enabled = cJSON_GetObjectItem(root, "enabled");
 
+        save_req.type = CONFIG_SAVE_WIFI_AP;
         if (ssid && cJSON_IsString(ssid)) {
-            strncpy(wifi.ssid, ssid->valuestring, sizeof(wifi.ssid) - 1);
+            strncpy(save_req.wifi_ap_ssid, ssid->valuestring, sizeof(save_req.wifi_ap_ssid) - 1);
         }
-        if (enabled) {
-            wifi.enabled = cJSON_IsTrue(enabled);
-        } else {
-            wifi.enabled = true;
+        if (password && cJSON_IsString(password)) {
+            strncpy(save_req.wifi_ap_password, password->valuestring, sizeof(save_req.wifi_ap_password) - 1);
+        }
+        if (channel && cJSON_IsNumber(channel)) {
+            save_req.wifi_ap_channel = (uint8_t)channel->valueint;
+        }
+        if (enabled && cJSON_IsBool(enabled)) {
+            save_req.wifi_ap_enabled = cJSON_IsTrue(enabled);
         }
 
-        result = config_service_set_wifi_sta(&wifi);
+        ESP_LOGI(TAG, "Publishing AP save event: ssid=%s, ch=%d, en=%d",
+                 save_req.wifi_ap_ssid, save_req.wifi_ap_channel, save_req.wifi_ap_enabled);
+    }
+    else if (strncmp(path, "network/wifi", 13) == 0) {
+        cJSON* ssid = cJSON_GetObjectItem(root, "ssid");
+        cJSON* password = cJSON_GetObjectItem(root, "password");
+        cJSON* enabled = cJSON_GetObjectItem(root, "enabled");
+
+        save_req.type = CONFIG_SAVE_WIFI_STA;
+        if (ssid && cJSON_IsString(ssid)) {
+            strncpy(save_req.wifi_sta_ssid, ssid->valuestring, sizeof(save_req.wifi_sta_ssid) - 1);
+        }
+        if (password && cJSON_IsString(password)) {
+            strncpy(save_req.wifi_sta_password, password->valuestring, sizeof(save_req.wifi_sta_password) - 1);
+        }
+        if (enabled && cJSON_IsBool(enabled)) {
+            save_req.wifi_sta_enabled = cJSON_IsTrue(enabled);
+        }
+
+        ESP_LOGI(TAG, "Publishing STA save event: ssid=%s, en=%d",
+                 save_req.wifi_sta_ssid, save_req.wifi_sta_enabled);
     }
     else if (strncmp(path, "network/ethernet", 16) == 0) {
-        config_ethernet_t eth;
-        config_service_get_ethernet(&eth);
-
         cJSON* ip = cJSON_GetObjectItem(root, "staticIp");
         cJSON* gateway = cJSON_GetObjectItem(root, "gateway");
         cJSON* netmask = cJSON_GetObjectItem(root, "netmask");
         cJSON* dhcp = cJSON_GetObjectItem(root, "dhcp");
+        cJSON* enabled = cJSON_GetObjectItem(root, "enabled");
 
+        save_req.type = CONFIG_SAVE_ETHERNET;
+        if (dhcp && cJSON_IsBool(dhcp)) {
+            save_req.eth_dhcp = cJSON_IsTrue(dhcp);
+        }
         if (ip && cJSON_IsString(ip)) {
-            strncpy(eth.static_ip, ip->valuestring, sizeof(eth.static_ip) - 1);
+            strncpy(save_req.eth_static_ip, ip->valuestring, sizeof(save_req.eth_static_ip) - 1);
         }
         if (gateway && cJSON_IsString(gateway)) {
-            strncpy(eth.static_gateway, gateway->valuestring, sizeof(eth.static_gateway) - 1);
+            strncpy(save_req.eth_gateway, gateway->valuestring, sizeof(save_req.eth_gateway) - 1);
         }
         if (netmask && cJSON_IsString(netmask)) {
-            strncpy(eth.static_netmask, netmask->valuestring, sizeof(eth.static_netmask) - 1);
+            strncpy(save_req.eth_netmask, netmask->valuestring, sizeof(save_req.eth_netmask) - 1);
         }
-        if (dhcp) {
-            eth.dhcp_enabled = cJSON_IsTrue(dhcp);
+        if (enabled && cJSON_IsBool(enabled)) {
+            save_req.eth_enabled = cJSON_IsTrue(enabled);
         }
 
-        result = config_service_set_ethernet(&eth);
+        ESP_LOGI(TAG, "Publishing Ethernet save event: dhcp=%d, en=%d",
+                 save_req.eth_dhcp, save_req.eth_enabled);
     }
     else {
-        result = ESP_FAIL;
-        response_msg = "Unknown config path";
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Unknown config path");
+        return ESP_FAIL;
     }
 
     cJSON_Delete(root);
 
-    // 응답
-    if (result == ESP_OK) {
-        httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
-    } else {
-        httpd_resp_set_type(req, "application/json");
-        char resp[128];
-        snprintf(resp, sizeof(resp), "{\"status\":\"error\",\"message\":\"%s\"}", response_msg);
-        httpd_resp_send(req, resp, strlen(resp));
+    // 설정 저장 이벤트 발행 (config_service가 NVS 저장 후 EVT_CONFIG_DATA_CHANGED 발행)
+    event_bus_publish(EVT_CONFIG_CHANGED, &save_req, sizeof(save_req));
+
+    // EVT_CONFIG_DATA_CHANGED 이벤트가 network_service에 전달될 때까지 대기
+    vTaskDelay(pdMS_TO_TICKS(100));
+
+    // 네트워크 설정인 경우 재시작 이벤트도 발행
+    if (save_req.type == CONFIG_SAVE_WIFI_AP) {
+        network_restart_request_t restart_req = { .type = NETWORK_RESTART_WIFI_AP, .ssid = "", .password = "" };
+        event_bus_publish(EVT_NETWORK_RESTART_REQUEST, &restart_req, sizeof(restart_req));
+    }
+    else if (save_req.type == CONFIG_SAVE_WIFI_STA) {
+        if (save_req.wifi_sta_enabled) {
+            network_restart_request_t restart_req = {
+                .type = NETWORK_RESTART_WIFI_STA,
+                .ssid = "",
+                .password = ""
+            };
+            strncpy(restart_req.ssid, save_req.wifi_sta_ssid, sizeof(restart_req.ssid) - 1);
+            strncpy(restart_req.password, save_req.wifi_sta_password, sizeof(restart_req.password) - 1);
+            event_bus_publish(EVT_NETWORK_RESTART_REQUEST, &restart_req, sizeof(restart_req));
+        } else {
+            network_restart_request_t restart_req = { .type = NETWORK_RESTART_WIFI_AP, .ssid = "", .password = "" };
+            event_bus_publish(EVT_NETWORK_RESTART_REQUEST, &restart_req, sizeof(restart_req));
+        }
+    }
+    else if (save_req.type == CONFIG_SAVE_ETHERNET) {
+        network_restart_request_t restart_req = { .type = NETWORK_RESTART_ETHERNET, .ssid = "", .password = "" };
+        event_bus_publish(EVT_NETWORK_RESTART_REQUEST, &restart_req, sizeof(restart_req));
     }
 
-    return result;
+    // 응답
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+
+    return ESP_OK;
 }
 
 /**
@@ -646,13 +713,6 @@ static const httpd_uri_t uri_api_status = {
     .user_ctx = nullptr
 };
 
-static const httpd_uri_t uri_api_config = {
-    .uri = "/api/config",
-    .method = HTTP_GET,
-    .handler = api_config_get_handler,
-    .user_ctx = nullptr
-};
-
 static const httpd_uri_t uri_api_reboot = {
     .uri = "/api/reboot",
     .method = HTTP_POST,
@@ -660,8 +720,22 @@ static const httpd_uri_t uri_api_reboot = {
     .user_ctx = nullptr
 };
 
-static const httpd_uri_t uri_api_config_post = {
-    .uri = "/api/config/*",
+static const httpd_uri_t uri_api_config_network_ap = {
+    .uri = "/api/config/network/ap",
+    .method = HTTP_POST,
+    .handler = api_config_post_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_config_network_wifi = {
+    .uri = "/api/config/network/wifi",
+    .method = HTTP_POST,
+    .handler = api_config_post_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_config_network_ethernet = {
+    .uri = "/api/config/network/ethernet",
     .method = HTTP_POST,
     .handler = api_config_post_handler,
     .user_ctx = nullptr
@@ -701,7 +775,7 @@ esp_err_t web_server_init(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     config.max_open_sockets = 5;
-    config.max_uri_handlers = 12;  // API + 정적 파일
+    config.max_uri_handlers = 16;  // API + 정적 파일
     config.lru_purge_enable = true;
 
     esp_err_t ret = httpd_start(&s_server, &config);
@@ -715,14 +789,19 @@ esp_err_t web_server_init(void)
     httpd_register_uri_handler(s_server, &uri_css);
     httpd_register_uri_handler(s_server, &uri_js);
     httpd_register_uri_handler(s_server, &uri_api_status);
-    httpd_register_uri_handler(s_server, &uri_api_config);
     httpd_register_uri_handler(s_server, &uri_api_reboot);
-    httpd_register_uri_handler(s_server, &uri_api_config_post);
+    httpd_register_uri_handler(s_server, &uri_api_config_network_ap);
+    httpd_register_uri_handler(s_server, &uri_api_config_network_wifi);
+    httpd_register_uri_handler(s_server, &uri_api_config_network_ethernet);
 
     // 이벤트 구독
     event_bus_subscribe(EVT_INFO_UPDATED, onSystemInfoEvent);
     event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, onSwitcherStatusEvent);
     event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
+    event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
+
+    // 설정 데이터 요청 (초기 캐시 populate)
+    event_bus_publish(EVT_CONFIG_DATA_REQUEST, nullptr, 0);
 
     ESP_LOGI(TAG, "Web server started on port 80");
     return ESP_OK;
@@ -740,11 +819,13 @@ esp_err_t web_server_stop(void)
     event_bus_unsubscribe(EVT_INFO_UPDATED, onSystemInfoEvent);
     event_bus_unsubscribe(EVT_SWITCHER_STATUS_CHANGED, onSwitcherStatusEvent);
     event_bus_unsubscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
+    event_bus_unsubscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
 
     // 캐시 무효화
     s_cache.system_valid = false;
     s_cache.switcher_valid = false;
     s_cache.network_valid = false;
+    s_cache.config_valid = false;
 
     esp_err_t ret = httpd_stop(s_server);
     s_server = nullptr;

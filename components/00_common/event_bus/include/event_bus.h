@@ -146,6 +146,134 @@ typedef struct __attribute__((packed)) {
     bool eth_dhcp;           ///< Ethernet DHCP 모드
 } network_status_event_t;
 
+/**
+ * @brief 네트워크 재시작 요청 타입
+ */
+typedef enum {
+    NETWORK_RESTART_WIFI_AP = 0,      ///< WiFi AP 재시작
+    NETWORK_RESTART_WIFI_STA,         ///< WiFi STA 재연결 (AP 유지)
+    NETWORK_RESTART_ETHERNET,         ///< Ethernet 재시작
+    NETWORK_RESTART_ALL,              ///< 전체 네트워크 재시작
+} network_restart_type_t;
+
+/**
+ * @brief 네트워크 재시작 요청 이벤트 데이터 (EVT_NETWORK_RESTART_REQUEST용)
+ *
+ * web_server에서 발행하는 네트워크 재시작 요청
+ */
+typedef struct {
+    network_restart_type_t type;  ///< 재시작 타입
+    char ssid[33];                ///< SSID (STA 재연결용)
+    char password[65];             ///< 비밀번호 (STA 재연결용)
+} network_restart_request_t;
+
+/**
+ * @brief 설정 저장 요청 타입
+ */
+typedef enum {
+    CONFIG_SAVE_WIFI_AP = 0,          ///< WiFi AP 설정 저장
+    CONFIG_SAVE_WIFI_STA,             ///< WiFi STA 설정 저장
+    CONFIG_SAVE_ETHERNET,             ///< Ethernet 설정 저장
+    CONFIG_SAVE_SWITCHER_PRIMARY,     ///< Primary Switcher 설정 저장
+    CONFIG_SAVE_SWITCHER_SECONDARY,   ///< Secondary Switcher 설정 저장
+    CONFIG_SAVE_SWITCHER_DUAL,        ///< Dual 모드 설정 저장
+    CONFIG_SAVE_DEVICE_BRIGHTNESS,    ///< 밝기 설정 저장
+    CONFIG_SAVE_DEVICE_CAMERA_ID,     ///< 카메라 ID 설정 저장
+    CONFIG_SAVE_DEVICE_RF,            ///< RF 설정 저장
+} config_save_type_t;
+
+/**
+ * @brief 설정 저장 요청 이벤트 데이터 (EVT_CONFIG_CHANGED용)
+ *
+ * web_server에서 발행하는 설정 저장 요청
+ */
+typedef struct {
+    config_save_type_t type;     ///< 저장 타입
+
+    // WiFi AP
+    char wifi_ap_ssid[33];       ///< AP SSID
+    char wifi_ap_password[65];   ///< AP 비밀번호
+    uint8_t wifi_ap_channel;     ///< AP 채널
+    bool wifi_ap_enabled;        ///< AP 활성화
+
+    // WiFi STA
+    char wifi_sta_ssid[33];      ///< STA SSID
+    char wifi_sta_password[65];  ///< STA 비밀번호
+    bool wifi_sta_enabled;       ///< STA 활성화
+
+    // Ethernet
+    bool eth_dhcp;               ///< DHCP 모드
+    char eth_static_ip[16];      ///< 고정 IP
+    char eth_netmask[16];        ///< 넷마스크
+    char eth_gateway[16];        ///< 게이트웨이
+    bool eth_enabled;            ///< Ethernet 활성화
+
+    // Switcher
+    char switcher_type[8];       ///< Switcher 타입 ("ATEM", "OBS", "vMix")
+    char switcher_ip[16];        ///< Switcher IP
+    uint16_t switcher_port;      ///< Switcher 포트
+    bool switcher_dual_enabled;  ///< 듀얼 모드 활성화
+    uint8_t switcher_secondary_offset; ///< Secondary 오프셋
+
+    // Device
+    uint8_t brightness;          ///< 밝기 (0-255)
+    uint8_t camera_id;           ///< 카메라 ID (1-20)
+    float rf_frequency;          ///< RF 주파수 (MHz)
+    uint8_t rf_sync_word;        ///< RF Sync Word
+} config_save_request_t;
+
+/**
+ * @brief 설정 데이터 이벤트 (EVT_CONFIG_DATA_CHANGED용)
+ *
+ * config_service에서 발행하는 전체 설정 데이터
+ * web_server에서 캐시용으로 사용
+ */
+typedef struct __attribute__((packed)) {
+    // WiFi AP
+    char wifi_ap_ssid[33];
+    uint8_t wifi_ap_channel;
+    bool wifi_ap_enabled;
+
+    // WiFi STA
+    char wifi_sta_ssid[33];
+    bool wifi_sta_enabled;
+
+    // Ethernet
+    bool eth_dhcp_enabled;
+    char eth_static_ip[16];
+    char eth_static_netmask[16];
+    char eth_static_gateway[16];
+    bool eth_enabled;
+
+    // Device
+    uint8_t device_brightness;
+    uint8_t device_camera_id;
+    float device_rf_frequency;
+    uint8_t device_rf_sync_word;
+    uint8_t device_rf_sf;         // Spreading Factor
+    uint8_t device_rf_cr;          // Coding Rate
+    float device_rf_bw;           // Bandwidth
+    int8_t device_rf_tx_power;    // TX Power
+
+    // Switcher Primary
+    uint8_t primary_type;        // 0=ATEM, 1=OBS, 2=vMix
+    char primary_ip[16];
+    uint16_t primary_port;
+    uint8_t primary_interface;
+    uint8_t primary_camera_limit;
+
+    // Switcher Secondary
+    uint8_t secondary_type;      // 0=ATEM, 1=OBS, 2=vMix
+    char secondary_ip[16];
+    uint16_t secondary_port;
+    uint8_t secondary_interface;
+    uint8_t secondary_camera_limit;
+
+    // Switcher Dual
+    bool dual_enabled;
+    uint8_t secondary_offset;
+} config_data_event_t;
+
 // ============================================================================
 // 이벤트 타입 정의
 // ============================================================================
@@ -156,7 +284,9 @@ typedef struct __attribute__((packed)) {
 typedef enum {
     // 시스템 이벤트 (01_app)
     EVT_SYSTEM_READY = 0,
-    EVT_CONFIG_CHANGED,
+    EVT_CONFIG_CHANGED,         ///< 설정 저장 요청 (data: config_save_request_t)
+    EVT_CONFIG_DATA_CHANGED,    ///< 설정 데이터 변경 (data: config_data_event_t)
+    EVT_CONFIG_DATA_REQUEST,    ///< 설정 데이터 요청 (data: 없음, 응답으로 EVT_CONFIG_DATA_CHANGED 발행)
     EVT_BRIGHTNESS_CHANGED,     ///< 밝기 설정 변경 (data: uint8_t, 0-255)
     EVT_CAMERA_ID_CHANGED,      ///< 카메라 ID 변경 (data: uint8_t, 1-20)
     EVT_RF_CHANGED,             ///< RF 설정 변경 (data: lora_rf_event_t)
@@ -181,6 +311,7 @@ typedef enum {
     EVT_NETWORK_STATUS_CHANGED,   ///< 네트워크 상태 변경 (data: network_status_event_t)
     EVT_NETWORK_CONNECTED,
     EVT_NETWORK_DISCONNECTED,
+    EVT_NETWORK_RESTART_REQUEST,  ///< 네트워크 재시작 요청 (data: network_restart_request_t)
 
     // 스위처 이벤트 (03_service)
     EVT_SWITCHER_CONNECTED,

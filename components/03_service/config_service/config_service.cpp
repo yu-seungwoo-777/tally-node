@@ -102,6 +102,9 @@ private:
     static bool s_initialized;
 };
 
+// 이벤트 발행용 정적 버퍼 (DisplayManager 패턴)
+static config_data_event_t s_config_data_event = {};
+
 // ============================================================================
 // 정적 멤버 초기화
 // ============================================================================
@@ -142,6 +145,257 @@ static esp_err_t on_device_unregister_request(const event_data_t* event) {
     }
 
     return ConfigServiceClass::unregisterDevice(req->device_id);
+}
+
+/**
+ * @brief 설정 저장 요청 이벤트 핸들러
+ * web_server에서 EVT_CONFIG_CHANGED로 발행하는 설정 저장 요청 처리
+ */
+static esp_err_t on_config_save_request(const event_data_t* event) {
+    if (event->data == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const auto* req = reinterpret_cast<const config_save_request_t*>(event->data);
+    esp_err_t ret = ESP_OK;
+
+    switch (req->type) {
+        case CONFIG_SAVE_WIFI_AP: {
+            config_wifi_ap_t ap = {};
+            strncpy(ap.ssid, req->wifi_ap_ssid, sizeof(ap.ssid) - 1);
+            strncpy(ap.password, req->wifi_ap_password, sizeof(ap.password) - 1);
+            ap.channel = req->wifi_ap_channel;
+            ap.enabled = req->wifi_ap_enabled;
+            ret = ConfigServiceClass::setWiFiAP(&ap);
+            break;
+        }
+
+        case CONFIG_SAVE_WIFI_STA: {
+            config_wifi_sta_t sta = {};
+            strncpy(sta.ssid, req->wifi_sta_ssid, sizeof(sta.ssid) - 1);
+            strncpy(sta.password, req->wifi_sta_password, sizeof(sta.password) - 1);
+            sta.enabled = req->wifi_sta_enabled;
+            ret = ConfigServiceClass::setWiFiSTA(&sta);
+            break;
+        }
+
+        case CONFIG_SAVE_ETHERNET: {
+            config_ethernet_t eth = {};
+            eth.dhcp_enabled = req->eth_dhcp;
+            strncpy(eth.static_ip, req->eth_static_ip, sizeof(eth.static_ip) - 1);
+            strncpy(eth.static_netmask, req->eth_netmask, sizeof(eth.static_netmask) - 1);
+            strncpy(eth.static_gateway, req->eth_gateway, sizeof(eth.static_gateway) - 1);
+            eth.enabled = req->eth_enabled;
+            ret = ConfigServiceClass::setEthernet(&eth);
+            break;
+        }
+
+        case CONFIG_SAVE_SWITCHER_PRIMARY: {
+            config_switcher_t sw = {};
+            // switcher_type 문자열을 숫자로 변환
+            if (strcmp(req->switcher_type, "ATEM") == 0) {
+                sw.type = 0;
+            } else if (strcmp(req->switcher_type, "OBS") == 0) {
+                sw.type = 1;
+            } else {
+                sw.type = 2;  // vMix
+            }
+            strncpy(sw.ip, req->switcher_ip, sizeof(sw.ip) - 1);
+            sw.port = req->switcher_port;
+            ret = ConfigServiceClass::setPrimary(&sw);
+            break;
+        }
+
+        case CONFIG_SAVE_SWITCHER_SECONDARY: {
+            config_switcher_t sw = {};
+            // switcher_type 문자열을 숫자로 변환
+            if (strcmp(req->switcher_type, "ATEM") == 0) {
+                sw.type = 0;
+            } else if (strcmp(req->switcher_type, "OBS") == 0) {
+                sw.type = 1;
+            } else {
+                sw.type = 2;  // vMix
+            }
+            strncpy(sw.ip, req->switcher_ip, sizeof(sw.ip) - 1);
+            sw.port = req->switcher_port;
+            ret = ConfigServiceClass::setSecondary(&sw);
+            break;
+        }
+
+        case CONFIG_SAVE_SWITCHER_DUAL:
+            if (req->switcher_dual_enabled) {
+                ret = ConfigServiceClass::setDualEnabled(true);
+            }
+            if (req->switcher_secondary_offset > 0) {
+                ret = ConfigServiceClass::setSecondaryOffset(req->switcher_secondary_offset);
+            }
+            break;
+
+        case CONFIG_SAVE_DEVICE_BRIGHTNESS:
+            ret = ConfigServiceClass::setBrightness(req->brightness);
+            break;
+
+        case CONFIG_SAVE_DEVICE_CAMERA_ID:
+            ret = ConfigServiceClass::setCameraId(req->camera_id);
+            break;
+
+        case CONFIG_SAVE_DEVICE_RF:
+            ret = ConfigServiceClass::setRf(req->rf_frequency, req->rf_sync_word);
+            break;
+
+        default:
+            T_LOGW(TAG, "Unknown config save type: %d", req->type);
+            return ESP_ERR_INVALID_ARG;
+    }
+
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "Config saved via event: type=%d", req->type);
+
+        // 저장 완료 후 전체 설정 데이터를 로드하여 정적 버퍼에 저장
+        config_all_t full_config;
+        if (ConfigServiceClass::loadAll(&full_config) == ESP_OK) {
+            // 정적 버퍼에 데이터 저장 (DisplayManager 패턴)
+            config_data_event_t* data_event = &s_config_data_event;
+            memset(data_event, 0, sizeof(config_data_event_t));
+
+            // WiFi AP
+            strncpy(data_event->wifi_ap_ssid, full_config.wifi_ap.ssid, sizeof(data_event->wifi_ap_ssid) - 1);
+            data_event->wifi_ap_ssid[sizeof(data_event->wifi_ap_ssid) - 1] = '\0';
+            data_event->wifi_ap_channel = full_config.wifi_ap.channel;
+            data_event->wifi_ap_enabled = full_config.wifi_ap.enabled;
+
+            // WiFi STA
+            strncpy(data_event->wifi_sta_ssid, full_config.wifi_sta.ssid, sizeof(data_event->wifi_sta_ssid) - 1);
+            data_event->wifi_sta_ssid[sizeof(data_event->wifi_sta_ssid) - 1] = '\0';
+            data_event->wifi_sta_enabled = full_config.wifi_sta.enabled;
+
+            // Ethernet
+            data_event->eth_dhcp_enabled = full_config.ethernet.dhcp_enabled;
+            strncpy(data_event->eth_static_ip, full_config.ethernet.static_ip, sizeof(data_event->eth_static_ip) - 1);
+            data_event->eth_static_ip[sizeof(data_event->eth_static_ip) - 1] = '\0';
+            strncpy(data_event->eth_static_netmask, full_config.ethernet.static_netmask, sizeof(data_event->eth_static_netmask) - 1);
+            data_event->eth_static_netmask[sizeof(data_event->eth_static_netmask) - 1] = '\0';
+            strncpy(data_event->eth_static_gateway, full_config.ethernet.static_gateway, sizeof(data_event->eth_static_gateway) - 1);
+            data_event->eth_static_gateway[sizeof(data_event->eth_static_gateway) - 1] = '\0';
+            data_event->eth_enabled = full_config.ethernet.enabled;
+
+            // Device
+            data_event->device_brightness = full_config.device.brightness;
+            data_event->device_camera_id = full_config.device.camera_id;
+            data_event->device_rf_frequency = full_config.device.rf.frequency;
+            data_event->device_rf_sync_word = full_config.device.rf.sync_word;
+            data_event->device_rf_sf = full_config.device.rf.sf;
+            data_event->device_rf_cr = full_config.device.rf.cr;
+            data_event->device_rf_bw = full_config.device.rf.bw;
+            data_event->device_rf_tx_power = full_config.device.rf.tx_power;
+
+            // Switcher Primary
+            data_event->primary_type = full_config.primary.type;
+            strncpy(data_event->primary_ip, full_config.primary.ip, sizeof(data_event->primary_ip) - 1);
+            data_event->primary_ip[sizeof(data_event->primary_ip) - 1] = '\0';
+            data_event->primary_port = full_config.primary.port;
+            data_event->primary_interface = full_config.primary.interface;
+            data_event->primary_camera_limit = full_config.primary.camera_limit;
+
+            // Switcher Secondary
+            data_event->secondary_type = full_config.secondary.type;
+            strncpy(data_event->secondary_ip, full_config.secondary.ip, sizeof(data_event->secondary_ip) - 1);
+            data_event->secondary_ip[sizeof(data_event->secondary_ip) - 1] = '\0';
+            data_event->secondary_port = full_config.secondary.port;
+            data_event->secondary_interface = full_config.secondary.interface;
+            data_event->secondary_camera_limit = full_config.secondary.camera_limit;
+
+            // Switcher Dual
+            data_event->dual_enabled = full_config.dual_enabled;
+            data_event->secondary_offset = full_config.secondary_offset;
+
+            // 정적 버퍼 포인터를 발행 (수명 주기 보장)
+            event_bus_publish(EVT_CONFIG_DATA_CHANGED, data_event, sizeof(config_data_event_t));
+        }
+    } else {
+        T_LOGE(TAG, "Config save failed: type=%d", req->type);
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 설정 데이터 요청 이벤트 핸들러
+ * web_server에서 EVT_CONFIG_DATA_REQUEST로 발행하는 설정 데이터 요청 처리
+ * 현재 설정을 로드하여 정적 버퍼에 저장 후 포인터를 발행
+ */
+static esp_err_t on_config_data_request(const event_data_t* event)
+{
+    (void)event;  // 데이터 없음
+
+    T_LOGI(TAG, "Config data request received");
+
+    // 현재 설정 로드
+    config_all_t full_config;
+    if (ConfigServiceClass::loadAll(&full_config) != ESP_OK) {
+        T_LOGE(TAG, "Failed to load config for request");
+        return ESP_FAIL;
+    }
+
+    // 정적 버퍼에 데이터 저장 (DisplayManager 패턴)
+    config_data_event_t* data_event = &s_config_data_event;
+    memset(data_event, 0, sizeof(config_data_event_t));
+
+    // WiFi AP
+    strncpy(data_event->wifi_ap_ssid, full_config.wifi_ap.ssid, sizeof(data_event->wifi_ap_ssid) - 1);
+    data_event->wifi_ap_ssid[sizeof(data_event->wifi_ap_ssid) - 1] = '\0';
+    data_event->wifi_ap_channel = full_config.wifi_ap.channel;
+    data_event->wifi_ap_enabled = full_config.wifi_ap.enabled;
+
+    // WiFi STA
+    strncpy(data_event->wifi_sta_ssid, full_config.wifi_sta.ssid, sizeof(data_event->wifi_sta_ssid) - 1);
+    data_event->wifi_sta_ssid[sizeof(data_event->wifi_sta_ssid) - 1] = '\0';
+    data_event->wifi_sta_enabled = full_config.wifi_sta.enabled;
+
+    // Ethernet
+    data_event->eth_dhcp_enabled = full_config.ethernet.dhcp_enabled;
+    strncpy(data_event->eth_static_ip, full_config.ethernet.static_ip, sizeof(data_event->eth_static_ip) - 1);
+    data_event->eth_static_ip[sizeof(data_event->eth_static_ip) - 1] = '\0';
+    strncpy(data_event->eth_static_netmask, full_config.ethernet.static_netmask, sizeof(data_event->eth_static_netmask) - 1);
+    data_event->eth_static_netmask[sizeof(data_event->eth_static_netmask) - 1] = '\0';
+    strncpy(data_event->eth_static_gateway, full_config.ethernet.static_gateway, sizeof(data_event->eth_static_gateway) - 1);
+    data_event->eth_static_gateway[sizeof(data_event->eth_static_gateway) - 1] = '\0';
+    data_event->eth_enabled = full_config.ethernet.enabled;
+
+    // Device
+    data_event->device_brightness = full_config.device.brightness;
+    data_event->device_camera_id = full_config.device.camera_id;
+    data_event->device_rf_frequency = full_config.device.rf.frequency;
+    data_event->device_rf_sync_word = full_config.device.rf.sync_word;
+    data_event->device_rf_sf = full_config.device.rf.sf;
+    data_event->device_rf_cr = full_config.device.rf.cr;
+    data_event->device_rf_bw = full_config.device.rf.bw;
+    data_event->device_rf_tx_power = full_config.device.rf.tx_power;
+
+    // Switcher Primary
+    data_event->primary_type = full_config.primary.type;
+    strncpy(data_event->primary_ip, full_config.primary.ip, sizeof(data_event->primary_ip) - 1);
+    data_event->primary_ip[sizeof(data_event->primary_ip) - 1] = '\0';
+    data_event->primary_port = full_config.primary.port;
+    data_event->primary_interface = full_config.primary.interface;
+    data_event->primary_camera_limit = full_config.primary.camera_limit;
+
+    // Switcher Secondary
+    data_event->secondary_type = full_config.secondary.type;
+    strncpy(data_event->secondary_ip, full_config.secondary.ip, sizeof(data_event->secondary_ip) - 1);
+    data_event->secondary_ip[sizeof(data_event->secondary_ip) - 1] = '\0';
+    data_event->secondary_port = full_config.secondary.port;
+    data_event->secondary_interface = full_config.secondary.interface;
+    data_event->secondary_camera_limit = full_config.secondary.camera_limit;
+
+    // Switcher Dual
+    data_event->dual_enabled = full_config.dual_enabled;
+    data_event->secondary_offset = full_config.secondary_offset;
+
+    // 정적 버퍼 포인터를 발행 (수명 주기 보장)
+    event_bus_publish(EVT_CONFIG_DATA_CHANGED, data_event, sizeof(config_data_event_t));
+
+    return ESP_OK;
 }
 
 // ============================================================================
@@ -188,9 +442,13 @@ esp_err_t ConfigServiceClass::init(void)
     // 디바이스 등록/해제 이벤트 구독
     event_bus_subscribe(EVT_DEVICE_REGISTER, on_device_register_request);
     event_bus_subscribe(EVT_DEVICE_UNREGISTER, on_device_unregister_request);
+    // 설정 저장 요청 이벤트 구독 (web_server에서 발행)
+    event_bus_subscribe(EVT_CONFIG_CHANGED, on_config_save_request);
+    event_bus_subscribe(EVT_CONFIG_DATA_REQUEST, on_config_data_request);
     T_LOGD(TAG, "Event bus 구독 완료");
 
     s_initialized = true;
+
     T_LOGI(TAG, "Config Service 초기화 완료");
     return ESP_OK;
 }
@@ -383,6 +641,31 @@ esp_err_t ConfigServiceClass::setWiFiSTA(const config_wifi_sta_t* config)
 // Ethernet 설정
 // ============================================================================
 
+/**
+ * @brief IP 주소 형식 검증 (간단한 체크)
+ * @return true 유효한 IP 주소 (null이거나 빈 문자열도 허용)
+ */
+static bool is_valid_ip_string(const char* ip)
+{
+    if (!ip || ip[0] == '\0') {
+        return true;  // 빈 문자열은 유효 (미설정)
+    }
+
+    // 간단한 체크: printable ASCII 문자만 허용, '.' 포함
+    int dot_count = 0;
+    for (int i = 0; ip[i] != '\0' && i < 16; i++) {
+        if (ip[i] == '.') {
+            dot_count++;
+        } else if (ip[i] < '0' || ip[i] > '9') {
+            // 숫자와 '.' 외의 문자가 있으면 유효하지 않음
+            return false;
+        }
+    }
+
+    // IP 주소는 최소 3개의 '.'를 가져야 함
+    return (dot_count == 3);
+}
+
 esp_err_t ConfigServiceClass::getEthernet(config_ethernet_t* config)
 {
     if (!config) {
@@ -401,14 +684,42 @@ esp_err_t ConfigServiceClass::getEthernet(config_ethernet_t* config)
     nvs_get_u8(handle, "eth_dhcp_enbl", &dhcp_enabled);
     config->dhcp_enabled = (dhcp_enabled != 0);
 
+    // static_ip
     size_t len = sizeof(config->static_ip);
-    nvs_get_str(handle, "eth_static_ip", config->static_ip, &len);
+    if (nvs_get_str(handle, "eth_static_ip", config->static_ip, &len) != ESP_OK) {
+        config->static_ip[0] = '\0';
+    } else {
+        config->static_ip[sizeof(config->static_ip) - 1] = '\0';
+        // 유효성 검사: 쓰레기 값 필터링
+        if (!is_valid_ip_string(config->static_ip)) {
+            T_LOGW(TAG, "Invalid eth_static_ip in NVS, clearing");
+            config->static_ip[0] = '\0';
+        }
+    }
 
+    // static_netmask
     len = sizeof(config->static_netmask);
-    nvs_get_str(handle, "eth_static_net", config->static_netmask, &len);
+    if (nvs_get_str(handle, "eth_static_net", config->static_netmask, &len) != ESP_OK) {
+        config->static_netmask[0] = '\0';
+    } else {
+        config->static_netmask[sizeof(config->static_netmask) - 1] = '\0';
+        if (!is_valid_ip_string(config->static_netmask)) {
+            T_LOGW(TAG, "Invalid eth_static_netmask in NVS, clearing");
+            config->static_netmask[0] = '\0';
+        }
+    }
 
+    // static_gateway
     len = sizeof(config->static_gateway);
-    nvs_get_str(handle, "eth_static_gw", config->static_gateway, &len);
+    if (nvs_get_str(handle, "eth_static_gw", config->static_gateway, &len) != ESP_OK) {
+        config->static_gateway[0] = '\0';
+    } else {
+        config->static_gateway[sizeof(config->static_gateway) - 1] = '\0';
+        if (!is_valid_ip_string(config->static_gateway)) {
+            T_LOGW(TAG, "Invalid eth_static_gateway in NVS, clearing");
+            config->static_gateway[0] = '\0';
+        }
+    }
 
     uint8_t enabled = 1;
     nvs_get_u8(handle, "eth_enbl", &enabled);
