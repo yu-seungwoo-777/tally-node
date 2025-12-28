@@ -116,6 +116,12 @@ typedef struct __attribute__((packed)) {
     char s2_ip[16];          ///< Secondary IP 주소
     uint16_t s1_port;        ///< Primary 포트
     uint16_t s2_port;        ///< Secondary 포트
+
+    // Tally 데이터 (결합 전 개별 상태)
+    uint8_t s1_channel_count; ///< Primary 채널 수
+    uint8_t s1_tally_data[8]; ///< Primary packed 데이터
+    uint8_t s2_channel_count; ///< Secondary 채널 수
+    uint8_t s2_tally_data[8]; ///< Secondary packed 데이터
 } switcher_status_event_t;
 
 /**

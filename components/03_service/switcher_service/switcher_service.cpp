@@ -665,6 +665,18 @@ void SwitcherService::publishSwitcherStatus() {
     strncpy(s_status.s2_ip, secondary_.ip, sizeof(s_status.s2_ip) - 1);
     s_status.s2_ip[sizeof(s_status.s2_ip) - 1] = '\0';
 
+    // Tally 데이터 (개별 상태)
+    if (primary_.adapter && primary_.last_packed.data) {
+        s_status.s1_channel_count = primary_.last_packed.channel_count;
+        memcpy(s_status.s1_tally_data, primary_.last_packed.data,
+               primary_.last_packed.data_size > 8 ? 8 : primary_.last_packed.data_size);
+    }
+    if (secondary_.adapter && secondary_.last_packed.data) {
+        s_status.s2_channel_count = secondary_.last_packed.channel_count;
+        memcpy(s_status.s2_tally_data, secondary_.last_packed.data,
+               secondary_.last_packed.data_size > 8 ? 8 : secondary_.last_packed.data_size);
+    }
+
     event_bus_publish(EVT_SWITCHER_STATUS_CHANGED, &s_status, sizeof(s_status));
 }
 

@@ -101,6 +101,40 @@ static esp_err_t onNetworkStatusEvent(const event_data_t* event)
 }
 
 // ============================================================================
+// Packed 데이터 → PGM/PVW 리스트 변환
+// ============================================================================
+
+/**
+ * @brief packed 데이터에서 채널 상태 가져오기
+ * @param data packed 데이터
+ * @param channel 채널 번호 (1-20)
+ * @return 0=off, 1=pgm, 2=pvw, 3=both
+ */
+static uint8_t get_channel_state(const uint8_t* data, uint8_t channel)
+{
+    if (!data || channel < 1 || channel > 20) {
+        return 0;
+    }
+    uint8_t byte_idx = (channel - 1) / 4;
+    uint8_t bit_idx = ((channel - 1) % 4) * 2;
+    return (data[byte_idx] >> bit_idx) & 0x03;
+}
+
+/**
+ * @brief packed 데이터를 hex 문자열로 변환
+ */
+static void packed_to_hex(const uint8_t* data, uint8_t size, char* out, size_t out_size)
+{
+    if (!data || !out || out_size < (size * 2 + 1)) {
+        if (out) out[0] = '\0';
+        return;
+    }
+    for (uint8_t i = 0; i < size; i++) {
+        snprintf(out + (i * 2), 3, "%02X", data[i]);
+    }
+}
+
+// ============================================================================
 // API 핸들러
 // ============================================================================
 
@@ -140,27 +174,106 @@ static esp_err_t api_status_handler(httpd_req_t* req)
 
     // Switcher (EVT_SWITCHER_STATUS_CHANGED)
     cJSON* switcher = cJSON_CreateObject();
+
+    // S1 (Primary)
+    cJSON* s1 = cJSON_CreateObject();
     if (s_cache.switcher_valid) {
-        cJSON_AddBoolToObject(switcher, "dualEnabled", s_cache.switcher.dual_mode);
-        cJSON_AddStringToObject(switcher, "s1Type", s_cache.switcher.s1_type);
-        cJSON_AddStringToObject(switcher, "s1Ip", s_cache.switcher.s1_ip);
-        cJSON_AddNumberToObject(switcher, "s1Port", s_cache.switcher.s1_port);
-        cJSON_AddBoolToObject(switcher, "s1Connected", s_cache.switcher.s1_connected);
-        cJSON_AddStringToObject(switcher, "s2Type", s_cache.switcher.s2_type);
-        cJSON_AddStringToObject(switcher, "s2Ip", s_cache.switcher.s2_ip);
-        cJSON_AddNumberToObject(switcher, "s2Port", s_cache.switcher.s2_port);
-        cJSON_AddBoolToObject(switcher, "s2Connected", s_cache.switcher.s2_connected);
+        cJSON_AddBoolToObject(s1, "connected", s_cache.switcher.s1_connected);
+        cJSON_AddStringToObject(s1, "type", s_cache.switcher.s1_type);
+        cJSON_AddStringToObject(s1, "ip", s_cache.switcher.s1_ip);
+        cJSON_AddNumberToObject(s1, "port", s_cache.switcher.s1_port);
+
+        // Tally S1
+        cJSON* s1_tally = cJSON_CreateObject();
+        cJSON* s1_pgm = cJSON_CreateArray();
+        cJSON* s1_pvw = cJSON_CreateArray();
+        uint8_t s1_count = s_cache.switcher.s1_channel_count;
+        for (uint8_t i = 0; i < s1_count && i < 20; i++) {
+            uint8_t state = get_channel_state(s_cache.switcher.s1_tally_data, i + 1);
+            if (state == 1 || state == 3) {  // pgm or both
+                cJSON_AddItemToArray(s1_pgm, cJSON_CreateNumber(i + 1));
+            }
+            if (state == 2 || state == 3) {  // pvw or both
+                cJSON_AddItemToArray(s1_pvw, cJSON_CreateNumber(i + 1));
+            }
+        }
+        cJSON_AddItemToObject(s1_tally, "pgm", s1_pgm);
+        cJSON_AddItemToObject(s1_tally, "pvw", s1_pvw);
+
+        // Raw hex (JS 해석용)
+        char s1_hex[17] = {0};
+        uint8_t s1_bytes = (s1_count + 3) / 4;
+        packed_to_hex(s_cache.switcher.s1_tally_data, s1_bytes, s1_hex, sizeof(s1_hex));
+        cJSON_AddStringToObject(s1_tally, "raw", s1_hex);
+        cJSON_AddNumberToObject(s1_tally, "channels", s1_count);
+
+        cJSON_AddItemToObject(s1, "tally", s1_tally);
     } else {
-        cJSON_AddBoolToObject(switcher, "dualEnabled", false);
-        cJSON_AddStringToObject(switcher, "s1Type", "--");
-        cJSON_AddStringToObject(switcher, "s1Ip", "--");
-        cJSON_AddNumberToObject(switcher, "s1Port", 0);
-        cJSON_AddBoolToObject(switcher, "s1Connected", false);
-        cJSON_AddStringToObject(switcher, "s2Type", "--");
-        cJSON_AddStringToObject(switcher, "s2Ip", "--");
-        cJSON_AddNumberToObject(switcher, "s2Port", 0);
-        cJSON_AddBoolToObject(switcher, "s2Connected", false);
+        cJSON_AddBoolToObject(s1, "connected", false);
+        cJSON_AddStringToObject(s1, "type", "--");
+        cJSON_AddStringToObject(s1, "ip", "--");
+        cJSON_AddNumberToObject(s1, "port", 0);
+
+        cJSON* s1_tally = cJSON_CreateObject();
+        cJSON_AddItemToObject(s1_tally, "pgm", cJSON_CreateArray());
+        cJSON_AddItemToObject(s1_tally, "pvw", cJSON_CreateArray());
+        cJSON_AddStringToObject(s1_tally, "raw", "");
+        cJSON_AddNumberToObject(s1_tally, "channels", 0);
+        cJSON_AddItemToObject(s1, "tally", s1_tally);
     }
+    cJSON_AddItemToObject(switcher, "s1", s1);
+
+    // S2 (Secondary)
+    cJSON* s2 = cJSON_CreateObject();
+    if (s_cache.switcher_valid) {
+        cJSON_AddBoolToObject(s2, "connected", s_cache.switcher.s2_connected);
+        cJSON_AddStringToObject(s2, "type", s_cache.switcher.s2_type);
+        cJSON_AddStringToObject(s2, "ip", s_cache.switcher.s2_ip);
+        cJSON_AddNumberToObject(s2, "port", s_cache.switcher.s2_port);
+
+        // Tally S2
+        cJSON* s2_tally = cJSON_CreateObject();
+        cJSON* s2_pgm = cJSON_CreateArray();
+        cJSON* s2_pvw = cJSON_CreateArray();
+        uint8_t s2_count = s_cache.switcher.s2_channel_count;
+        for (uint8_t i = 0; i < s2_count && i < 20; i++) {
+            uint8_t state = get_channel_state(s_cache.switcher.s2_tally_data, i + 1);
+            if (state == 1 || state == 3) {  // pgm or both
+                cJSON_AddItemToArray(s2_pgm, cJSON_CreateNumber(i + 1));
+            }
+            if (state == 2 || state == 3) {  // pvw or both
+                cJSON_AddItemToArray(s2_pvw, cJSON_CreateNumber(i + 1));
+            }
+        }
+        cJSON_AddItemToObject(s2_tally, "pgm", s2_pgm);
+        cJSON_AddItemToObject(s2_tally, "pvw", s2_pvw);
+
+        // Raw hex (JS 해석용)
+        char s2_hex[17] = {0};
+        uint8_t s2_bytes = (s2_count + 3) / 4;
+        packed_to_hex(s_cache.switcher.s2_tally_data, s2_bytes, s2_hex, sizeof(s2_hex));
+        cJSON_AddStringToObject(s2_tally, "raw", s2_hex);
+        cJSON_AddNumberToObject(s2_tally, "channels", s2_count);
+
+        cJSON_AddItemToObject(s2, "tally", s2_tally);
+    } else {
+        cJSON_AddBoolToObject(s2, "connected", false);
+        cJSON_AddStringToObject(s2, "type", "--");
+        cJSON_AddStringToObject(s2, "ip", "--");
+        cJSON_AddNumberToObject(s2, "port", 0);
+
+        cJSON* s2_tally = cJSON_CreateObject();
+        cJSON_AddItemToObject(s2_tally, "pgm", cJSON_CreateArray());
+        cJSON_AddItemToObject(s2_tally, "pvw", cJSON_CreateArray());
+        cJSON_AddStringToObject(s2_tally, "raw", "");
+        cJSON_AddNumberToObject(s2_tally, "channels", 0);
+        cJSON_AddItemToObject(s2, "tally", s2_tally);
+    }
+    cJSON_AddItemToObject(switcher, "s2", s2);
+
+    // 공통 필드
+    cJSON_AddBoolToObject(switcher, "dualEnabled", s_cache.switcher_valid ? s_cache.switcher.dual_mode : false);
+
     cJSON_AddItemToObject(root, "switcher", switcher);
 
     // System (EVT_INFO_UPDATED)
