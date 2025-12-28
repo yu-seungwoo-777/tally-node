@@ -162,11 +162,11 @@ static void handle_page_transition(void)
  */
 static void print_status_log(void)
 {
-    T_LOGI(TAG, "────────────────────────────────────────");
+    T_LOGI(TAG, "──────────────────────────────────");
 
     // 시스템 정보
     if (s_mgr.data.system_valid) {
-        T_LOGI(TAG, "[System] ID:%s Bat:%d%% %.1fV %.1f°C Up:%us",
+        T_LOGI(TAG, "ID:%s Bat:%d%% %.1fV %.0f°C Up:%us",
                s_mgr.data.system.device_id,
                s_mgr.data.system.battery,
                s_mgr.data.system.voltage,
@@ -176,7 +176,7 @@ static void print_status_log(void)
 
     // LoRa 정보
     if (s_mgr.data.lora.valid) {
-        T_LOGI(TAG, "[LoRa] RSSI:%ddB SNR:%.0fdB",
+        T_LOGI(TAG, "LoRa RSSI:%ddB SNR:%.0fdB",
                s_mgr.data.lora.rssi,
                s_mgr.data.lora.snr);
     }
@@ -184,7 +184,7 @@ static void print_status_log(void)
 #ifdef DEVICE_MODE_RX
     // Tally 정보 (RX)
     if (s_mgr.data.tally.valid) {
-        T_LOGI(TAG, "[Tally] PGM:%dch PVW:%dch",
+        T_LOGI(TAG, "Tally PGM:%d PVW:%d",
                s_mgr.data.tally.pgm_count,
                s_mgr.data.tally.pvw_count);
     }
@@ -192,41 +192,44 @@ static void print_status_log(void)
     // Switcher 정보 (TX)
     if (s_mgr.data.switcher_valid) {
         if (s_mgr.data.switcher.dual_mode) {
-            T_LOGI(TAG, "[Switcher] S1:%s@%s:%d%c S2:%s@%s:%d%c",
+            T_LOGI(TAG, "S1:%s@%s:%d %c | S2:%s@%s:%d %c",
                    s_mgr.data.switcher.s1_type,
-                   s_mgr.data.switcher.s1_ip[0] ? s_mgr.data.switcher.s1_ip : "?",
-                   s_mgr.data.switcher.s1_port, s_mgr.data.switcher.s1_connected ? 'Y' : 'N',
+                   s_mgr.data.switcher.s1_ip[0] ? s_mgr.data.switcher.s1_ip : "-",
+                   s_mgr.data.switcher.s1_port,
+                   s_mgr.data.switcher.s1_connected ? 'Y' : 'N',
                    s_mgr.data.switcher.s2_type,
-                   s_mgr.data.switcher.s2_ip[0] ? s_mgr.data.switcher.s2_ip : "?",
-                   s_mgr.data.switcher.s2_port, s_mgr.data.switcher.s2_connected ? 'Y' : 'N');
+                   s_mgr.data.switcher.s2_ip[0] ? s_mgr.data.switcher.s2_ip : "-",
+                   s_mgr.data.switcher.s2_port,
+                   s_mgr.data.switcher.s2_connected ? 'Y' : 'N');
         } else {
-            T_LOGI(TAG, "[Switcher] S1:%s@%s:%d%c",
+            T_LOGI(TAG, "S1:%s@%s:%d %c",
                    s_mgr.data.switcher.s1_type,
-                   s_mgr.data.switcher.s1_ip[0] ? s_mgr.data.switcher.s1_ip : "?",
-                   s_mgr.data.switcher.s1_port, s_mgr.data.switcher.s1_connected ? 'Y' : 'N');
+                   s_mgr.data.switcher.s1_ip[0] ? s_mgr.data.switcher.s1_ip : "-",
+                   s_mgr.data.switcher.s1_port,
+                   s_mgr.data.switcher.s1_connected ? 'Y' : 'N');
         }
     }
 
     // Network 정보 (TX)
     if (s_mgr.data.network_valid) {
         if (s_mgr.data.network.sta_connected) {
-            T_LOGI(TAG, "[Network] WiFi:%s@%s ETH:%s",
+            T_LOGI(TAG, "WiFi:%s@%s | ETH:%s",
                    s_mgr.data.network.sta_ssid, s_mgr.data.network.sta_ip,
                    s_mgr.data.network.eth_connected ? s_mgr.data.network.eth_ip : "N/A");
         } else {
-            T_LOGI(TAG, "[Network] WiFi:- ETH:%s",
+            T_LOGI(TAG, "WiFi:- | ETH:%s",
                    s_mgr.data.network.eth_connected ? s_mgr.data.network.eth_ip : "N/A");
         }
     }
 
     // RF 정보 (TX)
     if (s_mgr.data.rf_valid) {
-        T_LOGI(TAG, "[RF] %.1fMHz Sync:0x%02X",
+        T_LOGI(TAG, "RF %.1fMHz Sync:0x%02X",
                s_mgr.data.rf.frequency,
                s_mgr.data.rf.sync_word);
     }
 #endif
-    T_LOGI(TAG, "────────────────────────────────────────");
+    T_LOGI(TAG, "──────────────────────────────────");
 }
 
 // ============================================================================
