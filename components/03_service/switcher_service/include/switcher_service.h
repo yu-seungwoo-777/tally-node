@@ -128,6 +128,12 @@ packed_data_t switcher_service_get_combined_tally(switcher_service_handle_t hand
 void switcher_service_free_packed_data(packed_data_t* packed);
 
 /**
+ * @brief 스위처 상태 이벤트 발행 (외부 호출용)
+ * @param handle 서비스 핸들
+ */
+void switcher_service_publish_status(switcher_service_handle_t handle);
+
+/**
  * @brief 스위터 상태 조회
  * @param handle 서비스 핸들
  * @param role 스위처 역할

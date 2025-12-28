@@ -925,4 +925,14 @@ void switcher_service_get_pvw_channels(const packed_data_t* tally,
     *pvw_count = count;
 }
 
+/**
+ * @brief 스위처 상태 이벤트 발행 (외부 호출용)
+ * @param handle 서비스 핸들
+ */
+void switcher_service_publish_status(switcher_service_handle_t handle)
+{
+    if (!handle) return;
+    static_cast<SwitcherService*>(handle)->publishSwitcherStatus();
+}
+
 } // extern "C"
