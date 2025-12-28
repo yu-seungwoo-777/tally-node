@@ -508,8 +508,6 @@ void prod_tx_app_start(void)
     // WebServer 시작 (이벤트 기반)
     if (web_server_init() == ESP_OK) {
         T_LOGI(TAG, "WebServer 시작");
-        // 스위처 상태 이벤트 발행 (웹 서버가 받을 수 있도록)
-        switcher_service_publish_status(s_app.service);
     } else {
         T_LOGW(TAG, "WebServer 시작 실패");
     }
