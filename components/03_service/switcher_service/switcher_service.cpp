@@ -620,8 +620,15 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
         T_LOGI(TAG, "Combined Tally: [%s] (%d채널, %d바이트) → %s",
                  hex_str, combined.channel_count, combined.data_size, tally_str);
 
-        // 이벤트 버스로 Tally 상태 변경 발행
-        event_bus_publish(EVT_TALLY_STATE_CHANGED, combined.data, combined.data_size);
+        // 이벤트 버스로 Tally 상태 변경 발행 (tally_event_data_t 구조체)
+        static tally_event_data_t s_tally_event;
+        memset(&s_tally_event, 0, sizeof(s_tally_event));
+        s_tally_event.source = 0;  // 0=Primary (듀얼 모드 시 결합됨)
+        s_tally_event.channel_count = combined.channel_count;
+        memcpy(s_tally_event.tally_data, combined.data, combined.data_size);
+        s_tally_event.tally_value = packed_data_to_uint64(&combined);
+
+        event_bus_publish(EVT_TALLY_STATE_CHANGED, &s_tally_event, sizeof(s_tally_event));
     }
 
     // 사용자 콜백 호출 (Tally 변경 알림)
