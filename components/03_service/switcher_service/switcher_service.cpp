@@ -637,6 +637,9 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
         event_bus_publish(EVT_TALLY_STATE_CHANGED, &s_tally_event, sizeof(s_tally_event));
     }
 
+    // Tally 변경 시 상태 이벤트도 발행 (웹 서버 등에서 사용)
+    publishSwitcherStatus();
+
     // 사용자 콜백 호출 (Tally 변경 알림)
     if (tally_callback_) {
         tally_callback_();
@@ -665,16 +668,32 @@ void SwitcherService::publishSwitcherStatus() {
     strncpy(s_status.s2_ip, secondary_.ip, sizeof(s_status.s2_ip) - 1);
     s_status.s2_ip[sizeof(s_status.s2_ip) - 1] = '\0';
 
-    // Tally 데이터 (개별 상태)
-    if (primary_.adapter && primary_.last_packed.data) {
-        s_status.s1_channel_count = primary_.last_packed.channel_count;
-        memcpy(s_status.s1_tally_data, primary_.last_packed.data,
-               primary_.last_packed.data_size > 8 ? 8 : primary_.last_packed.data_size);
+    // Tally 데이터 (개별 상태) - last_packed가 없으면 어댑터에서 직접 가져옴
+    if (primary_.adapter) {
+        packed_data_t s1_packed;
+        if (primary_.last_packed.data) {
+            s1_packed = primary_.last_packed;
+        } else {
+            s1_packed = primary_.adapter->getPackedTally();
+        }
+        if (s1_packed.data && s1_packed.data_size > 0) {
+            s_status.s1_channel_count = s1_packed.channel_count;
+            memcpy(s_status.s1_tally_data, s1_packed.data,
+                   s1_packed.data_size > 8 ? 8 : s1_packed.data_size);
+        }
     }
-    if (secondary_.adapter && secondary_.last_packed.data) {
-        s_status.s2_channel_count = secondary_.last_packed.channel_count;
-        memcpy(s_status.s2_tally_data, secondary_.last_packed.data,
-               secondary_.last_packed.data_size > 8 ? 8 : secondary_.last_packed.data_size);
+    if (secondary_.adapter) {
+        packed_data_t s2_packed;
+        if (secondary_.last_packed.data) {
+            s2_packed = secondary_.last_packed;
+        } else {
+            s2_packed = secondary_.adapter->getPackedTally();
+        }
+        if (s2_packed.data && s2_packed.data_size > 0) {
+            s_status.s2_channel_count = s2_packed.channel_count;
+            memcpy(s_status.s2_tally_data, s2_packed.data,
+                   s2_packed.data_size > 8 ? 8 : s2_packed.data_size);
+        }
     }
 
     event_bus_publish(EVT_SWITCHER_STATUS_CHANGED, &s_status, sizeof(s_status));
