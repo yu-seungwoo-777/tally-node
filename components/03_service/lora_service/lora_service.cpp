@@ -52,9 +52,46 @@ static uint32_t s_tx_dropped = 0;          // 큐 오버플로우로 폐기된 �
 static QueueHandle_t s_tx_queue = nullptr;
 static TaskHandle_t s_tx_task = nullptr;
 
+// 스캔 관련
+static TaskHandle_t s_scan_task = nullptr;
+static volatile bool s_scanning = false;
+static volatile bool s_scan_stop_requested = false;
+static float s_scan_start_freq = 0.0f;
+static float s_scan_end_freq = 0.0f;
+static float s_scan_step = 0.1f;
+#define MAX_SCAN_CHANNELS 100
+
 // ============================================================================
 // 내부 함수
 // ============================================================================
+
+/**
+ * @brief LoRa 스캔 시작 요청 이벤트 핸들러
+ */
+static esp_err_t on_lora_scan_start_request(const event_data_t* event) {
+    if (event->type != EVT_LORA_SCAN_START) {
+        return ESP_OK;
+    }
+
+    const auto* req = reinterpret_cast<const lora_scan_start_t*>(event->data);
+    if (req == nullptr) {
+        T_LOGW(TAG, "Invalid scan request (null data)");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    return lora_service_start_scan(req->start_freq, req->end_freq, req->step);
+}
+
+/**
+ * @brief LoRa 스캔 중지 요청 이벤트 핸들러
+ */
+static esp_err_t on_lora_scan_stop_request(const event_data_t* event) {
+    if (event->type != EVT_LORA_SCAN_STOP) {
+        return ESP_OK;
+    }
+
+    return lora_service_stop_scan();
+}
 
 /**
  * @brief LoRa 송신 요청 이벤트 핸들러
@@ -93,11 +130,12 @@ static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, 
     event_bus_publish(EVT_LORA_PACKET_RECEIVED, &packet_event, sizeof(packet_event));
 
     // RSSI/SNR 이벤트도 함께 발행 (패킷 수신 시마다 즉시 갱신)
+    lora_status_t driver_status = lora_driver_get_status();
     lora_rssi_event_t rssi_event = {
         .is_running = s_running,
         .is_initialized = s_initialized,
-        .chip_type = 0,  // 드라이버에서 필요시 읽기
-        .frequency = 0.0f,
+        .chip_type = (uint8_t)driver_status.chip_type,
+        .frequency = driver_status.frequency,
         .rssi = rssi,
         .snr = (int8_t)snr
     };
@@ -236,6 +274,10 @@ esp_err_t lora_service_start(void)
         return ret;
     }
 
+    // 스캔 이벤트 구독
+    event_bus_subscribe(EVT_LORA_SCAN_START, on_lora_scan_start_request);
+    event_bus_subscribe(EVT_LORA_SCAN_STOP, on_lora_scan_stop_request);
+
     // 수신 모드 시작
     ret = lora_driver_start_receive();
     if (ret != ESP_OK) {
@@ -268,6 +310,18 @@ esp_err_t lora_service_start(void)
     bool running = true;
     event_bus_publish(EVT_LORA_STATUS_CHANGED, &running, sizeof(running));
 
+    // RSSI 이벤트 발행 (칩 타입 전달을 위해 시작 직후 발행)
+    lora_status_t driver_status = lora_driver_get_status();
+    lora_rssi_event_t rssi_event = {
+        .is_running = s_running,
+        .is_initialized = s_initialized,
+        .chip_type = (uint8_t)driver_status.chip_type,
+        .frequency = driver_status.frequency,
+        .rssi = driver_status.rssi,
+        .snr = driver_status.snr
+    };
+    event_bus_publish(EVT_LORA_RSSI_CHANGED, &rssi_event, sizeof(rssi_event));
+
     return ESP_OK;
 }
 
@@ -282,6 +336,10 @@ void lora_service_stop(void)
 
     // 송신 요청 이벤트 구독 취소
     event_bus_unsubscribe(EVT_LORA_SEND_REQUEST, on_lora_send_request);
+
+    // 스캔 이벤트 구독 취소
+    event_bus_unsubscribe(EVT_LORA_SCAN_START, on_lora_scan_start_request);
+    event_bus_unsubscribe(EVT_LORA_SCAN_STOP, on_lora_scan_stop_request);
 
     // 태스크 종료 대기
     if (s_tx_task) {
@@ -434,6 +492,160 @@ esp_err_t lora_service_set_sync_word(uint8_t sync_word)
         return ESP_ERR_INVALID_STATE;
     }
     return lora_driver_set_sync_word(sync_word);
+}
+
+// ============================================================================
+// 주파수 스캔 태스크
+// ============================================================================
+
+/**
+ * @brief 주파수 스캔 태스크
+ *
+ * - 각 채널에서 RSSI 측정
+ * - 진행 상황을 이벤트로 발행
+ * - 완료 시 전체 결과 발행
+ */
+static void lora_scan_task(void* arg)
+{
+    T_LOGI(TAG, "스캔 태스크 시작: %.1f ~ %.1f MHz (step=%.1f)",
+           s_scan_start_freq, s_scan_end_freq, s_scan_step);
+
+    // 예상 채널 수 계산
+    int total_channels = (int)((s_scan_end_freq - s_scan_start_freq) / s_scan_step) + 1;
+    if (total_channels > MAX_SCAN_CHANNELS) {
+        total_channels = MAX_SCAN_CHANNELS;
+    }
+
+    channel_info_t results[MAX_SCAN_CHANNELS];
+    size_t result_count = 0;
+
+    // 스캔 시작 이벤트 발행
+    lora_scan_start_t start_event = {
+        .start_freq = s_scan_start_freq,
+        .end_freq = s_scan_end_freq,
+        .step = s_scan_step
+    };
+    event_bus_publish(EVT_LORA_SCAN_START, &start_event, sizeof(start_event));
+
+    // 채널별 스캔 (진행도 발행을 위해)
+    for (float freq = s_scan_start_freq; freq <= s_scan_end_freq && result_count < MAX_SCAN_CHANNELS; freq += s_scan_step) {
+        // 중지 요청 확인
+        if (s_scan_stop_requested) {
+            T_LOGI(TAG, "스캔 중지 요청됨");
+            break;
+        }
+
+        // 단일 채널 스캔 (드라이버에는 유효한 범위 전달 - 1MHz 고정)
+        size_t count = 0;
+        esp_err_t ret = lora_driver_scan_channels(freq, freq + 1.0f, 1.0f, &results[result_count], 1, &count);
+
+        if (ret == ESP_OK && count > 0) {
+            result_count++;
+
+            // 진행률 계산
+            uint8_t progress = (uint8_t)((result_count * 100) / total_channels);
+
+            // 진행 이벤트 발행
+            lora_scan_progress_t progress_event = {
+                .progress = progress,
+                .current_freq = freq,
+                .result = {
+                    .frequency = results[result_count - 1].frequency,
+                    .rssi = results[result_count - 1].rssi,
+                    .noise_floor = results[result_count - 1].noise_floor,
+                    .clear_channel = results[result_count - 1].clear_channel
+                }
+            };
+            event_bus_publish(EVT_LORA_SCAN_PROGRESS, &progress_event, sizeof(progress_event));
+
+            T_LOGD(TAG, "스캔: %.1f MHz, RSSI %d dBm (%d%%)",
+                   freq, results[result_count - 1].rssi, progress);
+        }
+
+        // 채널 간 약간 대기 (진행 이벤트가 전달될 시간 확보)
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+
+    // 스캔 완료 이벤트 발행
+    lora_scan_complete_t complete_event = {};
+    complete_event.count = (result_count > 100) ? 100 : (uint8_t)result_count;
+    memcpy(complete_event.channels, results, sizeof(channel_info_t) * complete_event.count);
+
+    event_bus_publish(EVT_LORA_SCAN_COMPLETE, &complete_event, sizeof(complete_event));
+
+    T_LOGI(TAG, "스캔 완료: %d개 채널", result_count);
+
+    // 상태 정리
+    s_scanning = false;
+    s_scan_stop_requested = false;
+    s_scan_task = nullptr;
+
+    vTaskDelete(nullptr);
+}
+
+// ============================================================================
+// 스캔 공개 API
+// ============================================================================
+
+esp_err_t lora_service_start_scan(float start_freq, float end_freq, float step)
+{
+    if (!s_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (s_scanning) {
+        T_LOGW(TAG, "이미 스캔 중");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (start_freq >= end_freq || step <= 0.0f) {
+        T_LOGE(TAG, "잘못된 스캔 파라미터");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // 파라미터 저장
+    s_scan_start_freq = start_freq;
+    s_scan_end_freq = end_freq;
+    s_scan_step = step;
+    s_scan_stop_requested = false;
+    s_scanning = true;
+
+    // 스캔 태스크 생성 (스택 8KB - 100채널 배열 + RadioLib 사용)
+    BaseType_t task_ret = xTaskCreatePinnedToCore(
+        lora_scan_task,
+        "lora_scan_task",
+        8192,
+        nullptr,
+        5,  // 우선순위 (낮음 - 긴 스캔 시간)
+        &s_scan_task,
+        1
+    );
+
+    if (task_ret != pdPASS) {
+        T_LOGE(TAG, "스캔 태스크 생성 실패");
+        s_scanning = false;
+        return ESP_FAIL;
+    }
+
+    T_LOGI(TAG, "스캔 시작됨");
+    return ESP_OK;
+}
+
+esp_err_t lora_service_stop_scan(void)
+{
+    if (!s_scanning) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    s_scan_stop_requested = true;
+    T_LOGI(TAG, "스캔 중지 요청됨");
+
+    return ESP_OK;
+}
+
+bool lora_service_is_scanning(void)
+{
+    return s_scanning;
 }
 
 } // extern "C"

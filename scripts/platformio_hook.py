@@ -3,7 +3,7 @@ PlatformIO Build Hook
 빌드 전 web 폴더의 npm run deploy 실행
 """
 
-Import("env")
+Import("env", "projenv")
 
 def pre_build_action(source, target, env):
     """빌드 전 실행: web UI 배포"""
@@ -44,5 +44,5 @@ def pre_build_action(source, target, env):
 
     print("=" * 60 + "\n")
 
-env.AddPreAction("buildprog", pre_build_action)
-env.AddPreAction("upload", pre_build_action)
+# 모든 타겟에 대해 실행 시도
+env.AddPreAction(None, pre_build_action)

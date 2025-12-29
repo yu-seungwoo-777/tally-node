@@ -6,6 +6,29 @@
  * - 상위 레이어는 이벤트를 발행(Publish)만 하고, 누가 구독하는지 모름
  * - 하위 레이어는 이벤트를 구독(Subscribe)하고 반응
  * - 단방향 통신: 01_app → 02 → 03 → 04 → 05
+ *
+ * @section event_data_usage 이벤트 데이터 사용 가이드
+ *
+ * 이벤트 데이터 포인터는 발행 직후에 해제될 수 있으므로, 데이터를 이벤트로 전달할 때는
+ * 반드시 **정적(static) 구조체**를 사용해야 합니다:
+ *
+ * @code
+ * // 올바른 사용 예시 (정적 구조체)
+ * static switcher_status_event_t s_status;  // 정적 변수
+ * s_status.dual_mode = true;
+ * s_status.s1_connected = false;
+ * event_bus_publish(EVT_SWITCHER_STATUS_CHANGED, &s_status, sizeof(s_status));
+ *
+ * // 잘못된 사용 예시 (스택 구조체)
+ * switcher_status_event_t status;  // 스택 변수 (함수 반환 후 소멸)
+ * status.dual_mode = true;
+ * event_bus_publish(EVT_SWITCHER_STATUS_CHANGED, &status, sizeof(status));  // 위험!
+ * @endcode
+ *
+ * @note 정적 구조체 사용 이유:
+ *       - event_bus_publish()는 내부적으로 데이터를 복사하지만
+ *       - 콜백이 비동기적으로 호출되는 경우 �택 변수가 이미 소멸될 수 있음
+ *       - static 변수는 함수 수명 주기와 무관하게 메모리에 유지됨
  */
 
 #ifndef EVENT_BUS_H
@@ -86,6 +109,42 @@ typedef struct {
 } lora_rf_event_t;
 
 /**
+ * @brief 채널 정보 (LoRa 스캔 결과)
+ */
+typedef struct {
+    float frequency;     ///< 주파수 (MHz)
+    int16_t rssi;        ///< RSSI (dBm)
+    int16_t noise_floor; ///< 노이즈 플로어 (dBm)
+    bool clear_channel;  ///< 깨끗한 채널 여부
+} lora_channel_info_t;
+
+/**
+ * @brief LoRa 스캔 시작 이벤트 데이터 (EVT_LORA_SCAN_START용)
+ */
+typedef struct {
+    float start_freq;  ///< 시작 주파수 (MHz)
+    float end_freq;    ///< 종료 주파수 (MHz)
+    float step;        ///< 스캔 간격 (MHz)
+} lora_scan_start_t;
+
+/**
+ * @brief LoRa 스캔 진행 이벤트 데이터 (EVT_LORA_SCAN_PROGRESS용)
+ */
+typedef struct {
+    uint8_t progress;           ///< 진행률 (0-100)
+    float current_freq;         ///< 현재 스캔 중인 주파수 (MHz)
+    lora_channel_info_t result; ///< 현재 채널 결과
+} lora_scan_progress_t;
+
+/**
+ * @brief LoRa 스캔 완료 이벤트 데이터 (EVT_LORA_SCAN_COMPLETE용)
+ */
+typedef struct {
+    lora_channel_info_t channels[100]; ///< 스캔 결과 (최대 100 채널)
+    uint8_t count;                     ///< 스캔된 채널 수
+} lora_scan_complete_t;
+
+/**
  * @brief 시스템 정보 이벤트 데이터 (EVT_INFO_UPDATED용)
  *
  * hardware_service에서 발행하는 시스템 상태 정보
@@ -95,8 +154,7 @@ typedef struct __attribute__((packed)) {
     uint8_t battery;         ///< 배터리 % (0-100)
     float voltage;           ///< 전압 (V)
     float temperature;       ///< 온도 (°C)
-    int16_t rssi;            ///< LoRa RSSI (dBm)
-    float snr;               ///< LoRa SNR (dB)
+    uint8_t lora_chip_type;  ///< LoRa 칩 타입 (0=Unknown, 1=SX1262, 2=SX1268)
     uint32_t uptime;         ///< 업타임 (초)
     bool stopped;            ///< 기능 정지 상태
 } system_info_event_t;
@@ -143,6 +201,7 @@ typedef struct __attribute__((packed)) {
     // Ethernet (Page 4)
     char eth_ip[16];         ///< Ethernet IP 주소
     bool eth_connected;      ///< Ethernet 연결 여부
+    bool eth_detected;       ///< W5500 칩 감지 여부
     bool eth_dhcp;           ///< Ethernet DHCP 모드
 } network_status_event_t;
 
@@ -308,21 +367,25 @@ typedef enum {
     // LoRa 이벤트 (03_service)
     EVT_LORA_STATUS_CHANGED,
     EVT_LORA_RSSI_CHANGED,         ///< RSSI/SNR 변경 (data: lora_rssi_event_t)
-    EVT_LORA_PACKET_RECEIVED,      ///< 패킷 수신 (data: lora_packet_event_t)
+    EVT_LORA_PACKET_RECEIVED,      ///< Packet received (data: lora_packet_event_t)
     EVT_LORA_PACKET_SENT,
-    EVT_LORA_SEND_REQUEST,         ///< 송신 요청 (data: lora_send_request_t)
+    EVT_LORA_SEND_REQUEST,         ///< Send request (data: lora_send_request_t)
+    EVT_LORA_SCAN_START,           ///< Scan start request (data: lora_scan_start_t)
+    EVT_LORA_SCAN_PROGRESS,        ///< Scan progress (data: lora_scan_progress_t)
+    EVT_LORA_SCAN_COMPLETE,        ///< Scan complete (data: lora_scan_complete_t)
+    EVT_LORA_SCAN_STOP,            ///< Scan stop request (data: none)
 
-    // 네트워크 이벤트 (03_service)
-    EVT_NETWORK_STATUS_CHANGED,   ///< 네트워크 상태 변경 (data: network_status_event_t)
+    // Network events (03_service)
+    EVT_NETWORK_STATUS_CHANGED,   ///< Network status changed (data: network_status_event_t)
     EVT_NETWORK_CONNECTED,
     EVT_NETWORK_DISCONNECTED,
-    EVT_NETWORK_RESTART_REQUEST,  ///< 네트워크 재시작 요청 (data: network_restart_request_t)
+    EVT_NETWORK_RESTART_REQUEST,  ///< Network restart request (data: network_restart_request_t)
 
-    // 스위처 이벤트 (03_service)
+    // Switcher events (03_service)
     EVT_SWITCHER_CONNECTED,
     EVT_SWITCHER_DISCONNECTED,
-    EVT_SWITCHER_STATUS_CHANGED,  ///< 스위처 상태 변경 (data: switcher_status_event_t)
-    EVT_TALLY_STATE_CHANGED,      ///< Tally 상태 변경 (data: tally_event_data_t)
+    EVT_SWITCHER_STATUS_CHANGED,  ///< Switcher status changed (data: switcher_status_event_t)
+    EVT_TALLY_STATE_CHANGED,      ///< Tally state changed (data: tally_event_data_t)
 
     // UI 이벤트 (02_presentation)
     EVT_DISPLAY_UPDATE_REQUEST,

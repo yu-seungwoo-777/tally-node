@@ -182,6 +182,7 @@ network_status_t NetworkServiceClass::getStatus(void)
     if (ethernet_driver_is_initialized()) {
         ethernet_driver_status_t eth_status = ethernet_driver_get_status();
         status.ethernet.active = eth_status.initialized;
+        status.ethernet.detected = eth_status.detected;
         status.ethernet.connected = eth_status.link_up && eth_status.got_ip;
         strncpy(status.ethernet.ip, eth_status.ip, sizeof(status.ethernet.ip));
         strncpy(status.ethernet.netmask, eth_status.netmask, sizeof(status.ethernet.netmask));
@@ -273,6 +274,7 @@ void NetworkServiceClass::publishStatus(void)
         s_event.ap_enabled = s_config.wifi_ap.enabled;
         s_event.sta_connected = status.wifi_sta.connected;
         s_event.eth_connected = status.ethernet.connected;
+        s_event.eth_detected = status.ethernet.detected;
         s_event.eth_dhcp = s_config.ethernet.dhcp_enabled;
 
         strncpy(s_event.ap_ssid, s_config.wifi_ap.ssid, sizeof(s_event.ap_ssid) - 1);

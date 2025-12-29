@@ -23,6 +23,7 @@ public:
     // 상태 구조체
     struct Status {
         bool initialized = false;
+        bool detected = false;
         bool link_up = false;
         bool got_ip = false;
         bool dhcp_mode = true;
@@ -231,6 +232,7 @@ EthernetDriver::Status EthernetDriver::getStatus(void)
     ethernet_hal_status_t hal_status;
     if (ethernet_hal_get_status(&hal_status) == ESP_OK) {
         status.initialized = hal_status.initialized;
+        status.detected = hal_status.detected;
         status.link_up = hal_status.link_up;
         status.got_ip = hal_status.got_ip;
         status.dhcp_mode = s_dhcp_mode;
@@ -336,6 +338,7 @@ ethernet_driver_status_t ethernet_driver_get_status(void)
     auto cpp_status = EthernetDriver::getStatus();
     ethernet_driver_status_t c_status;
     c_status.initialized = cpp_status.initialized;
+    c_status.detected = cpp_status.detected;
     c_status.link_up = cpp_status.link_up;
     c_status.got_ip = cpp_status.got_ip;
     c_status.dhcp_mode = cpp_status.dhcp_mode;

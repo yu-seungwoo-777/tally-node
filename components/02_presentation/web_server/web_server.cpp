@@ -37,6 +37,12 @@ typedef struct {
 
     config_data_event_t config;       // EVT_CONFIG_DATA_CHANGED
     bool config_valid;
+
+    // LoRa 스캔 결과
+    lora_scan_complete_t lora_scan;   // EVT_LORA_SCAN_COMPLETE
+    bool lora_scan_valid;
+    bool lora_scanning;               // 스캔 중 여부
+    uint8_t lora_scan_progress;       // 스캔 진행률
 } web_server_data_t;
 
 static web_server_data_t s_cache;
@@ -49,6 +55,9 @@ static void init_cache(void)
     s_cache.switcher_valid = false;
     s_cache.network_valid = false;
     s_cache.config_valid = false;
+    s_cache.lora_scan_valid = false;
+    s_cache.lora_scanning = false;
+    s_cache.lora_scan_progress = 0;
 }
 
 // ============================================================================
@@ -117,6 +126,57 @@ static esp_err_t onConfigDataEvent(const event_data_t* event)
     s_cache.config = *config;
     s_cache.config_valid = true;
 
+    return ESP_OK;
+}
+
+/**
+ * @brief LoRa 스캔 시작 이벤트 핸들러 (EVT_LORA_SCAN_START)
+ */
+static esp_err_t onLoraScanStartEvent(const event_data_t* event)
+{
+    s_cache.lora_scanning = true;
+    s_cache.lora_scan_progress = 0;
+    s_cache.lora_scan_valid = false;
+    s_cache.lora_scan.count = 0;  // 이전 결과 초기화
+    return ESP_OK;
+}
+
+/**
+ * @brief LoRa 스캔 진행 이벤트 핸들러 (EVT_LORA_SCAN_PROGRESS)
+ */
+static esp_err_t onLoraScanProgressEvent(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const lora_scan_progress_t* progress = (const lora_scan_progress_t*)event->data;
+    s_cache.lora_scan_progress = progress->progress;
+
+    // 진행 중인 채널 결과 추가 (누적)
+    if (s_cache.lora_scan.count < 100) {
+        s_cache.lora_scan.channels[s_cache.lora_scan.count] = progress->result;
+        s_cache.lora_scan.count++;
+        s_cache.lora_scan_valid = true;
+    }
+
+    return ESP_OK;
+}
+
+/**
+ * @brief LoRa 스캔 완료 이벤트 핸들러 (EVT_LORA_SCAN_COMPLETE)
+ */
+static esp_err_t onLoraScanCompleteEvent(const event_data_t* event)
+{
+    if (!event || !event->data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const lora_scan_complete_t* result = (const lora_scan_complete_t*)event->data;
+    memcpy(&s_cache.lora_scan, result, sizeof(lora_scan_complete_t));
+    s_cache.lora_scan_valid = true;
+    s_cache.lora_scanning = false;
+    s_cache.lora_scan_progress = 100;
     return ESP_OK;
 }
 
@@ -225,9 +285,11 @@ static esp_err_t api_status_handler(httpd_req_t* req)
     // 연결 상태와 IP는 network 이벤트에서
     if (s_cache.network_valid) {
         cJSON_AddBoolToObject(ethernet, "connected", s_cache.network.eth_connected);
+        cJSON_AddBoolToObject(ethernet, "detected", s_cache.network.eth_detected);
         cJSON_AddStringToObject(ethernet, "ip", s_cache.network.eth_connected ? s_cache.network.eth_ip : "--");
     } else {
         cJSON_AddBoolToObject(ethernet, "connected", false);
+        cJSON_AddBoolToObject(ethernet, "detected", false);
         cJSON_AddStringToObject(ethernet, "ip", "--");
     }
     cJSON_AddItemToObject(network, "ethernet", ethernet);
@@ -372,12 +434,14 @@ static esp_err_t api_status_handler(httpd_req_t* req)
         cJSON_AddNumberToObject(system, "voltage", (round(s_cache.system.voltage * 10) / 10));
         cJSON_AddNumberToObject(system, "temperature", (round(s_cache.system.temperature * 10) / 10));
         cJSON_AddNumberToObject(system, "uptime", s_cache.system.uptime);
+        cJSON_AddNumberToObject(system, "loraChipType", s_cache.system.lora_chip_type);
     } else {
         cJSON_AddStringToObject(system, "deviceId", "0000");
         cJSON_AddNumberToObject(system, "battery", 0);
         cJSON_AddNumberToObject(system, "voltage", 0);
         cJSON_AddNumberToObject(system, "temperature", 0);
         cJSON_AddNumberToObject(system, "uptime", 0);
+        cJSON_AddNumberToObject(system, "loraChipType", 0);
     }
     cJSON_AddItemToObject(root, "system", system);
 
@@ -716,6 +780,116 @@ static esp_err_t api_reboot_handler(httpd_req_t* req)
 }
 
 /**
+ * @brief GET /api/broadcast/scan - 스캔 상태 및 결과 반환
+ */
+static esp_err_t api_broadcast_scan_get_handler(httpd_req_t* req)
+{
+    cJSON* root = cJSON_CreateObject();
+
+    cJSON_AddBoolToObject(root, "scanning", s_cache.lora_scanning);
+    cJSON_AddNumberToObject(root, "progress", s_cache.lora_scan_progress);
+
+    // 스캔 결과
+    cJSON* results = cJSON_CreateArray();
+    if (s_cache.lora_scan_valid) {
+        for (uint8_t i = 0; i < s_cache.lora_scan.count; i++) {
+            cJSON* channel = cJSON_CreateObject();
+            cJSON_AddNumberToObject(channel, "frequency", s_cache.lora_scan.channels[i].frequency);
+            cJSON_AddNumberToObject(channel, "rssi", s_cache.lora_scan.channels[i].rssi);
+            cJSON_AddNumberToObject(channel, "noiseFloor", s_cache.lora_scan.channels[i].noise_floor);
+            cJSON_AddBoolToObject(channel, "clearChannel", s_cache.lora_scan.channels[i].clear_channel);
+            cJSON_AddStringToObject(channel, "status", s_cache.lora_scan.channels[i].clear_channel ? "clear" : "busy");
+
+            cJSON_AddItemToArray(results, channel);
+        }
+    }
+    cJSON_AddItemToObject(root, "results", results);
+
+    char* json_str = cJSON_Print(root);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, json_str, strlen(json_str));
+
+    cJSON_free(json_str);
+    cJSON_Delete(root);
+    return ESP_OK;
+}
+
+/**
+ * @brief POST /api/broadcast/scan/start - 스캔 시작
+ */
+static esp_err_t api_broadcast_scan_start_handler(httpd_req_t* req)
+{
+    // 요청 바디 읽기
+    char* buf = new char[256];
+    int ret = httpd_req_recv(req, buf, 255);
+    if (ret <= 0) {
+        delete[] buf;
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    // JSON 파싱
+    cJSON* root = cJSON_Parse(buf);
+    delete[] buf;
+
+    if (root == nullptr) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    // 파라미터 추출 (기본값: 863-870 MHz, 0.1 MHz step)
+    cJSON* start_json = cJSON_GetObjectItem(root, "startFreq");
+    cJSON* end_json = cJSON_GetObjectItem(root, "endFreq");
+    cJSON* step_json = cJSON_GetObjectItem(root, "step");
+
+    float start_freq = 863.0f;
+    float end_freq = 870.0f;
+    float step = 0.1f;
+
+    if (start_json && cJSON_IsNumber(start_json)) {
+        start_freq = (float)start_json->valuedouble;
+    }
+    if (end_json && cJSON_IsNumber(end_json)) {
+        end_freq = (float)end_json->valuedouble;
+    }
+    if (step_json && cJSON_IsNumber(step_json)) {
+        step = (float)step_json->valuedouble;
+    }
+
+    cJSON_Delete(root);
+
+    // 스캔 시작 이벤트 발행
+    lora_scan_start_t scan_req = {
+        .start_freq = start_freq,
+        .end_freq = end_freq,
+        .step = step
+    };
+    event_bus_publish(EVT_LORA_SCAN_START, &scan_req, sizeof(scan_req));
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"started\"}");
+
+    return ESP_OK;
+}
+
+/**
+ * @brief POST /api/broadcast/scan/stop - 스캔 중지
+ */
+static esp_err_t api_broadcast_scan_stop_handler(httpd_req_t* req)
+{
+    // 스캔 중지 이벤트 발행
+    event_bus_publish(EVT_LORA_SCAN_STOP, nullptr, 0);
+
+    s_cache.lora_scanning = false;
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"stopped\"}");
+
+    return ESP_OK;
+}
+
+/**
  * @brief index.html 핸들러
  */
 static esp_err_t index_handler(httpd_req_t* req)
@@ -812,6 +986,28 @@ static const httpd_uri_t uri_api_config_switcher_dual = {
     .user_ctx = nullptr
 };
 
+// Broadcast API URI
+static const httpd_uri_t uri_api_broadcast_scan = {
+    .uri = "/api/broadcast/scan",
+    .method = HTTP_GET,
+    .handler = api_broadcast_scan_get_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_broadcast_scan_start = {
+    .uri = "/api/broadcast/scan/start",
+    .method = HTTP_POST,
+    .handler = api_broadcast_scan_start_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_broadcast_scan_stop = {
+    .uri = "/api/broadcast/scan/stop",
+    .method = HTTP_POST,
+    .handler = api_broadcast_scan_stop_handler,
+    .user_ctx = nullptr
+};
+
 // 정적 파일 URI
 static const httpd_uri_t uri_css = {
     .uri = "/css/styles.css",
@@ -846,7 +1042,7 @@ esp_err_t web_server_init(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     config.max_open_sockets = 5;
-    config.max_uri_handlers = 16;  // API + 정적 파일
+    config.max_uri_handlers = 20;  // API + 정적 파일 + LoRa
     config.lru_purge_enable = true;
 
     esp_err_t ret = httpd_start(&s_server, &config);
@@ -867,12 +1063,20 @@ esp_err_t web_server_init(void)
     httpd_register_uri_handler(s_server, &uri_api_config_switcher_primary);
     httpd_register_uri_handler(s_server, &uri_api_config_switcher_secondary);
     httpd_register_uri_handler(s_server, &uri_api_config_switcher_dual);
+    // Broadcast API
+    httpd_register_uri_handler(s_server, &uri_api_broadcast_scan);
+    httpd_register_uri_handler(s_server, &uri_api_broadcast_scan_start);
+    httpd_register_uri_handler(s_server, &uri_api_broadcast_scan_stop);
 
     // 이벤트 구독
     event_bus_subscribe(EVT_INFO_UPDATED, onSystemInfoEvent);
     event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, onSwitcherStatusEvent);
     event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
     event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
+    // LoRa 스캔 이벤트
+    event_bus_subscribe(EVT_LORA_SCAN_START, onLoraScanStartEvent);
+    event_bus_subscribe(EVT_LORA_SCAN_PROGRESS, onLoraScanProgressEvent);
+    event_bus_subscribe(EVT_LORA_SCAN_COMPLETE, onLoraScanCompleteEvent);
 
     // 설정 데이터 요청 (초기 캐시 populate)
     event_bus_publish(EVT_CONFIG_DATA_REQUEST, nullptr, 0);
@@ -894,6 +1098,10 @@ esp_err_t web_server_stop(void)
     event_bus_unsubscribe(EVT_SWITCHER_STATUS_CHANGED, onSwitcherStatusEvent);
     event_bus_unsubscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
     event_bus_unsubscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
+    // LoRa 스캔 이벤트 해제
+    event_bus_unsubscribe(EVT_LORA_SCAN_START, onLoraScanStartEvent);
+    event_bus_unsubscribe(EVT_LORA_SCAN_PROGRESS, onLoraScanProgressEvent);
+    event_bus_unsubscribe(EVT_LORA_SCAN_COMPLETE, onLoraScanCompleteEvent);
 
     // 캐시 무효화
     s_cache.system_valid = false;

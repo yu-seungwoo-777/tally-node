@@ -33,6 +33,7 @@ typedef enum {
 // 인터페이스 상태
 typedef struct {
     bool active;
+    bool detected;       // 하드웨어 감지 여부 (Ethernet만 해당)
     bool connected;
     char ip[16];
     char netmask[16];

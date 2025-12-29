@@ -148,6 +148,30 @@ esp_err_t lora_service_set_frequency(float freq_mhz);
  */
 esp_err_t lora_service_set_sync_word(uint8_t sync_word);
 
+/**
+ * @brief 주파수 스캔 시작
+ *
+ * @param start_freq 시작 주파수 (MHz)
+ * @param end_freq 종료 주파수 (MHz)
+ * @param step 스캔 간격 (MHz)
+ * @return ESP_OK 성공
+ */
+esp_err_t lora_service_start_scan(float start_freq, float end_freq, float step);
+
+/**
+ * @brief 주파수 스캔 중지
+ *
+ * @return ESP_OK 성공
+ */
+esp_err_t lora_service_stop_scan(void);
+
+/**
+ * @brief 스캔 중 여부 확인
+ *
+ * @return true 스캔 중
+ */
+bool lora_service_is_scanning(void);
+
 #ifdef __cplusplus
 }
 #endif

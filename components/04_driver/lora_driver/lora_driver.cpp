@@ -454,6 +454,26 @@ esp_err_t lora_driver_set_frequency(float freq_mhz) {
         return ESP_ERR_INVALID_STATE;
     }
 
+    // 모듈별 주파수 범위 검사
+    // SX1262 (900TB): 850-930 MHz
+    // SX1268 (400TB): 410-493 MHz
+    bool valid = false;
+    switch (s_chip_type) {
+        case LORA_CHIP_SX1262_433M:  // 900TB
+            valid = (freq_mhz >= 850.0f && freq_mhz <= 930.0f);
+            break;
+        case LORA_CHIP_SX1268_868M:  // 400TB
+            valid = (freq_mhz >= 410.0f && freq_mhz <= 493.0f);
+            break;
+        default:
+            break;
+    }
+
+    if (!valid) {
+        T_LOGW(TAG, "주파수 범위 벗어남: %.1f MHz (chip=%d)", freq_mhz, s_chip_type);
+        return ESP_ERR_INVALID_ARG;
+    }
+
     if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
         return ESP_ERR_TIMEOUT;
     }
@@ -487,4 +507,77 @@ esp_err_t lora_driver_set_sync_word(uint8_t sync_word) {
         return ESP_OK;
     }
     return ESP_FAIL;
+}
+
+esp_err_t lora_driver_scan_channels(float start_freq, float end_freq, float step,
+                                     channel_info_t* results, size_t max_results,
+                                     size_t* result_count) {
+    if (!s_initialized || !s_radio || !results || !result_count) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (start_freq >= end_freq || step <= 0.0f) {
+        T_LOGE(TAG, "잘못된 스캔 범위: start=%.1f, end=%.1f, step=%.1f",
+               start_freq, end_freq, step);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    T_LOGI(TAG, "채널 스캔 시작: %.1f ~ %.1f MHz (간격 %.1f MHz)",
+           start_freq, end_freq, step);
+
+    size_t count = 0;
+    float original_freq = s_frequency;  // 원래 주파수 저장
+
+    // SPI 뮤텍스 잠금
+    if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        T_LOGE(TAG, "스캔 시작 중 뮤텍스 획득 실패");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    for (float freq = start_freq; freq <= end_freq && count < max_results; freq += step) {
+        // 주파수 설정
+        int16_t state = s_radio->setFrequency(freq);
+        if (state != RADIOLIB_ERR_NONE) {
+            T_LOGW(TAG, "주파수 설정 실패: %.1f MHz", freq);
+            continue;
+        }
+
+        // 수신 모드로 전환
+        s_radio->startReceive();
+
+        // RSSI 안정화를 위한 대기
+        vTaskDelay(pdMS_TO_TICKS(20));
+
+        // 3번 측정하여 평균 (안정성 향상)
+        float rssi_sum = 0.0f;
+        for (int i = 0; i < 3; i++) {
+            rssi_sum += s_radio->getRSSI(false);
+            if (i < 2) {
+                vTaskDelay(pdMS_TO_TICKS(10));  // 측정 간 대기
+            }
+        }
+        float rssi_avg = rssi_sum / 3.0f;
+
+        // 결과 저장
+        results[count].frequency = freq;
+        results[count].rssi = (int16_t)rssi_avg;
+        results[count].noise_floor = -100;  // 기본값 (나중에 CAD로 개선 가능)
+        // -80 dBm 미만 = 조용한 채널, 이상 = 노이즈/사용중
+        results[count].clear_channel = (rssi_avg < -80.0f);
+
+        T_LOGD(TAG, "%.1f MHz: %.1f dBm", freq, rssi_avg);
+
+        count++;
+    }
+
+    // 원래 주파수로 복원
+    s_radio->setFrequency(original_freq);
+    s_radio->startReceive();
+
+    xSemaphoreGive(s_spi_mutex);
+
+    *result_count = count;
+    T_LOGI(TAG, "채널 스캔 완료: %d개 채널", count);
+
+    return ESP_OK;
 }

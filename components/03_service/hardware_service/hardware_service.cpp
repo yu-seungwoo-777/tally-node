@@ -97,8 +97,7 @@ hardware_system_t HardwareService::s_system = {
     .battery = 100,
     .voltage = 3.7f,
     .temperature = 25.0f,
-    .rssi = -120,
-    .snr = 0.0f,
+    .lora_chip_type = 0,  // Unknown
     .uptime = 0,
     .stopped = false
 };
@@ -135,8 +134,7 @@ esp_err_t HardwareService::onRssiEvent(const event_data_t* event)
     }
 
     const lora_rssi_event_t* status = (const lora_rssi_event_t*)event->data;
-    s_system.rssi = status->rssi;
-    s_system.snr = (float)status->snr;
+    s_system.lora_chip_type = status->chip_type;
 
     return ESP_OK;
 }
@@ -183,10 +181,9 @@ esp_err_t HardwareService::init(void)
     // System 상태 기본값
     s_system.uptime = 0;
     s_system.stopped = false;
-    s_system.rssi = -120;  // 기본값 (신호 없음)
-    s_system.snr = 0.0f;   // 기본값
+    s_system.lora_chip_type = 0;  // Unknown
 
-    // LoRa RSSI/SNR 이벤트 구독
+    // LoRa RSSI/SNR 이벤트 구독 (chip_type만 사용)
     event_bus_subscribe(EVT_LORA_RSSI_CHANGED, onRssiEvent);
 
     // 정지 상태 변경 이벤트 구독
@@ -354,26 +351,26 @@ float HardwareService::getTemperature(void)
     return s_system.temperature;
 }
 
-// RSSI/SNR
-void HardwareService::setRssi(int16_t rssi)
-{
-    s_system.rssi = rssi;
-}
-
-int16_t HardwareService::getRssi(void)
-{
-    return s_system.rssi;
-}
-
-void HardwareService::setSnr(float snr)
-{
-    s_system.snr = snr;
-}
-
-float HardwareService::getSnr(void)
-{
-    return s_system.snr;
-}
+// RSSI/SNR - device RF에서 관리하므로 hardware_service에서 제거
+// void HardwareService::setRssi(int16_t rssi)
+// {
+//     s_system.rssi = rssi;
+// }
+//
+// int16_t HardwareService::getRssi(void)
+// {
+//     return s_system.rssi;
+// }
+//
+// void HardwareService::setSnr(float snr)
+// {
+//     s_system.snr = snr;
+// }
+//
+// float HardwareService::getSnr(void)
+// {
+//     return s_system.snr;
+// }
 
 // Uptime/Status
 void HardwareService::setStopped(bool stopped)
@@ -472,25 +469,26 @@ float hardware_service_get_temperature(void)
     return HardwareService::getTemperature();
 }
 
-void hardware_service_set_rssi(int16_t rssi)
-{
-    HardwareService::setRssi(rssi);
-}
-
-int16_t hardware_service_get_rssi(void)
-{
-    return HardwareService::getRssi();
-}
-
-void hardware_service_set_snr(float snr)
-{
-    HardwareService::setSnr(snr);
-}
-
-float hardware_service_get_snr(void)
-{
-    return HardwareService::getSnr();
-}
+// RSSI/SNR - device RF에서 관리하므로 제거
+// void hardware_service_set_rssi(int16_t rssi)
+// {
+//     HardwareService::setRssi(rssi);
+// }
+//
+// int16_t hardware_service_get_rssi(void)
+// {
+//     return HardwareService::getRssi();
+// }
+//
+// void hardware_service_set_snr(float snr)
+// {
+//     HardwareService::setSnr(snr);
+// }
+//
+// float hardware_service_get_snr(void)
+// {
+//     return HardwareService::getSnr();
+// }
 
 void hardware_service_set_stopped(bool stopped)
 {

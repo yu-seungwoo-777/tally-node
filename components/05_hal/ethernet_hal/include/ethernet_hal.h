@@ -31,6 +31,7 @@ typedef enum {
 // Ethernet 상태 정보
 typedef struct {
     bool initialized;
+    bool detected;       // W5500 칩 감지 여부
     bool link_up;
     bool got_ip;
     bool dhcp_mode;

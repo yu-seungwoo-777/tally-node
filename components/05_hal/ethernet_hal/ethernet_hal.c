@@ -29,7 +29,8 @@ static const char* TAG = "EthernetHal";
 
 static bool s_initialized = false;
 static bool s_started = false;
-static bool s_link_up = false;    // 링크 상태 추적
+static bool s_detected = false;      // W5500 칩 감지 여부
+static bool s_link_up = false;      // 링크 상태 추적
 static ethernet_hal_state_t s_state = ETHERNET_HAL_STATE_IDLE;
 static esp_eth_handle_t s_eth_handle = NULL;
 static esp_netif_t* s_netif = NULL;
@@ -180,6 +181,9 @@ esp_err_t ethernet_hal_start(void)
 
     T_LOGI(TAG, "Ethernet 시작 중...");
 
+    // 감지 상태 초기화
+    s_detected = false;
+
     // netif 초기화 (ESP-IDF 5.5.0 필수)
     esp_err_t ret = esp_netif_init();
     if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
@@ -267,6 +271,7 @@ esp_err_t ethernet_hal_start(void)
     ret = esp_eth_driver_install(&eth_config, &s_eth_handle);
     if (ret != ESP_OK) {
         T_LOGE(TAG, "Ethernet 드라이버 설치 실패: %s", esp_err_to_name(ret));
+        s_detected = false;  // 감지 실패
 
         // W5500 감지 실패 디버깅 정보
         if (ret == ESP_ERR_INVALID_VERSION) {
@@ -289,6 +294,8 @@ esp_err_t ethernet_hal_start(void)
 
         return ret;
     }
+
+    s_detected = true;  // 감지 성공
 
     // MAC 주소 설정
     uint8_t base_mac[6];
@@ -458,6 +465,7 @@ esp_err_t ethernet_hal_get_status(ethernet_hal_status_t* status)
     memset(status, 0, sizeof(ethernet_hal_status_t));
 
     status->initialized = s_initialized;
+    status->detected = s_detected;
     status->link_up = ethernet_hal_is_link_up();
     status->got_ip = ethernet_hal_has_ip();
 
