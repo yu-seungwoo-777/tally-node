@@ -1,0 +1,364 @@
+/**
+ * 상태 모듈
+ * 상태 초기화, fetchStatus, 폴링
+ */
+
+export function stateModule() {
+    return {
+        // 초기화 완료 플래그
+        _initialized: false,
+
+        // 폴링 타이머
+        _statusPollingTimer: null,
+
+        // 현재 뷰
+        currentView: 'dashboard',
+
+        // 뷰 타이틀 매핑
+        viewTitles: {
+            dashboard: 'Dashboard',
+            network: 'Network',
+            switcher: 'Switcher',
+            broadcast: 'Broadcast',
+            system: 'System'
+        },
+
+        // WebSocket 연결 상태
+        wsConnected: false,
+
+        // /api/status 응답 데이터 (캐시)
+        status: {
+            network: { wifi: { connected: false, ssid: '', ip: '--' }, ethernet: { connected: false, ip: '--' } },
+            switcher: {
+                dualEnabled: false,
+                secondaryOffset: 4,
+                primary: { connected: false, type: 'ATEM', ip: '', port: 0, tally: { pgm: [], pvw: [], raw: '', channels: 0 } },
+                secondary: { connected: false, type: 'ATEM', ip: '', port: 0, tally: { pgm: [], pvw: [], raw: '', channels: 0 } }
+            },
+            system: { deviceId: '0000', battery: 0, voltage: 0, temperature: 0, uptime: 0 }
+        },
+
+        // 네트워크 상태 (UI용 별칭)
+        network: {
+            wifiConnected: false,
+            wifiSsid: '',
+            wifiIp: '--',
+            ethConnected: false,
+            ethDetected: false,
+            ethIp: '--',
+            apEnabled: false,
+            apSsid: '',
+            apChannel: 1,
+            apIp: '--'
+        },
+
+        // 시스템 정보
+        system: {
+            deviceId: '0000',
+            battery: 0,
+            voltage: 0,
+            temperature: 0,
+            uptime: 0,
+            freeHeap: 0,
+            version: '0.1.0'
+        },
+
+        // 설정 데이터
+        config: {
+            network: {
+                wifiAp: { ssid: '', channel: 1, enabled: false },
+                wifiSta: { ssid: '', enabled: false },
+                ethernet: { dhcp: true, staticIp: '', netmask: '', gateway: '', enabled: false }
+            },
+            switcher: {
+                primary: { connected: false, type: 'ATEM', ip: '', port: 0, interface: 2, cameraLimit: 0, tally: { pgm: [], pvw: [], raw: '', channels: 0 } },
+                secondary: { connected: false, type: 'ATEM', ip: '', port: 0, interface: 1, cameraLimit: 0, tally: { pgm: [], pvw: [], raw: '', channels: 0 } },
+                dualEnabled: false,
+                secondaryOffset: 4
+            },
+            device: {
+                brightness: 128,
+                cameraId: 1,
+                rf: {
+                    frequency: 868,
+                    syncWord: 0x12,
+                    spreadingFactor: 7,
+                    codingRate: 7,
+                    bandwidth: 250,
+                    txPower: 22
+                }
+            }
+        },
+
+        // 폼 입력 임시 데이터
+        form: {
+            ap: { ssid: '', password: '', channel: 1, enabled: false },
+            wifi: { ssid: '', password: '', enabled: false },
+            ethernet: { dhcp: true, ip: '', gateway: '', netmask: '', enabled: false },
+            switcher: {
+                primary: { type: 'ATEM', ip: '', port: 9910, interface: 0, cameraLimit: 0, password: '', portLocked: true },
+                secondary: { type: 'ATEM', ip: '', port: 9910, interface: 0, cameraLimit: 0, password: '', portLocked: true },
+                dualEnabled: false,
+                secondaryOffset: 4
+            },
+            mappingOffset: 4,
+            display: { brightness: 128, cameraId: 1 },
+            broadcast: { syncCode: 18, frequency: 868.0 }
+        },
+
+        /**
+         * 뷰 타이틀 계산
+         */
+        get viewTitle() {
+            return this.viewTitles[this.currentView] || 'TALLY-NODE';
+        },
+
+        /**
+         * 초기화
+         */
+        async init() {
+            console.log('Tally App initializing...');
+
+            // URL 해시에서 현재 뷰 복원
+            const hash = window.location.hash.slice(1);
+            if (hash && ['dashboard', 'network', 'switcher', 'broadcast', 'system'].includes(hash)) {
+                this.currentView = hash;
+            }
+
+            // 해시 변경 감지
+            window.addEventListener('hashchange', () => {
+                const newHash = window.location.hash.slice(1);
+                if (newHash && ['dashboard', 'network', 'switcher', 'broadcast', 'system'].includes(newHash)) {
+                    this.currentView = newHash;
+                }
+            });
+
+            await this.fetchStatus();
+
+            // currentView 변경 감지: 스위처 페이지면 폴링 시작
+            this.$watch('currentView', (value) => {
+                if (value === 'switcher') {
+                    this.startStatusPolling();
+                } else {
+                    this.stopStatusPolling();
+                }
+            });
+
+            // 초기 로드 시 스위처 페이지면 폴링 시작
+            if (this.currentView === 'switcher') {
+                this.startStatusPolling();
+            }
+        },
+
+        /**
+         * 상태 조회
+         */
+        async fetchStatus() {
+            try {
+                const res = await fetch('/api/status');
+                if (!res.ok) throw new Error('Status fetch failed');
+                const data = await res.json();
+
+                // status 캐시 업데이트
+                this.status = { ...this.status, ...data };
+
+                // Network (상태 + 설정 통합 업데이트)
+                if (data.network) {
+                    // AP
+                    if (data.network.ap) {
+                        this.network.apEnabled = data.network.ap.enabled || false;
+                        this.network.apSsid = data.network.ap.ssid || '';
+                        this.network.apChannel = data.network.ap.channel || 1;
+                        this.network.apIp = data.network.ap.ip || '--';
+                        // 첫 로드 시에만 폼 초기화
+                        if (!this._initialized) {
+                            this.form.ap = {
+                                enabled: data.network.ap.enabled,
+                                ssid: data.network.ap.ssid || '',
+                                channel: data.network.ap.channel || 1,
+                                password: this.form.ap.password
+                            };
+                        }
+                    }
+                    // WiFi STA
+                    if (data.network.wifi) {
+                        this.network.wifiConnected = data.network.wifi.connected;
+                        this.network.wifiSsid = data.network.wifi.ssid || '';
+                        this.network.wifiIp = data.network.wifi.ip || '--';
+                        // 첫 로드 시에만 폼 초기화
+                        if (!this._initialized) {
+                            this.form.wifi.enabled = data.network.wifi.enabled;
+                            this.form.wifi.ssid = data.network.wifi.ssid || '';
+                        }
+                    }
+                    // Ethernet
+                    if (data.network.ethernet) {
+                        this.network.ethConnected = data.network.ethernet.connected;
+                        this.network.ethDetected = data.network.ethernet.detected || false;
+                        this.network.ethIp = data.network.ethernet.ip || '--';
+                        // 첫 로드 시에만 폼 초기화
+                        if (!this._initialized) {
+                            this.form.ethernet.enabled = data.network.ethernet.enabled;
+                            this.form.ethernet.dhcp = data.network.ethernet.dhcp;
+                            this.form.ethernet.ip = data.network.ethernet.staticIp || '';
+                            this.form.ethernet.netmask = data.network.ethernet.netmask || '';
+                            this.form.ethernet.gateway = data.network.ethernet.gateway || '';
+                        }
+                    }
+                }
+
+                // System (UI용 업데이트)
+                if (data.system) {
+                    this.system.deviceId = data.system.deviceId || '0000';
+                    this.system.battery = data.system.battery || 0;
+                    this.system.voltage = data.system.voltage || 0;
+                    this.system.temperature = data.system.temperature || 0;
+                    this.system.uptime = data.system.uptime || 0;
+                }
+
+                // Switcher 업데이트 (primary/secondary에 상태+설정 병합)
+                if (data.switcher) {
+                    // config는 항상 업데이트 (카드 표시용)
+                    this.config.switcher.dualEnabled = data.switcher.dualEnabled || false;
+                    this.config.switcher.secondaryOffset = data.switcher.secondaryOffset || 4;
+
+                    // 폼은 초기화 시에만 업데이트 (폴링 시 폼 입력 방해 방지)
+                    if (!this._initialized) {
+                        this.form.switcher.dualEnabled = data.switcher.dualEnabled || false;
+                        this.form.switcher.secondaryOffset = data.switcher.secondaryOffset || 4;
+                        this.form.mappingOffset = (data.switcher.secondaryOffset || 4) + 1; // 1-based
+                    }
+
+                    if (data.switcher.primary) {
+                        // config 업데이트
+                        const primaryData = {
+                            connected: data.switcher.primary.connected || false,
+                            type: data.switcher.primary.type || 'ATEM',
+                            ip: data.switcher.primary.ip || '',
+                            port: data.switcher.primary.port || 0,
+                            interface: data.switcher.primary.interface || 0,
+                            cameraLimit: data.switcher.primary.cameraLimit || 0,
+                            tally: data.switcher.primary.tally || { pgm: [], pvw: [], raw: '', channels: 0 }
+                        };
+                        this.config.switcher.primary = primaryData;
+
+                        // status에도 업데이트 (새 객체 생성 - Alpine.js 반응성)
+                        if (!this.status.switcher) this.status.switcher = { primary: {}, secondary: {} };
+                        this.status.switcher.primary = { ...primaryData };
+
+                        // 첫 로드 시 폼 초기화
+                        if (!this._initialized) {
+                            this.form.switcher.primary.type = data.switcher.primary.type || 'ATEM';
+                            this.form.switcher.primary.ip = data.switcher.primary.ip || '';
+                            this.form.switcher.primary.port = data.switcher.primary.port || 9910;
+                            this.form.switcher.primary.interface = data.switcher.primary.interface || 0;
+                            this.form.switcher.primary.cameraLimit = data.switcher.primary.cameraLimit || 0;
+                            this.form.switcher.primary.password = data.switcher.primary.password || '';
+                            this.form.switcher.primary.portLocked = true;
+                        }
+                    }
+                    if (data.switcher.secondary) {
+                        // config 업데이트
+                        const secondaryData = {
+                            connected: data.switcher.secondary.connected || false,
+                            type: data.switcher.secondary.type || 'ATEM',
+                            ip: data.switcher.secondary.ip || '',
+                            port: data.switcher.secondary.port || 0,
+                            interface: data.switcher.secondary.interface || 0,
+                            cameraLimit: data.switcher.secondary.cameraLimit || 0,
+                            tally: data.switcher.secondary.tally || { pgm: [], pvw: [], raw: '', channels: 0 }
+                        };
+                        this.config.switcher.secondary = secondaryData;
+
+                        // status에도 업데이트 (새 객체 생성 - Alpine.js 반응성)
+                        if (!this.status.switcher) this.status.switcher = { primary: {}, secondary: {} };
+                        this.status.switcher.secondary = { ...secondaryData };
+
+                        // 첫 로드 시 폼 초기화
+                        if (!this._initialized) {
+                            this.form.switcher.secondary.type = data.switcher.secondary.type || 'ATEM';
+                            this.form.switcher.secondary.ip = data.switcher.secondary.ip || '';
+                            this.form.switcher.secondary.port = data.switcher.secondary.port || 9910;
+                            this.form.switcher.secondary.interface = data.switcher.secondary.interface || 0;
+                            this.form.switcher.secondary.cameraLimit = data.switcher.secondary.cameraLimit || 0;
+                            this.form.switcher.secondary.password = data.switcher.secondary.password || '';
+                            this.form.switcher.secondary.portLocked = true;
+                        }
+                    }
+                }
+
+                // Device 설정 업데이트
+                if (data.device) {
+                    this.config.device.brightness = data.device.brightness || 128;
+                    this.config.device.cameraId = data.device.cameraId || 1;
+
+                    if (data.device && data.device.rf) {
+                        this.config.device.rf = {
+                            frequency: data.device.rf.frequency || 868,
+                            syncWord: data.device.rf.syncWord || 0x12,
+                            spreadingFactor: data.device.rf.spreadingFactor || 7,
+                            codingRate: data.device.rf.codingRate || 7,
+                            bandwidth: data.device.rf.bandwidth || 250,
+                            txPower: data.device.rf.txPower || 22
+                        };
+                        // 첫 로드 시 폼 초기화
+                        if (!this._initialized) {
+                            this.form.display.brightness = data.device.brightness || 128;
+                            this.form.display.cameraId = data.device.cameraId || 1;
+                            // RF 설정 초기화
+                            this.form.broadcast.syncCode = data.device.rf.syncWord || 18;
+                            this.form.broadcast.frequency = data.device.rf.frequency || 868.0;
+                        }
+                    } else {
+                        // device.rf가 없는 경우 기본값 설정
+                        this.config.device.rf = {
+                            frequency: 868,
+                            syncWord: 18,
+                            spreadingFactor: 7,
+                            codingRate: 7,
+                            bandwidth: 250,
+                            txPower: 22
+                        };
+                        if (!this._initialized) {
+                            this.form.display.brightness = data.device.brightness || 128;
+                            this.form.display.cameraId = data.device.cameraId || 1;
+                            this.form.broadcast.syncCode = 18;
+                            this.form.broadcast.frequency = 868.0;
+                        }
+                    }
+                }
+
+                // 초기화 완료 표시
+                this._initialized = true;
+
+                this.wsConnected = true;
+            } catch (e) {
+                console.error('Status fetch error:', e);
+                this.wsConnected = false;
+            }
+        },
+
+        /**
+         * 상태 폴링 시작 (스위처 카드 정보 주기 업데이트)
+         */
+        startStatusPolling() {
+            // 이미 실행 중이면 시작 안 함
+            if (this._statusPollingTimer) return;
+
+            // 2초마다 상태 조회
+            this._statusPollingTimer = setInterval(async () => {
+                await this.fetchStatus();
+            }, 2000);
+        },
+
+        /**
+         * 상태 폴링 중지
+         */
+        stopStatusPolling() {
+            if (this._statusPollingTimer) {
+                clearInterval(this._statusPollingTimer);
+                this._statusPollingTimer = null;
+            }
+        }
+    };
+}

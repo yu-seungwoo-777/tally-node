@@ -550,9 +550,6 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
     else if (strncmp(path, "device/rf", 9) == 0) {
         cJSON* freq = cJSON_GetObjectItem(root, "frequency");
         cJSON* sync = cJSON_GetObjectItem(root, "syncWord");
-        ESP_LOGD(TAG, "freq=%p (isNumber=%d), sync=%p (isNumber=%d)",
-                 freq, freq ? cJSON_IsNumber(freq) : 0,
-                 sync, sync ? cJSON_IsNumber(sync) : 0);
         if (freq && sync && cJSON_IsNumber(freq) && cJSON_IsNumber(sync)) {
             save_req.type = CONFIG_SAVE_DEVICE_RF;
             save_req.rf_frequency = (float)freq->valuedouble;
@@ -927,8 +924,18 @@ static esp_err_t css_handler(httpd_req_t* req)
  */
 static esp_err_t js_handler(httpd_req_t* req)
 {
-    httpd_resp_set_type(req, "application/javascript");
-    httpd_resp_send(req, (const char*)app_js_data, app_js_len);
+    httpd_resp_set_type(req, "text/javascript");
+    httpd_resp_send(req, (const char*)app_bundle_js_data, app_bundle_js_len);
+    return ESP_OK;
+}
+
+/**
+ * @brief Alpine.js 파일 핸들러
+ */
+static esp_err_t alpine_handler(httpd_req_t* req)
+{
+    httpd_resp_set_type(req, "text/javascript");
+    httpd_resp_send(req, (const char*)alpine_js_data, alpine_js_len);
     return ESP_OK;
 }
 
@@ -1052,9 +1059,16 @@ static const httpd_uri_t uri_css = {
 };
 
 static const httpd_uri_t uri_js = {
-    .uri = "/js/app.js",
+    .uri = "/js/app.bundle.js",
     .method = HTTP_GET,
     .handler = js_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_alpine = {
+    .uri = "/vendor/alpine.js",
+    .method = HTTP_GET,
+    .handler = alpine_handler,
     .user_ctx = nullptr
 };
 
@@ -1090,6 +1104,7 @@ esp_err_t web_server_init(void)
     httpd_register_uri_handler(s_server, &uri_index);
     httpd_register_uri_handler(s_server, &uri_css);
     httpd_register_uri_handler(s_server, &uri_js);
+    httpd_register_uri_handler(s_server, &uri_alpine);
     httpd_register_uri_handler(s_server, &uri_api_status);
     httpd_register_uri_handler(s_server, &uri_api_reboot);
     httpd_register_uri_handler(s_server, &uri_api_config_network_ap);

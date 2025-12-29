@@ -1,0 +1,214 @@
+                <div x-show="currentView === 'switcher'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-cloak>
+                    <div class="mb-4">
+                        <h2 class="text-lg md:text-xl font-semibold text-slate-900">Switcher Settings</h2>
+                        <p class="text-xs md:text-sm text-slate-500 hidden sm:block">Configure video switcher connections</p>
+                    </div>
+
+                    <!-- Dual Mode Toggle -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="font-semibold text-slate-900">Dual Mode</h3>
+                                <p class="text-sm text-slate-500">Enable secondary switcher for expanded camera coverage</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" x-model="form.switcher.dualEnabled"
+                                       class="sr-only peer" @change="onDualModeChange()">
+                                <div class="w-11 h-6 bg-slate-200 rounded-full peer
+                                            peer-checked:after:translate-x-full
+                                            after:absolute after:top-[2px] after:left-[2px]
+                                            after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all
+                                            peer-checked:bg-blue-600 transition-all"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Switcher Status Cards (2-Column) -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <!-- Primary Status Card -->
+                        <div class="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden">
+                            <div class="px-4 py-3 bg-blue-50 border-b border-blue-100">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-3 h-3 rounded-full bg-blue-600"></span>
+                                        <h3 class="font-semibold text-slate-900">Primary (S1)</h3>
+                                    </div>
+                                    <span class="text-xs px-2 py-1 rounded-full"
+                                          :class="status.switcher.primary.connected
+                                              ? 'bg-emerald-100 text-emerald-700'
+                                              : 'bg-rose-100 text-rose-700'">
+                                        <span x-text="status.switcher.primary.connected ? 'Connected' : 'Disconnected'"></span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-3">
+                                <div class="text-sm text-slate-600">
+                                    <span class="font-medium">Type:</span>
+                                    <span x-text="status.switcher.primary.type || '--'"></span>
+                                </div>
+                                <div class="text-sm text-slate-600">
+                                    <span class="font-medium">IP:</span>
+                                    <span class="font-mono" x-text="status.switcher.primary.ip || '--'"></span>
+                                </div>
+                                <div class="text-sm text-slate-600">
+                                    <span class="font-medium">Port:</span>
+                                    <span x-text="status.switcher.primary.port || '--'"></span>
+                                </div>
+
+                                <!-- Tally Status -->
+                                <div class="flex gap-2">
+                                    <div class="flex-1 p-2 bg-red-50 rounded-lg">
+                                        <div class="text-xs text-red-600 font-medium mb-1">PGM</div>
+                                        <div class="text-sm font-semibold text-red-700">
+                                            <template x-if="status.switcher.primary.tally && status.switcher.primary.tally.pgm && status.switcher.primary.tally.pgm.length > 0">
+                                                <span x-text="status.switcher.primary.tally.pgm.join(', ')"></span>
+                                            </template>
+                                            <template x-if="!status.switcher.primary.tally || !status.switcher.primary.tally.pgm || status.switcher.primary.tally.pgm.length === 0">
+                                                <span class="text-red-400">-</span>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    <div class="flex-1 p-2 bg-emerald-50 rounded-lg">
+                                        <div class="text-xs text-emerald-600 font-medium mb-1">PVW</div>
+                                        <div class="text-sm font-semibold text-emerald-700">
+                                            <template x-if="status.switcher.primary.tally && status.switcher.primary.tally.pvw && status.switcher.primary.tally.pvw.length > 0">
+                                                <span x-text="status.switcher.primary.tally.pvw.join(', ')"></span>
+                                            </template>
+                                            <template x-if="!status.switcher.primary.tally || !status.switcher.primary.tally.pvw || status.switcher.primary.tally.pvw.length === 0">
+                                                <span class="text-emerald-400">-</span>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button @click="showPrimaryConfig = true"
+                                        class="w-full py-2 text-sm font-medium text-blue-600
+                                               border border-blue-200 rounded-lg hover:bg-blue-50">
+                                    Configure
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Secondary Status Card -->
+                        <div class="bg-white rounded-xl shadow-sm border overflow-hidden"
+                             :class="form.switcher.dualEnabled
+                                 ? 'border-purple-200'
+                                 : 'border-slate-200 opacity-60'">
+                            <div class="px-4 py-3 border-b"
+                                 :class="form.switcher.dualEnabled
+                                     ? 'bg-purple-50 border-purple-100'
+                                     : 'bg-slate-50 border-slate-100'">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-3 h-3 rounded-full"
+                                              :class="form.switcher.dualEnabled ? 'bg-purple-600' : 'bg-slate-400'"></span>
+                                        <h3 class="font-semibold text-slate-900">Secondary (S2)</h3>
+                                    </div>
+                                    <span class="text-xs px-2 py-1 rounded-full"
+                                          :class="status.switcher.secondary.connected
+                                              ? 'bg-emerald-100 text-emerald-700'
+                                              : 'bg-rose-100 text-rose-700'">
+                                        <span x-text="status.switcher.secondary.connected ? 'Connected' : 'Disconnected'"></span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-3">
+                                <div class="text-sm text-slate-600">
+                                    <span class="font-medium">Type:</span>
+                                    <span x-text="status.switcher.secondary.type || '--'"></span>
+                                </div>
+                                <div class="text-sm text-slate-600">
+                                    <span class="font-medium">IP:</span>
+                                    <span class="font-mono" x-text="status.switcher.secondary.ip || '--'"></span>
+                                </div>
+                                <div class="text-sm text-slate-600">
+                                    <span class="font-medium">Port:</span>
+                                    <span x-text="status.switcher.secondary.port || '--'"></span>
+                                </div>
+
+                                <!-- Tally Status -->
+                                <div class="flex gap-2">
+                                    <div class="flex-1 p-2 bg-red-50 rounded-lg">
+                                        <div class="text-xs text-red-600 font-medium mb-1">PGM</div>
+                                        <div class="text-sm font-semibold text-red-700">
+                                            <template x-if="status.switcher.secondary.tally && status.switcher.secondary.tally.pgm && status.switcher.secondary.tally.pgm.length > 0">
+                                                <span x-text="status.switcher.secondary.tally.pgm.join(', ')"></span>
+                                            </template>
+                                            <template x-if="!status.switcher.secondary.tally || !status.switcher.secondary.tally.pgm || status.switcher.secondary.tally.pgm.length === 0">
+                                                <span class="text-red-400">-</span>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    <div class="flex-1 p-2 bg-emerald-50 rounded-lg">
+                                        <div class="text-xs text-emerald-600 font-medium mb-1">PVW</div>
+                                        <div class="text-sm font-semibold text-emerald-700">
+                                            <template x-if="status.switcher.secondary.tally && status.switcher.secondary.tally.pvw && status.switcher.secondary.tally.pvw.length > 0">
+                                                <span x-text="status.switcher.secondary.tally.pvw.join(', ')"></span>
+                                            </template>
+                                            <template x-if="!status.switcher.secondary.tally || !status.switcher.secondary.tally.pvw || status.switcher.secondary.tally.pvw.length === 0">
+                                                <span class="text-emerald-400">-</span>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button @click="form.switcher.dualEnabled && (showSecondaryConfig = true)"
+                                        class="w-full py-2 text-sm font-medium rounded-lg"
+                                        :class="form.switcher.dualEnabled
+                                            ? 'text-purple-600 border border-purple-200 hover:bg-purple-50'
+                                            : 'text-slate-400 border border-slate-200 cursor-not-allowed'"
+                                        :disabled="!form.switcher.dualEnabled">
+                                    Configure
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Camera Mapping Visualization -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0 translate-y-2"
+                         x-transition:enter-end="opacity-100 translate-y-0">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="font-semibold text-slate-900">Camera Mapping</h3>
+                                <p class="text-xs text-slate-500 mt-0.5">Click a number to set Secondary start position</p>
+                            </div>
+                            <div class="flex items-center gap-4 text-sm">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-3 h-3 rounded bg-blue-500"></span>
+                                    <span class="text-slate-600">Primary</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="w-3 h-3 rounded bg-purple-500"></span>
+                                    <span class="text-slate-600">Secondary</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Camera Buttons Grid -->
+                        <div class="grid grid-cols-5 md:grid-cols-10 gap-2 mb-4">
+                            <template x-for="i in 20" :key="i">
+                                <button @click="selectOffset(i)"
+                                        class="aspect-square rounded-lg font-medium text-xs transition-all flex flex-col items-center justify-center leading-tight"
+                                        :class="getCameraButtonClass(i)"
+                                        :disabled="!form.switcher.dualEnabled">
+                                    <span x-text="getCameraLabel(i)"></span>
+                                </button>
+                            </template>
+                        </div>
+
+                        <!-- Offset Info & Save -->
+                        <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                            <div class="text-sm text-slate-600">
+                                Secondary starts at camera
+                                <span class="font-bold text-purple-600" x-text="form.mappingOffset"></span>
+                            </div>
+                            <button @click="saveMapping()"
+                                    class="px-4 py-2 text-sm font-medium text-white
+                                           bg-purple-600 rounded-lg hover:bg-purple-700">
+                                Save Mapping
+                            </button>
+                        </div>
+                    </div>
+                </div>

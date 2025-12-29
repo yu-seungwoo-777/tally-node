@@ -61,9 +61,6 @@ static void rf_change_task(void* arg) {
     float frequency = s_rf_new_frequency;
     uint8_t sync_word = s_rf_new_sync_word;
 
-    T_LOGD(TAG_RF, "s_rf_new: freq=%.1f, sync=0x%02X", s_rf_new_frequency, s_rf_new_sync_word);
-    T_LOGD(TAG_RF, "로컬 변수: freq=%.1f, sync=0x%02X", frequency, sync_word);
-
     // SET_RF 패킷 구성 (broadcast)
     lora_cmd_rf_t cmd;
     cmd.header = LORA_HDR_SET_RF;
@@ -80,8 +77,6 @@ static void rf_change_task(void* arg) {
     // 10회 broadcast (500ms 간격)
     for (int i = 0; i < 10 && s_rf_changing; i++) {
         event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
-        T_LOGD(TAG_RF, "SET_RF broadcast [%d/10]", i + 1);
-
         if (i < 9) {
             vTaskDelay(pdMS_TO_TICKS(500));
         }

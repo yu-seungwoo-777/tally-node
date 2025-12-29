@@ -1,0 +1,224 @@
+                <div x-show="currentView === 'dashboard'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-cloak>
+
+                    <!-- 히어로 스탯 -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                        <!-- 배터리 -->
+                        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center shrink-0">
+                                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="2" y="6" width="16" height="12" rx="2" />
+                                            <path d="M22 14v-4" />
+                                        </svg>
+                                    </div>
+                                    <span class="text-sm text-slate-500">Battery</span>
+                                </div>
+                                <span class="text-xl md:text-2xl font-bold text-slate-900" x-text="system.battery + '%'"></span>
+                            </div>
+                        </div>
+
+                        <!-- 온도 -->
+                        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center shrink-0">
+                                        <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z" />
+                                        </svg>
+                                    </div>
+                                    <span class="text-sm text-slate-500">Temperature</span>
+                                </div>
+                                <span class="text-xl md:text-2xl font-bold text-slate-900" x-text="system.temperature + '°C'"></span>
+                            </div>
+                        </div>
+
+                        <!-- 업타임 -->
+                        <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
+                                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <circle cx="12" cy="12" r="10" />
+                                            <path d="M12 6v6l4 2" />
+                                        </svg>
+                                    </div>
+                                    <span class="text-sm text-slate-500">Uptime</span>
+                                </div>
+                                <span class="text-xl md:text-2xl font-bold text-slate-900 truncate" x-text="formatUptimeShort(system.uptime)"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Switcher + Network 2열 -->
+                    <div class="grid gap-4 md:grid-cols-2 mb-4">
+                        <!-- Switcher Status -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3.5 border-b border-slate-100">
+                                <h2 class="font-semibold text-slate-900 text-base">Switcher Status</h2>
+                            </div>
+                            <div class="p-4 space-y-3">
+                                <!-- S1 Primary -->
+                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+                                        <div>
+                                            <div class="text-sm font-medium text-slate-700">S1 (Primary)</div>
+                                            <div class="text-xs text-slate-500 font-mono" x-text="config.switcher.primary.ip || '--'"></div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs px-2 py-0.5 rounded-md bg-blue-100 text-blue-700" x-text="config.switcher.primary.type || '--'"></span>
+                                        <span class="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full" :class="config.switcher.primary.connected ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'">
+                                            <span class="w-1.5 h-1.5 rounded-full" :class="config.switcher.primary.connected ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+                                            <span x-text="config.switcher.primary.connected ? 'Connected' : 'Disconnected'"></span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- S2 Secondary -->
+                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2 h-2 rounded-full bg-purple-600"></span>
+                                        <div>
+                                            <div class="text-sm font-medium text-slate-700">S2 (Secondary)</div>
+                                            <div class="text-xs text-slate-500 font-mono" x-text="config.switcher.secondary.ip || '--'"></div>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs px-2 py-0.5 rounded-md bg-purple-100 text-purple-700" x-text="config.switcher.secondary.type || '--'"></span>
+                                        <span class="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full" :class="config.switcher.secondary.connected ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'">
+                                            <span class="w-1.5 h-1.5 rounded-full" :class="config.switcher.secondary.connected ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+                                            <span x-text="config.switcher.secondary.connected ? 'Connected' : 'Disconnected'"></span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- 듀얼 모드 -->
+                                <div class="flex items-center justify-between p-3 bg-blue-50 rounded-xl">
+                                    <span class="text-sm font-medium text-slate-700">Dual Mode</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs text-slate-600" x-show="config.switcher.dualEnabled">Offset: <span class="font-medium" x-text="config.switcher.secondaryOffset || 0"></span></span>
+                                        <span class="text-xs px-2.5 py-1 rounded-full" :class="config.switcher.dualEnabled ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'" x-text="config.switcher.dualEnabled ? 'Enabled' : 'Disabled'"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Network Status -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3.5 border-b border-slate-100">
+                                <h2 class="font-semibold text-slate-900 text-base">Network Status</h2>
+                            </div>
+                            <div class="p-4 space-y-3">
+                                <!-- AP -->
+                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-lg flex items-center justify-center" :class="network.apEnabled ? 'bg-violet-100' : 'bg-slate-200'">
+                                            <svg class="w-4 h-4" :class="network.apEnabled ? 'text-violet-600' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M12 20h.01" />
+                                                <path d="M2 8.82a15 15 0 0 1 20 0" />
+                                                <path d="M5 12.859a10 10 0 0 1 14 0" />
+                                                <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <div class="text-sm font-medium text-slate-700" x-text="'AP (' + (network.apSsid || '--') + ')'"></div>
+                                            <div class="text-xs text-slate-500 font-mono" x-text="network.apIp || '--'"></div>
+                                        </div>
+                                    </div>
+                                    <span class="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" :class="network.apEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'">
+                                        <span class="w-1.5 h-1.5 rounded-full" :class="network.apEnabled ? 'bg-emerald-500' : 'bg-slate-300'"></span>
+                                        <span x-text="network.apEnabled ? 'Enabled' : 'Disabled'"></span>
+                                    </span>
+                                </div>
+
+                                <!-- WiFi -->
+                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-lg flex items-center justify-center" :class="network.wifiConnected ? 'bg-blue-100' : 'bg-slate-200'">
+                                            <svg class="w-4 h-4" :class="network.wifiConnected ? 'text-blue-600' : 'text-slate-400'" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M12 20h.01" />
+                                                <path d="M2 8.82a15 15 0 0 1 20 0" />
+                                                <path d="M5 12.859a10 10 0 0 1 14 0" />
+                                                <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <div class="text-sm font-medium text-slate-700" x-text="'WiFi (' + (network.wifiSsid || '--') + ')'"></div>
+                                            <div class="text-xs text-slate-500 font-mono" x-text="network.wifiIp || '--'"></div>
+                                        </div>
+                                    </div>
+                                    <span class="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" :class="network.wifiConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'">
+                                        <span class="w-1.5 h-1.5 rounded-full" :class="network.wifiConnected ? 'bg-emerald-500' : 'bg-slate-300'"></span>
+                                        <span x-text="network.wifiConnected ? 'Connected' : 'Disconnected'"></span>
+                                    </span>
+                                </div>
+
+                                <!-- Ethernet -->
+                                <div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 rounded-lg flex items-center justify-center" :class="{
+                                            'bg-emerald-100': network.ethDetected && network.ethConnected,
+                                            'bg-slate-200': network.ethDetected && !network.ethConnected,
+                                            'bg-amber-100': !network.ethDetected
+                                        }">
+                                            <svg class="w-4 h-4" :class="{
+                                                'text-emerald-600': network.ethDetected && network.ethConnected,
+                                                'text-slate-400': network.ethDetected && !network.ethConnected,
+                                                'text-amber-600': !network.ethDetected
+                                            }" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="m15 20 3-3h2a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2l3 3z" />
+                                                <path d="M6 8v1" />
+                                                <path d="M10 8v1" />
+                                                <path d="M14 8v1" />
+                                                <path d="M18 8v1" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <div class="text-sm font-medium text-slate-700">Ethernet</div>
+                                            <div class="text-xs" :class="{
+                                                'text-slate-500 font-mono': network.ethDetected,
+                                                'text-amber-600': !network.ethDetected
+                                            }" x-text="network.ethDetected ? (network.ethIp || '--') : 'Check hardware'"></div>
+                                        </div>
+                                    </div>
+                                    <span class="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" :class="{
+                                        'bg-emerald-100 text-emerald-700': network.ethDetected && network.ethConnected,
+                                        'bg-slate-200 text-slate-500': network.ethDetected && !network.ethConnected,
+                                        'bg-amber-100 text-amber-700': !network.ethDetected
+                                    }">
+                                        <span class="w-1.5 h-1.5 rounded-full" :class="{
+                                            'bg-emerald-500': network.ethDetected && network.ethConnected,
+                                            'bg-slate-300': network.ethDetected && !network.ethConnected,
+                                            'bg-amber-500': !network.ethDetected
+                                        }"></span>
+                                        <span x-text="network.ethDetected ? (network.ethConnected ? 'Connected' : 'No Link') : 'Not Detected'"></span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Info -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="px-4 py-3.5 border-b border-slate-100 flex items-center justify-between">
+                            <h2 class="font-semibold text-slate-900 text-base">System Info</h2>
+                            <button @click="currentView = 'system'" class="text-xs text-blue-600 hover:text-blue-700 font-medium">Open Settings →</button>
+                        </div>
+                        <div class="p-4 flex flex-wrap gap-x-8 gap-y-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm text-slate-500">Device ID:</span>
+                                <span class="text-sm font-mono font-medium text-slate-900" x-text="system.deviceId || '0000'"></span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm text-slate-500">Voltage:</span>
+                                <span class="text-sm font-medium text-slate-900" x-text="system.voltage + ' V'"></span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm text-slate-500">Version:</span>
+                                <span class="text-sm font-medium text-slate-900" x-text="system.version || '0.1.0'"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>

@@ -377,7 +377,8 @@ esp_err_t ethernet_hal_restart(void)
     if (ret != ESP_OK) {
         return ret;
     }
-    vTaskDelay(pdMS_TO_TICKS(100));
+    // 드라이버 재초기화를 위한 충분한 대기 시간
+    vTaskDelay(pdMS_TO_TICKS(500));
     return ethernet_hal_start();
 }
 

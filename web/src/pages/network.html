@@ -1,0 +1,271 @@
+                <div x-show="currentView === 'network'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-cloak>
+                    <div class="mb-4">
+                        <h2 class="text-lg md:text-xl font-semibold text-slate-900">Network Settings</h2>
+                        <p class="text-xs md:text-sm text-slate-500 hidden sm:block">Configure WiFi AP, WiFi STA, and Ethernet settings</p>
+                    </div>
+
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <!-- AP 설정 카드 -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-transparent">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-violet-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M12 20h.01" />
+                                            <path d="M2 8.82a15 15 0 0 1 20 0" />
+                                            <path d="M5 12.859a10 10 0 0 1 14 0" />
+                                            <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+                                        </svg>
+                                    </div>
+                                    <h3 class="font-semibold text-slate-900">AP Settings</h3>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <div class="flex items-center justify-between py-2 px-3 bg-violet-50 rounded-lg">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" x-model="form.ap.enabled" class="w-4 h-4 text-violet-600 rounded focus:ring-violet-500 border-slate-300">
+                                        <span class="text-sm font-medium text-slate-700">Enable AP</span>
+                                    </label>
+                                </div>
+                                <div class="space-y-4" :class="!form.ap.enabled ? 'opacity-50 pointer-events-none' : ''">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">SSID</label>
+                                        <input type="text" x-model="form.ap.ssid" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 text-sm" placeholder="AP SSID">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                                        <input type="password" x-model="form.ap.password" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 text-sm" placeholder="Password">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Channel</label>
+                                        <div class="relative" x-data="{ open: false, channels: [
+                                            { value: 1, label: '1', recommended: true },
+                                            { value: 2, label: '2', recommended: false },
+                                            { value: 3, label: '3', recommended: false },
+                                            { value: 4, label: '4', recommended: false },
+                                            { value: 5, label: '5', recommended: false },
+                                            { value: 6, label: '6', recommended: true },
+                                            { value: 7, label: '7', recommended: false },
+                                            { value: 8, label: '8', recommended: false },
+                                            { value: 9, label: '9', recommended: false },
+                                            { value: 10, label: '10', recommended: false },
+                                            { value: 11, label: '11', recommended: true }
+                                        ] }">
+                                            <button @click="open = !open" @click.outside="open = false" type="button" class="w-full px-3 py-2 pr-9 border border-slate-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 text-sm bg-white text-left flex items-center justify-between">
+                                                <span x-text="channels.find(c => c.value === form.ap.channel)?.label || form.ap.channel"></span>
+                                                <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none transition-transform" :class="open ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                                </svg>
+                                            </button>
+                                            <div x-show="open" x-transition class="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-auto">
+                                                <template x-for="ch in channels" :key="ch.value">
+                                                    <button @click="form.ap.channel = ch.value; open = false" type="button" class="w-full px-3 py-2 text-left text-sm hover:bg-violet-50 transition-colors flex items-center justify-between gap-3" :class="form.ap.channel === ch.value ? 'bg-violet-100 text-violet-700 font-medium' : 'text-slate-700'">
+                                                        <span x-text="ch.label"></span>
+                                                        <template x-if="ch.recommended">
+                                                            <span class="text-xs px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">Recommended</span>
+                                                        </template>
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button @click="saveAp()" class="w-full px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+                                    Save AP Settings
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- AP 상태 카드 -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3 md:px-5 md:py-3.5 border-b border-slate-100 bg-slate-50">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-slate-200 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M12 20h.01" />
+                                            <path d="M2 8.82a15 15 0 0 1 20 0" />
+                                            <path d="M5 12.859a10 10 0 0 1 14 0" />
+                                            <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+                                        </svg>
+                                    </div>
+                                    <h3 class="font-semibold text-slate-900">AP Status</h3>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-2">
+                                <div class="flex justify-between items-center py-2 border-b border-slate-100">
+                                    <span class="text-sm text-slate-600">State</span>
+                                    <span class="text-sm font-medium px-2 py-0.5 rounded" :class="network.apEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'" x-text="network.apEnabled ? 'Enabled' : 'Disabled'"></span>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-b border-slate-100">
+                                    <span class="text-sm text-slate-600">SSID</span>
+                                    <span class="text-sm font-mono text-slate-900" x-text="network.apSsid || '--'"></span>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-b border-slate-100">
+                                    <span class="text-sm text-slate-600">Channel</span>
+                                    <span class="text-sm font-medium text-slate-900" x-text="network.apChannel || 1"></span>
+                                </div>
+                                <div class="flex justify-between items-center py-2">
+                                    <span class="text-sm text-slate-600">IP Address</span>
+                                    <span class="text-sm font-mono text-slate-900" x-text="network.apIp || '--'"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- WiFi 설정 카드 -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+                            <div class="px-4 py-3 md:px-5 md:py-3.5 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-transparent">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M12 20h.01" />
+                                            <path d="M2 8.82a15 15 0 0 1 20 0" />
+                                            <path d="M5 12.859a10 10 0 0 1 14 0" />
+                                            <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+                                        </svg>
+                                    </div>
+                                    <h3 class="font-semibold text-slate-900">WiFi Settings</h3>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <div class="flex items-center justify-between py-2 px-3 bg-blue-50 rounded-lg">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" x-model="form.wifi.enabled" class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-slate-300">
+                                        <span class="text-sm font-medium text-slate-700">Enable WiFi</span>
+                                    </label>
+                                </div>
+                                <div class="space-y-4" :class="!form.wifi.enabled ? 'opacity-50 pointer-events-none' : ''">
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">SSID</label>
+                                        <input type="text" x-model="form.wifi.ssid" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="WiFi SSID">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                                        <input type="password" x-model="form.wifi.password" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Password">
+                                    </div>
+                                </div>
+                                <button @click="saveWifi()" class="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+                                    Save WiFi Settings
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- WiFi 상태 카드 -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3 md:px-5 md:py-3.5 border-b border-slate-100 bg-slate-50">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-slate-200 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M12 20h.01" />
+                                            <path d="M2 8.82a15 15 0 0 1 20 0" />
+                                            <path d="M5 12.859a10 10 0 0 1 14 0" />
+                                            <path d="M8.5 16.429a5 5 0 0 1 7 0" />
+                                        </svg>
+                                    </div>
+                                    <h3 class="font-semibold text-slate-900">WiFi Status</h3>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-2">
+                                <div class="flex justify-between items-center py-2 border-b border-slate-100">
+                                    <span class="text-sm text-slate-600">Connection</span>
+                                    <span class="text-sm font-medium px-2 py-0.5 rounded" :class="network.wifiConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'" x-text="network.wifiConnected ? 'Connected' : 'Disconnected'"></span>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-b border-slate-100">
+                                    <span class="text-sm text-slate-600">SSID</span>
+                                    <span class="text-sm font-mono text-slate-900" x-text="network.wifiSsid || '--'"></span>
+                                </div>
+                                <div class="flex justify-between items-center py-2">
+                                    <span class="text-sm text-slate-600">IP Address</span>
+                                    <span class="text-sm font-mono text-slate-900" x-text="network.wifiIp || '--'"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Ethernet 설정 카드 -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+                            <div class="px-4 py-3 md:px-5 md:py-3.5 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-transparent">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="m15 20 3-3h2a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2l3 3z" />
+                                            <path d="M6 8v1" />
+                                            <path d="M10 8v1" />
+                                            <path d="M14 8v1" />
+                                            <path d="M18 8v1" />
+                                        </svg>
+                                    </div>
+                                    <h3 class="font-semibold text-slate-900">Ethernet Settings</h3>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <div class="flex items-center justify-between py-2 px-3 bg-emerald-50 rounded-lg">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="checkbox" x-model="form.ethernet.enabled" class="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500 border-slate-300">
+                                        <span class="text-sm font-medium text-slate-700">Enable Ethernet</span>
+                                    </label>
+                                </div>
+                                <div class="space-y-4" :class="!form.ethernet.enabled ? 'opacity-50 pointer-events-none' : ''">
+                                    <div class="flex items-center justify-between py-2">
+                                        <span class="text-sm font-medium text-slate-700">DHCP</span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" x-model="form.ethernet.dhcp" class="sr-only peer">
+                                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                                        </label>
+                                    </div>
+                                    <div class="space-y-3" :class="form.ethernet.dhcp ? 'opacity-50 pointer-events-none' : ''">
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
+                                            <input type="text" x-model="form.ethernet.ip" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm" placeholder="192.168.1.100">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1">Gateway</label>
+                                            <input type="text" x-model="form.ethernet.gateway" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm" placeholder="192.168.1.1">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1">Subnet Mask</label>
+                                            <input type="text" x-model="form.ethernet.netmask" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm" placeholder="255.255.255.0">
+                                        </div>
+                                    </div>
+                                </div>
+                                <button @click="saveEthernet()" class="w-full px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors">
+                                    Save Ethernet Settings
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Ethernet 상태 카드 -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3 md:px-5 md:py-3.5 border-b border-slate-100 bg-slate-50">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-slate-200 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="m15 20 3-3h2a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2l3 3z" />
+                                            <path d="M6 8v1" />
+                                            <path d="M10 8v1" />
+                                            <path d="M14 8v1" />
+                                            <path d="M18 8v1" />
+                                        </svg>
+                                    </div>
+                                    <h3 class="font-semibold text-slate-900">Ethernet Status</h3>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-2">
+                                <div class="flex justify-between items-center py-2 border-b border-slate-100">
+                                    <span class="text-sm text-slate-600">Hardware</span>
+                                    <span class="text-sm font-medium px-2 py-0.5 rounded" :class="network.ethDetected ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'" x-text="network.ethDetected ? 'Device Detected' : 'Not Detected'"></span>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-b border-slate-100">
+                                    <span class="text-sm text-slate-600">Connection</span>
+                                    <span class="text-sm font-medium px-2 py-0.5 rounded" :class="network.ethDetected && network.ethConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'" x-text="network.ethDetected ? (network.ethConnected ? 'Connected' : 'No Link') : 'N/A'"></span>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-b border-slate-100" x-show="network.ethDetected">
+                                    <span class="text-sm text-slate-600">Mode</span>
+                                    <span class="text-sm font-medium text-slate-900" x-text="form.ethernet.dhcp ? 'DHCP' : 'Static'"></span>
+                                </div>
+                                <div class="flex justify-between items-center py-2" x-show="network.ethDetected">
+                                    <span class="text-sm text-slate-600">IP Address</span>
+                                    <span class="text-sm font-mono text-slate-900" x-text="network.ethIp || '--'"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>

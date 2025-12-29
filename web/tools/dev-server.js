@@ -16,7 +16,8 @@ const SRC_DIR = path.resolve(__dirname, '../src');
 const MIME_TYPES = {
     '.html': 'text/html',
     '.css': 'text/css',
-    '.js': 'application/javascript',
+    '.js': 'text/javascript',
+    '.mjs': 'text/javascript',
     '.json': 'application/json',
     '.png': 'image/png',
     '.jpg': 'image/jpeg',

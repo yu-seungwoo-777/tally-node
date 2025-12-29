@@ -1,0 +1,14 @@
+{
+  "name": "tally-node",
+  "version": "1.0.0",
+  "description": "Tally Node - ESP32 LoRa Tally System",
+  "scripts": {
+    "upload": ". venv/bin/activate && cd web && npm run deploy && cd .. && pio run -t upload && pio device monitor",
+    "clean": ". venv/bin/activate && cd web && npm run deploy && cd .. && pio run -t clean && pio run -t upload && pio device monitor",
+    "tx": ". venv/bin/activate && cd web && npm run deploy && cd .. && pio run -e eora_s3_tx -t upload && pio device monitor",
+    "clean-tx": ". venv/bin/activate && cd web && npm run deploy && cd .. && pio run -e eora_s3_tx -t clean && pio run -e eora_s3_tx -t upload && pio device monitor",
+    "rx": ". venv/bin/activate && cd web && npm run deploy && cd .. && pio run -e eora_s3_rx -t upload && pio device monitor",
+    "clean-rx": ". venv/bin/activate && cd web && npm run deploy && cd .. && pio run -e eora_s3_rx -t clean && pio run -e eora_s3_rx -t upload && pio device monitor",
+    "monitor": ". venv/bin/activate && pio device monitor"
+  }
+}

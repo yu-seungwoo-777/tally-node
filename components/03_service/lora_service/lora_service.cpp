@@ -136,9 +136,6 @@ static esp_err_t on_config_data_changed(const event_data_t* event) {
         return ESP_OK;
     }
 
-    T_LOGD(TAG_RF, "config 데이터: freq=%.1f, sync=0x%02X",
-           config->device_rf_frequency, config->device_rf_sync_word);
-
     // RF 설정 변경 감지
     bool frequency_changed = (config->device_rf_frequency != s_last_frequency && s_last_frequency > 0.0f);
     bool sync_word_changed = (config->device_rf_sync_word != s_last_sync_word && s_last_sync_word > 0);

@@ -1,0 +1,241 @@
+                <div x-show="currentView === 'broadcast'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-cloak>
+                    <div class="mb-4">
+                        <h2 class="text-lg md:text-xl font-semibold text-slate-900">Broadcast</h2>
+                        <p class="text-xs md:text-sm text-slate-500 hidden sm:block">Configure wireless tally channel</p>
+                    </div>
+
+                    <div class="grid gap-4 lg:grid-cols-2">
+                        <!-- Channel Scan Card -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3.5 md:px-5 md:py-4 border-b border-slate-100 bg-gradient-to-r from-amber-50 to-transparent">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-semibold text-slate-900 text-base">Channel Scan</h3>
+                                        <p class="text-xs text-slate-500">Find clear channels</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <!-- Current Frequency Gauge -->
+                                <div class="flex items-center justify-between py-4 px-5 bg-slate-50 rounded-xl">
+                                    <div class="flex-1 space-y-2">
+                                        <div class="flex items-baseline gap-2">
+                                            <span class="text-sm text-slate-500">Frequency</span>
+                                            <span class="text-xl font-mono font-bold text-slate-900" x-text="Math.round(config.device.rf.frequency) + ' MHz'"></span>
+                                        </div>
+                                        <div class="flex items-baseline gap-2">
+                                            <span class="text-sm text-slate-500">Sync Word</span>
+                                            <span class="text-xl font-mono font-bold text-blue-600">0x<span x-text="Number(config.device.rf.syncWord).toString(16).toUpperCase().padStart(2, '0')"></span></span>
+                                        </div>
+                                    </div>
+                                    <!-- Circular RSSI Gauge -->
+                                    <div class="relative w-20 h-20">
+                                        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
+                                            <!-- Background circle -->
+                                            <circle cx="18" cy="18" r="16" fill="none" stroke="#e2e8f0" stroke-width="3"/>
+                                            <!-- RSSI Gauge circle -->
+                                            <circle cx="18" cy="18" r="16" fill="none"
+                                                    :stroke="getGaugeColor(channelScan.currentRssi)"
+                                                    :stroke-dasharray="getGaugeCircumference(channelScan.currentRssi)"
+                                                    stroke-width="3"
+                                                    stroke-linecap="round"
+                                                    class="transition-all duration-500"/>
+                                        </svg>
+                                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                            <span class="text-[10px] text-slate-400">RSSI</span>
+                                            <span class="text-xs font-bold" :class="getGaugeTextColor(channelScan.currentRssi)" x-text="channelScan.currentRssi"></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Scan Button -->
+                                <button @click="startChannelScan()" :disabled="channelScan.scanning" class="w-full px-4 py-3 text-sm font-medium text-white bg-amber-600 rounded-xl hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <span x-show="!channelScan.scanning">Start Scan (850-930 MHz)</span>
+                                    <span x-show="channelScan.scanning">Scanning...</span>
+                                </button>
+
+                                <!-- Progress -->
+                                <div x-show="channelScan.scanning || channelScan.progress > 0" class="space-y-2">
+                                    <div class="flex items-center justify-between text-sm">
+                                        <span class="text-slate-600">Scanning...</span>
+                                        <span class="font-medium text-slate-900" x-text="channelScan.progress + '%'"></span>
+                                    </div>
+                                    <div class="w-full bg-slate-200 rounded-full h-2">
+                                        <div class="bg-amber-600 h-2 rounded-full transition-all duration-300" :style="'width: ' + channelScan.progress + '%'"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Recommendation (after scan) -->
+                                <div x-show="channelScan.recommendation && !channelScan.scanning" class="p-3 rounded-lg text-sm" :class="{
+                                    'bg-emerald-50 border border-emerald-200': channelScan.recommendation && channelScan.recommendation.type === 'good',
+                                    'bg-amber-50 border border-amber-200': channelScan.recommendation && channelScan.recommendation.type === 'better',
+                                    'bg-rose-50 border border-rose-200': channelScan.recommendation && channelScan.recommendation.type === 'change'
+                                }">
+                                    <template x-if="channelScan.recommendation">
+                                        <div class="flex items-start gap-2">
+                                            <span x-show="channelScan.recommendation.type === 'good'" class="text-emerald-600">✓</span>
+                                            <span x-show="channelScan.recommendation.type === 'better'" class="text-amber-600">↑</span>
+                                            <span x-show="channelScan.recommendation.type === 'change'" class="text-rose-600">⚠</span>
+                                            <div>
+                                                <p class="font-medium" x-text="channelScan.recommendation.title"></p>
+                                                <p class="text-xs mt-1" x-show="channelScan.recommendation.message" x-text="channelScan.recommendation.message"></p>
+                                                <button x-show="channelScan.recommendation.suggestedFreq"
+                                                        @click="selectChannelFrequency(channelScan.recommendation.suggestedFreq)"
+                                                        class="mt-2 text-xs underline opacity-75 hover:opacity-100"
+                                                        :class="{
+                                                            'text-emerald-700': channelScan.recommendation.type === 'better',
+                                                            'text-rose-700': channelScan.recommendation.type === 'change'
+                                                        }">
+                                                    Switch to <span x-text="channelScan.recommendation.suggestedFreq.toFixed(1) + ' MHz'"></span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Scan Results Card -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden lg:row-span-2">
+                            <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-transparent">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-semibold text-slate-900 text-base">Scan Results</h3>
+                                        <p class="text-xs text-slate-500">RSSI levels by channel</p>
+                                    </div>
+                                    <span x-show="channelScan.results.length > 0" class="ml-auto text-xs text-slate-500" x-text="channelScan.results.length + ' channels'"></span>
+                                </div>
+                            </div>
+                            <div class="p-4 min-h-[250px] lg:min-h-[400px] flex flex-col">
+                                <!-- Empty State -->
+                                <div x-show="channelScan.results.length === 0" class="flex-1 flex flex-col items-center justify-center text-slate-400 text-sm">
+                                    <svg class="w-12 h-12 mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                    </svg>
+                                    <p>No scan results</p>
+                                    <p class="text-xs">Click "Start Scan" to begin</p>
+                                </div>
+
+                                <!-- Gauge Results -->
+                                <div x-show="channelScan.results.length > 0" class="flex-1 overflow-y-auto space-y-1.5 pr-1" style="max-height: 800px;">
+                                    <template x-for="result in channelScan.results" :key="result.frequency">
+                                        <div @click="selectChannelFrequency(result.frequency)" class="flex items-center gap-3 cursor-pointer hover:bg-slate-50 rounded-lg px-2 py-1.5 transition-colors">
+                                            <!-- Frequency -->
+                                            <div class="w-16 text-right text-sm font-mono text-slate-600" x-text="result.frequency.toFixed(1) + ' MHz'"></div>
+                                            <!-- Gauge Bar -->
+                                            <div class="flex-1 h-5 bg-slate-200 rounded-full overflow-hidden relative">
+                                                <div class="h-full rounded-full transition-all duration-200"
+                                                     :style="{
+                                                         width: result.gaugePercent + '%',
+                                                         backgroundColor: result.clearChannel ? '#22c55e' : '#ef4444'
+                                                     }"></div>
+                                                <!-- RSSI Value on Bar -->
+                                                <div class="absolute inset-0 flex items-center justify-end pr-2">
+                                                    <span class="text-xs font-medium text-slate-700" x-text="result.rssi + ' dBm'"></span>
+                                                </div>
+                                            </div>
+                                            <!-- Status Badge -->
+                                            <div class="w-16">
+                                                <span class="text-xs px-2 py-0.5 rounded" :class="{
+                                                    'bg-emerald-100 text-emerald-700': result.clearChannel,
+                                                    'bg-rose-100 text-rose-700': !result.clearChannel
+                                                }" x-text="result.clearChannel ? 'Clear' : 'Busy'"></span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Channel Settings Card -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3.5 md:px-5 md:py-4 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-transparent">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-semibold text-slate-900 text-base">Channel Settings</h3>
+                                        <p class="text-xs text-slate-500">Frequency & Sync Word</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <!-- Info Notice -->
+                                <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
+                                    <p class="font-semibold mb-1">⚠️ Important</p>
+                                    <p>• Frequency & Sync Word must match for TX/RX communication</p>
+                                    <p>• Change frequency only when all RX devices are ON</p>
+                                    <p>• Keep devices close during change (5-10 seconds)</p>
+                                </div>
+
+                                <!-- Frequency Slider -->
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">Frequency (MHz)</label>
+                                    <input type="range" x-model="form.broadcast.frequency" min="850" max="930" step="1"
+                                           @input="form.broadcast.frequency = Math.round(form.broadcast.frequency)"
+                                           class="w-full h-2 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600">
+                                    <div class="flex justify-between text-xs text-slate-500 mt-1">
+                                        <template x-for="freq in [850, 860, 868, 870, 880, 900, 915, 925, 930]">
+                                            <span :class="{'font-semibold text-blue-600': form.broadcast.frequency === freq}" x-text="freq"></span>
+                                        </template>
+                                    </div>
+                                    <div class="text-center mt-2">
+                                        <span class="text-lg font-mono font-semibold text-blue-600" x-text="Math.round(form.broadcast.frequency) + ' MHz'"></span>
+                                    </div>
+                                </div>
+
+                                <!-- Sync Word Slider -->
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-2">Sync Word</label>
+                                    <input type="range" x-model="form.broadcast.syncCode" min="1" max="150" step="1"
+                                           class="w-full h-2 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600">
+                                    <div class="flex justify-between text-xs text-slate-500 mt-1 font-mono">
+                                        <span>0x01</span>
+                                        <span>0x20</span>
+                                        <span>0x40</span>
+                                        <span>0x60</span>
+                                        <span>0x80</span>
+                                        <span>0x96</span>
+                                    </div>
+                                    <div class="text-center mt-2">
+                                        <span class="text-sm font-mono text-slate-600">Value: </span>
+                                        <span class="text-lg font-mono font-semibold text-blue-600">0x<span x-text="Number(form.broadcast.syncCode).toString(16).toUpperCase().padStart(2, '0')"></span></span>
+                                    </div>
+                                </div>
+
+                                <!-- Save Button with Loading -->
+                                <button @click="saveBroadcast()" :disabled="broadcast.saving"
+                                        class="w-full px-4 py-2.5 text-sm font-medium text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        :class="broadcast.saving ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'">
+                                    <span x-show="!broadcast.saving">Save Channel Settings</span>
+                                    <span x-show="broadcast.saving" class="flex items-center justify-center gap-2">
+                                        <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Applying settings...
+                                    </span>
+                                </button>
+
+                                <!-- Progress during save -->
+                                <div x-show="broadcast.saving" class="text-center">
+                                    <p class="text-xs text-slate-500">This may take 5-10 seconds</p>
+                                    <p class="text-xs text-slate-400">Keep devices close and powered on</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>

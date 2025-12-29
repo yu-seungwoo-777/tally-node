@@ -251,7 +251,7 @@ int AtemDriver::loop() {
         now - state_.last_keepalive_ms > ATEM_KEEPALIVE_INTERVAL_MS) {
         uint8_t keepalive[ATEM_ACK_PACKET_SIZE];
         createKeepalivePacket(keepalive);
-        T_LOGD(TAG, "Keepalive 전송 (간격: %dms)", (int)(now - state_.last_keepalive_ms));
+        T_LOGD(TAG, "[%s] Keepalive 전송 (간격: %dms)", config_.name.c_str(), (int)(now - state_.last_keepalive_ms));
         sendPacket(keepalive, ATEM_ACK_PACKET_SIZE);
         state_.last_keepalive_ms = now;
     }
