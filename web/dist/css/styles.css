@@ -1,0 +1,110 @@
+/* Tally Node Custom Styles */
+
+[x-cloak] {
+    display: none !important;
+}
+
+/* Scrollbar hide */
+::-webkit-scrollbar {
+    display: none;
+}
+
+* {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Select dropdown option styles */
+select option {
+    background-color: white;
+    color: rgb(15, 23, 42);
+    padding: 0.5rem 0.75rem;
+}
+
+select option:hover {
+    background-color: rgb(243, 244, 246);
+}
+
+select option:checked {
+    background-color: rgb(139, 92, 246);
+    color: white;
+}
+
+/* Toast styles with consistent colors */
+.toast-custom {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.875rem 1.25rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    border: 1px solid;
+    min-width: 280px;
+    max-width: 400px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.toast-custom span {
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+    white-space: normal;
+    line-height: 1.4;
+}
+
+/* Success - Emerald */
+.toast-success {
+    background-color: rgb(236 253 245); /* emerald-50 */
+    border-color: rgb(167 243 208); /* emerald-200 */
+    color: rgb(4 120 87); /* emerald-700 */
+}
+.toast-success svg {
+    color: rgb(5 150 105); /* emerald-600 */
+}
+
+/* Error - Red */
+.toast-error {
+    background-color: rgb(254 242 242); /* red-50 */
+    border-color: rgb(254 202 202); /* red-200 */
+    color: rgb(185 28 28); /* red-700 */
+}
+.toast-error svg {
+    color: rgb(220 38 38); /* red-600 */
+}
+
+/* Info - Violet (app theme) */
+.toast-info {
+    background-color: rgb(245 243 255); /* violet-50 */
+    border-color: rgb(221 214 254); /* violet-200 */
+    color: rgb(71 85 105); /* slate-700 */
+}
+.toast-info svg {
+    color: rgb(139 92 246); /* violet-600 */
+}
+
+/* Warning - Amber */
+.toast-warning {
+    background-color: rgb(255 251 235); /* amber-50 */
+    border-color: rgb(253 230 138); /* amber-200 */
+    color: rgb(161 98 7); /* amber-700 */
+}
+.toast-warning svg {
+    color: rgb(217 119 6); /* amber-600 */
+}
+
+/* Toast mobile responsive */
+@media (max-width: 768px) {
+    .toast.toast-end {
+        right: 0.5rem;
+        left: 0.5rem;
+        bottom: 0.5rem;
+    }
+
+    .toast-custom {
+        min-width: unset;
+        max-width: unset;
+        font-size: 0.875rem;
+        padding: 0.75rem 1rem;
+    }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "tally-web-ui",
+  "version": "0.1.0",
+  "description": "Tally Node Web UI",
+  "type": "module",
+  "scripts": {
+    "dev": "node tools/dev-server.js",
+    "build": "node tools/build.js",
+    "embed": "node tools/embed.js",
+    "copy": "bash tools/copy-to-esp.sh",
+    "deploy": "npm run build && npm run embed && npm run copy"
+  },
+  "devDependencies": {
+    "esbuild": "^0.20.0"
+  },
+  "dependencies": {
+    "lucide-static": "^0.562.0"
+  }
+}
