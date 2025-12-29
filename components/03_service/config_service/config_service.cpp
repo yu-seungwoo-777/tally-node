@@ -202,6 +202,9 @@ static esp_err_t on_config_save_request(const event_data_t* event) {
             }
             strncpy(sw.ip, req->switcher_ip, sizeof(sw.ip) - 1);
             sw.port = req->switcher_port;
+            sw.interface = req->switcher_interface;
+            sw.camera_limit = req->switcher_camera_limit;
+            strncpy(sw.password, req->switcher_password, sizeof(sw.password) - 1);
             ret = ConfigServiceClass::setPrimary(&sw);
             break;
         }
@@ -218,6 +221,9 @@ static esp_err_t on_config_save_request(const event_data_t* event) {
             }
             strncpy(sw.ip, req->switcher_ip, sizeof(sw.ip) - 1);
             sw.port = req->switcher_port;
+            sw.interface = req->switcher_interface;
+            sw.camera_limit = req->switcher_camera_limit;
+            strncpy(sw.password, req->switcher_password, sizeof(sw.password) - 1);
             ret = ConfigServiceClass::setSecondary(&sw);
             break;
         }
@@ -296,6 +302,8 @@ static esp_err_t on_config_save_request(const event_data_t* event) {
             data_event->primary_port = full_config.primary.port;
             data_event->primary_interface = full_config.primary.interface;
             data_event->primary_camera_limit = full_config.primary.camera_limit;
+            strncpy(data_event->primary_password, full_config.primary.password, sizeof(data_event->primary_password) - 1);
+            data_event->primary_password[sizeof(data_event->primary_password) - 1] = '\0';
 
             // Switcher Secondary
             data_event->secondary_type = full_config.secondary.type;
@@ -304,6 +312,8 @@ static esp_err_t on_config_save_request(const event_data_t* event) {
             data_event->secondary_port = full_config.secondary.port;
             data_event->secondary_interface = full_config.secondary.interface;
             data_event->secondary_camera_limit = full_config.secondary.camera_limit;
+            strncpy(data_event->secondary_password, full_config.secondary.password, sizeof(data_event->secondary_password) - 1);
+            data_event->secondary_password[sizeof(data_event->secondary_password) - 1] = '\0';
 
             // Switcher Dual
             data_event->dual_enabled = full_config.dual_enabled;
@@ -379,6 +389,8 @@ static esp_err_t on_config_data_request(const event_data_t* event)
     data_event->primary_port = full_config.primary.port;
     data_event->primary_interface = full_config.primary.interface;
     data_event->primary_camera_limit = full_config.primary.camera_limit;
+    strncpy(data_event->primary_password, full_config.primary.password, sizeof(data_event->primary_password) - 1);
+    data_event->primary_password[sizeof(data_event->primary_password) - 1] = '\0';
 
     // Switcher Secondary
     data_event->secondary_type = full_config.secondary.type;
@@ -387,6 +399,8 @@ static esp_err_t on_config_data_request(const event_data_t* event)
     data_event->secondary_port = full_config.secondary.port;
     data_event->secondary_interface = full_config.secondary.interface;
     data_event->secondary_camera_limit = full_config.secondary.camera_limit;
+    strncpy(data_event->secondary_password, full_config.secondary.password, sizeof(data_event->secondary_password) - 1);
+    data_event->secondary_password[sizeof(data_event->secondary_password) - 1] = '\0';
 
     // Switcher Dual
     data_event->dual_enabled = full_config.dual_enabled;

@@ -26,14 +26,14 @@ struct AtemConfig {
     std::string ip;              ///< ATEM IP 주소
     uint16_t port;               ///< 포트 (기본 9910)
     uint8_t camera_limit;        ///< 카메라 제한 (0 = 자동)
-    tally_network_if_t interface; ///< 네트워크 인터페이스 (1=WiFi, 2=Ethernet, 0=자동)
+    tally_network_if_t interface; ///< 네트워크 인터페이스 (0=Auto, 1=Ethernet, 2=WiFi)
 
     AtemConfig()
         : name("ATEM")
         , ip("")
         , port(ATEM_DEFAULT_PORT)
         , camera_limit(0)
-        , interface(static_cast<tally_network_if_t>(0))  // 기본값: 자동 선택
+        , interface(TALLY_NET_AUTO)  // 기본값: 자동 선택
     {}
 };
 

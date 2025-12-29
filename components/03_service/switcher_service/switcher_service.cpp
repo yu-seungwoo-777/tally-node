@@ -8,7 +8,6 @@
 #include "event_bus.h"
 #include "atem_driver.h"
 #include "vmix_driver.h"
-#include "obs_driver.h"
 #include <cstring>
 
 // =============================================================================
@@ -113,6 +112,8 @@ const SwitcherService::SwitcherInfo* SwitcherService::getSwitcherInfo(switcher_r
 
 /**
  * @brief 설정 데이터 변경 이벤트 핸들러
+ *
+ * 듀얼 모드, 오프셋, 또는 스위처 설정(IP, Port, Interface 등) 변경 시 재연결 트리거
  */
 static esp_err_t onConfigDataEvent(const event_data_t* event) {
     if (!event || !event->data) {
@@ -125,22 +126,8 @@ static esp_err_t onConfigDataEvent(const event_data_t* event) {
 
     const config_data_event_t* config = (const config_data_event_t*)event->data;
 
-    // 듀얼 모드 또는 오프셋 변경 확인
-    bool dual_changed = (config->dual_enabled != g_switcher_service_instance->isDualModeEnabled());
-    bool offset_changed = (config->secondary_offset != g_switcher_service_instance->getSecondaryOffset());
-
-    if (dual_changed || offset_changed) {
-        T_LOGI(TAG, "Dual 모드 설정 변경: dual=%d->%d, offset=%d->%d",
-                g_switcher_service_instance->isDualModeEnabled(), config->dual_enabled,
-                g_switcher_service_instance->getSecondaryOffset(), config->secondary_offset);
-
-        // 내부 상태 업데이트 (기존 메서드 사용)
-        g_switcher_service_instance->setDualMode(config->dual_enabled);
-        g_switcher_service_instance->setSecondaryOffset(config->secondary_offset);
-
-        // 재연결 트리거
-        g_switcher_service_instance->triggerReconnect();
-    }
+    // public 메서드를 통해 설정 변경 확인 및 재연결 처리
+    g_switcher_service_instance->checkConfigAndReconnect(config);
 
     return ESP_OK;
 }
@@ -262,6 +249,75 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
     return true;
 }
 
+bool SwitcherService::setVmix(switcher_role_t role, const char* name, const char* ip, uint16_t port, uint8_t camera_limit) {
+    SwitcherInfo* info = getSwitcherInfo(role);
+    if (!info) {
+        T_LOGE(TAG, "잘못된 역할: %d", static_cast<int>(role));
+        return false;
+    }
+
+    // 기존 어댑터 정리
+    info->cleanup();
+
+    // VmixConfig 설정
+    VmixConfig config;
+    config.name = name ? name : switcher_role_to_string(role);
+    config.ip = ip ? ip : "";
+    config.port = (port > 0) ? port : VMIX_DEFAULT_PORT;
+    config.camera_limit = camera_limit;
+
+    // VmixDriver 생성
+    auto driver = std::unique_ptr<VmixDriver>(new VmixDriver(config));
+
+    // Tally 콜백 설정
+    driver->setTallyCallback([this, role]() {
+        onSwitcherTallyChange(role);
+    });
+
+    // 연결 상태 콜백 설정
+    driver->setConnectionCallback([this, role](connection_state_t state) {
+        T_LOGD(TAG, "%s 연결 상태: %s", switcher_role_to_string(role),
+                 connection_state_to_string(state));
+
+        SwitcherInfo* info = getSwitcherInfo(role);
+        if (info) {
+            bool was_connected = info->is_connected;
+            bool now_connected = (state == CONNECTION_STATE_READY || state == CONNECTION_STATE_CONNECTED);
+            info->is_connected = now_connected;
+
+            if (was_connected != now_connected) {
+                publishSwitcherStatus();
+            }
+        }
+
+        if (connection_callback_) {
+            connection_callback_(state);
+        }
+    });
+
+    // 어댑터 설정
+    info->adapter = std::move(driver);
+    info->last_packed.data = nullptr;
+    info->last_packed.data_size = 0;
+    info->last_packed.channel_count = 0;
+    info->has_changed = false;
+    info->last_reconnect_attempt = 0;
+    info->last_packed_change_time = 0;
+    info->is_connected = false;
+
+    // 설정 정보 저장
+    strncpy(info->type, "vMix", sizeof(info->type) - 1);
+    strncpy(info->ip, config.ip.c_str(), sizeof(info->ip) - 1);
+    info->port = config.port;
+
+    T_LOGI(TAG, "%s vMix 스위처 설정됨: %s (%s:%d)",
+            switcher_role_to_string(role), config.name.c_str(), config.ip.c_str(), config.port);
+
+    publishSwitcherStatus();
+
+    return true;
+}
+
 void SwitcherService::removeSwitcher(switcher_role_t role) {
     SwitcherInfo* info = getSwitcherInfo(role);
     if (!info) {
@@ -298,8 +354,8 @@ void SwitcherService::loop() {
         checkSwitcherChange(SWITCHER_ROLE_PRIMARY);
     }
 
-    // Secondary 처리
-    if (secondary_.adapter) {
+    // Secondary 처리 (듀얼 모드 활성화 시에만)
+    if (dual_mode_enabled_ && secondary_.adapter) {
         connection_state_t state = secondary_.adapter->getConnectionState();
         if (state == CONNECTION_STATE_DISCONNECTED) {
             uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
@@ -446,6 +502,113 @@ void SwitcherService::triggerReconnect() {
                 secondary_.adapter->disconnect();
             }
         }
+    }
+}
+
+// ============================================================================
+// 설정 데이터 변경 확인 및 재연결
+// ============================================================================
+
+void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config) {
+    if (!config) {
+        return;
+    }
+
+    bool reconnect_needed = false;
+
+    // 듀얼 모드 또는 오프셋 변경 확인
+    bool dual_changed = (config->dual_enabled != dual_mode_enabled_);
+    bool offset_changed = (config->secondary_offset != secondary_offset_);
+
+    if (dual_changed || offset_changed) {
+        T_LOGI(TAG, "Dual 모드 설정 변경: dual=%d->%d, offset=%d->%d",
+                dual_mode_enabled_, config->dual_enabled,
+                secondary_offset_, config->secondary_offset);
+
+        // 내부 상태 업데이트
+        setDualMode(config->dual_enabled);
+        setSecondaryOffset(config->secondary_offset);
+        reconnect_needed = true;
+    }
+
+    // 현재 타입 확인 (문자열 비교)
+    auto getCurrentType = [](const char* type_str) -> int {
+        if (strcmp(type_str, "ATEM") == 0) return 0;
+        if (strcmp(type_str, "vMix") == 0) return 2;
+        return 0; // default ATEM
+    };
+
+    // Primary 스위처 설정 변경 확인 (타입, IP, Port)
+    if (primary_.adapter) {
+        int current_type = getCurrentType(primary_.type);
+        bool type_changed = (current_type != config->primary_type);
+        bool ip_changed = (strncmp(config->primary_ip, primary_.ip, sizeof(config->primary_ip)) != 0);
+        bool port_changed = (config->primary_port != primary_.port);
+
+        if (type_changed || ip_changed || port_changed) {
+            T_LOGI(TAG, "Primary 스위처 설정 변경: %s -> %s, %s:%d -> %s:%d",
+                    primary_.type, (config->primary_type == 0 ? "ATEM" : "vMix"),
+                    primary_.ip, primary_.port, config->primary_ip, config->primary_port);
+
+            // 타입에 따라 올바른 메서드 호출
+            switch (config->primary_type) {
+                case 0: // ATEM
+                    setAtem(SWITCHER_ROLE_PRIMARY, "Primary",
+                            config->primary_ip, config->primary_port,
+                            config->primary_camera_limit,
+                            static_cast<tally_network_if_t>(config->primary_interface));
+                    break;
+                case 2: // vMix
+                    setVmix(SWITCHER_ROLE_PRIMARY, "Primary",
+                            config->primary_ip, config->primary_port,
+                            config->primary_camera_limit);
+                    break;
+            }
+
+            // 새 어댑터 연결 시작
+            if (primary_.adapter) {
+                primary_.adapter->connect();
+            }
+        }
+    }
+
+    // Secondary 스위처 설정 변경 확인 (듀얼 모드일 때만)
+    if (config->dual_enabled && secondary_.adapter) {
+        int current_type = getCurrentType(secondary_.type);
+        bool type_changed = (current_type != config->secondary_type);
+        bool ip_changed = (strncmp(config->secondary_ip, secondary_.ip, sizeof(config->secondary_ip)) != 0);
+        bool port_changed = (config->secondary_port != secondary_.port);
+
+        if (type_changed || ip_changed || port_changed) {
+            T_LOGI(TAG, "Secondary 스위처 설정 변경: %s -> %s, %s:%d -> %s:%d",
+                    secondary_.type, (config->secondary_type == 0 ? "ATEM" : "vMix"),
+                    secondary_.ip, secondary_.port, config->secondary_ip, config->secondary_port);
+
+            // 타입에 따라 올바른 메서드 호출
+            switch (config->secondary_type) {
+                case 0: // ATEM
+                    setAtem(SWITCHER_ROLE_SECONDARY, "Secondary",
+                            config->secondary_ip, config->secondary_port,
+                            config->secondary_camera_limit,
+                            static_cast<tally_network_if_t>(config->secondary_interface));
+                    break;
+                case 2: // vMix
+                    setVmix(SWITCHER_ROLE_SECONDARY, "Secondary",
+                            config->secondary_ip, config->secondary_port,
+                            config->secondary_camera_limit);
+                    break;
+            }
+
+            // 새 어댑터 연결 시작
+            if (secondary_.adapter) {
+                secondary_.adapter->connect();
+            }
+        }
+    }
+
+    // 듀얼/오프셋 변경 시 재연결 트리거
+    if (reconnect_needed) {
+        triggerReconnect();
     }
 }
 

@@ -497,6 +497,9 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
         cJSON* type = cJSON_GetObjectItem(root, "type");
         cJSON* ip = cJSON_GetObjectItem(root, "ip");
         cJSON* port = cJSON_GetObjectItem(root, "port");
+        cJSON* interface = cJSON_GetObjectItem(root, "interface");
+        cJSON* camera_limit = cJSON_GetObjectItem(root, "cameraLimit");
+        cJSON* password = cJSON_GetObjectItem(root, "password");
 
         save_req.type = CONFIG_SAVE_SWITCHER_PRIMARY;
         if (type && type->valuestring) {
@@ -508,11 +511,29 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
         if (port && cJSON_IsNumber(port)) {
             save_req.switcher_port = (uint16_t)port->valueint;
         }
+        if (interface && cJSON_IsNumber(interface)) {
+            save_req.switcher_interface = (uint8_t)interface->valueint;
+        } else {
+            save_req.switcher_interface = 0; // Default: Auto
+        }
+        if (camera_limit && cJSON_IsNumber(camera_limit)) {
+            save_req.switcher_camera_limit = (uint8_t)camera_limit->valueint;
+        } else {
+            save_req.switcher_camera_limit = 0; // Default: unlimited
+        }
+        if (password && cJSON_IsString(password)) {
+            strncpy(save_req.switcher_password, password->valuestring, sizeof(save_req.switcher_password) - 1);
+        } else {
+            save_req.switcher_password[0] = '\0';
+        }
     }
     else if (strncmp(path, "switcher/secondary", 18) == 0) {
         cJSON* type = cJSON_GetObjectItem(root, "type");
         cJSON* ip = cJSON_GetObjectItem(root, "ip");
         cJSON* port = cJSON_GetObjectItem(root, "port");
+        cJSON* interface = cJSON_GetObjectItem(root, "interface");
+        cJSON* camera_limit = cJSON_GetObjectItem(root, "cameraLimit");
+        cJSON* password = cJSON_GetObjectItem(root, "password");
 
         save_req.type = CONFIG_SAVE_SWITCHER_SECONDARY;
         if (type && type->valuestring) {
@@ -523,6 +544,21 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
         }
         if (port && cJSON_IsNumber(port)) {
             save_req.switcher_port = (uint16_t)port->valueint;
+        }
+        if (interface && cJSON_IsNumber(interface)) {
+            save_req.switcher_interface = (uint8_t)interface->valueint;
+        } else {
+            save_req.switcher_interface = 0; // Default: Auto
+        }
+        if (camera_limit && cJSON_IsNumber(camera_limit)) {
+            save_req.switcher_camera_limit = (uint8_t)camera_limit->valueint;
+        } else {
+            save_req.switcher_camera_limit = 0; // Default: unlimited
+        }
+        if (password && cJSON_IsString(password)) {
+            strncpy(save_req.switcher_password, password->valuestring, sizeof(save_req.switcher_password) - 1);
+        } else {
+            save_req.switcher_password[0] = '\0';
         }
     }
     else if (strncmp(path, "switcher/dual", 13) == 0) {

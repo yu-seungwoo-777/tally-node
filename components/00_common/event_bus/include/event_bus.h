@@ -212,6 +212,9 @@ typedef struct {
     char switcher_type[8];       ///< Switcher 타입 ("ATEM", "OBS", "vMix")
     char switcher_ip[16];        ///< Switcher IP
     uint16_t switcher_port;      ///< Switcher 포트
+    uint8_t switcher_interface;  ///< 네트워크 인터페이스 (0=Auto, 1=WiFi, 2=Ethernet)
+    uint8_t switcher_camera_limit; ///< 카메라 제한 (0=무제한)
+    char switcher_password[64];  ///< Switcher 비밀번호 (OBS용)
     bool switcher_dual_enabled;  ///< 듀얼 모드 활성화
     uint8_t switcher_secondary_offset; ///< Secondary 오프셋
 
@@ -261,6 +264,7 @@ typedef struct __attribute__((packed)) {
     uint16_t primary_port;
     uint8_t primary_interface;
     uint8_t primary_camera_limit;
+    char primary_password[64];   // OBS 비밀번호
 
     // Switcher Secondary
     uint8_t secondary_type;      // 0=ATEM, 1=OBS, 2=vMix
@@ -268,6 +272,7 @@ typedef struct __attribute__((packed)) {
     uint16_t secondary_port;
     uint8_t secondary_interface;
     uint8_t secondary_camera_limit;
+    char secondary_password[64]; // OBS 비밀번호
 
     // Switcher Dual
     bool dual_enabled;

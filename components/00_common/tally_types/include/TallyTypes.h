@@ -25,7 +25,7 @@ extern "C" {
  */
 typedef enum {
     SWITCHER_TYPE_ATEM = 0,    ///< Blackmagic ATEM (UDP, 포트 9910)
-    SWITCHER_TYPE_OBS = 1,     ///< OBS Studio (WebSocket, 포트 4455)
+    SWITCHER_TYPE_OBS = 1,     ///< OBS Studio (WebSocket, 포트 4455) - 개발 중
     SWITCHER_TYPE_VMIX = 2     ///< vMix (TCP, 포트 8099)
 } switcher_type_t;
 
@@ -41,11 +41,12 @@ typedef enum {
  * @brief 네트워크 인터페이스 타입
  *
  * 스위처가 사용할 네트워크 인터페이스
- * NVS 값과 일치: 1=WiFi, 2=Ethernet
+ * NVS 값과 일치: 0=Auto, 1=Ethernet, 2=WiFi
  */
 typedef enum {
-    TALLY_NET_WIFI = 1,        ///< WiFi 사용
-    TALLY_NET_ETHERNET = 2    ///< Ethernet 사용
+    TALLY_NET_AUTO = 0,        ///< 자동 선택
+    TALLY_NET_ETHERNET = 1,    ///< Ethernet 사용
+    TALLY_NET_WIFI = 2         ///< WiFi 사용
 } tally_network_if_t;
 
 /**

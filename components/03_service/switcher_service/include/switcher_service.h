@@ -13,6 +13,7 @@
 #define SWITCHER_SERVICE_H
 
 #include "TallyTypes.h"
+#include "event_bus.h"
 #include <memory>
 #include <functional>
 #include "freertos/FreeRTOS.h"
@@ -69,7 +70,7 @@ bool switcher_service_initialize(switcher_service_handle_t handle);
  * @param ip IP 주소
  * @param port 포트 번호 (0 = 기본값 9910)
  * @param camera_limit 카메라 제한 (0 = 자동)
- * @param network_interface 네트워크 인터페이스 (1=WiFi, 2=Ethernet, 0=자동)
+ * @param network_interface 네트워크 인터페이스 (0=Auto, 1=Ethernet, 2=WiFi)
  * @return 성공 여부
  */
 bool switcher_service_set_atem(switcher_service_handle_t handle,
@@ -269,10 +270,21 @@ public:
      * @param ip IP 주소
      * @param port 포트 번호
      * @param camera_limit 카메라 제한
-     * @param network_interface 네트워크 인터페이스 (1=WiFi, 2=Ethernet, 0=자동)
+     * @param network_interface 네트워크 인터페이스 (0=Auto, 1=Ethernet, 2=WiFi)
      * @return 성공 여부
      */
     bool setAtem(switcher_role_t role, const char* name, const char* ip, uint16_t port, uint8_t camera_limit, tally_network_if_t network_interface = static_cast<tally_network_if_t>(0));
+
+    /**
+     * @brief vMix 스위처 설정
+     * @param role 스위처 역할 (PRIMARY/SECONDARY)
+     * @param name 스위처 이름
+     * @param ip IP 주소
+     * @param port 포트 번호
+     * @param camera_limit 카메라 제한
+     * @return 성공 여부
+     */
+    bool setVmix(switcher_role_t role, const char* name, const char* ip, uint16_t port, uint8_t camera_limit);
 
     /**
      * @brief 스위처 제거
@@ -365,6 +377,14 @@ public:
      * @brief 설정 변경 시 스위처 재연결 트리거
      */
     void triggerReconnect();
+
+    /**
+     * @brief 설정 데이터 변경 확인 및 재연결
+     * @param config 설정 데이터 이벤트
+     *
+     * 듀얼모드, 오프셋, IP, 포트 등 설정 변경을 확인하고 재연결을 수행
+     */
+    void checkConfigAndReconnect(const config_data_event_t* config);
 
 private:
     struct SwitcherInfo {
