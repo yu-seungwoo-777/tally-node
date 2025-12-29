@@ -18,6 +18,9 @@
 #include <stdio.h>
 
 static const char* TAG __attribute__((unused)) = "LORA_SERVICE";
+#ifdef DEVICE_MODE_TX
+static const char* TAG_RF __attribute__((unused)) = "RF";
+#endif
 
 // ============================================================================
 // 상수
@@ -123,19 +126,17 @@ static esp_err_t on_lora_send_request(const event_data_t* event) {
  * RF 설정 변경 감지 시 device_management_service에 broadcast 요청
  */
 static esp_err_t on_config_data_changed(const event_data_t* event) {
-    T_LOGI(TAG, "[RF] on_config_data_changed 호출, type=%d", event->type);
-
     if (event->type != EVT_CONFIG_DATA_CHANGED) {
         return ESP_OK;
     }
 
     const auto* config = reinterpret_cast<const config_data_event_t*>(event->data);
     if (config == nullptr) {
-        T_LOGW(TAG, "[RF] config 데이터가 NULL");
+        T_LOGW(TAG_RF, "config 데이터가 NULL");
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "[RF] config 데이터: freq=%.1f, sync=0x%02X",
+    T_LOGD(TAG_RF, "config 데이터: freq=%.1f, sync=0x%02X",
            config->device_rf_frequency, config->device_rf_sync_word);
 
     // RF 설정 변경 감지
@@ -143,7 +144,7 @@ static esp_err_t on_config_data_changed(const event_data_t* event) {
     bool sync_word_changed = (config->device_rf_sync_word != s_last_sync_word && s_last_sync_word > 0);
 
     if (frequency_changed || sync_word_changed) {
-        T_LOGI(TAG, "[RF] 설정 변경 감지: freq=%.1f→%.1f MHz, sync=0x%02X→0x%02X",
+        T_LOGI(TAG_RF, "설정 변경: %.1f→%.1f MHz, Sync 0x%02X→0x%02X (broadcast 시작)",
                s_last_frequency, config->device_rf_frequency,
                s_last_sync_word, config->device_rf_sync_word);
 
@@ -164,19 +165,17 @@ static esp_err_t on_config_data_changed(const event_data_t* event) {
  * broadcast 완료 후 자신의 RF 설정 적용
  */
 static esp_err_t on_rf_changed(const event_data_t* event) {
-    T_LOGI(TAG, "[RF] on_rf_changed 호출, type=%d", event->type);
-
     if (event->type != EVT_RF_CHANGED) {
         return ESP_OK;
     }
 
     const auto* rf = reinterpret_cast<const lora_rf_event_t*>(event->data);
     if (rf == nullptr) {
-        T_LOGW(TAG, "[RF] rf 데이터가 NULL");
+        T_LOGW(TAG_RF, "rf 데이터가 NULL");
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "[RF] 설정 적용: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
+    T_LOGI(TAG_RF, "드라이버 적용: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
 
     // 드라이버에 RF 설정 적용
     lora_driver_set_frequency(rf->frequency);

@@ -14,6 +14,7 @@
 #include <cmath>
 
 static const char* TAG = "WebServer";
+static const char* TAG_RF = "RF";
 static httpd_handle_t s_server = nullptr;
 
 // ============================================================================
@@ -512,21 +513,13 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
     // JSON 파싱
     cJSON* root = cJSON_Parse(buf);
     if (root == nullptr) {
-        ESP_LOGE(TAG, "POST /api/config/%s JSON 파싱 실패: %s", path, buf);
+        ESP_LOGE(TAG, "POST /api/config/%s JSON 파싱 실패", path);
         delete[] buf;
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "POST /api/config/%s (body: %s)", path, buf);
     delete[] buf;
-
-    // JSON 디버그 출력
-    char* json_str = cJSON_Print(root);
-    if (json_str) {
-        ESP_LOGI(TAG, "  파싱된 JSON: %s", json_str);
-        cJSON_free(json_str);
-    }
 
     // 설정 저장 요청 이벤트 데이터
     config_save_request_t save_req = {};
@@ -557,16 +550,15 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
     else if (strncmp(path, "device/rf", 9) == 0) {
         cJSON* freq = cJSON_GetObjectItem(root, "frequency");
         cJSON* sync = cJSON_GetObjectItem(root, "syncWord");
-        ESP_LOGI(TAG, "  freq=%p (isNumber=%d), sync=%p (isNumber=%d)",
+        ESP_LOGD(TAG, "freq=%p (isNumber=%d), sync=%p (isNumber=%d)",
                  freq, freq ? cJSON_IsNumber(freq) : 0,
                  sync, sync ? cJSON_IsNumber(sync) : 0);
         if (freq && sync && cJSON_IsNumber(freq) && cJSON_IsNumber(sync)) {
             save_req.type = CONFIG_SAVE_DEVICE_RF;
             save_req.rf_frequency = (float)freq->valuedouble;
             save_req.rf_sync_word = (uint8_t)sync->valueint;
-            ESP_LOGI(TAG, "  RF 설정: freq=%.1f, sync=%d", save_req.rf_frequency, save_req.rf_sync_word);
         } else {
-            ESP_LOGE(TAG, "  Missing or invalid fields");
+            ESP_LOGE(TAG, "Missing 'frequency' or 'syncWord'");
             cJSON_Delete(root);
             httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing 'frequency' or 'syncWord'");
             return ESP_FAIL;
@@ -745,6 +737,12 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
 
     // 설정 저장 이벤트 발행 (config_service가 NVS 저장 후 EVT_CONFIG_DATA_CHANGED 발행)
     event_bus_publish(EVT_CONFIG_CHANGED, &save_req, sizeof(save_req));
+
+    // RF 설정 완료 로그
+    if (save_req.type == CONFIG_SAVE_DEVICE_RF) {
+        ESP_LOGI(TAG_RF, "저장: %.1f MHz, Sync 0x%02X",
+                 save_req.rf_frequency, save_req.rf_sync_word);
+    }
 
     // EVT_CONFIG_DATA_CHANGED 이벤트가 network_service에 전달될 때까지 대기
     vTaskDelay(pdMS_TO_TICKS(100));

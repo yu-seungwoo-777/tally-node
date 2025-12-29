@@ -61,9 +61,8 @@ static void rf_change_task(void* arg) {
     float frequency = s_rf_new_frequency;
     uint8_t sync_word = s_rf_new_sync_word;
 
-    // 디버그: 정적 변수 값 확인
-    T_LOGI(TAG, "s_rf_new: freq=%.1f, sync=0x%02X", s_rf_new_frequency, s_rf_new_sync_word);
-    T_LOGI(TAG, "로컬 변수: freq=%.1f, sync=0x%02X", frequency, sync_word);
+    T_LOGD(TAG_RF, "s_rf_new: freq=%.1f, sync=0x%02X", s_rf_new_frequency, s_rf_new_sync_word);
+    T_LOGD(TAG_RF, "로컬 변수: freq=%.1f, sync=0x%02X", frequency, sync_word);
 
     // SET_RF 패킷 구성 (broadcast)
     lora_cmd_rf_t cmd;
@@ -81,7 +80,7 @@ static void rf_change_task(void* arg) {
     // 10회 broadcast (500ms 간격)
     for (int i = 0; i < 10 && s_rf_changing; i++) {
         event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
-        T_LOGI(TAG, "  SET_RF broadcast [%d/10]", i + 1);
+        T_LOGD(TAG_RF, "SET_RF broadcast [%d/10]", i + 1);
 
         if (i < 9) {
             vTaskDelay(pdMS_TO_TICKS(500));
@@ -89,7 +88,7 @@ static void rf_change_task(void* arg) {
     }
 
     if (s_rf_changing) {
-        T_LOGI(TAG, "Broadcast 완료, lora_service에 RF 적용 요청");
+        T_LOGI(TAG_RF, "Broadcast 완료 (%.1f MHz, Sync 0x%02X)", frequency, sync_word);
 
         // TX가 자신의 RF 변경하도록 이벤트 발행 (정적 변수 사용)
         s_rf_event.frequency = frequency;
@@ -253,7 +252,7 @@ static esp_err_t on_lora_rf_broadcast_request(const event_data_t* event) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    T_LOGI(TAG, "RF broadcast 요청: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
+    T_LOGI(TAG_RF, "broadcast 요청: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
 
     // 비동기 태스크로 RF broadcast
     if (s_rf_change_task == nullptr) {
@@ -649,6 +648,9 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
 extern "C" {
 
 static const char* TAG = "DeviceMgmt";
+#ifdef DEVICE_MODE_TX
+static const char* TAG_RF = "RF";
+#endif
 
 esp_err_t device_management_service_init(device_mgmt_status_callback_t status_cb) {
     if (s_initialized) {
