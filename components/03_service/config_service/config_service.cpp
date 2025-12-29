@@ -223,10 +223,10 @@ static esp_err_t on_config_save_request(const event_data_t* event) {
         }
 
         case CONFIG_SAVE_SWITCHER_DUAL:
-            if (req->switcher_dual_enabled) {
-                ret = ConfigServiceClass::setDualEnabled(true);
-            }
-            if (req->switcher_secondary_offset > 0) {
+            // 듀얼 모드 설정 (항상 저장, false일 때도 호출)
+            ret = ConfigServiceClass::setDualEnabled(req->switcher_dual_enabled);
+            if (ret == ESP_OK) {
+                // Secondary Offset 저장 (0도 유효한 값)
                 ret = ConfigServiceClass::setSecondaryOffset(req->switcher_secondary_offset);
             }
             break;

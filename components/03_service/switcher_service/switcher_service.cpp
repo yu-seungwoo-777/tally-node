@@ -26,6 +26,10 @@
 #pragma GCC diagnostic ignored "-Wunused-variable"
 static const char* TAG = "SwitcherService";
 #pragma GCC diagnostic pop
+
+// 전역 인스턴스 포인터 (이벤트 핸들러에서 사용)
+static SwitcherService* g_switcher_service_instance = nullptr;
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -66,6 +70,9 @@ SwitcherService::SwitcherService()
     combined_packed_.data = nullptr;
     combined_packed_.data_size = 0;
     combined_packed_.channel_count = 0;
+
+    // 전역 인스턴스 포인터 설정
+    g_switcher_service_instance = this;
 }
 
 SwitcherService::~SwitcherService() {
@@ -73,6 +80,9 @@ SwitcherService::~SwitcherService() {
     primary_.cleanup();
     secondary_.cleanup();
     packed_data_cleanup(&combined_packed_);
+
+    // 전역 인스턴스 포인터 해제
+    g_switcher_service_instance = nullptr;
 }
 
 // ============================================================================
@@ -95,6 +105,44 @@ const SwitcherService::SwitcherInfo* SwitcherService::getSwitcherInfo(switcher_r
         return &secondary_;
     }
     return nullptr;
+}
+
+// ============================================================================
+// 이벤트 핸들러
+// ============================================================================
+
+/**
+ * @brief 설정 데이터 변경 이벤트 핸들러
+ */
+static esp_err_t onConfigDataEvent(const event_data_t* event) {
+    if (!event || !event->data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!g_switcher_service_instance) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    const config_data_event_t* config = (const config_data_event_t*)event->data;
+
+    // 듀얼 모드 또는 오프셋 변경 확인
+    bool dual_changed = (config->dual_enabled != g_switcher_service_instance->isDualModeEnabled());
+    bool offset_changed = (config->secondary_offset != g_switcher_service_instance->getSecondaryOffset());
+
+    if (dual_changed || offset_changed) {
+        T_LOGI(TAG, "Dual 모드 설정 변경: dual=%d->%d, offset=%d->%d",
+                g_switcher_service_instance->isDualModeEnabled(), config->dual_enabled,
+                g_switcher_service_instance->getSecondaryOffset(), config->secondary_offset);
+
+        // 내부 상태 업데이트 (기존 메서드 사용)
+        g_switcher_service_instance->setDualMode(config->dual_enabled);
+        g_switcher_service_instance->setSecondaryOffset(config->secondary_offset);
+
+        // 재연결 트리거
+        g_switcher_service_instance->triggerReconnect();
+    }
+
+    return ESP_OK;
 }
 
 // ============================================================================
@@ -276,6 +324,10 @@ bool SwitcherService::start() {
         return true;
     }
 
+    // 이벤트 버스 구독 (설정 변경 감지)
+    event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
+    T_LOGI(TAG, "이벤트 버스 구독: EVT_CONFIG_DATA_CHANGED");
+
     // 플래그 먼저 설정 (태스크가 즉시 시작되도록)
     task_running_ = true;
 
@@ -293,6 +345,7 @@ bool SwitcherService::start() {
     if (task_handle_ == nullptr) {
         T_LOGE(TAG, "태스크 생성 실패");
         task_running_ = false;
+        event_bus_unsubscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
         return false;
     }
 
@@ -315,6 +368,10 @@ void SwitcherService::stop() {
         vTaskDelay(pdMS_TO_TICKS(50));  // 태스크 종료 대기
         task_handle_ = nullptr;
     }
+
+    // 이벤트 버스 구독 해제
+    event_bus_unsubscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
+    T_LOGI(TAG, "이벤트 버스 구독 해제: EVT_CONFIG_DATA_CHANGED");
 
     T_LOGI(TAG, "태스크 정지 완료");
 }
@@ -346,6 +403,49 @@ void SwitcherService::reconnectAll() {
     if (secondary_.adapter && secondary_.adapter->getConnectionState() == CONNECTION_STATE_DISCONNECTED) {
         T_LOGI(TAG, "Secondary 재연결 시도");
         secondary_.adapter->connect();
+    }
+}
+
+// ============================================================================
+// 설정 변경 시 재연결 트리거 (이벤트 핸들러에서 호출)
+// ============================================================================
+
+void SwitcherService::triggerReconnect() {
+    T_LOGI(TAG, "설정 변경으로 인한 스위처 재연결 트리거 (dual=%d)", dual_mode_enabled_);
+
+    // Primary 재연결
+    if (primary_.adapter) {
+        connection_state_t state = primary_.adapter->getConnectionState();
+        if (state != CONNECTION_STATE_DISCONNECTED) {
+            T_LOGI(TAG, "Primary 연결 해제 및 재연결");
+            primary_.adapter->disconnect();
+            primary_.adapter->connect();
+        } else {
+            T_LOGI(TAG, "Primary 연결 시도");
+            primary_.adapter->connect();
+        }
+    }
+
+    // Secondary 처리
+    if (secondary_.adapter) {
+        if (dual_mode_enabled_) {
+            // 듀얼 모드 ON: 연결되어 있으면 재연결, 끊어져 있으면 연결
+            connection_state_t state = secondary_.adapter->getConnectionState();
+            if (state != CONNECTION_STATE_DISCONNECTED) {
+                T_LOGI(TAG, "Secondary 연결 해제 및 재연결");
+                secondary_.adapter->disconnect();
+                secondary_.adapter->connect();
+            } else {
+                T_LOGI(TAG, "Secondary 연결 시도");
+                secondary_.adapter->connect();
+            }
+        } else {
+            // 듀얼 모드 OFF: 연결되어 있으면 해제
+            if (secondary_.adapter->getConnectionState() != CONNECTION_STATE_DISCONNECTED) {
+                T_LOGI(TAG, "Dual 모드 비활성화로 Secondary 연결 해제");
+                secondary_.adapter->disconnect();
+            }
+        }
     }
 }
 
@@ -389,8 +489,8 @@ void SwitcherService::taskLoop() {
         checkSwitcherChange(SWITCHER_ROLE_PRIMARY);
     }
 
-    // Secondary 처리
-    if (secondary_.adapter) {
+    // Secondary 처리 (듀얼 모드 활성화 시에만)
+    if (dual_mode_enabled_ && secondary_.adapter) {
         // 연결 상태 확인 및 자동 재연결
         connection_state_t state = secondary_.adapter->getConnectionState();
         uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
@@ -420,6 +520,11 @@ void SwitcherService::taskLoop() {
 
         secondary_.adapter->loop();
         checkSwitcherChange(SWITCHER_ROLE_SECONDARY);
+    }
+    else if (!dual_mode_enabled_ && secondary_.adapter &&
+             secondary_.adapter->getConnectionState() != CONNECTION_STATE_DISCONNECTED) {
+        // 듀얼 모드 비활성화 시 Secondary 연결 해제
+        secondary_.adapter->disconnect();
     }
 
     // ============================================================================

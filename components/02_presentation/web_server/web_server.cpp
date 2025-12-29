@@ -526,16 +526,30 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
         }
     }
     else if (strncmp(path, "switcher/dual", 13) == 0) {
+        // 파라미터 호환성: dualEnabled/enabled, secondaryOffset/offset
         cJSON* enabled = cJSON_GetObjectItem(root, "enabled");
+        cJSON* dual_enabled = cJSON_GetObjectItem(root, "dualEnabled");
         cJSON* offset = cJSON_GetObjectItem(root, "offset");
+        cJSON* secondary_offset = cJSON_GetObjectItem(root, "secondaryOffset");
 
         save_req.type = CONFIG_SAVE_SWITCHER_DUAL;
-        if (enabled && cJSON_IsBool(enabled)) {
+
+        // dualEnabled 또는 enabled 사용 (우선순위: dualEnabled > enabled)
+        if (dual_enabled && cJSON_IsBool(dual_enabled)) {
+            save_req.switcher_dual_enabled = cJSON_IsTrue(dual_enabled);
+        } else if (enabled && cJSON_IsBool(enabled)) {
             save_req.switcher_dual_enabled = cJSON_IsTrue(enabled);
         }
-        if (offset && cJSON_IsNumber(offset)) {
+
+        // secondaryOffset 또는 offset 사용 (우선순위: secondaryOffset > offset)
+        if (secondary_offset && cJSON_IsNumber(secondary_offset)) {
+            save_req.switcher_secondary_offset = (uint8_t)secondary_offset->valueint;
+        } else if (offset && cJSON_IsNumber(offset)) {
             save_req.switcher_secondary_offset = (uint8_t)offset->valueint;
         }
+
+        ESP_LOGI(TAG, "Publishing Dual Mode save event: enabled=%d, offset=%d",
+                 save_req.switcher_dual_enabled, save_req.switcher_secondary_offset);
     }
     else if (strncmp(path, "network/ap", 11) == 0) {
         cJSON* ssid = cJSON_GetObjectItem(root, "ssid");
@@ -741,6 +755,27 @@ static const httpd_uri_t uri_api_config_network_ethernet = {
     .user_ctx = nullptr
 };
 
+static const httpd_uri_t uri_api_config_switcher_primary = {
+    .uri = "/api/config/switcher/primary",
+    .method = HTTP_POST,
+    .handler = api_config_post_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_config_switcher_secondary = {
+    .uri = "/api/config/switcher/secondary",
+    .method = HTTP_POST,
+    .handler = api_config_post_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_config_switcher_dual = {
+    .uri = "/api/config/switcher/dual",
+    .method = HTTP_POST,
+    .handler = api_config_post_handler,
+    .user_ctx = nullptr
+};
+
 // 정적 파일 URI
 static const httpd_uri_t uri_css = {
     .uri = "/css/styles.css",
@@ -793,6 +828,9 @@ esp_err_t web_server_init(void)
     httpd_register_uri_handler(s_server, &uri_api_config_network_ap);
     httpd_register_uri_handler(s_server, &uri_api_config_network_wifi);
     httpd_register_uri_handler(s_server, &uri_api_config_network_ethernet);
+    httpd_register_uri_handler(s_server, &uri_api_config_switcher_primary);
+    httpd_register_uri_handler(s_server, &uri_api_config_switcher_secondary);
+    httpd_register_uri_handler(s_server, &uri_api_config_switcher_dual);
 
     // 이벤트 구독
     event_bus_subscribe(EVT_INFO_UPDATED, onSystemInfoEvent);

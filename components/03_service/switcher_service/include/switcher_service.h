@@ -361,6 +361,11 @@ public:
      */
     void publishSwitcherStatus();
 
+    /**
+     * @brief 설정 변경 시 스위처 재연결 트리거
+     */
+    void triggerReconnect();
+
 private:
     struct SwitcherInfo {
         std::unique_ptr<ISwitcherPort> adapter;
