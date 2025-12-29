@@ -744,37 +744,55 @@ packed_data_t SwitcherService::combineDualModeTally() const {
         return primary_data;  // Secondary 데이터 없으면 Primary만
     }
 
-    // 전체 채널 수 = min(Primary, offset) + Secondary
+    // 전체 채널 수 계산
+    // - Primary는 offset까지만 사용
+    // - Secondary는 offset+1부터 시작 (offset 위치는 비어있음)
+    // - 예: offset=5, Primary=4, Secondary=6 → 채널 1-4(P), 5(gap), 6-11(S) = 11채널
+    // - 예: offset=18, Primary=4, Secondary=6 → 채널 1-4(P), 5-17(gap), 18(gap), 19-20(S only 2 fit) = 20채널
+
+    // Primary가 사용하는 채널 수 (offset으로 제한)
     uint8_t primary_channels = (primary_data.channel_count < secondary_offset_)
                                 ? primary_data.channel_count
                                 : secondary_offset_;
-    uint8_t total_channels = primary_channels + secondary_data.channel_count;
 
-    // 최대 20채널 제한
-    if (total_channels > TALLY_MAX_CHANNELS) {
-        total_channels = TALLY_MAX_CHANNELS;
+    // Secondary 중 실제로 20채널 내에 들어가는 개수 계산
+    uint8_t secondary_fitting = 0;
+    for (uint8_t i = 0; i < secondary_data.channel_count; i++) {
+        uint8_t target = i + 1 + secondary_offset_;
+        if (target <= TALLY_MAX_CHANNELS) {
+            secondary_fitting = i + 1;  // i는 0-based, fitting은 1-based
+        } else {
+            break;  // 20을 초과하면 종료
+        }
+    }
+
+    // 최대 사용 채널 번호 계산
+    uint8_t max_channel_used = primary_channels;  // Primary 최대 채널
+    if (secondary_fitting > 0) {
+        uint8_t secondary_max = secondary_offset_ + secondary_fitting;
+        if (secondary_max > max_channel_used) {
+            max_channel_used = secondary_max;
+        }
     }
 
     // 결합 데이터 생성
     packed_data_cleanup(&combined_packed_);
-    packed_data_init(&combined_packed_, total_channels);
+    packed_data_init(&combined_packed_, max_channel_used);
 
-    // Primary 데이터 복사 (min(primary, offset) 만큼만)
+    // Primary 데이터 복사
     for (uint8_t i = 0; i < primary_channels; i++) {
         uint8_t flags = packed_data_get_channel(&primary_data, i + 1);
         packed_data_set_channel(&combined_packed_, i + 1, flags);
     }
 
-    // Secondary 데이터 복사 (offset 적용)
-    for (uint8_t i = 0; i < secondary_data.channel_count; i++) {
+    // Secondary 데이터 복사 (offset 적용, 20채널 제한)
+    for (uint8_t i = 0; i < secondary_fitting; i++) {
         uint8_t flags = packed_data_get_channel(&secondary_data, i + 1);
         uint8_t target_channel = i + 1 + secondary_offset_;
 
-        if (target_channel <= total_channels) {
-            // 기존 값과 OR 결합
-            uint8_t existing = packed_data_get_channel(&combined_packed_, target_channel);
-            packed_data_set_channel(&combined_packed_, target_channel, existing | flags);
-        }
+        // 기존 값과 OR 결합
+        uint8_t existing = packed_data_get_channel(&combined_packed_, target_channel);
+        packed_data_set_channel(&combined_packed_, target_channel, existing | flags);
     }
 
     return combined_packed_;

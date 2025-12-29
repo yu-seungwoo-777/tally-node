@@ -374,6 +374,7 @@ typedef enum {
     EVT_LORA_SCAN_PROGRESS,        ///< Scan progress (data: lora_scan_progress_t)
     EVT_LORA_SCAN_COMPLETE,        ///< Scan complete (data: lora_scan_complete_t)
     EVT_LORA_SCAN_STOP,            ///< Scan stop request (data: none)
+    EVT_LORA_RF_BROADCAST_REQUEST, ///< RF broadcast 요청 (data: lora_rf_event_t)
 
     // Network events (03_service)
     EVT_NETWORK_STATUS_CHANGED,   ///< Network status changed (data: network_status_event_t)

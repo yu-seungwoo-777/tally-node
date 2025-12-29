@@ -511,11 +511,21 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
 
     // JSON 파싱
     cJSON* root = cJSON_Parse(buf);
-    delete[] buf;
-
     if (root == nullptr) {
+        ESP_LOGE(TAG, "POST /api/config/%s JSON 파싱 실패: %s", path, buf);
+        delete[] buf;
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
         return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "POST /api/config/%s (body: %s)", path, buf);
+    delete[] buf;
+
+    // JSON 디버그 출력
+    char* json_str = cJSON_Print(root);
+    if (json_str) {
+        ESP_LOGI(TAG, "  파싱된 JSON: %s", json_str);
+        cJSON_free(json_str);
     }
 
     // 설정 저장 요청 이벤트 데이터
@@ -547,11 +557,16 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
     else if (strncmp(path, "device/rf", 9) == 0) {
         cJSON* freq = cJSON_GetObjectItem(root, "frequency");
         cJSON* sync = cJSON_GetObjectItem(root, "syncWord");
+        ESP_LOGI(TAG, "  freq=%p (isNumber=%d), sync=%p (isNumber=%d)",
+                 freq, freq ? cJSON_IsNumber(freq) : 0,
+                 sync, sync ? cJSON_IsNumber(sync) : 0);
         if (freq && sync && cJSON_IsNumber(freq) && cJSON_IsNumber(sync)) {
             save_req.type = CONFIG_SAVE_DEVICE_RF;
             save_req.rf_frequency = (float)freq->valuedouble;
             save_req.rf_sync_word = (uint8_t)sync->valueint;
+            ESP_LOGI(TAG, "  RF 설정: freq=%.1f, sync=%d", save_req.rf_frequency, save_req.rf_sync_word);
         } else {
+            ESP_LOGE(TAG, "  Missing or invalid fields");
             cJSON_Delete(root);
             httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing 'frequency' or 'syncWord'");
             return ESP_FAIL;
@@ -780,9 +795,9 @@ static esp_err_t api_reboot_handler(httpd_req_t* req)
 }
 
 /**
- * @brief GET /api/broadcast/scan - 스캔 상태 및 결과 반환
+ * @brief GET /api/lora/scan - 스캔 상태 및 결과 반환
  */
-static esp_err_t api_broadcast_scan_get_handler(httpd_req_t* req)
+static esp_err_t api_lora_scan_get_handler(httpd_req_t* req)
 {
     cJSON* root = cJSON_CreateObject();
 
@@ -815,9 +830,9 @@ static esp_err_t api_broadcast_scan_get_handler(httpd_req_t* req)
 }
 
 /**
- * @brief POST /api/broadcast/scan/start - 스캔 시작
+ * @brief POST /api/lora/scan/start - 스캔 시작
  */
-static esp_err_t api_broadcast_scan_start_handler(httpd_req_t* req)
+static esp_err_t api_lora_scan_start_handler(httpd_req_t* req)
 {
     // 요청 바디 읽기
     char* buf = new char[256];
@@ -874,9 +889,9 @@ static esp_err_t api_broadcast_scan_start_handler(httpd_req_t* req)
 }
 
 /**
- * @brief POST /api/broadcast/scan/stop - 스캔 중지
+ * @brief POST /api/lora/scan/stop - 스캔 중지
  */
-static esp_err_t api_broadcast_scan_stop_handler(httpd_req_t* req)
+static esp_err_t api_lora_scan_stop_handler(httpd_req_t* req)
 {
     // 스캔 중지 이벤트 발행
     event_bus_publish(EVT_LORA_SCAN_STOP, nullptr, 0);
@@ -986,25 +1001,47 @@ static const httpd_uri_t uri_api_config_switcher_dual = {
     .user_ctx = nullptr
 };
 
-// Broadcast API URI
-static const httpd_uri_t uri_api_broadcast_scan = {
-    .uri = "/api/broadcast/scan",
+// Device API URI
+static const httpd_uri_t uri_api_config_device_brightness = {
+    .uri = "/api/config/device/brightness",
+    .method = HTTP_POST,
+    .handler = api_config_post_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_config_device_camera_id = {
+    .uri = "/api/config/device/camera_id",
+    .method = HTTP_POST,
+    .handler = api_config_post_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_config_device_rf = {
+    .uri = "/api/config/device/rf",
+    .method = HTTP_POST,
+    .handler = api_config_post_handler,
+    .user_ctx = nullptr
+};
+
+// LoRa API URI (internal)
+static const httpd_uri_t uri_api_lora_scan = {
+    .uri = "/api/lora/scan",
     .method = HTTP_GET,
-    .handler = api_broadcast_scan_get_handler,
+    .handler = api_lora_scan_get_handler,
     .user_ctx = nullptr
 };
 
-static const httpd_uri_t uri_api_broadcast_scan_start = {
-    .uri = "/api/broadcast/scan/start",
+static const httpd_uri_t uri_api_lora_scan_start = {
+    .uri = "/api/lora/scan/start",
     .method = HTTP_POST,
-    .handler = api_broadcast_scan_start_handler,
+    .handler = api_lora_scan_start_handler,
     .user_ctx = nullptr
 };
 
-static const httpd_uri_t uri_api_broadcast_scan_stop = {
-    .uri = "/api/broadcast/scan/stop",
+static const httpd_uri_t uri_api_lora_scan_stop = {
+    .uri = "/api/lora/scan/stop",
     .method = HTTP_POST,
-    .handler = api_broadcast_scan_stop_handler,
+    .handler = api_lora_scan_stop_handler,
     .user_ctx = nullptr
 };
 
@@ -1042,7 +1079,7 @@ esp_err_t web_server_init(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     config.max_open_sockets = 5;
-    config.max_uri_handlers = 20;  // API + 정적 파일 + LoRa
+    config.max_uri_handlers = 25;  // API + 정적 파일 + LoRa + Device
     config.lru_purge_enable = true;
 
     esp_err_t ret = httpd_start(&s_server, &config);
@@ -1063,10 +1100,13 @@ esp_err_t web_server_init(void)
     httpd_register_uri_handler(s_server, &uri_api_config_switcher_primary);
     httpd_register_uri_handler(s_server, &uri_api_config_switcher_secondary);
     httpd_register_uri_handler(s_server, &uri_api_config_switcher_dual);
-    // Broadcast API
-    httpd_register_uri_handler(s_server, &uri_api_broadcast_scan);
-    httpd_register_uri_handler(s_server, &uri_api_broadcast_scan_start);
-    httpd_register_uri_handler(s_server, &uri_api_broadcast_scan_stop);
+    httpd_register_uri_handler(s_server, &uri_api_config_device_brightness);
+    httpd_register_uri_handler(s_server, &uri_api_config_device_camera_id);
+    httpd_register_uri_handler(s_server, &uri_api_config_device_rf);
+    // LoRa API (internal)
+    httpd_register_uri_handler(s_server, &uri_api_lora_scan);
+    httpd_register_uri_handler(s_server, &uri_api_lora_scan_start);
+    httpd_register_uri_handler(s_server, &uri_api_lora_scan_stop);
 
     // 이벤트 구독
     event_bus_subscribe(EVT_INFO_UPDATED, onSystemInfoEvent);

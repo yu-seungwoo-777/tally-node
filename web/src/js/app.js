@@ -106,7 +106,7 @@ function tallyApp() {
             },
             mappingOffset: 4,
             display: { brightness: 128, cameraId: 1 },
-            lora: { syncCode: 18, frequency: 868.0 }
+            broadcast: { syncCode: 18, frequency: 868.0 }
         },
 
         // Broadcast 주파수 프리셋 (EoRa-S3-900TB: 850-930MHz)
@@ -332,7 +332,7 @@ function tallyApp() {
                     this.config.device.brightness = data.device.brightness || 128;
                     this.config.device.cameraId = data.device.cameraId || 1;
 
-                    if (data.device.rf) {
+                    if (data.device && data.device.rf) {
                         this.config.device.rf = {
                             frequency: data.device.rf.frequency || 868,
                             syncWord: data.device.rf.syncWord || 0x12,
@@ -345,8 +345,25 @@ function tallyApp() {
                         if (!this._initialized) {
                             this.form.display.brightness = data.device.brightness || 128;
                             this.form.display.cameraId = data.device.cameraId || 1;
+                            // RF 설정 초기화
                             this.form.broadcast.syncCode = data.device.rf.syncWord || 18;
                             this.form.broadcast.frequency = data.device.rf.frequency || 868.0;
+                        }
+                    } else {
+                        // device.rf가 없는 경우 기본값 설정
+                        this.config.device.rf = {
+                            frequency: 868,
+                            syncWord: 18,
+                            spreadingFactor: 7,
+                            codingRate: 7,
+                            bandwidth: 250,
+                            txPower: 22
+                        };
+                        if (!this._initialized) {
+                            this.form.display.brightness = data.device.brightness || 128;
+                            this.form.display.cameraId = data.device.cameraId || 1;
+                            this.form.broadcast.syncCode = 18;
+                            this.form.broadcast.frequency = 868.0;
                         }
                     }
                 }
@@ -658,6 +675,7 @@ function tallyApp() {
             }
 
             // 듀얼 모드 ON: offset으로 분할
+            // offset=5: 1-4(P), 5(S 시작), 5-10(S 영역)
             const primaryLimited = Math.min(primaryChannels, offset - 1);
             const secondaryEnd = Math.min(offset + secondaryChannels - 1, 20);
 
@@ -684,6 +702,49 @@ function tallyApp() {
             }
 
             return 'bg-slate-100 text-slate-400 cursor-pointer hover:bg-slate-200';
+        },
+
+        /**
+         * 카메라 버튼 라벨 생성 (예: "1(P1)", "5(S1)")
+         */
+        getCameraLabel(cameraNum) {
+            const offset = this.form.mappingOffset;
+            const primary = this.status.switcher?.primary;
+            const secondary = this.status.switcher?.secondary;
+            const dualEnabled = this.form.switcher.dualEnabled;
+
+            const primaryChannels = primary?.connected ? (primary.tally?.channels || 0) : 0;
+            const secondaryChannels = secondary?.connected && dualEnabled
+                ? (secondary.tally?.channels || 0)
+                : 0;
+
+            // 듀얼 모드 OFF: 모두 Primary
+            if (!dualEnabled) {
+                if (cameraNum <= primaryChannels) {
+                    return `${cameraNum}(P${cameraNum})`;
+                }
+                return `${cameraNum}`;
+            }
+
+            // 듀얼 모드 ON
+            const primaryLimited = Math.min(primaryChannels, offset - 1);
+            const secondaryStart = offset;
+
+            // Primary 영역
+            if (cameraNum <= primaryLimited) {
+                return `${cameraNum}(P${cameraNum})`;
+            }
+
+            // Secondary 영역
+            if (cameraNum >= secondaryStart) {
+                const secondaryIndex = cameraNum - secondaryStart + 1;
+                if (secondaryIndex <= secondaryChannels) {
+                    return `${cameraNum}(S${secondaryIndex})`;
+                }
+            }
+
+            // 비어있는 영역
+            return `${cameraNum}`;
         },
 
         /**
@@ -772,8 +833,8 @@ function tallyApp() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        frequency: this.form.broadcast.frequency,
-                        syncWord: this.form.broadcast.syncCode
+                        frequency: Number(this.form.broadcast.frequency),
+                        syncWord: Number(this.form.broadcast.syncCode)
                     })
                 });
                 const data = await res.json();
@@ -803,7 +864,7 @@ function tallyApp() {
                 this.channelScan.results = [];
                 this.channelScan.recommendation = null;  // 추천 초기화
 
-                const res = await fetch('/api/broadcast/scan/start', {
+                const res = await fetch('/api/lora/scan/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -831,7 +892,7 @@ function tallyApp() {
          */
         async stopChannelScan() {
             try {
-                await fetch('/api/broadcast/scan/stop', { method: 'POST' });
+                await fetch('/api/lora/scan/stop', { method: 'POST' });
                 this.channelScan.scanning = false;
                 this.stopChannelScanPolling();
                 this.showToast('Scan cancelled', 'alert-warning');
@@ -865,7 +926,7 @@ function tallyApp() {
          */
         async fetchChannelScanStatus() {
             try {
-                const res = await fetch('/api/broadcast/scan');
+                const res = await fetch('/api/lora/scan');
                 if (!res.ok) return;
                 const data = await res.json();
 

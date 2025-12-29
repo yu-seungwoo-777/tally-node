@@ -479,11 +479,17 @@ esp_err_t lora_driver_set_frequency(float freq_mhz) {
     }
 
     int16_t state = s_radio->setFrequency(freq_mhz);
+
+    // 주파수 변경 후 수신 모드 재시작
+    if (state == RADIOLIB_ERR_NONE) {
+        s_radio->startReceive();
+    }
+
     xSemaphoreGive(s_spi_mutex);
 
     if (state == RADIOLIB_ERR_NONE) {
         s_frequency = freq_mhz;
-        T_LOGI(TAG, "주파수 변경: %.1f MHz", freq_mhz);
+        T_LOGI(TAG, "주파수 변경: %.1f MHz (수신 모드 재시작)", freq_mhz);
         return ESP_OK;
     }
     return ESP_FAIL;
@@ -499,11 +505,17 @@ esp_err_t lora_driver_set_sync_word(uint8_t sync_word) {
     }
 
     int16_t state = s_radio->setSyncWord(sync_word);
+
+    // Sync Word 변경 후 수신 모드 재시작
+    if (state == RADIOLIB_ERR_NONE) {
+        s_radio->startReceive();
+    }
+
     xSemaphoreGive(s_spi_mutex);
 
     if (state == RADIOLIB_ERR_NONE) {
         s_sync_word = sync_word;
-        T_LOGI(TAG, "Sync Word 변경: 0x%02X", sync_word);
+        T_LOGI(TAG, "Sync Word 변경: 0x%02X (수신 모드 재시작)", sync_word);
         return ESP_OK;
     }
     return ESP_FAIL;

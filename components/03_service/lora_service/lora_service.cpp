@@ -61,6 +61,13 @@ static float s_scan_end_freq = 0.0f;
 static float s_scan_step = 0.1f;
 #define MAX_SCAN_CHANNELS 100
 
+// RF 설정 관련 (TX 전용)
+#ifdef DEVICE_MODE_TX
+static float s_last_frequency = 0.0f;
+static uint8_t s_last_sync_word = 0;
+static lora_rf_event_t s_rf_broadcast_event = {};  // 이벤트 발행용 정적 변수
+#endif
+
 // ============================================================================
 // 내부 함수
 // ============================================================================
@@ -109,6 +116,75 @@ static esp_err_t on_lora_send_request(const event_data_t* event) {
 
     return lora_service_send(req->data, req->length);
 }
+
+#ifdef DEVICE_MODE_TX
+/**
+ * @brief 설정 데이터 변경 이벤트 핸들러 (TX 전용)
+ * RF 설정 변경 감지 시 device_management_service에 broadcast 요청
+ */
+static esp_err_t on_config_data_changed(const event_data_t* event) {
+    T_LOGI(TAG, "[RF] on_config_data_changed 호출, type=%d", event->type);
+
+    if (event->type != EVT_CONFIG_DATA_CHANGED) {
+        return ESP_OK;
+    }
+
+    const auto* config = reinterpret_cast<const config_data_event_t*>(event->data);
+    if (config == nullptr) {
+        T_LOGW(TAG, "[RF] config 데이터가 NULL");
+        return ESP_OK;
+    }
+
+    T_LOGI(TAG, "[RF] config 데이터: freq=%.1f, sync=0x%02X",
+           config->device_rf_frequency, config->device_rf_sync_word);
+
+    // RF 설정 변경 감지
+    bool frequency_changed = (config->device_rf_frequency != s_last_frequency && s_last_frequency > 0.0f);
+    bool sync_word_changed = (config->device_rf_sync_word != s_last_sync_word && s_last_sync_word > 0);
+
+    if (frequency_changed || sync_word_changed) {
+        T_LOGI(TAG, "[RF] 설정 변경 감지: freq=%.1f→%.1f MHz, sync=0x%02X→0x%02X",
+               s_last_frequency, config->device_rf_frequency,
+               s_last_sync_word, config->device_rf_sync_word);
+
+        // device_management_service에 broadcast 요청 (정적 변수 사용)
+        s_rf_broadcast_event.frequency = config->device_rf_frequency;
+        s_rf_broadcast_event.sync_word = config->device_rf_sync_word;
+        event_bus_publish(EVT_LORA_RF_BROADCAST_REQUEST, &s_rf_broadcast_event, sizeof(s_rf_broadcast_event));
+    }
+
+    s_last_frequency = config->device_rf_frequency;
+    s_last_sync_word = config->device_rf_sync_word;
+
+    return ESP_OK;
+}
+
+/**
+ * @brief RF 변경 이벤트 핸들러 (TX 전용)
+ * broadcast 완료 후 자신의 RF 설정 적용
+ */
+static esp_err_t on_rf_changed(const event_data_t* event) {
+    T_LOGI(TAG, "[RF] on_rf_changed 호출, type=%d", event->type);
+
+    if (event->type != EVT_RF_CHANGED) {
+        return ESP_OK;
+    }
+
+    const auto* rf = reinterpret_cast<const lora_rf_event_t*>(event->data);
+    if (rf == nullptr) {
+        T_LOGW(TAG, "[RF] rf 데이터가 NULL");
+        return ESP_OK;
+    }
+
+    T_LOGI(TAG, "[RF] 설정 적용: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
+
+    // 드라이버에 RF 설정 적용
+    lora_driver_set_frequency(rf->frequency);
+    lora_driver_set_sync_word(rf->sync_word);
+
+    return ESP_OK;
+}
+#endif
 
 /**
  * @brief 드라이버 수신 콜백 (내부)
@@ -277,6 +353,12 @@ esp_err_t lora_service_start(void)
     // 스캔 이벤트 구독
     event_bus_subscribe(EVT_LORA_SCAN_START, on_lora_scan_start_request);
     event_bus_subscribe(EVT_LORA_SCAN_STOP, on_lora_scan_stop_request);
+
+#ifdef DEVICE_MODE_TX
+    // RF 설정 관련 이벤트 구독 (TX만)
+    event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, on_config_data_changed);
+    event_bus_subscribe(EVT_RF_CHANGED, on_rf_changed);
+#endif
 
     // 수신 모드 시작
     ret = lora_driver_start_receive();

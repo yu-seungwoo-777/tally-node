@@ -36,6 +36,13 @@ static uint8_t s_device_count = 0;
 static uint8_t s_registered_devices[DEVICE_MGMT_MAX_REGISTERED][LORA_DEVICE_ID_LEN] = {0};
 static uint8_t s_registered_count = 0;
 static device_mgmt_event_callback_t s_event_callback = nullptr;
+
+// RF 변경 브로드캐스트 태스크
+static TaskHandle_t s_rf_change_task = nullptr;
+static volatile bool s_rf_changing = false;
+static float s_rf_new_frequency = 0.0f;
+static uint8_t s_rf_new_sync_word = 0;
+static lora_rf_event_t s_rf_event = {};  // 이벤트 발행용 정적 변수 (초기화)
 #endif
 
 // ============================================================================
@@ -43,6 +50,57 @@ static device_mgmt_event_callback_t s_event_callback = nullptr;
 // ============================================================================
 
 #ifdef DEVICE_MODE_TX
+
+/**
+ * @brief RF broadcast 태스크
+ * - 5초 동안 10회 SET_RF broadcast (RX 기기들에 RF 변경 알림)
+ * - 완료 후 EVT_RF_CHANGED 발행 (lora_service가 TX 자신의 RF 설정 적용)
+ */
+static void rf_change_task(void* arg) {
+    // 정적 변수에서 로컬 변수로 복사 (태스크 실행 중 값 변경 방지)
+    float frequency = s_rf_new_frequency;
+    uint8_t sync_word = s_rf_new_sync_word;
+
+    // 디버그: 정적 변수 값 확인
+    T_LOGI(TAG, "s_rf_new: freq=%.1f, sync=0x%02X", s_rf_new_frequency, s_rf_new_sync_word);
+    T_LOGI(TAG, "로컬 변수: freq=%.1f, sync=0x%02X", frequency, sync_word);
+
+    // SET_RF 패킷 구성 (broadcast)
+    lora_cmd_rf_t cmd;
+    cmd.header = LORA_HDR_SET_RF;
+    cmd.frequency = frequency;
+    cmd.sync_word = sync_word;
+    const uint8_t broadcast_id[LORA_DEVICE_ID_LEN] = {0xFF, 0xFF, 0xFF, 0xFF};
+    memcpy(cmd.device_id, broadcast_id, LORA_DEVICE_ID_LEN);
+
+    lora_send_request_t req = {
+        .data = reinterpret_cast<const uint8_t*>(&cmd),
+        .length = sizeof(cmd)
+    };
+
+    // 10회 broadcast (500ms 간격)
+    for (int i = 0; i < 10 && s_rf_changing; i++) {
+        event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
+        T_LOGI(TAG, "  SET_RF broadcast [%d/10]", i + 1);
+
+        if (i < 9) {
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
+    }
+
+    if (s_rf_changing) {
+        T_LOGI(TAG, "Broadcast 완료, lora_service에 RF 적용 요청");
+
+        // TX가 자신의 RF 변경하도록 이벤트 발행 (정적 변수 사용)
+        s_rf_event.frequency = frequency;
+        s_rf_event.sync_word = sync_word;
+        event_bus_publish(EVT_RF_CHANGED, &s_rf_event, sizeof(s_rf_event));
+    }
+
+    s_rf_changing = false;
+    s_rf_change_task = nullptr;
+    vTaskDelete(nullptr);
+}
 
 static int find_registered_index(const uint8_t* device_id) {
     if (device_id == nullptr) {
@@ -180,6 +238,49 @@ static void send_pong(uint16_t tx_timestamp_low) {
 // ============================================================================
 
 #ifdef DEVICE_MODE_TX
+
+/**
+ * @brief LoRa RF broadcast 요청 이벤트 핸들러 (TX 전용)
+ * lora_service에서 RF 변경 감지 시 broadcast 전송
+ */
+static esp_err_t on_lora_rf_broadcast_request(const event_data_t* event) {
+    if (event->type != EVT_LORA_RF_BROADCAST_REQUEST) {
+        return ESP_OK;
+    }
+
+    const auto* rf = reinterpret_cast<const lora_rf_event_t*>(event->data);
+    if (rf == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    T_LOGI(TAG, "RF broadcast 요청: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
+
+    // 비동기 태스크로 RF broadcast
+    if (s_rf_change_task == nullptr) {
+        s_rf_new_frequency = rf->frequency;
+        s_rf_new_sync_word = rf->sync_word;
+        s_rf_changing = true;
+
+        BaseType_t ret = xTaskCreatePinnedToCore(
+            rf_change_task,
+            "rf_broadcast",
+            4096,
+            nullptr,
+            5,
+            &s_rf_change_task,
+            1
+        );
+
+        if (ret != pdPASS) {
+            T_LOGE(TAG, "RF broadcast 태스크 생성 실패");
+            s_rf_changing = false;
+        }
+    } else {
+        T_LOGW(TAG, "RF broadcast 진행 중 - 무시");
+    }
+
+    return ESP_OK;
+}
 
 static esp_err_t on_lora_packet_received(const event_data_t* event) {
     if (event->type != EVT_LORA_PACKET_RECEIVED) {
@@ -432,7 +533,9 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
             char id_str[5];
             lora_device_id_to_str(cmd->device_id, id_str);
 
-            if (!lora_device_id_equals(cmd->device_id, s_device_id)) {
+            // Broadcast 또는 자신의 device_id인지 확인
+            if (!lora_device_id_is_broadcast(cmd->device_id) &&
+                !lora_device_id_equals(cmd->device_id, s_device_id)) {
                 T_LOGD(TAG, "  SET_RF: not for me (target=%s)", id_str);
                 return ESP_OK;
             }
@@ -592,6 +695,16 @@ esp_err_t device_management_service_start(void) {
         return ret;
     }
 
+#ifdef DEVICE_MODE_TX
+    // TX: RF broadcast 요청을 위해 구독
+    ret = event_bus_subscribe(EVT_LORA_RF_BROADCAST_REQUEST, on_lora_rf_broadcast_request);
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "EVT_LORA_RF_BROADCAST_REQUEST 구독 실패");
+        event_bus_unsubscribe(EVT_LORA_PACKET_RECEIVED, on_lora_packet_received);
+        return ret;
+    }
+#endif
+
 #ifdef DEVICE_MODE_RX
     s_stopped = false;
 #endif
@@ -608,6 +721,11 @@ void device_management_service_stop(void) {
     T_LOGI(TAG, "Device Management Service 정지");
 
     event_bus_unsubscribe(EVT_LORA_PACKET_RECEIVED, on_lora_packet_received);
+
+#ifdef DEVICE_MODE_TX
+    event_bus_unsubscribe(EVT_LORA_RF_BROADCAST_REQUEST, on_lora_rf_broadcast_request);
+#endif
+
     s_started = false;
 }
 
@@ -657,19 +775,22 @@ esp_err_t device_mgmt_set_camera_id(const uint8_t* device_id, uint8_t camera_id)
 }
 
 esp_err_t device_mgmt_set_rf(const uint8_t* device_id, float frequency, uint8_t sync_word) {
-    if (device_id == nullptr) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
     lora_cmd_rf_t cmd;
     cmd.header = LORA_HDR_SET_RF;
     cmd.frequency = frequency;
     cmd.sync_word = sync_word;
-    memcpy(cmd.device_id, device_id, LORA_DEVICE_ID_LEN);
 
-    char id_str[5];
-    lora_device_id_to_str(device_id, id_str);
-    T_LOGI(TAG, "SET_RF: id=%s, freq=%.1f, sync=0x%02X", id_str, frequency, sync_word);
+    if (device_id == nullptr) {
+        // Broadcast
+        const uint8_t broadcast_id[LORA_DEVICE_ID_LEN] = {0xFF, 0xFF, 0xFF, 0xFF};
+        memcpy(cmd.device_id, broadcast_id, LORA_DEVICE_ID_LEN);
+        T_LOGI(TAG, "SET_RF: broadcast, freq=%.1f, sync=0x%02X", frequency, sync_word);
+    } else {
+        memcpy(cmd.device_id, device_id, LORA_DEVICE_ID_LEN);
+        char id_str[5];
+        lora_device_id_to_str(device_id, id_str);
+        T_LOGI(TAG, "SET_RF: id=%s, freq=%.1f, sync=0x%02X", id_str, frequency, sync_word);
+    }
 
     return send_packet(&cmd, sizeof(cmd));
 }
