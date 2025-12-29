@@ -41,6 +41,8 @@ typedef struct {
     bool is_online;                          ///< 온라인 상태
     uint32_t last_seen;                      ///< 마지막 수신 시간 (tick)
     uint16_t ping_ms;                        ///< 지연시간 (ms)
+    float frequency;                         ///< 현재 주파수 (MHz)
+    uint8_t sync_word;                       ///< 현재 sync word
 } device_mgmt_device_t;
 
 /**

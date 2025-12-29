@@ -103,6 +103,8 @@ typedef struct __attribute__((packed)) {
     uint32_t uptime;                 // 초
     uint8_t brightness;              // 0-100
     uint8_t flags;                   // 비트 플래그
+    float frequency;                 // 현재 주파수 (MHz)
+    uint8_t sync_word;               // 현재 sync word
 } lora_msg_status_t;
 
 // Status 플래그

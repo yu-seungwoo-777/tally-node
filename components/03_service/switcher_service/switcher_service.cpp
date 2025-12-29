@@ -528,7 +528,11 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
         // 내부 상태 업데이트
         setDualMode(config->dual_enabled);
         setSecondaryOffset(config->secondary_offset);
-        reconnect_needed = true;
+
+        // 듀얼 모드 변경 시에만 재연결 필요 (offset 변경은 로컬 계산용)
+        if (dual_changed) {
+            reconnect_needed = true;
+        }
     }
 
     // 현재 타입 확인 (문자열 비교)
@@ -746,19 +750,22 @@ packed_data_t SwitcherService::combineDualModeTally() const {
 
     // 전체 채널 수 계산
     // - Primary는 offset까지만 사용
-    // - Secondary는 offset+1부터 시작 (offset 위치는 비어있음)
-    // - 예: offset=5, Primary=4, Secondary=6 → 채널 1-4(P), 5(gap), 6-11(S) = 11채널
-    // - 예: offset=18, Primary=4, Secondary=6 → 채널 1-4(P), 5-17(gap), 18(gap), 19-20(S only 2 fit) = 20채널
+    // - Secondary는 offset부터 시작 (offset 위치부터 Secondary 1번이 매핑)
+    // - 예: offset=4, Primary=4, Secondary=6 → 채널 1-4(P), 5-9(S) = 9채널
+    // - 예: offset=1, Primary=4, Secondary=6 → 채널 1(P), 2-6(S, 1번과 겹침) = 6채널
+
+    // 유효한 offset 계산 (0이면 전체 Primary 사용, 즉 싱글모드와 동일)
+    uint8_t effective_offset = (secondary_offset_ > 0) ? secondary_offset_ : primary_data.channel_count;
 
     // Primary가 사용하는 채널 수 (offset으로 제한)
-    uint8_t primary_channels = (primary_data.channel_count < secondary_offset_)
+    uint8_t primary_channels = (primary_data.channel_count < effective_offset)
                                 ? primary_data.channel_count
-                                : secondary_offset_;
+                                : effective_offset;
 
     // Secondary 중 실제로 20채널 내에 들어가는 개수 계산
     uint8_t secondary_fitting = 0;
     for (uint8_t i = 0; i < secondary_data.channel_count; i++) {
-        uint8_t target = i + 1 + secondary_offset_;
+        uint8_t target = i + 1 + effective_offset;
         if (target <= TALLY_MAX_CHANNELS) {
             secondary_fitting = i + 1;  // i는 0-based, fitting은 1-based
         } else {
@@ -769,7 +776,7 @@ packed_data_t SwitcherService::combineDualModeTally() const {
     // 최대 사용 채널 번호 계산
     uint8_t max_channel_used = primary_channels;  // Primary 최대 채널
     if (secondary_fitting > 0) {
-        uint8_t secondary_max = secondary_offset_ + secondary_fitting;
+        uint8_t secondary_max = effective_offset + secondary_fitting;
         if (secondary_max > max_channel_used) {
             max_channel_used = secondary_max;
         }
@@ -788,7 +795,7 @@ packed_data_t SwitcherService::combineDualModeTally() const {
     // Secondary 데이터 복사 (offset 적용, 20채널 제한)
     for (uint8_t i = 0; i < secondary_fitting; i++) {
         uint8_t flags = packed_data_get_channel(&secondary_data, i + 1);
-        uint8_t target_channel = i + 1 + secondary_offset_;
+        uint8_t target_channel = i + 1 + effective_offset;
 
         // 기존 값과 OR 결합
         uint8_t existing = packed_data_get_channel(&combined_packed_, target_channel);

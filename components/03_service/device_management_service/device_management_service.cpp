@@ -27,6 +27,8 @@ static bool s_started = false;
 static bool s_stopped = false;
 static uint8_t s_device_id[LORA_DEVICE_ID_LEN] = {0};
 static device_mgmt_status_callback_t s_status_cb = nullptr;
+static float s_rf_frequency = 0.0f;   // 현재 RF 주파수
+static uint8_t s_rf_sync_word = 0;    // 현재 sync word
 #endif
 
 // TX 전용 상태
@@ -155,6 +157,27 @@ static esp_err_t send_packet(const void* data, size_t length) {
 
 #ifdef DEVICE_MODE_RX
 
+/**
+ * @brief RF 변경 이벤트 핸들러 (RX 전용)
+ * RF 설정이 변경되면 정적 변수 업데이트
+ */
+static esp_err_t on_rf_changed(const event_data_t* event) {
+    if (event->type != EVT_RF_CHANGED) {
+        return ESP_OK;
+    }
+
+    const auto* rf = reinterpret_cast<const lora_rf_event_t*>(event->data);
+    if (rf == nullptr) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    s_rf_frequency = rf->frequency;
+    s_rf_sync_word = rf->sync_word;
+
+    T_LOGD(TAG, "RF 설정 업데이트: %.1f MHz, Sync 0x%02X", s_rf_frequency, s_rf_sync_word);
+    return ESP_OK;
+}
+
 static void send_ack(uint8_t cmd_header, uint8_t result) {
     lora_msg_ack_t ack;
     ack.header = LORA_HDR_ACK;
@@ -191,6 +214,8 @@ static void send_status(void) {
     msg.uptime = status.uptime;
     msg.brightness = status.brightness;
     msg.flags = s_stopped ? static_cast<uint8_t>(LORA_STATUS_FLAG_STOPPED) : static_cast<uint8_t>(0);
+    msg.frequency = s_rf_frequency;
+    msg.sync_word = s_rf_sync_word;
     memcpy(msg.device_id, s_device_id, LORA_DEVICE_ID_LEN);
 
     // event_bus를 통해 LoRa 송신 요청 발행
@@ -360,6 +385,8 @@ static esp_err_t on_lora_packet_received(const event_data_t* event) {
             dev->uptime = msg->uptime;
             dev->brightness = msg->brightness;
             dev->is_stopped = (msg->flags & LORA_STATUS_FLAG_STOPPED) != 0;
+            dev->frequency = msg->frequency;
+            dev->sync_word = msg->sync_word;
             dev->last_seen = xTaskGetTickCount();
 
             T_LOGD(TAG, "Device %d updated: bat=%d%%, cam=%d",
@@ -700,9 +727,15 @@ esp_err_t device_management_service_start(void) {
         event_bus_unsubscribe(EVT_LORA_PACKET_RECEIVED, on_lora_packet_received);
         return ret;
     }
-#endif
+#else
+    // RX: RF 변경 이벤트 구독
+    ret = event_bus_subscribe(EVT_RF_CHANGED, on_rf_changed);
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "EVT_RF_CHANGED 구독 실패");
+        event_bus_unsubscribe(EVT_LORA_PACKET_RECEIVED, on_lora_packet_received);
+        return ret;
+    }
 
-#ifdef DEVICE_MODE_RX
     s_stopped = false;
 #endif
 
@@ -721,6 +754,8 @@ void device_management_service_stop(void) {
 
 #ifdef DEVICE_MODE_TX
     event_bus_unsubscribe(EVT_LORA_RF_BROADCAST_REQUEST, on_lora_rf_broadcast_request);
+#else
+    event_bus_unsubscribe(EVT_RF_CHANGED, on_rf_changed);
 #endif
 
     s_started = false;
