@@ -81,6 +81,33 @@ typedef struct {
 } device_register_event_t;
 
 /**
+ * @brief 단일 디바이스 정보 (device_list_event_t 내부)
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t device_id[4];     ///< 디바이스 ID
+    int16_t last_rssi;        ///< 마지막 RSSI (dBm)
+    int8_t last_snr;          ///< 마지막 SNR (dB)
+    uint8_t battery;          ///< 배터리 %
+    uint8_t camera_id;        ///< 카메라 ID
+    uint32_t uptime;          ///< 업타임 (초)
+    uint8_t brightness;       ///< 밝기 0-100
+    bool is_stopped;          ///< 기능 정지 상태
+    uint32_t last_seen;       ///< 마지막 수신 시간 (tick)
+    uint16_t ping_ms;         ///< 지연시간 (ms)
+    float frequency;          ///< 현재 주파수 (MHz)
+    uint8_t sync_word;        ///< 현재 sync word
+} device_info_t;
+
+/**
+ * @brief 디바이스 리스트 이벤트 데이터 (EVT_DEVICE_LIST_CHANGED용)
+ */
+typedef struct {
+    device_info_t devices[20]; ///< 온라인 디바이스 배열
+    uint8_t count;             ///< 디바이스 수
+    uint8_t registered_count;  ///< 등록된 총 디바이스 수
+} device_list_event_t;
+
+/**
  * @brief LoRa 패킷 이벤트 데이터 (EVT_LORA_PACKET_RECEIVED용)
  */
 typedef struct {
@@ -111,7 +138,7 @@ typedef struct {
 /**
  * @brief 채널 정보 (LoRa 스캔 결과)
  */
-typedef struct {
+typedef struct __attribute__((packed)) {
     float frequency;     ///< 주파수 (MHz)
     int16_t rssi;        ///< RSSI (dBm)
     int16_t noise_floor; ///< 노이즈 플로어 (dBm)
@@ -353,7 +380,8 @@ typedef enum {
     EVT_CONFIG_DATA_REQUEST,    ///< 설정 데이터 요청 (data: 없음, 응답으로 EVT_CONFIG_DATA_CHANGED 발행)
     EVT_BRIGHTNESS_CHANGED,     ///< 밝기 설정 변경 (data: uint8_t, 0-255)
     EVT_CAMERA_ID_CHANGED,      ///< 카메라 ID 변경 (data: uint8_t, 1-20)
-    EVT_RF_CHANGED,             ///< RF 설정 변경 (data: lora_rf_event_t)
+    EVT_RF_CHANGED,             ///< RF 설정 변경 (data: lora_rf_event_t) - 드라이버 적용 + broadcast
+    EVT_RF_SAVED,               ///< RF NVS 저장 요청 (data: lora_rf_event_t) - broadcast 완료 후
     EVT_STOP_CHANGED,           ///< 기능 정지 상태 변경 (data: bool, true=정지)
 
     // 버튼 이벤트 (03_service → 01_app)
@@ -374,7 +402,6 @@ typedef enum {
     EVT_LORA_SCAN_PROGRESS,        ///< Scan progress (data: lora_scan_progress_t)
     EVT_LORA_SCAN_COMPLETE,        ///< Scan complete (data: lora_scan_complete_t)
     EVT_LORA_SCAN_STOP,            ///< Scan stop request (data: none)
-    EVT_LORA_RF_BROADCAST_REQUEST, ///< RF broadcast 요청 (data: lora_rf_event_t)
 
     // Network events (03_service)
     EVT_NETWORK_STATUS_CHANGED,   ///< Network status changed (data: network_status_event_t)
@@ -397,19 +424,31 @@ typedef enum {
     // 디바이스 관리 이벤트 (03_service → ConfigService)
     EVT_DEVICE_REGISTER,         ///< 디바이스 등록 요청 (data: device_register_event_t)
     EVT_DEVICE_UNREGISTER,       ///< 디바이스 등록 해제 요청 (data: device_register_event_t)
+    EVT_DEVICE_LIST_CHANGED,     ///< 디바이스 리스트 변경 (data: device_list_event_t)
 
     // 최대 이벤트 수
    _EVT_MAX
 } event_type_t;
 
 /**
- * @brief 이벤트 데이터 구조체
+ * @brief 이벤트 버스 내부 버퍼 크기
+ *
+ * 가장 큰 이벤트 데이터: lora_scan_complete_t (약 901바이트)
+ * 1024바이트로 할당하여 여유 있게 처리
+ */
+#define EVENT_DATA_BUFFER_SIZE 1024
+
+/**
+ * @brief 이벤트 데이터 구조체 (내부 버퍼 방식)
+ *
+ * 데이터 포인터 대신 내부 버퍼에 값을 복사하여 저장합니다.
+ * 발행자는 stack 변수를 안전하게 사용할 수 있습니다.
  */
 typedef struct {
-    event_type_t type;        ///< 이벤트 타입
-    const void* data;         ///< 이벤트 데이터 (상수 포인터 - 수명 주의)
-    size_t data_size;         ///< 데이터 크기
-    uint32_t timestamp;       ///< 타임스탬프 (ms)
+    event_type_t type;                 ///< 이벤트 타입
+    uint8_t data[EVENT_DATA_BUFFER_SIZE]; ///< 내부 데이터 버퍼 (복사본)
+    size_t data_size;                  ///< 실제 데이터 크기
+    uint32_t timestamp;                ///< 타임스탬프 (ms)
 } event_data_t;
 
 /**

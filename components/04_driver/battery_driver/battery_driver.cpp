@@ -65,7 +65,7 @@ uint8_t BatteryDriver::updatePercent(void)
     float voltage;
     if (getVoltage(&voltage) == ESP_OK && voltage > 0.5f) {
         uint8_t percent = voltageToPercent(voltage);
-        T_LOGD("BatteryDrv", "배터리: %.2fV → %d%%", voltage, percent);
+        // T_LOGD("BatteryDrv", "배터리: %.2fV → %d%%", voltage, percent);
         return percent;
     }
     return 100;  // 기본값

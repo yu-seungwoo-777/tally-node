@@ -44,6 +44,10 @@ typedef struct {
     bool lora_scan_valid;
     bool lora_scanning;               // 스캔 중 여부
     uint8_t lora_scan_progress;       // 스캔 진행률
+
+    // 디바이스 리스트 (TX 전용)
+    device_list_event_t devices;      // EVT_DEVICE_LIST_CHANGED
+    bool devices_valid;
 } web_server_data_t;
 
 static web_server_data_t s_cache;
@@ -59,6 +63,7 @@ static void init_cache(void)
     s_cache.lora_scan_valid = false;
     s_cache.lora_scanning = false;
     s_cache.lora_scan_progress = 0;
+    s_cache.devices_valid = false;
 }
 
 // ============================================================================
@@ -70,7 +75,7 @@ static void init_cache(void)
  */
 static esp_err_t onSystemInfoEvent(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -86,7 +91,7 @@ static esp_err_t onSystemInfoEvent(const event_data_t* event)
  */
 static esp_err_t onSwitcherStatusEvent(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -102,7 +107,7 @@ static esp_err_t onSwitcherStatusEvent(const event_data_t* event)
  */
 static esp_err_t onNetworkStatusEvent(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -118,7 +123,7 @@ static esp_err_t onNetworkStatusEvent(const event_data_t* event)
  */
 static esp_err_t onConfigDataEvent(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -147,7 +152,7 @@ static esp_err_t onLoraScanStartEvent(const event_data_t* event)
  */
 static esp_err_t onLoraScanProgressEvent(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -169,7 +174,7 @@ static esp_err_t onLoraScanProgressEvent(const event_data_t* event)
  */
 static esp_err_t onLoraScanCompleteEvent(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -178,6 +183,26 @@ static esp_err_t onLoraScanCompleteEvent(const event_data_t* event)
     s_cache.lora_scan_valid = true;
     s_cache.lora_scanning = false;
     s_cache.lora_scan_progress = 100;
+    return ESP_OK;
+}
+
+/**
+ * @brief 디바이스 리스트 이벤트 핸들러 (EVT_DEVICE_LIST_CHANGED)
+ * TX 모드 전용 - 온라인 디바이스 목록 캐시
+ */
+static esp_err_t onDeviceListEvent(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const device_list_event_t* devices = (const device_list_event_t*)event->data;
+    memcpy(&s_cache.devices, devices, sizeof(device_list_event_t));
+    s_cache.devices_valid = true;
+
+    ESP_LOGD(TAG, "Device list updated: %d devices (registered: %d)",
+             devices->count, devices->registered_count);
+
     return ESP_OK;
 }
 
@@ -551,9 +576,21 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
         cJSON* freq = cJSON_GetObjectItem(root, "frequency");
         cJSON* sync = cJSON_GetObjectItem(root, "syncWord");
         if (freq && sync && cJSON_IsNumber(freq) && cJSON_IsNumber(sync)) {
-            save_req.type = CONFIG_SAVE_DEVICE_RF;
-            save_req.rf_frequency = (float)freq->valuedouble;
-            save_req.rf_sync_word = (uint8_t)sync->valueint;
+            // RF 설정은 즉시 적용 (broadcast 후 NVS 저장)
+            lora_rf_event_t rf_event;
+            rf_event.frequency = (float)freq->valuedouble;
+            rf_event.sync_word = (uint8_t)sync->valueint;
+            event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
+
+            ESP_LOGI(TAG_RF, "RF 설정 요청: %.1f MHz, Sync 0x%02X",
+                     rf_event.frequency, rf_event.sync_word);
+
+            cJSON_Delete(root);
+
+            // 응답 (NVS 저장은 broadcast 완료 후 처리됨)
+            httpd_resp_set_type(req, "application/json");
+            httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+            return ESP_OK;
         } else {
             ESP_LOGE(TAG, "Missing 'frequency' or 'syncWord'");
             cJSON_Delete(root);
@@ -900,6 +937,78 @@ static esp_err_t api_lora_scan_stop_handler(httpd_req_t* req)
 }
 
 /**
+ * @brief GET /api/devices - 디바이스 리스트 반환 (TX 전용)
+ */
+static esp_err_t api_devices_handler(httpd_req_t* req)
+{
+    cJSON* root = cJSON_CreateObject();
+    if (!root) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    // 디바이스 수
+    cJSON_AddNumberToObject(root, "count", s_cache.devices.count);
+    cJSON_AddNumberToObject(root, "registeredCount", s_cache.devices.registered_count);
+
+    // 디바이스 배열
+    cJSON* devices_array = cJSON_CreateArray();
+    if (devices_array) {
+        for (uint8_t i = 0; i < s_cache.devices.count; i++) {
+            const device_info_t* dev = &s_cache.devices.devices[i];
+
+            cJSON* item = cJSON_CreateObject();
+            if (item) {
+                // Device ID (hex 문자열)
+                char id_str[9];
+                snprintf(id_str, sizeof(id_str), "%02X%02X%02X%02X",
+                         dev->device_id[0], dev->device_id[1],
+                         dev->device_id[2], dev->device_id[3]);
+                cJSON_AddStringToObject(item, "id", id_str);
+
+                // RSSI, SNR
+                cJSON_AddNumberToObject(item, "rssi", dev->last_rssi);
+                cJSON_AddNumberToObject(item, "snr", dev->last_snr);
+
+                // 배터리, 카메라 ID
+                cJSON_AddNumberToObject(item, "battery", dev->battery);
+                cJSON_AddNumberToObject(item, "cameraId", dev->camera_id);
+
+                // 업타임, 밝기
+                cJSON_AddNumberToObject(item, "uptime", dev->uptime);
+                cJSON_AddNumberToObject(item, "brightness", dev->brightness);
+
+                // 상태 플래그
+                cJSON_AddBoolToObject(item, "stopped", dev->is_stopped);
+
+                // Ping
+                cJSON_AddNumberToObject(item, "ping", dev->ping_ms);
+
+                // RF 설정
+                cJSON_AddNumberToObject(item, "frequency", dev->frequency);
+                cJSON_AddNumberToObject(item, "syncWord", dev->sync_word);
+
+                cJSON_AddItemToArray(devices_array, item);
+            }
+        }
+        cJSON_AddItemToObject(root, "devices", devices_array);
+    }
+
+    char* json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (json_str) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, json_str);
+        free(json_str);
+    } else {
+        httpd_resp_send_500(req);
+    }
+
+    return ESP_OK;
+}
+
+/**
  * @brief index.html 핸들러
  */
 static esp_err_t index_handler(httpd_req_t* req)
@@ -1050,6 +1159,13 @@ static const httpd_uri_t uri_api_lora_scan_stop = {
     .user_ctx = nullptr
 };
 
+static const httpd_uri_t uri_api_devices = {
+    .uri = "/api/devices",
+    .method = HTTP_GET,
+    .handler = api_devices_handler,
+    .user_ctx = nullptr
+};
+
 // 정적 파일 URI
 static const httpd_uri_t uri_css = {
     .uri = "/css/styles.css",
@@ -1120,6 +1236,8 @@ esp_err_t web_server_init(void)
     httpd_register_uri_handler(s_server, &uri_api_lora_scan);
     httpd_register_uri_handler(s_server, &uri_api_lora_scan_start);
     httpd_register_uri_handler(s_server, &uri_api_lora_scan_stop);
+    // Device API (TX only)
+    httpd_register_uri_handler(s_server, &uri_api_devices);
 
     // 이벤트 구독
     event_bus_subscribe(EVT_INFO_UPDATED, onSystemInfoEvent);
@@ -1130,6 +1248,8 @@ esp_err_t web_server_init(void)
     event_bus_subscribe(EVT_LORA_SCAN_START, onLoraScanStartEvent);
     event_bus_subscribe(EVT_LORA_SCAN_PROGRESS, onLoraScanProgressEvent);
     event_bus_subscribe(EVT_LORA_SCAN_COMPLETE, onLoraScanCompleteEvent);
+    // 디바이스 리스트 이벤트 (TX 전용)
+    event_bus_subscribe(EVT_DEVICE_LIST_CHANGED, onDeviceListEvent);
 
     // 설정 데이터 요청 (초기 캐시 populate)
     event_bus_publish(EVT_CONFIG_DATA_REQUEST, nullptr, 0);

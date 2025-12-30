@@ -197,24 +197,7 @@ export function broadcastModule() {
             // 현재 채널 상태 확인
             if (currentResult) {
                 if (currentResult.clearChannel) {
-                    // 현재 채널이 조용함
-                    if (currentResult.frequency === quietest.frequency) {
-                        // 이미 가장 조용한 채널
-                        this.channelScan.recommendation = {
-                            type: 'good',
-                            title: 'Current frequency is optimal',
-                            message: `Current channel is clear (${currentResult.rssi} dBm)`
-                        };
-                    } else {
-                        // 더 조용한 채널 있음
-                        const improvement = quietestRssi - currentResult.rssi;
-                        this.channelScan.recommendation = {
-                            type: 'better',
-                            title: 'Quieter channel available',
-                            message: `${quietest.frequency.toFixed(1)} MHz is ${improvement.toFixed(1)} dBm quieter`,
-                            suggestedFreq: quietest.frequency
-                        };
-                    }
+                    // 현재 채널이 조용함 - 추천 메시지 표시 안 함
                 } else {
                     // 현재 채널이 노이즈함
                     this.channelScan.recommendation = {
@@ -270,9 +253,18 @@ export function broadcastModule() {
          */
         selectChannelFrequency(freq) {
             this.form.broadcast.frequency = freq;
-            // 추천 갱신
-            this.analyzeScanRecommendation();
+            // 추천 메시지 유지 (갱신하지 않음)
             this.showToast(`Channel selected: ${Math.round(freq)} MHz - Click "Save Channel Settings" to apply`, 'alert-info');
+        },
+
+        /**
+         * 추천 채널로 이동 (스크롤)
+         */
+        scrollToChannelSettings() {
+            const el = document.getElementById('channel-settings');
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth' });
+            }
         }
     };
 }

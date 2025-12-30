@@ -45,6 +45,7 @@ static const char* EVENT_NAMES[] = {
     "EVT_BRIGHTNESS_CHANGED",
     "EVT_CAMERA_ID_CHANGED",
     "EVT_RF_CHANGED",
+    "EVT_RF_SAVED",
     "EVT_STOP_CHANGED",
     "EVT_BUTTON_SINGLE_CLICK",
     "EVT_BUTTON_LONG_PRESS",
@@ -59,7 +60,6 @@ static const char* EVENT_NAMES[] = {
     "EVT_LORA_SCAN_PROGRESS",
     "EVT_LORA_SCAN_COMPLETE",
     "EVT_LORA_SCAN_STOP",
-    "EVT_LORA_RF_BROADCAST_REQUEST",
     "EVT_NETWORK_STATUS_CHANGED",
     "EVT_NETWORK_CONNECTED",
     "EVT_NETWORK_DISCONNECTED",
@@ -167,12 +167,22 @@ esp_err_t event_bus_publish(event_type_t type, const void* data, size_t data_siz
         return ESP_ERR_INVALID_ARG;
     }
 
+    // 데이터 크기 검증
+    if (data_size > EVENT_DATA_BUFFER_SIZE) {
+        T_LOGE(TAG, "Data size %zu exceeds buffer size %d", data_size, EVENT_DATA_BUFFER_SIZE);
+        return ESP_ERR_INVALID_ARG;
+    }
+
     event_data_t event = {
         .type = type,
-        .data = data,
         .data_size = data_size,
         .timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS
     };
+
+    // 데이터 복사 (발행자의 데이터를 내부 버퍼로)
+    if (data != NULL && data_size > 0) {
+        memcpy(event.data, data, data_size);
+    }
 
     // 큐에 전송 (대기 없음)
     if (xQueueSend(g_event_bus.queue, &event, 0) != pdTRUE) {

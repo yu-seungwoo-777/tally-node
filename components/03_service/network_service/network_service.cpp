@@ -266,29 +266,29 @@ void NetworkServiceClass::publishStatus(void)
     bool ap_changed = (strncmp(s_last_status.wifi_ap.ip, status.wifi_ap.ip, sizeof(s_last_status.wifi_ap.ip)) != 0);
 
     if (sta_changed || eth_changed || ap_changed) {
-        // 이벤트 발행용 정적 변수 (지역 변수 사용 시 데이터가 소실됨)
-        static network_status_event_t s_event;
-        memset(&s_event, 0, sizeof(s_event));
+        // stack 변수 사용 (이벤트 버스가 복사)
+        network_status_event_t event;
+        memset(&event, 0, sizeof(event));
 
         // 이벤트 데이터 생성
-        s_event.ap_enabled = s_config.wifi_ap.enabled;
-        s_event.sta_connected = status.wifi_sta.connected;
-        s_event.eth_connected = status.ethernet.connected;
-        s_event.eth_detected = status.ethernet.detected;
-        s_event.eth_dhcp = s_config.ethernet.dhcp_enabled;
+        event.ap_enabled = s_config.wifi_ap.enabled;
+        event.sta_connected = status.wifi_sta.connected;
+        event.eth_connected = status.ethernet.connected;
+        event.eth_detected = status.ethernet.detected;
+        event.eth_dhcp = s_config.ethernet.dhcp_enabled;
 
-        strncpy(s_event.ap_ssid, s_config.wifi_ap.ssid, sizeof(s_event.ap_ssid) - 1);
-        s_event.ap_ssid[sizeof(s_event.ap_ssid) - 1] = '\0';
-        strncpy(s_event.ap_ip, status.wifi_ap.ip, sizeof(s_event.ap_ip) - 1);
-        s_event.ap_ip[sizeof(s_event.ap_ip) - 1] = '\0';
-        strncpy(s_event.sta_ssid, s_config.wifi_sta.ssid, sizeof(s_event.sta_ssid) - 1);
-        s_event.sta_ssid[sizeof(s_event.sta_ssid) - 1] = '\0';
-        strncpy(s_event.sta_ip, status.wifi_sta.ip, sizeof(s_event.sta_ip) - 1);
-        s_event.sta_ip[sizeof(s_event.sta_ip) - 1] = '\0';
-        strncpy(s_event.eth_ip, status.ethernet.ip, sizeof(s_event.eth_ip) - 1);
-        s_event.eth_ip[sizeof(s_event.eth_ip) - 1] = '\0';
+        strncpy(event.ap_ssid, s_config.wifi_ap.ssid, sizeof(event.ap_ssid) - 1);
+        event.ap_ssid[sizeof(event.ap_ssid) - 1] = '\0';
+        strncpy(event.ap_ip, status.wifi_ap.ip, sizeof(event.ap_ip) - 1);
+        event.ap_ip[sizeof(event.ap_ip) - 1] = '\0';
+        strncpy(event.sta_ssid, s_config.wifi_sta.ssid, sizeof(event.sta_ssid) - 1);
+        event.sta_ssid[sizeof(event.sta_ssid) - 1] = '\0';
+        strncpy(event.sta_ip, status.wifi_sta.ip, sizeof(event.sta_ip) - 1);
+        event.sta_ip[sizeof(event.sta_ip) - 1] = '\0';
+        strncpy(event.eth_ip, status.ethernet.ip, sizeof(event.eth_ip) - 1);
+        event.eth_ip[sizeof(event.eth_ip) - 1] = '\0';
 
-        event_bus_publish(EVT_NETWORK_STATUS_CHANGED, &s_event, sizeof(s_event));
+        event_bus_publish(EVT_NETWORK_STATUS_CHANGED, &event, sizeof(event));
 
         // 현재 상태 저장
         s_last_status = status;
@@ -392,7 +392,7 @@ esp_err_t NetworkServiceClass::restartAll(void)
 
 esp_err_t NetworkServiceClass::onRestartRequest(const event_data_t* event)
 {
-    if (event == nullptr || event->data == nullptr) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -423,34 +423,33 @@ esp_err_t NetworkServiceClass::onRestartRequest(const event_data_t* event)
 
 esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    // DisplayManager 패턴: 구조체 통째로 복사 (정적 버퍼)
-    static config_data_event_t s_config_event;
-    s_config_event = *(const config_data_event_t*)event->data;
+    // 이벤트 버스가 복사한 데이터를 직접 참조
+    const config_data_event_t* config_event = (const config_data_event_t*)event->data;
 
     // WiFi AP 설정 업데이트
-    s_config.wifi_ap.enabled = s_config_event.wifi_ap_enabled;
-    s_config.wifi_ap.channel = s_config_event.wifi_ap_channel;
-    strncpy(s_config.wifi_ap.ssid, s_config_event.wifi_ap_ssid, sizeof(s_config.wifi_ap.ssid) - 1);
+    s_config.wifi_ap.enabled = config_event->wifi_ap_enabled;
+    s_config.wifi_ap.channel = config_event->wifi_ap_channel;
+    strncpy(s_config.wifi_ap.ssid, config_event->wifi_ap_ssid, sizeof(s_config.wifi_ap.ssid) - 1);
     s_config.wifi_ap.ssid[sizeof(s_config.wifi_ap.ssid) - 1] = '\0';
 
     // WiFi STA 설정 업데이트
-    s_config.wifi_sta.enabled = s_config_event.wifi_sta_enabled;
-    strncpy(s_config.wifi_sta.ssid, s_config_event.wifi_sta_ssid, sizeof(s_config.wifi_sta.ssid) - 1);
+    s_config.wifi_sta.enabled = config_event->wifi_sta_enabled;
+    strncpy(s_config.wifi_sta.ssid, config_event->wifi_sta_ssid, sizeof(s_config.wifi_sta.ssid) - 1);
     s_config.wifi_sta.ssid[sizeof(s_config.wifi_sta.ssid) - 1] = '\0';
 
     // Ethernet 설정 업데이트
-    s_config.ethernet.dhcp_enabled = s_config_event.eth_dhcp_enabled;
-    strncpy(s_config.ethernet.static_ip, s_config_event.eth_static_ip, sizeof(s_config.ethernet.static_ip) - 1);
+    s_config.ethernet.dhcp_enabled = config_event->eth_dhcp_enabled;
+    strncpy(s_config.ethernet.static_ip, config_event->eth_static_ip, sizeof(s_config.ethernet.static_ip) - 1);
     s_config.ethernet.static_ip[sizeof(s_config.ethernet.static_ip) - 1] = '\0';
-    strncpy(s_config.ethernet.static_netmask, s_config_event.eth_static_netmask, sizeof(s_config.ethernet.static_netmask) - 1);
+    strncpy(s_config.ethernet.static_netmask, config_event->eth_static_netmask, sizeof(s_config.ethernet.static_netmask) - 1);
     s_config.ethernet.static_netmask[sizeof(s_config.ethernet.static_netmask) - 1] = '\0';
-    strncpy(s_config.ethernet.static_gateway, s_config_event.eth_static_gateway, sizeof(s_config.ethernet.static_gateway) - 1);
+    strncpy(s_config.ethernet.static_gateway, config_event->eth_static_gateway, sizeof(s_config.ethernet.static_gateway) - 1);
     s_config.ethernet.static_gateway[sizeof(s_config.ethernet.static_gateway) - 1] = '\0';
-    s_config.ethernet.enabled = s_config_event.eth_enabled;
+    s_config.ethernet.enabled = config_event->eth_enabled;
 
     T_LOGI(TAG, "설정 데이터 업데이트됨 (이벤트)");
 

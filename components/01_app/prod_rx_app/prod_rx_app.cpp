@@ -18,6 +18,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
+#include "esp_mac.h"
 #include <cstring>
 
 // =============================================================================
@@ -54,7 +55,7 @@ static tally_event_data_t s_tally_event;  // 정적 이벤트 데이터
  */
 static esp_err_t on_lora_packet_event(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_OK;
     }
 
@@ -73,9 +74,10 @@ static esp_err_t on_lora_packet_event(const event_data_t* event)
     // - ChannelCount: 실제 채널 수 (1-20)
     // - Data: packed tally 데이터
 
-    // 헤더 검증
+    // 헤더 검증 (0xF1: Tally, 나머지는 device_management_service에서 처리)
     if (data[0] != 0xF1) {
-        T_LOGW(TAG, "알 수 없는 헤더: 0x%02X", data[0]);
+        // 관리 명령(0xE3, 0xD0 등)은 device_management_service에서 처리하므로 조용히 무시
+        T_LOGD(TAG, "Tally 아닌 패킷 (0x%02X), device_management_service로 전달", data[0]);
         return ESP_OK;
     }
 
@@ -130,22 +132,6 @@ static esp_err_t on_lora_packet_event(const event_data_t* event)
 
     // RSSI/SNR은 주기적 업데이트(1초)만 사용 (패킷 수신 시 즉시 업데이트 제거)
     // display_manager_update_rssi(rssi, snr);
-
-    // RxPage용 PGM/PVW 채널 추출
-    uint8_t pgm_channels[20];
-    uint8_t pvw_channels[20];
-    uint8_t pgm_count = 0;
-    uint8_t pvw_count = 0;
-
-    for (uint8_t i = 0; i < ch_count && i < 20; i++) {
-        uint8_t status = packed_data_get_channel(&tally, i + 1);
-        if (status == TALLY_STATUS_PROGRAM || status == TALLY_STATUS_BOTH) {
-            pgm_channels[pgm_count++] = i + 1;
-        }
-        if (status == TALLY_STATUS_PREVIEW || status == TALLY_STATUS_BOTH) {
-            pvw_channels[pvw_count++] = i + 1;
-        }
-    }
 
     // Tally 상태 변경 이벤트 발행 (WS2812 먼저 반응)
     // 정적 변수 사용 (이벤트 버스가 포인터만 복사하므로)
@@ -211,11 +197,11 @@ static void stop_camera_id_timer(void)
 // 버튼 이벤트 핸들러
 // ============================================================================
 
+#ifdef DEVICE_MODE_RX
 static esp_err_t handle_button_single_click(const event_data_t* event)
 {
     (void)event;
 
-#ifdef DEVICE_MODE_RX
     // 카메라 ID 팝업 상태(1)면 닫기
     if (display_manager_get_state() == 1) {
         display_manager_hide_camera_id_popup();
@@ -231,14 +217,6 @@ static esp_err_t handle_button_single_click(const event_data_t* event)
     display_manager_switch_page(next);
     display_manager_force_refresh();
     T_LOGI(TAG, "RxPage: %d -> %d", current, next);
-#else
-    // TxPage: 1 -> 2 -> 3 -> 4 -> 5 -> 1 순환
-    uint8_t current = display_manager_get_page_index();
-    uint8_t next = (current == 5) ? 1 : (current + 1);
-    display_manager_switch_page(next);
-    display_manager_force_refresh();
-    T_LOGI(TAG, "TxPage: %d -> %d", current, next);
-#endif
 
     return ESP_OK;
 }
@@ -247,8 +225,7 @@ static esp_err_t handle_button_long_press(const event_data_t* event)
 {
     (void)event;
 
-#ifdef DEVICE_MODE_RX
-    // 롱 프레스: RX 모드에서 카메라 ID 변경 팝업 표시
+    // 롱 프레스: 카메라 ID 변경 팝업 표시
     if (display_manager_get_state() == 0) {
         uint8_t max_camera = config_service_get_max_camera_num();
         display_manager_show_camera_id_popup(max_camera);
@@ -257,9 +234,6 @@ static esp_err_t handle_button_long_press(const event_data_t* event)
         display_manager_force_refresh();
         T_LOGI(TAG, "Camera ID 팝업 표시 (롱프레스, max: %d)", max_camera);
     }
-#else
-    T_LOGI(TAG, "Long press (TX mode: no action)");
-#endif
 
     return ESP_OK;
 }
@@ -268,8 +242,7 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
 {
     (void)event;
 
-#ifdef DEVICE_MODE_RX
-    // 롱 프레스 해제: RX 모드에서 카메라 ID 저장
+    // 롱 프레스 해제: 카메라 ID 저장
     if (display_manager_get_state() == 1) {
         stop_camera_id_timer();
 
@@ -297,12 +270,10 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
         display_manager_force_refresh();
         T_LOGI(TAG, "Camera ID 팝업 닫기 (롱프레스 해제)");
     }
-#else
-    T_LOGD(TAG, "Long press release");
-#endif
 
     return ESP_OK;
 }
+#endif // DEVICE_MODE_RX
 
 // ============================================================================
 // 앱 상태
@@ -460,10 +431,12 @@ void prod_rx_app_start(void)
     display_manager_start();
     display_manager_set_page(PAGE_BOOT);
 
+#ifdef DEVICE_MODE_RX
     // 버튼 이벤트 구독
     event_bus_subscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
+#endif
 
     // 버튼 서비스 시작
     button_service_start();
@@ -505,10 +478,12 @@ void prod_rx_app_stop(void)
         return;
     }
 
+#ifdef DEVICE_MODE_RX
     // 버튼 이벤트 구독 취소
     event_bus_unsubscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_unsubscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_unsubscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
+#endif
 
     button_service_stop();
 

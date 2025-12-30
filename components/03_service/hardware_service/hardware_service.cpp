@@ -80,8 +80,16 @@ private:
     static bool s_initialized;
     static bool s_running;
     static bool s_device_id_initialized;
-    static hardware_system_t s_system;
     static TaskHandle_t s_task_handle;
+
+    // 내부 상태 변수 (구조체 분리)
+    static char s_device_id[5];
+    static uint8_t s_battery;
+    static float s_voltage;
+    static float s_temperature;
+    static uint8_t s_lora_chip_type;
+    static uint32_t s_uptime;
+    static bool s_stopped;
 };
 
 // ============================================================================
@@ -92,15 +100,15 @@ bool HardwareService::s_initialized = false;
 bool HardwareService::s_running = false;
 bool HardwareService::s_device_id_initialized = false;
 TaskHandle_t HardwareService::s_task_handle = nullptr;
-hardware_system_t HardwareService::s_system = {
-    .device_id = "0000",
-    .battery = 100,
-    .voltage = 3.7f,
-    .temperature = 25.0f,
-    .lora_chip_type = 0,  // Unknown
-    .uptime = 0,
-    .stopped = false
-};
+
+// 내부 상태 변수 초기화
+char HardwareService::s_device_id[5] = "0000";
+uint8_t HardwareService::s_battery = 100;
+float HardwareService::s_voltage = 3.7f;
+float HardwareService::s_temperature = 25.0f;
+uint8_t HardwareService::s_lora_chip_type = 0;  // Unknown
+uint32_t HardwareService::s_uptime = 0;
+bool HardwareService::s_stopped = false;
 
 // ============================================================================
 // 내부 함수
@@ -117,36 +125,36 @@ void HardwareService::initDeviceId(void)
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
 
     // MAC 뒤 4자리 사용 - 상위 nibble만 사용하여 4자리 hex 문자열 생성
-    s_system.device_id[0] = "0123456789ABCDEF"[(mac[2] >> 4) & 0x0F];
-    s_system.device_id[1] = "0123456789ABCDEF"[(mac[3] >> 4) & 0x0F];
-    s_system.device_id[2] = "0123456789ABCDEF"[(mac[4] >> 4) & 0x0F];
-    s_system.device_id[3] = "0123456789ABCDEF"[(mac[5] >> 4) & 0x0F];
-    s_system.device_id[4] = '\0';
+    s_device_id[0] = "0123456789ABCDEF"[(mac[2] >> 4) & 0x0F];
+    s_device_id[1] = "0123456789ABCDEF"[(mac[3] >> 4) & 0x0F];
+    s_device_id[2] = "0123456789ABCDEF"[(mac[4] >> 4) & 0x0F];
+    s_device_id[3] = "0123456789ABCDEF"[(mac[5] >> 4) & 0x0F];
+    s_device_id[4] = '\0';
 
     s_device_id_initialized = true;
-    T_LOGI(TAG, "Device ID: %s", s_system.device_id);
+    T_LOGI(TAG, "Device ID: %s", s_device_id);
 }
 
 esp_err_t HardwareService::onRssiEvent(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 
     const lora_rssi_event_t* status = (const lora_rssi_event_t*)event->data;
-    s_system.lora_chip_type = status->chip_type;
+    s_lora_chip_type = status->chip_type;
 
     return ESP_OK;
 }
 
 esp_err_t HardwareService::onStopEvent(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 
     bool stopped = *(const bool*)event->data;
-    s_system.stopped = stopped;
+    s_stopped = stopped;
 
     T_LOGI(TAG, "정지 상태 변경: %s", stopped ? "정지" : "동작");
 
@@ -176,12 +184,12 @@ esp_err_t HardwareService::init(void)
     TemperatureDriver_init();
 
     // 배터리 읽기
-    s_system.battery = updateBattery();
+    s_battery = updateBattery();
 
     // System 상태 기본값
-    s_system.uptime = 0;
-    s_system.stopped = false;
-    s_system.lora_chip_type = 0;  // Unknown
+    s_uptime = 0;
+    s_stopped = false;
+    s_lora_chip_type = 0;  // Unknown
 
     // LoRa RSSI/SNR 이벤트 구독 (chip_type만 사용)
     event_bus_subscribe(EVT_LORA_RSSI_CHANGED, onRssiEvent);
@@ -229,10 +237,19 @@ void HardwareService::hw_monitor_task(void* arg)
         updateTemperature();
 
         // uptime 증가
-        s_system.uptime++;
+        s_uptime++;
 
-        // 하드웨어 정보 이벤트 발행 (s_system은 system_info_event_t와 동일)
-        event_bus_publish(EVT_INFO_UPDATED, &s_system, sizeof(s_system));
+        // 하드웨어 정보 이벤트 발행 (stack 변수 사용 - 이벤트 버스가 복사)
+        system_info_event_t info;
+        memcpy(info.device_id, s_device_id, sizeof(s_device_id));
+        info.battery = s_battery;
+        info.voltage = s_voltage;
+        info.temperature = s_temperature;
+        info.lora_chip_type = s_lora_chip_type;
+        info.uptime = s_uptime;
+        info.stopped = s_stopped;
+
+        event_bus_publish(EVT_INFO_UPDATED, &info, sizeof(info));
 
         vTaskDelay(pdMS_TO_TICKS(MONITOR_INTERVAL_MS));
     }
@@ -301,24 +318,24 @@ const char* HardwareService::getDeviceId(void)
     if (!s_device_id_initialized) {
         initDeviceId();
     }
-    return s_system.device_id;
+    return s_device_id;
 }
 
 // Battery
 void HardwareService::setBattery(uint8_t battery)
 {
-    s_system.battery = battery;
+    s_battery = battery;
 }
 
 uint8_t HardwareService::updateBattery(void)
 {
     uint8_t percent = battery_driver_update_percent();
-    s_system.battery = percent;
+    s_battery = percent;
 
     // 전압도 함께 업데이트
     float voltage = 3.7f;  // 기본값
     if (battery_driver_get_voltage(&voltage) == ESP_OK) {
-        s_system.voltage = voltage;
+        s_voltage = voltage;
     }
 
     return percent;
@@ -326,7 +343,7 @@ uint8_t HardwareService::updateBattery(void)
 
 uint8_t HardwareService::getBattery(void)
 {
-    return s_system.battery;
+    return s_battery;
 }
 
 float HardwareService::getVoltage(void)
@@ -341,63 +358,70 @@ void HardwareService::updateTemperature(void)
 {
     float temp = 25.0f;  // 기본값
     if (TemperatureDriver_getCelsius(&temp) == ESP_OK) {
-        s_system.temperature = temp;
+        s_temperature = temp;
     }
 }
 
 float HardwareService::getTemperature(void)
 {
     // 캐시된 값 반환 (태스크에서 1초마다 갱신됨)
-    return s_system.temperature;
+    return s_temperature;
 }
 
 // RSSI/SNR - device RF에서 관리하므로 hardware_service에서 제거
 // void HardwareService::setRssi(int16_t rssi)
 // {
-//     s_system.rssi = rssi;
+//     s_rssi = rssi;
 // }
 //
 // int16_t HardwareService::getRssi(void)
 // {
-//     return s_system.rssi;
+//     return s_rssi;
 // }
 //
 // void HardwareService::setSnr(float snr)
 // {
-//     s_system.snr = snr;
+//     s_snr = snr;
 // }
 //
 // float HardwareService::getSnr(void)
 // {
-//     return s_system.snr;
+//     return s_snr;
 // }
 
 // Uptime/Status
 void HardwareService::setStopped(bool stopped)
 {
-    s_system.stopped = stopped;
+    s_stopped = stopped;
 }
 
 bool HardwareService::getStopped(void)
 {
-    return s_system.stopped;
+    return s_stopped;
 }
 
 void HardwareService::incUptime(void)
 {
-    s_system.uptime++;
+    s_uptime++;
 }
 
 uint32_t HardwareService::getUptime(void)
 {
-    return s_system.uptime;
+    return s_uptime;
 }
 
 // System
 void HardwareService::getSystem(hardware_system_t* status)
 {
     if (status) {
-        memcpy(status, &s_system, sizeof(hardware_system_t));
+        // 개별 변수들을 구조체로 조합
+        memcpy(status->device_id, s_device_id, sizeof(s_device_id));
+        status->battery = s_battery;
+        status->voltage = s_voltage;
+        status->temperature = s_temperature;
+        status->lora_chip_type = s_lora_chip_type;
+        status->uptime = s_uptime;
+        status->stopped = s_stopped;
     }
 }
 

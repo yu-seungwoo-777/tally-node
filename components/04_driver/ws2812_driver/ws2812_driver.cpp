@@ -99,7 +99,7 @@ esp_err_t WS2812Driver::init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
 
 esp_err_t WS2812Driver::brightnessEventCallback(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -297,7 +297,7 @@ void WS2812Driver::setCameraId(uint8_t camera_id)
 
 esp_err_t WS2812Driver::tallyEventCallback(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 

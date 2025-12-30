@@ -15,6 +15,7 @@
         network: "Network",
         switcher: "Switcher",
         broadcast: "Broadcast",
+        devices: "Devices",
         system: "System"
       },
       // WebSocket 연결 상태
@@ -97,7 +98,7 @@
       /**
        * 뷰 타이틀 계산
        */
-      get viewTitle() {
+      viewTitle() {
         return this.viewTitles[this.currentView] || "TALLY-NODE";
       },
       /**
@@ -106,26 +107,18 @@
       async init() {
         console.log("Tally App initializing...");
         const hash = window.location.hash.slice(1);
-        if (hash && ["dashboard", "network", "switcher", "broadcast", "system"].includes(hash)) {
+        if (hash && ["dashboard", "network", "switcher", "broadcast", "devices", "system"].includes(hash)) {
           this.currentView = hash;
         }
         window.addEventListener("hashchange", () => {
           const newHash = window.location.hash.slice(1);
-          if (newHash && ["dashboard", "network", "switcher", "broadcast", "system"].includes(newHash)) {
+          if (newHash && ["dashboard", "network", "switcher", "broadcast", "devices", "system"].includes(newHash)) {
             this.currentView = newHash;
           }
         });
         await this.fetchStatus();
-        this.$watch("currentView", (value) => {
-          if (value === "switcher") {
-            this.startStatusPolling();
-          } else {
-            this.stopStatusPolling();
-          }
-        });
-        if (this.currentView === "switcher") {
-          this.startStatusPolling();
-        }
+        await this.initDevices();
+        this.startStatusPolling();
       },
       /**
        * 상태 조회
@@ -803,21 +796,6 @@
         const quietestRssi = quietest.rssi;
         if (currentResult) {
           if (currentResult.clearChannel) {
-            if (currentResult.frequency === quietest.frequency) {
-              this.channelScan.recommendation = {
-                type: "good",
-                title: "Current frequency is optimal",
-                message: `Current channel is clear (${currentResult.rssi} dBm)`
-              };
-            } else {
-              const improvement = quietestRssi - currentResult.rssi;
-              this.channelScan.recommendation = {
-                type: "better",
-                title: "Quieter channel available",
-                message: `${quietest.frequency.toFixed(1)} MHz is ${improvement.toFixed(1)} dBm quieter`,
-                suggestedFreq: quietest.frequency
-              };
-            }
           } else {
             this.channelScan.recommendation = {
               type: "change",
@@ -870,8 +848,104 @@
        */
       selectChannelFrequency(freq) {
         this.form.broadcast.frequency = freq;
-        this.analyzeScanRecommendation();
         this.showToast(`Channel selected: ${Math.round(freq)} MHz - Click "Save Channel Settings" to apply`, "alert-info");
+      },
+      /**
+       * 추천 채널로 이동 (스크롤)
+       */
+      scrollToChannelSettings() {
+        const el = document.getElementById("channel-settings");
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth" });
+        }
+      }
+    };
+  }
+
+  // src/js/modules/devices.js
+  function devicesModule() {
+    return {
+      // 디바이스 데이터
+      devices: {
+        list: [],
+        onlineCount: 0,
+        registeredCount: 0,
+        loading: false,
+        _pollingTimer: null
+      },
+      /**
+       * 초기화
+       */
+      async initDevices() {
+        await this.fetchDevices();
+        this.$watch("currentView", (value) => {
+          if (value === "devices") {
+            this.startDevicesPolling();
+          } else {
+            this.stopDevicesPolling();
+          }
+        });
+        if (this.currentView === "devices") {
+          this.startDevicesPolling();
+        }
+      },
+      /**
+       * 디바이스 목록 조회
+       */
+      async fetchDevices() {
+        try {
+          this.devices.loading = true;
+          const res = await fetch("/api/devices");
+          if (!res.ok)
+            throw new Error("Failed to fetch devices");
+          const data = await res.json();
+          this.devices.list = data.devices || [];
+          this.devices.onlineCount = data.count || 0;
+          this.devices.registeredCount = data.registeredCount || 0;
+        } catch (e) {
+          console.error("Devices fetch error:", e);
+          this.devices.list = [];
+          this.devices.onlineCount = 0;
+          this.devices.registeredCount = 0;
+        } finally {
+          this.devices.loading = false;
+        }
+      },
+      /**
+       * 디바이스 폴링 시작
+       */
+      startDevicesPolling() {
+        if (this.devices._pollingTimer)
+          return;
+        this.devices._pollingTimer = setInterval(async () => {
+          await this.fetchDevices();
+        }, 5e3);
+      },
+      /**
+       * 디바이스 폴링 중지
+       */
+      stopDevicesPolling() {
+        if (this.devices._pollingTimer) {
+          clearInterval(this.devices._pollingTimer);
+          this.devices._pollingTimer = null;
+        }
+      },
+      /**
+       * 업타임 포맷 (초 → 읽기 쉬운 형식)
+       */
+      formatUptime(seconds) {
+        if (!seconds)
+          return "0s";
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor(seconds % 3600 / 60);
+        const secs = seconds % 60;
+        if (hours > 0) {
+          return `${hours}h ${minutes}m`;
+        } else if (minutes > 0) {
+          return `${minutes}m ${secs}s`;
+        } else {
+          return `${secs}s`;
+        }
       }
     };
   }
@@ -1010,6 +1084,7 @@
       ...networkModule(),
       ...switcherModule(),
       ...broadcastModule(),
+      ...devicesModule(),
       ...deviceModule(),
       ...utilsModule()
     };

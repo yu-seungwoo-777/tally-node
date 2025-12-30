@@ -17,7 +17,7 @@
             <div class="flex items-center justify-between px-8 py-5 border-b border-slate-200">
                 <div>
                     <h1 class="font-bold text-slate-900 text-lg">TALLY-NODE</h1>
-                    <p class="text-xs text-slate-500">Dashboard</p>
+                    <p class="text-xs text-slate-500" x-text="viewTitle()"></p>
                 </div>
                 <button @click="sidebarOpen = false" class="lg:hidden p-1 hover:bg-slate-100 rounded-lg">
                     <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,6 +64,15 @@
                     <span class="font-medium">Broadcast</span>
                 </a>
 
+                <a href="#devices"
+                   :class="currentView === 'devices' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'"
+                   class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                    </svg>
+                    <span class="font-medium">Devices</span>
+                </a>
+
                 <a href="#system"
                    :class="currentView === 'system' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'"
                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all">
@@ -100,12 +109,16 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                     </svg>
                 </button>
-                <h1 class="text-base font-semibold text-slate-900" x-text="viewTitle"></h1>
+                <h1 class="text-base font-semibold text-slate-900" x-text="viewTitle()"></h1>
             </header>
 
             <!-- 페이지 컨텐츠 (pages/*.html에서 주입) -->
             <main class="flex-1 p-4 lg:p-6 overflow-auto max-w-6xl mx-auto w-full">
                 <div x-show="currentView === 'dashboard'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-cloak>
+                    <div class="mb-4">
+                        <h2 class="text-lg md:text-xl font-semibold text-slate-900">Dashboard</h2>
+                        <p class="text-xs md:text-sm text-slate-500 hidden sm:block">System status and connection overview</p>
+                    </div>
 
                     <!-- 히어로 스탯 -->
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
@@ -402,7 +415,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button @click="saveAp()" class="w-full px-4 py-2 text-sm font-medium text-white bg-violet-600 rounded-lg hover:bg-violet-700 transition-colors">
+                                <button @click="saveAp()" class="w-full px-4 py-2.5 text-sm font-medium text-white bg-violet-600 rounded-xl hover:bg-violet-700 transition-colors">
                                     Save AP Settings
                                 </button>
                             </div>
@@ -475,7 +488,7 @@
                                         <input type="password" x-model="form.wifi.password" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Password">
                                     </div>
                                 </div>
-                                <button @click="saveWifi()" class="w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+                                <button @click="saveWifi()" class="w-full px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors">
                                     Save WiFi Settings
                                 </button>
                             </div>
@@ -558,7 +571,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <button @click="saveEthernet()" class="w-full px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition-colors">
+                                <button @click="saveEthernet()" class="w-full px-4 py-2.5 text-sm font-medium text-white bg-emerald-600 rounded-xl hover:bg-emerald-700 transition-colors">
                                     Save Ethernet Settings
                                 </button>
                             </div>
@@ -686,8 +699,8 @@
                                 </div>
 
                                 <button @click="showPrimaryConfig = true"
-                                        class="w-full py-2 text-sm font-medium text-blue-600
-                                               border border-blue-200 rounded-lg hover:bg-blue-50">
+                                        class="w-full px-4 py-2.5 text-sm font-medium text-blue-600
+                                               border border-blue-200 rounded-xl hover:bg-blue-50">
                                     Configure
                                 </button>
                             </div>
@@ -757,7 +770,7 @@
                                 </div>
 
                                 <button @click="form.switcher.dualEnabled && (showSecondaryConfig = true)"
-                                        class="w-full py-2 text-sm font-medium rounded-lg"
+                                        class="w-full px-4 py-2.5 text-sm font-medium rounded-xl"
                                         :class="form.switcher.dualEnabled
                                             ? 'text-purple-600 border border-purple-200 hover:bg-purple-50'
                                             : 'text-slate-400 border border-slate-200 cursor-not-allowed'"
@@ -809,8 +822,8 @@
                                 <span class="font-bold text-purple-600" x-text="form.mappingOffset"></span>
                             </div>
                             <button @click="saveMapping()"
-                                    class="px-4 py-2 text-sm font-medium text-white
-                                           bg-purple-600 rounded-lg hover:bg-purple-700">
+                                    class="px-4 py-2.5 text-sm font-medium text-white
+                                           bg-purple-600 rounded-xl hover:bg-purple-700">
                                 Save Mapping
                             </button>
                         </div>
@@ -904,7 +917,7 @@
                                                 <p class="font-medium" x-text="channelScan.recommendation.title"></p>
                                                 <p class="text-xs mt-1" x-show="channelScan.recommendation.message" x-text="channelScan.recommendation.message"></p>
                                                 <button x-show="channelScan.recommendation.suggestedFreq"
-                                                        @click="selectChannelFrequency(channelScan.recommendation.suggestedFreq)"
+                                                        @click="selectChannelFrequency(channelScan.recommendation.suggestedFreq); scrollToChannelSettings()"
                                                         class="mt-2 text-xs underline opacity-75 hover:opacity-100"
                                                         :class="{
                                                             'text-emerald-700': channelScan.recommendation.type === 'better',
@@ -977,7 +990,7 @@
                         </div>
 
                         <!-- Channel Settings Card -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div id="channel-settings" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3.5 md:px-5 md:py-4 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-transparent">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -1058,6 +1071,162 @@
                         </div>
                     </div>
                 </div>
+
+<!-- Devices Page -->
+<div x-show="currentView === 'devices'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-cloak>
+    <div class="mb-4">
+        <h2 class="text-lg md:text-xl font-semibold text-slate-900">Connected Devices</h2>
+        <p class="text-xs md:text-sm text-slate-500 hidden sm:block">
+            <span x-text="devices.onlineCount"></span> online / <span x-text="devices.registeredCount"></span> registered devices
+        </p>
+    </div>
+
+    <!-- 상태 표시줄 -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full" :class="devices.onlineCount > 0 ? 'bg-emerald-500' : 'bg-slate-300'"></span>
+                    <span class="text-sm text-slate-600"><span class="font-medium" x-text="devices.onlineCount"></span> Online</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                    <span class="text-sm text-slate-600"><span class="font-medium" x-text="devices.registeredCount"></span> Registered</span>
+                </div>
+            </div>
+            <button @click="fetchDevices()"
+                    :disabled="devices.loading"
+                    class="px-3 py-1.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-2">
+                <svg class="w-4 h-4" :class="{ 'animate-spin': devices.loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                <span x-text="devices.loading ? 'Refreshing...' : 'Refresh'"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 디바이스 그리드 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <template x-for="device in devices.list" :key="device.id">
+            <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <!-- 디바이스 카드 헤더 -->
+                <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-transparent">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="font-semibold text-slate-900 text-sm" x-text="device.id"></p>
+                                <p class="text-xs text-slate-500">Cam <span x-text="device.cameraId"></span></p>
+                            </div>
+                        </div>
+                        <div x-show="device.stopped"
+                             class="px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-700 rounded-full">
+                            Stopped
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 디바이스 카드 내용 -->
+                <div class="p-4 space-y-3">
+                    <!-- 배터리 -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs text-slate-500">Battery</span>
+                            <span class="text-xs font-medium" :class="{
+                                'text-emerald-600': device.battery > 50,
+                                'text-yellow-600': device.battery > 20 && device.battery <= 50,
+                                'text-rose-600': device.battery <= 20
+                            }" x-text="device.battery + '%'"></span>
+                        </div>
+                        <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full transition-all"
+                                 :class="{
+                                     'bg-emerald-500': device.battery > 50,
+                                     'bg-yellow-500': device.battery > 20 && device.battery <= 50,
+                                     'bg-rose-500': device.battery <= 20
+                                 }"
+                                 :style="`width: ${device.battery}%`"></div>
+                        </div>
+                    </div>
+
+                    <!-- 신호 + Ping 2열 -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <!-- RSSI -->
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs text-slate-500">Signal</span>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <div class="flex gap-0.5">
+                                    <div class="w-0.5 h-2.5 rounded-sm" :class="device.rssi > -90 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
+                                    <div class="w-0.5 h-3 rounded-sm" :class="device.rssi > -80 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
+                                    <div class="w-0.5 h-3.5 rounded-sm" :class="device.rssi > -70 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
+                                    <div class="w-0.5 h-4 rounded-sm" :class="device.rssi > -60 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
+                                </div>
+                                <span class="text-xs font-medium" :class="{
+                                    'text-emerald-600': device.rssi > -70,
+                                    'text-yellow-600': device.rssi > -85 && device.rssi <= -70,
+                                    'text-rose-600': device.rssi <= -85
+                                }" x-text="device.rssi + ' dBm'"></span>
+                            </div>
+                        </div>
+
+                        <!-- Ping -->
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs text-slate-500">Ping</span>
+                            </div>
+                            <span class="text-xs font-medium" :class="{
+                                'text-emerald-600': device.ping < 200,
+                                'text-yellow-600': device.ping >= 200 && device.ping < 500,
+                                'text-rose-600': device.ping >= 500
+                            }" x-text="device.ping + ' ms'"></span>
+                        </div>
+                    </div>
+
+                    <!-- 업타임 + RF 2열 -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <span class="text-xs text-slate-500 block mb-1">Uptime</span>
+                            <span class="text-xs font-medium text-slate-700" x-text="formatUptime(device.uptime)"></span>
+                        </div>
+                        <div>
+                            <span class="text-xs text-slate-500 block mb-1">Frequency</span>
+                            <span class="text-xs font-medium text-slate-700" x-text="device.frequency + ' MHz'"></span>
+                        </div>
+                    </div>
+
+                    <!-- 밝기 -->
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+                        <span class="text-xs text-slate-500">Brightness</span>
+                        <div class="flex items-center gap-2">
+                            <div class="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                <div class="h-full bg-slate-700 rounded-full" :style="`width: ${device.brightness}%`"></div>
+                            </div>
+                            <span class="text-xs font-medium text-slate-700" x-text="device.brightness + '%'"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- 디바이스 없음 -->
+    <div x-show="devices.list.length === 0 && !devices.loading"
+         class="text-center py-16 bg-white rounded-xl border border-slate-200">
+        <div class="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+            </svg>
+        </div>
+        <p class="text-slate-600 font-medium">No devices connected</p>
+        <p class="text-sm text-slate-400 mt-1">Devices will appear here when they come online</p>
+    </div>
+</div>
 
                 <div x-show="currentView === 'system'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-cloak>
                     <div class="mb-4">
@@ -1261,13 +1430,13 @@
                     <!-- Buttons -->
                     <div class="flex gap-2">
                         <button @click="showPrimaryConfig = false"
-                                class="flex-1 py-2 text-sm font-medium text-slate-600
-                                       border border-slate-300 rounded-lg hover:bg-slate-50">
+                                class="flex-1 px-4 py-2.5 text-sm font-medium text-slate-600
+                                       border border-slate-300 rounded-xl hover:bg-slate-50">
                             Cancel
                         </button>
                         <button @click="savePrimarySwitcher()"
-                                class="flex-1 py-2 text-sm font-medium text-white
-                                       bg-blue-600 rounded-lg hover:bg-blue-700">
+                                class="flex-1 px-4 py-2.5 text-sm font-medium text-white
+                                       bg-blue-600 rounded-xl hover:bg-blue-700">
                             Save
                         </button>
                     </div>
@@ -1396,13 +1565,13 @@
                     <!-- Buttons -->
                     <div class="flex gap-2">
                         <button @click="showSecondaryConfig = false"
-                                class="flex-1 py-2 text-sm font-medium text-slate-600
-                                       border border-slate-300 rounded-lg hover:bg-slate-50">
+                                class="flex-1 px-4 py-2.5 text-sm font-medium text-slate-600
+                                       border border-slate-300 rounded-xl hover:bg-slate-50">
                             Cancel
                         </button>
                         <button @click="saveSecondarySwitcher()"
-                                class="flex-1 py-2 text-sm font-medium text-white
-                                       bg-purple-600 rounded-lg hover:bg-purple-700">
+                                class="flex-1 px-4 py-2.5 text-sm font-medium text-white
+                                       bg-purple-600 rounded-xl hover:bg-purple-700">
                             Save
                         </button>
                     </div>

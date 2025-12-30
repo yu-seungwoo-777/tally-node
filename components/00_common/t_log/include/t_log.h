@@ -51,31 +51,31 @@ void t_log_output(t_log_level_t level, const char* tag, const char* fmt, ...);
 
 #define T_LOGE(tag, fmt, ...) do { \
     if (T_LOG_ERROR <= T_LOG_DEFAULT_LEVEL) { \
-        t_log_output(T_LOG_ERROR, #tag, fmt "\n", ##__VA_ARGS__); \
+        t_log_output(T_LOG_ERROR, tag, fmt "\n", ##__VA_ARGS__); \
     } \
 } while(0)
 
 #define T_LOGW(tag, fmt, ...) do { \
     if (T_LOG_WARN <= T_LOG_DEFAULT_LEVEL) { \
-        t_log_output(T_LOG_WARN, #tag, fmt "\n", ##__VA_ARGS__); \
+        t_log_output(T_LOG_WARN, tag, fmt "\n", ##__VA_ARGS__); \
     } \
 } while(0)
 
 #define T_LOGI(tag, fmt, ...) do { \
     if (T_LOG_INFO <= T_LOG_DEFAULT_LEVEL) { \
-        t_log_output(T_LOG_INFO, #tag, fmt "\n", ##__VA_ARGS__); \
+        t_log_output(T_LOG_INFO, tag, fmt "\n", ##__VA_ARGS__); \
     } \
 } while(0)
 
 #define T_LOGD(tag, fmt, ...) do { \
     if (T_LOG_DEBUG <= T_LOG_DEFAULT_LEVEL) { \
-        t_log_output(T_LOG_DEBUG, #tag, fmt "\n", ##__VA_ARGS__); \
+        t_log_output(T_LOG_DEBUG, tag, fmt "\n", ##__VA_ARGS__); \
     } \
 } while(0)
 
 #define T_LOGV(tag, fmt, ...) do { \
     if (T_LOG_VERBOSE <= T_LOG_DEFAULT_LEVEL) { \
-        t_log_output(T_LOG_VERBOSE, #tag, fmt "\n", ##__VA_ARGS__); \
+        t_log_output(T_LOG_VERBOSE, tag, fmt "\n", ##__VA_ARGS__); \
     } \
 } while(0)
 

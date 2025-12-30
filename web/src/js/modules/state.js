@@ -20,6 +20,7 @@ export function stateModule() {
             network: 'Network',
             switcher: 'Switcher',
             broadcast: 'Broadcast',
+            devices: 'Devices',
             system: 'System'
         },
 
@@ -109,7 +110,7 @@ export function stateModule() {
         /**
          * 뷰 타이틀 계산
          */
-        get viewTitle() {
+        viewTitle() {
             return this.viewTitles[this.currentView] || 'TALLY-NODE';
         },
 
@@ -121,33 +122,25 @@ export function stateModule() {
 
             // URL 해시에서 현재 뷰 복원
             const hash = window.location.hash.slice(1);
-            if (hash && ['dashboard', 'network', 'switcher', 'broadcast', 'system'].includes(hash)) {
+            if (hash && ['dashboard', 'network', 'switcher', 'broadcast', 'devices', 'system'].includes(hash)) {
                 this.currentView = hash;
             }
 
             // 해시 변경 감지
             window.addEventListener('hashchange', () => {
                 const newHash = window.location.hash.slice(1);
-                if (newHash && ['dashboard', 'network', 'switcher', 'broadcast', 'system'].includes(newHash)) {
+                if (newHash && ['dashboard', 'network', 'switcher', 'broadcast', 'devices', 'system'].includes(newHash)) {
                     this.currentView = newHash;
                 }
             });
 
             await this.fetchStatus();
 
-            // currentView 변경 감지: 스위처 페이지면 폴링 시작
-            this.$watch('currentView', (value) => {
-                if (value === 'switcher') {
-                    this.startStatusPolling();
-                } else {
-                    this.stopStatusPolling();
-                }
-            });
+            // 디바이스 모듈 초기화
+            await this.initDevices();
 
-            // 초기 로드 시 스위처 페이지면 폴링 시작
-            if (this.currentView === 'switcher') {
-                this.startStatusPolling();
-            }
+            // 상태 폴링 시작 (모든 페이지)
+            this.startStatusPolling();
         },
 
         /**

@@ -116,7 +116,7 @@ const SwitcherService::SwitcherInfo* SwitcherService::getSwitcherInfo(switcher_r
  * 듀얼 모드, 오프셋, 또는 스위처 설정(IP, Port, Interface 등) 변경 시 재연결 트리거
  */
 static esp_err_t onConfigDataEvent(const event_data_t* event) {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -929,15 +929,15 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
         T_LOGI(TAG, "Combined Tally: [%s] (%d채널, %d바이트) → %s",
                  hex_str, combined.channel_count, combined.data_size, tally_str);
 
-        // 이벤트 버스로 Tally 상태 변경 발행 (tally_event_data_t 구조체)
-        static tally_event_data_t s_tally_event;
-        memset(&s_tally_event, 0, sizeof(s_tally_event));
-        s_tally_event.source = 0;  // 0=Primary (듀얼 모드 시 결합됨)
-        s_tally_event.channel_count = combined.channel_count;
-        memcpy(s_tally_event.tally_data, combined.data, combined.data_size);
-        s_tally_event.tally_value = packed_data_to_uint64(&combined);
+        // stack 변수 사용 (이벤트 버스가 복사)
+        tally_event_data_t tally_event;
+        memset(&tally_event, 0, sizeof(tally_event));
+        tally_event.source = 0;  // 0=Primary (듀얼 모드 시 결합됨)
+        tally_event.channel_count = combined.channel_count;
+        memcpy(tally_event.tally_data, combined.data, combined.data_size);
+        tally_event.tally_value = packed_data_to_uint64(&combined);
 
-        event_bus_publish(EVT_TALLY_STATE_CHANGED, &s_tally_event, sizeof(s_tally_event));
+        event_bus_publish(EVT_TALLY_STATE_CHANGED, &tally_event, sizeof(tally_event));
     }
 
     // Tally 변경 시 상태 이벤트도 발행 (웹 서버 등에서 사용)
@@ -950,26 +950,26 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
 }
 
 void SwitcherService::publishSwitcherStatus() {
-    // 이벤트 발행용 정적 변수 (지역 변수 사용 시 데이터가 소실됨)
-    static switcher_status_event_t s_status;
-    memset(&s_status, 0, sizeof(s_status));
+    // stack 변수 사용 (이벤트 버스가 복사)
+    switcher_status_event_t status;
+    memset(&status, 0, sizeof(status));
 
     // 스위처 상태 이벤트 발행
-    s_status.dual_mode = dual_mode_enabled_;
-    s_status.s1_connected = primary_.is_connected;
-    s_status.s2_connected = secondary_.is_connected;
-    s_status.s1_port = primary_.port;
-    s_status.s2_port = secondary_.port;
+    status.dual_mode = dual_mode_enabled_;
+    status.s1_connected = primary_.is_connected;
+    status.s2_connected = secondary_.is_connected;
+    status.s1_port = primary_.port;
+    status.s2_port = secondary_.port;
 
     // 문자열 복사 시 null termination 보장
-    strncpy(s_status.s1_type, primary_.type, sizeof(s_status.s1_type) - 1);
-    s_status.s1_type[sizeof(s_status.s1_type) - 1] = '\0';
-    strncpy(s_status.s2_type, secondary_.type, sizeof(s_status.s2_type) - 1);
-    s_status.s2_type[sizeof(s_status.s2_type) - 1] = '\0';
-    strncpy(s_status.s1_ip, primary_.ip, sizeof(s_status.s1_ip) - 1);
-    s_status.s1_ip[sizeof(s_status.s1_ip) - 1] = '\0';
-    strncpy(s_status.s2_ip, secondary_.ip, sizeof(s_status.s2_ip) - 1);
-    s_status.s2_ip[sizeof(s_status.s2_ip) - 1] = '\0';
+    strncpy(status.s1_type, primary_.type, sizeof(status.s1_type) - 1);
+    status.s1_type[sizeof(status.s1_type) - 1] = '\0';
+    strncpy(status.s2_type, secondary_.type, sizeof(status.s2_type) - 1);
+    status.s2_type[sizeof(status.s2_type) - 1] = '\0';
+    strncpy(status.s1_ip, primary_.ip, sizeof(status.s1_ip) - 1);
+    status.s1_ip[sizeof(status.s1_ip) - 1] = '\0';
+    strncpy(status.s2_ip, secondary_.ip, sizeof(status.s2_ip) - 1);
+    status.s2_ip[sizeof(status.s2_ip) - 1] = '\0';
 
     // Tally 데이터 (개별 상태) - last_packed가 없으면 어댑터에서 직접 가져옴
     if (primary_.adapter) {
@@ -980,8 +980,8 @@ void SwitcherService::publishSwitcherStatus() {
             s1_packed = primary_.adapter->getPackedTally();
         }
         if (s1_packed.data && s1_packed.data_size > 0) {
-            s_status.s1_channel_count = s1_packed.channel_count;
-            memcpy(s_status.s1_tally_data, s1_packed.data,
+            status.s1_channel_count = s1_packed.channel_count;
+            memcpy(status.s1_tally_data, s1_packed.data,
                    s1_packed.data_size > 8 ? 8 : s1_packed.data_size);
         }
     }
@@ -993,13 +993,13 @@ void SwitcherService::publishSwitcherStatus() {
             s2_packed = secondary_.adapter->getPackedTally();
         }
         if (s2_packed.data && s2_packed.data_size > 0) {
-            s_status.s2_channel_count = s2_packed.channel_count;
-            memcpy(s_status.s2_tally_data, s2_packed.data,
+            status.s2_channel_count = s2_packed.channel_count;
+            memcpy(status.s2_tally_data, s2_packed.data,
                    s2_packed.data_size > 8 ? 8 : s2_packed.data_size);
         }
     }
 
-    event_bus_publish(EVT_SWITCHER_STATUS_CHANGED, &s_status, sizeof(s_status));
+    event_bus_publish(EVT_SWITCHER_STATUS_CHANGED, &status, sizeof(status));
 }
 
 // ============================================================================

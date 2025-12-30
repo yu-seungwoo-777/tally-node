@@ -489,7 +489,7 @@ esp_err_t lora_driver_set_frequency(float freq_mhz) {
 
     if (state == RADIOLIB_ERR_NONE) {
         s_frequency = freq_mhz;
-        T_LOGI(TAG, "주파수 변경: %.1f MHz (수신 모드 재시작)", freq_mhz);
+        T_LOGI(TAG, "주파수 설정: %.1f MHz (브로드캐스트 후 재설정)", freq_mhz);
         return ESP_OK;
     }
     return ESP_FAIL;
@@ -515,7 +515,7 @@ esp_err_t lora_driver_set_sync_word(uint8_t sync_word) {
 
     if (state == RADIOLIB_ERR_NONE) {
         s_sync_word = sync_word;
-        T_LOGI(TAG, "Sync Word 변경: 0x%02X (수신 모드 재시작)", sync_word);
+        T_LOGI(TAG, "Sync Word 설정: 0x%02X (브로드캐스트 후 재설정)", sync_word);
         return ESP_OK;
     }
     return ESP_FAIL;

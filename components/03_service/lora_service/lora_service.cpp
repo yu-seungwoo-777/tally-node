@@ -64,13 +64,6 @@ static float s_scan_end_freq = 0.0f;
 static float s_scan_step = 0.1f;
 #define MAX_SCAN_CHANNELS 100
 
-// RF 설정 관련 (TX 전용)
-#ifdef DEVICE_MODE_TX
-static float s_last_frequency = 0.0f;
-static uint8_t s_last_sync_word = 0;
-static lora_rf_event_t s_rf_broadcast_event = {};  // 이벤트 발행용 정적 변수
-#endif
-
 // ============================================================================
 // 내부 함수
 // ============================================================================
@@ -120,46 +113,9 @@ static esp_err_t on_lora_send_request(const event_data_t* event) {
     return lora_service_send(req->data, req->length);
 }
 
-#ifdef DEVICE_MODE_TX
 /**
- * @brief 설정 데이터 변경 이벤트 핸들러 (TX 전용)
- * RF 설정 변경 감지 시 device_management_service에 broadcast 요청
- */
-static esp_err_t on_config_data_changed(const event_data_t* event) {
-    if (event->type != EVT_CONFIG_DATA_CHANGED) {
-        return ESP_OK;
-    }
-
-    const auto* config = reinterpret_cast<const config_data_event_t*>(event->data);
-    if (config == nullptr) {
-        T_LOGW(TAG_RF, "config 데이터가 NULL");
-        return ESP_OK;
-    }
-
-    // RF 설정 변경 감지
-    bool frequency_changed = (config->device_rf_frequency != s_last_frequency && s_last_frequency > 0.0f);
-    bool sync_word_changed = (config->device_rf_sync_word != s_last_sync_word && s_last_sync_word > 0);
-
-    if (frequency_changed || sync_word_changed) {
-        T_LOGI(TAG_RF, "설정 변경: %.1f→%.1f MHz, Sync 0x%02X→0x%02X (broadcast 시작)",
-               s_last_frequency, config->device_rf_frequency,
-               s_last_sync_word, config->device_rf_sync_word);
-
-        // device_management_service에 broadcast 요청 (정적 변수 사용)
-        s_rf_broadcast_event.frequency = config->device_rf_frequency;
-        s_rf_broadcast_event.sync_word = config->device_rf_sync_word;
-        event_bus_publish(EVT_LORA_RF_BROADCAST_REQUEST, &s_rf_broadcast_event, sizeof(s_rf_broadcast_event));
-    }
-
-    s_last_frequency = config->device_rf_frequency;
-    s_last_sync_word = config->device_rf_sync_word;
-
-    return ESP_OK;
-}
-
-/**
- * @brief RF 변경 이벤트 핸들러 (TX 전용)
- * broadcast 완료 후 자신의 RF 설정 적용
+ * @brief RF 변경 이벤트 핸들러 (TX/RX 공용)
+ * RF 설정 변경 시 드라이버에 적용하고, TX는 broadcast 후 저장 요청
  */
 static esp_err_t on_rf_changed(const event_data_t* event) {
     if (event->type != EVT_RF_CHANGED) {
@@ -168,19 +124,41 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
 
     const auto* rf = reinterpret_cast<const lora_rf_event_t*>(event->data);
     if (rf == nullptr) {
-        T_LOGW(TAG_RF, "rf 데이터가 NULL");
+        T_LOGW(TAG, "rf 데이터가 NULL");
         return ESP_OK;
     }
 
+#ifdef DEVICE_MODE_TX
     T_LOGI(TAG_RF, "드라이버 적용: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
+#else
+    T_LOGI(TAG, "드라이버 적용: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
+#endif
 
-    // 드라이버에 RF 설정 적용
+    // 1. 드라이버에 RF 설정 적용
     lora_driver_set_frequency(rf->frequency);
     lora_driver_set_sync_word(rf->sync_word);
 
+#ifdef DEVICE_MODE_TX
+    // 2. TX: RF 변경 broadcast 10회 (RX들에게 알림, 5초간)
+    // 패킷 구조: [0xE3][frequency(4바이트 float)][sync_word(1바이트)]
+    uint8_t broadcast_pkt[6];
+    broadcast_pkt[0] = 0xE3;  // RF 설정 broadcast 헤더
+    memcpy(&broadcast_pkt[1], &rf->frequency, sizeof(float));
+    broadcast_pkt[5] = rf->sync_word;
+
+    for (int i = 0; i < 10; i++) {
+        lora_service_send(broadcast_pkt, sizeof(broadcast_pkt));
+        vTaskDelay(pdMS_TO_TICKS(500));  // 500ms 간격
+    }
+
+    T_LOGI(TAG_RF, "RF broadcast 완료: %.1f MHz, Sync 0x%02X (10회)", rf->frequency, rf->sync_word);
+
+    // 3. NVS 저장 요청 (broadcast 완료 후)
+    event_bus_publish(EVT_RF_SAVED, rf, sizeof(*rf));
+#endif
+
     return ESP_OK;
 }
-#endif
 
 /**
  * @brief 드라이버 수신 콜백 (내부)
@@ -189,28 +167,28 @@ static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, 
 {
     s_packets_received++;
 
-    // 이벤트 발행 (패킷 데이터 + RSSI/SNR)
-    lora_packet_event_t packet_event = {};
+    // 이벤트 발행 (패킷 데이터 + RSSI/SNR) - stack 변수 사용
     if (length > MAX_PACKET_SIZE) {
         length = MAX_PACKET_SIZE;
     }
+
+    // 패킷 이벤트
+    lora_packet_event_t packet_event;
     memcpy(packet_event.data, data, length);
     packet_event.length = length;
     packet_event.rssi = rssi;
     packet_event.snr = snr;
-
     event_bus_publish(EVT_LORA_PACKET_RECEIVED, &packet_event, sizeof(packet_event));
 
     // RSSI/SNR 이벤트도 함께 발행 (패킷 수신 시마다 즉시 갱신)
     lora_status_t driver_status = lora_driver_get_status();
-    lora_rssi_event_t rssi_event = {
-        .is_running = s_running,
-        .is_initialized = s_initialized,
-        .chip_type = (uint8_t)driver_status.chip_type,
-        .frequency = driver_status.frequency,
-        .rssi = rssi,
-        .snr = (int8_t)snr
-    };
+    lora_rssi_event_t rssi_event;
+    rssi_event.is_running = s_running;
+    rssi_event.is_initialized = s_initialized;
+    rssi_event.chip_type = (uint8_t)driver_status.chip_type;
+    rssi_event.frequency = driver_status.frequency;
+    rssi_event.rssi = rssi;
+    rssi_event.snr = (int8_t)snr;
     event_bus_publish(EVT_LORA_RSSI_CHANGED, &rssi_event, sizeof(rssi_event));
 
     // 사용자 콜백 호출 (레거시 지원)
@@ -350,11 +328,8 @@ esp_err_t lora_service_start(void)
     event_bus_subscribe(EVT_LORA_SCAN_START, on_lora_scan_start_request);
     event_bus_subscribe(EVT_LORA_SCAN_STOP, on_lora_scan_stop_request);
 
-#ifdef DEVICE_MODE_TX
-    // RF 설정 관련 이벤트 구독 (TX만)
-    event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, on_config_data_changed);
+    // RF 변경 이벤트 구독 (TX/RX 공용)
     event_bus_subscribe(EVT_RF_CHANGED, on_rf_changed);
-#endif
 
     // 수신 모드 시작
     ret = lora_driver_start_receive();
@@ -594,16 +569,8 @@ static void lora_scan_task(void* arg)
         total_channels = MAX_SCAN_CHANNELS;
     }
 
-    channel_info_t results[MAX_SCAN_CHANNELS];
+    lora_channel_info_t results[MAX_SCAN_CHANNELS];
     size_t result_count = 0;
-
-    // 스캔 시작 이벤트 발행
-    lora_scan_start_t start_event = {
-        .start_freq = s_scan_start_freq,
-        .end_freq = s_scan_end_freq,
-        .step = s_scan_step
-    };
-    event_bus_publish(EVT_LORA_SCAN_START, &start_event, sizeof(start_event));
 
     // 채널별 스캔 (진행도 발행을 위해)
     for (float freq = s_scan_start_freq; freq <= s_scan_end_freq && result_count < MAX_SCAN_CHANNELS; freq += s_scan_step) {
@@ -613,11 +580,17 @@ static void lora_scan_task(void* arg)
             break;
         }
 
-        // 단일 채널 스캔 (드라이버에는 유효한 범위 전달 - 1MHz 고정)
+        // 단일 채널 스캔 (드라이버에는 임시 버퍼 사용 후 타입 변환)
+        channel_info_t driver_result;
         size_t count = 0;
-        esp_err_t ret = lora_driver_scan_channels(freq, freq + 1.0f, 1.0f, &results[result_count], 1, &count);
+        esp_err_t ret = lora_driver_scan_channels(freq, freq + 1.0f, 1.0f, &driver_result, 1, &count);
 
         if (ret == ESP_OK && count > 0) {
+            // 드라이버 타입 → 이벤트 타입 변환
+            results[result_count].frequency = driver_result.frequency;
+            results[result_count].rssi = driver_result.rssi;
+            results[result_count].noise_floor = driver_result.noise_floor;
+            results[result_count].clear_channel = driver_result.clear_channel;
             result_count++;
 
             // 진행률 계산
@@ -647,7 +620,7 @@ static void lora_scan_task(void* arg)
     // 스캔 완료 이벤트 발행
     lora_scan_complete_t complete_event = {};
     complete_event.count = (result_count > 100) ? 100 : (uint8_t)result_count;
-    memcpy(complete_event.channels, results, sizeof(channel_info_t) * complete_event.count);
+    memcpy(complete_event.channels, results, sizeof(lora_channel_info_t) * complete_event.count);
 
     event_bus_publish(EVT_LORA_SCAN_COMPLETE, &complete_event, sizeof(complete_event));
 
@@ -657,6 +630,9 @@ static void lora_scan_task(void* arg)
     s_scanning = false;
     s_scan_stop_requested = false;
     s_scan_task = nullptr;
+
+    // 수신 모드 복귀
+    lora_driver_start_receive();
 
     vTaskDelete(nullptr);
 }

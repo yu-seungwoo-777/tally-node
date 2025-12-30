@@ -15,7 +15,7 @@
 
 // LoRa - SPI2_HOST
 // E22-400MM22S (SX1268, 433MHz) 또는 E22-900MM22S (SX1262, 868MHz) 모듈 지원
-#define EORA_S3_LORA_MISO       GPIO_NUM_3
+#define EORA_S3_LORA_MISO       GPIO_NUM_3 
 #define EORA_S3_LORA_MOSI       GPIO_NUM_6
 #define EORA_S3_LORA_SCK        GPIO_NUM_5
 #define EORA_S3_LORA_CS         GPIO_NUM_7
@@ -38,12 +38,12 @@
 #define EORA_S3_OLED_RST         GPIO_NUM_10  // OLED 전용
 
 // W5500 Ethernet - SPI3_HOST
-#define EORA_S3_W5500_MISO      GPIO_NUM_15
-#define EORA_S3_W5500_MOSI      GPIO_NUM_16
-#define EORA_S3_W5500_SCK       GPIO_NUM_48
-#define EORA_S3_W5500_CS        GPIO_NUM_47
+#define EORA_S3_W5500_MOSI      GPIO_NUM_16   // 갈색
+#define EORA_S3_W5500_MISO      GPIO_NUM_15   // 초록색
+#define EORA_S3_W5500_RST       GPIO_NUM_12   // 흰색
+#define EORA_S3_W5500_SCK       GPIO_NUM_48   // 파란색
+#define EORA_S3_W5500_CS        GPIO_NUM_47   // 노란색
 #define EORA_S3_W5500_INT       -1            // 미사용
-#define EORA_S3_W5500_RST       GPIO_NUM_12
 #define EORA_S3_W5500_SPI_HOST  SPI3_HOST
 
 // LED (Tally Light)

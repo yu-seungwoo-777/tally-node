@@ -15,7 +15,6 @@
 #include "switcher_service.h"
 #include "network_service.h"
 #include "lora_service.h"
-#include "device_management_service.h"
 #include "web_server.h"
 #include "TallyTypes.h"
 #include "esp_netif.h"
@@ -74,9 +73,10 @@ static void send_tally_via_lora(const packed_data_t* tally)
 }
 
 // ============================================================================
-// 버튼 이벤트 핸들러
+// 버튼 이벤트 핸들러 (TX 전용)
 // ============================================================================
 
+#ifdef DEVICE_MODE_TX
 static esp_err_t handle_button_single_click(const event_data_t* event)
 {
     (void)event;
@@ -104,6 +104,7 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
     T_LOGD(TAG, "Long press release");
     return ESP_OK;
 }
+#endif // DEVICE_MODE_TX
 
 // ============================================================================
 // 앱 상태
@@ -414,14 +415,6 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         T_LOGW(TAG, "Button service init failed: %s", esp_err_to_name(ret));
     }
 
-    // DeviceManagementService 초기화 (TX 모드)
-    ret = device_management_service_init(NULL);  // TX는 상태 콜백 불필요
-    if (ret != ESP_OK) {
-        T_LOGW(TAG, "DeviceManagementService init failed: %s", esp_err_to_name(ret));
-    } else {
-        T_LOGI(TAG, "DeviceManagementService 초기화 완료");
-    }
-
     s_app.initialized = true;
     T_LOGI(TAG, "TX app init complete");
 
@@ -455,18 +448,16 @@ void prod_tx_app_start(void)
     lora_service_start();
     T_LOGI(TAG, "LoRa 시작");
 
-    // DeviceManagementService 시작
-    device_management_service_start();
-    T_LOGI(TAG, "DeviceManagementService 시작");
-
     // DisplayManager 시작, BootPage로 전환
     display_manager_start();
     display_manager_set_page(PAGE_BOOT);
 
+#ifdef DEVICE_MODE_TX
     // 버튼 이벤트 구독
     event_bus_subscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
+#endif
 
     // 스위처/네트워크 연결 상태 이벤트 구독
     event_bus_subscribe(EVT_SWITCHER_CONNECTED, handle_switcher_connected);
@@ -525,10 +516,12 @@ void prod_tx_app_stop(void)
     // WebServer 중지
     web_server_stop();
 
+#ifdef DEVICE_MODE_TX
     // 버튼 이벤트 구독 취소
     event_bus_unsubscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_unsubscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_unsubscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
+#endif
 
     // 스위처/네트워크 연결 상태 이벤트 구독 취소
     event_bus_unsubscribe(EVT_SWITCHER_CONNECTED, handle_switcher_connected);
@@ -537,9 +530,6 @@ void prod_tx_app_stop(void)
     event_bus_unsubscribe(EVT_NETWORK_DISCONNECTED, handle_network_disconnected);
 
     button_service_stop();
-
-    // DeviceManagementService 정지
-    device_management_service_stop();
 
     // LoRa 정지
     lora_service_stop();

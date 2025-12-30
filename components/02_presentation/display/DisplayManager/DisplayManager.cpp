@@ -243,7 +243,7 @@ static void print_status_log(void)
  */
 static esp_err_t on_info_updated(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_OK;
     }
 
@@ -276,7 +276,7 @@ static esp_err_t on_info_updated(const event_data_t* event)
  */
 static esp_err_t on_lora_rssi_changed(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_OK;
     }
 
@@ -307,7 +307,7 @@ static esp_err_t on_lora_rssi_changed(const event_data_t* event)
  */
 static esp_err_t on_tally_state_changed(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_OK;
     }
 
@@ -360,7 +360,7 @@ static esp_err_t on_tally_state_changed(const event_data_t* event)
  */
 static esp_err_t on_switcher_status_changed(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_OK;
     }
 
@@ -387,7 +387,7 @@ static esp_err_t on_switcher_status_changed(const event_data_t* event)
  */
 static esp_err_t on_network_status_changed(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_OK;
     }
 
@@ -417,7 +417,7 @@ static esp_err_t on_network_status_changed(const event_data_t* event)
  */
 static esp_err_t on_rf_changed(const event_data_t* event)
 {
-    if (!event || !event->data) {
+    if (!event) {
         return ESP_OK;
     }
 
