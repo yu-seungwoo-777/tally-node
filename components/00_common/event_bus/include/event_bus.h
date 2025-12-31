@@ -395,6 +395,8 @@ typedef enum {
     // LoRa 이벤트 (03_service)
     EVT_LORA_STATUS_CHANGED,
     EVT_LORA_RSSI_CHANGED,         ///< RSSI/SNR 변경 (data: lora_rssi_event_t)
+    EVT_LORA_TX_COMMAND,           ///< TX→RX 명령 수신 (0xE0~0xEF) (data: lora_packet_event_t)
+    EVT_LORA_RX_RESPONSE,          ///< RX→TX 응답 수신 (0xD0~0xDF) (data: lora_packet_event_t)
     EVT_LORA_PACKET_RECEIVED,      ///< Packet received (data: lora_packet_event_t)
     EVT_LORA_PACKET_SENT,
     EVT_LORA_SEND_REQUEST,         ///< Send request (data: lora_send_request_t)

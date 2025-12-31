@@ -253,13 +253,25 @@ static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, 
     if (LORA_IS_TALLY_HEADER(header)) {
         process_tally_packet(data, length, rssi, snr);
     }
-    // TX→RX 명령 (0xE0~0xEF) - 추후 구현
+    // TX→RX 명령 (0xE0~0xEF) - device_manager로 발행
     else if (LORA_IS_TX_COMMAND_HEADER(header)) {
-        T_LOGD(TAG, "TX 명령 수신 (추후 구현): 0x%02X", header);
+        // 패킷 이벤트 발행 (device_manager에서 구독)
+        lora_packet_event_t packet_event;
+        memcpy(packet_event.data, data, length);
+        packet_event.length = length;
+        packet_event.rssi = rssi;
+        packet_event.snr = snr;
+        event_bus_publish(EVT_LORA_TX_COMMAND, &packet_event, sizeof(packet_event));
     }
-    // RX→TX 응답 (0xD0~0xDF) - 추후 구현
+    // RX→TX 응답 (0xD0~0xDF) - device_manager로 발행
     else if (LORA_IS_RX_RESPONSE_HEADER(header)) {
-        T_LOGD(TAG, "RX 응답 수신 (추후 구현): 0x%02X", header);
+        // 패킷 이벤트 발행 (device_manager에서 구독)
+        lora_packet_event_t packet_event;
+        memcpy(packet_event.data, data, length);
+        packet_event.length = length;
+        packet_event.rssi = rssi;
+        packet_event.snr = snr;
+        event_bus_publish(EVT_LORA_RX_RESPONSE, &packet_event, sizeof(packet_event));
     }
     // 알 수 없는 헤더
     else {
