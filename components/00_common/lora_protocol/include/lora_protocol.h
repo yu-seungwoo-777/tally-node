@@ -175,25 +175,48 @@ static inline void lora_device_id_to_str(const uint8_t* id, char* str) {
     str[4] = '\0';
 }
 
+// ============================================================================
+// 헤더 확인 매크로 (컴파일 타임 평가)
+// ============================================================================
+
+/**
+ * @brief 헤더가 Tally 데이터인지 확인 (0xF1~0xF4)
+ */
+#define LORA_IS_TALLY_HEADER(h)      ((h) >= 0xF1 && (h) <= 0xF4)
+
+/**
+ * @brief 헤더가 TX→RX 명령인지 확인 (0xE0~0xEF)
+ */
+#define LORA_IS_TX_COMMAND_HEADER(h) ((h) >= 0xE0 && (h) <= 0xEF)
+
+/**
+ * @brief 헤더가 RX→TX 응답인지 확인 (0xD0~0xDF)
+ */
+#define LORA_IS_RX_RESPONSE_HEADER(h) ((h) >= 0xD0 && (h) <= 0xDF)
+
+// ============================================================================
+// 헤더 확인 함수 (레거시 호환)
+// ============================================================================
+
 /**
  * @brief 헤더가 TX→RX 명령인지 확인
  */
 static inline bool lora_header_is_tx_command(uint8_t header) {
-    return (header >= 0xE0 && header <= 0xEF);
+    return LORA_IS_TX_COMMAND_HEADER(header);
 }
 
 /**
  * @brief 헤더가 RX→TX 응답인지 확인
  */
 static inline bool lora_header_is_rx_response(uint8_t header) {
-    return (header >= 0xD0 && header <= 0xDF);
+    return LORA_IS_RX_RESPONSE_HEADER(header);
 }
 
 /**
  * @brief 헤더가 Tally 데이터인지 확인
  */
 static inline bool lora_header_is_tally(uint8_t header) {
-    return (header >= 0xF1 && header <= 0xF4);
+    return LORA_IS_TALLY_HEADER(header);
 }
 
 #ifdef __cplusplus

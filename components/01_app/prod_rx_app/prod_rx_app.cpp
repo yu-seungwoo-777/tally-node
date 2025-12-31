@@ -43,111 +43,6 @@ static esp_err_t init_nvs(void)
 static const char* TAG = "prod_rx_app";
 
 // ============================================================================
-// LoRa 패킷 수신 처리 (RSSI/SNR 포함)
-// ============================================================================
-
-// 정적 버퍼 (이벤트 발행 후에도 데이터 유지)
-static uint8_t s_tally_buffer[8];  // 최대 20채널 = 5바이트
-static tally_event_data_t s_tally_event;  // 정적 이벤트 데이터
-
-/**
- * @brief LoRa 패킷 이벤트 핸들러 (RSSI/SNR 포함)
- */
-static esp_err_t on_lora_packet_event(const event_data_t* event)
-{
-    if (!event) {
-        return ESP_OK;
-    }
-
-    const lora_packet_event_t* packet = (const lora_packet_event_t*)event->data;
-    const uint8_t* data = packet->data;
-    size_t len = packet->length;
-    int16_t rssi = packet->rssi;
-    float snr = packet->snr;
-
-    if (!data || len == 0) {
-        return ESP_OK;
-    }
-
-    // 패킷 구조: [F1][ChannelCount][Data...]
-    // - F1: 고정 헤더
-    // - ChannelCount: 실제 채널 수 (1-20)
-    // - Data: packed tally 데이터
-
-    // 헤더 검증 (0xF1: Tally, 나머지는 device_management_service에서 처리)
-    if (data[0] != 0xF1) {
-        // 관리 명령(0xE3, 0xD0 등)은 device_management_service에서 처리하므로 조용히 무시
-        T_LOGD(TAG, "Tally 아닌 패킷 (0x%02X), device_management_service로 전달", data[0]);
-        return ESP_OK;
-    }
-
-    // 길이 체크 (최소 2바이트: F1 + ChannelCount)
-    if (len < 2) {
-        T_LOGW(TAG, "패킷 길이 부족: %d", (int)len);
-        return ESP_OK;
-    }
-
-    uint8_t ch_count = data[1];
-    if (ch_count < 1 || ch_count > 20) {
-        T_LOGW(TAG, "잘못된 채널 수: %d", ch_count);
-        return ESP_OK;
-    }
-
-    // 데이터 길이 계산
-    uint8_t expected_data_len = (ch_count + 3) / 4;
-    size_t payload_len = len - 2;  // 헤더(2) 제외
-
-    if (payload_len != expected_data_len || payload_len > sizeof(s_tally_buffer)) {
-        T_LOGW(TAG, "데이터 길이 불일치: 예상 %d, 수신 %d", expected_data_len, (int)payload_len);
-        return ESP_OK;
-    }
-
-    const uint8_t* payload = &data[2];
-
-    // 정적 버퍼에 데이터 복사 (이벤트 발행 후에도 유효)
-    memcpy(s_tally_buffer, payload, payload_len);
-
-    // packed_data_t로 변환 (정적 버퍼 사용)
-    packed_data_t tally = {
-        .data = s_tally_buffer,
-        .data_size = static_cast<uint8_t>(payload_len),
-        .channel_count = ch_count  // 실제 채널 수 사용
-    };
-
-    if (!packed_data_is_valid(&tally)) {
-        T_LOGW(TAG, "잘못된 Tally 데이터");
-        return ESP_OK;
-    }
-
-    // 헥스 문자열 변환 (데이터만)
-    char hex_str[16];
-    packed_data_to_hex(&tally, hex_str, sizeof(hex_str));
-
-    // Tally 상태 문자열 변환
-    char tally_str[64];
-    packed_data_format_tally(&tally, tally_str, sizeof(tally_str));
-
-    T_LOGI(TAG, "LoRa 수신: [F1][%d][%s] (%d채널, %d바이트) → %s RSSI:%d SNR:%.1f",
-             ch_count, hex_str, ch_count, (int)payload_len, tally_str, rssi, snr);
-
-    // RSSI/SNR은 주기적 업데이트(1초)만 사용 (패킷 수신 시 즉시 업데이트 제거)
-    // display_manager_update_rssi(rssi, snr);
-
-    // Tally 상태 변경 이벤트 발행 (WS2812 먼저 반응)
-    // 정적 변수 사용 (이벤트 버스가 포인터만 복사하므로)
-    s_tally_event.source = SWITCHER_ROLE_PRIMARY;
-    s_tally_event.channel_count = ch_count;
-    s_tally_event.tally_value = packed_data_to_uint64(&tally);
-    memcpy(s_tally_event.tally_data, s_tally_buffer, payload_len);
-
-    event_bus_publish(EVT_TALLY_STATE_CHANGED, &s_tally_event, sizeof(s_tally_event));
-
-    // DisplayManager는 EVT_TALLY_STATE_CHANGED 이벤트를 구독하여 자동 갱신됨
-
-    return ESP_OK;
-}
-
-// ============================================================================
 // 카메라 ID 변경 타이머 (RX 전용)
 // ============================================================================
 
@@ -423,9 +318,6 @@ void prod_rx_app_start(void)
     // LoRa 시작
     lora_service_start();
     T_LOGI(TAG, "LoRa 시작");
-
-    // LoRa 패킷 수신 이벤트 구독 (RSSI/SNR 포함)
-    event_bus_subscribe(EVT_LORA_PACKET_RECEIVED, on_lora_packet_event);
 
     // DisplayManager 시작, BootPage로 전환
     display_manager_start();

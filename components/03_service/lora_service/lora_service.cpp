@@ -9,6 +9,7 @@
 
 #include "lora_service.h"
 #include "lora_driver.h"
+#include "lora_protocol.h"
 #include "event_bus.h"
 #include "t_log.h"
 #include "freertos/FreeRTOS.h"
@@ -160,27 +161,112 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
     return ESP_OK;
 }
 
+// ============================================================================
+// 패킷 분류 및 처리
+// ============================================================================
+
+/**
+ * @brief Tally 패킷 처리 (0xF1~0xF4)
+ *
+ * TX/RX 공통으로 수신된 Tally 패킷을 파싱하고 이벤트를 발행합니다.
+ */
+static void process_tally_packet(const uint8_t* data, size_t length, int16_t rssi, float snr)
+{
+    // 패킷 구조: [F1-F4][ChannelCount][Data...]
+    if (length < 2) {
+        T_LOGW(TAG, "Tally 패킷 길이 부족: %d", (int)length);
+        return;
+    }
+
+    uint8_t ch_count = data[1];
+    if (ch_count < 1 || ch_count > 20) {
+        T_LOGW(TAG, "잘못된 채널 수: %d", ch_count);
+        return;
+    }
+
+    // 데이터 길이 계산
+    uint8_t expected_data_len = (ch_count + 3) / 4;
+    size_t payload_len = length - 2;  // 헤더(2) 제외
+
+    if (payload_len != expected_data_len || payload_len > 8) {
+        T_LOGW(TAG, "Tally 데이터 길이 불일치: 예상 %d, 수신 %d", expected_data_len, (int)payload_len);
+        return;
+    }
+
+    const uint8_t* payload = &data[2];
+
+    // packed_data_t 변환
+    packed_data_t tally = {
+        .data = const_cast<uint8_t*>(payload),
+        .data_size = static_cast<uint8_t>(payload_len),
+        .channel_count = ch_count
+    };
+
+    if (!packed_data_is_valid(&tally)) {
+        T_LOGW(TAG, "잘못된 Tally 데이터");
+        return;
+    }
+
+    // Tally 상태 이벤트 발행
+    static tally_event_data_t s_tally_event;  // 정적 변수 (이벤트 발행 후에도 유효)
+    s_tally_event.source = SWITCHER_ROLE_PRIMARY;
+    s_tally_event.channel_count = ch_count;
+    s_tally_event.tally_value = packed_data_to_uint64(&tally);
+    memcpy(s_tally_event.tally_data, payload, payload_len);
+
+    event_bus_publish(EVT_TALLY_STATE_CHANGED, &s_tally_event, sizeof(s_tally_event));
+
+    // 로그 출력
+    char hex_str[16];
+    packed_data_to_hex(&tally, hex_str, sizeof(hex_str));
+
+    char tally_str[64];
+    packed_data_format_tally(&tally, tally_str, sizeof(tally_str));
+
+    T_LOGI(TAG, "Tally: [F1][%d][%s] → %s (RSSI:%d SNR:%.1f)",
+             ch_count, hex_str, tally_str, rssi, snr);
+}
+
 /**
  * @brief 드라이버 수신 콜백 (내부)
+ *
+ * 패킷 헤더를 기준으로 분류하여 처리합니다.
  */
 static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, float snr)
 {
     s_packets_received++;
 
-    // 이벤트 발행 (패킷 데이터 + RSSI/SNR) - stack 변수 사용
+    // 길이 제한
     if (length > MAX_PACKET_SIZE) {
         length = MAX_PACKET_SIZE;
     }
 
-    // 패킷 이벤트
-    lora_packet_event_t packet_event;
-    memcpy(packet_event.data, data, length);
-    packet_event.length = length;
-    packet_event.rssi = rssi;
-    packet_event.snr = snr;
-    event_bus_publish(EVT_LORA_PACKET_RECEIVED, &packet_event, sizeof(packet_event));
+    // 패킷이 비어있으면 무시
+    if (length == 0 || data == nullptr) {
+        return;
+    }
 
-    // RSSI/SNR 이벤트도 함께 발행 (패킷 수신 시마다 즉시 갱신)
+    // 헤더 기반 분류
+    uint8_t header = data[0];
+
+    // Tally 데이터 (0xF1~0xF4)
+    if (LORA_IS_TALLY_HEADER(header)) {
+        process_tally_packet(data, length, rssi, snr);
+    }
+    // TX→RX 명령 (0xE0~0xEF) - 추후 구현
+    else if (LORA_IS_TX_COMMAND_HEADER(header)) {
+        T_LOGD(TAG, "TX 명령 수신 (추후 구현): 0x%02X", header);
+    }
+    // RX→TX 응답 (0xD0~0xDF) - 추후 구현
+    else if (LORA_IS_RX_RESPONSE_HEADER(header)) {
+        T_LOGD(TAG, "RX 응답 수신 (추후 구현): 0x%02X", header);
+    }
+    // 알 수 없는 헤더
+    else {
+        T_LOGD(TAG, "알 수 없는 패킷: 0x%02X (%d bytes)", header, (int)length);
+    }
+
+    // RSSI/SNR 이벤트 발행
     lora_status_t driver_status = lora_driver_get_status();
     lora_rssi_event_t rssi_event;
     rssi_event.is_running = s_running;

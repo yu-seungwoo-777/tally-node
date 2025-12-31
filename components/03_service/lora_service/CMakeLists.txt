@@ -3,6 +3,7 @@ idf_component_register(
     INCLUDE_DIRS "include"
     REQUIRES
         lora_driver
+        lora_protocol
         event_bus
         tally_types
         t_log
