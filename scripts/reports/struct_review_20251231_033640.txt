@@ -1,0 +1,29 @@
+============================================
+   Component Structure Review Report
+============================================
+프로젝트: tally-node
+날짜: 2025-12-31 03:36:40
+============================================
+
+[1] 이벤트 데이터 크기 검증
+-----------------------------------
+✅ network_status_event_t: 사용됨 (네트워크 상태 (packed), 8 참조)
+✅ lora_rf_event_t: 사용됨 (RF 설정, 9 참조)
+✅ device_register_event_t: 사용됨 (디바이스 등록, 5 참조)
+✅ lora_packet_event_t: 사용됨 (패킷 수신 (256+4+4+4), 4 참조)
+✅ lora_scan_complete_t: 사용됨 (스캔 완료 (100*9+4), 7 참조)
+✅ lora_scan_progress_t: 사용됨 (스캔 진행, 4 참조)
+✅ lora_rssi_event_t: 사용됨 (RSSI/SNR 이벤트, 6 참조)
+✅ system_info_event_t: 사용됨 (시스템 정보 (packed), 9 참조)
+✅ lora_scan_start_t: 사용됨 (스캔 시작, 4 참조)
+✅ lora_channel_info_t: 사용됨 (채널 정보 (packed), 5 참조)
+✅ switcher_status_event_t: 사용됨 (스위처 상태 (packed), 10 참조)
+✅ lora_send_request_t: 사용됨 (송신 요청 (포인터 포함), 3 참조)
+✅ tally_event_data_t: 사용됨 (Tally 상태 (packed), 7 참조)
+✅ config_save_request_t: 사용됨 (설정 저장 요청, 4 참조)
+✅ config_data_event_t: 사용됨 (설정 데이터 (packed), 16 참조)
+✅ network_restart_request_t: 사용됨 (네트워크 재시작 요청, 7 참조)
+✅ device_list_event_t: 사용됨 (디바이스 리스트 (20*41+4), 6 참조)
+✅ device_info_t: 사용됨 (단일 디바이스 정보 (packed), 3 참조)
+
+발견된 문제: 0개
