@@ -52,6 +52,13 @@ typedef struct {
 // ============================================================================
 
 /**
+ * @brief Network Service 초기화 (이벤트 기반)
+ * EVT_CONFIG_DATA_CHANGED 이벤트를 기다려서 설정을 로드함
+ * @return ESP_OK 성공, ESP_ERR_* 실패
+ */
+esp_err_t network_service_init(void);
+
+/**
  * @brief Network Service 초기화 (설정 포함)
  * @param config 네트워크 설정 (WiFi, Ethernet)
  * @return ESP_OK 성공, ESP_ERR_* 실패

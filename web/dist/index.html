@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tally Node Control</title>
+    <!-- 개발용: Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/styles.css">
     <script defer src="vendor/alpine.js"></script>
 </head>
@@ -17,7 +19,7 @@
             <div class="flex items-center justify-between px-8 py-5 border-b border-slate-200">
                 <div>
                     <h1 class="font-bold text-slate-900 text-lg">TALLY-NODE</h1>
-                    <p class="text-xs text-slate-500" x-text="viewTitle()"></p>
+                    <p class="text-xs text-slate-500">Wireless Tally System</p>
                 </div>
                 <button @click="sidebarOpen = false" class="lg:hidden p-1 hover:bg-slate-100 rounded-lg">
                     <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1123,10 +1125,6 @@
                                 <p class="text-xs text-slate-500">Cam <span x-text="device.cameraId"></span></p>
                             </div>
                         </div>
-                        <div x-show="device.stopped"
-                             class="px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-700 rounded-full">
-                            Stopped
-                        </div>
                     </div>
                 </div>
 
@@ -1161,17 +1159,17 @@
                                 <span class="text-xs text-slate-500">Signal</span>
                             </div>
                             <div class="flex items-center gap-1.5">
+                                <!-- 안테나 아이콘 (3단계) -->
                                 <div class="flex gap-0.5">
-                                    <div class="w-0.5 h-2.5 rounded-sm" :class="device.rssi > -90 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
-                                    <div class="w-0.5 h-3 rounded-sm" :class="device.rssi > -80 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
-                                    <div class="w-0.5 h-3.5 rounded-sm" :class="device.rssi > -70 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
-                                    <div class="w-0.5 h-4 rounded-sm" :class="device.rssi > -60 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
+                                    <div class="w-0.5 h-1.5 rounded-sm" :class="getSignalLevel(device.rssi, device.snr) >= 1 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
+                                    <div class="w-0.5 h-2.5 rounded-sm" :class="getSignalLevel(device.rssi, device.snr) >= 2 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
+                                    <div class="w-0.5 h-3.5 rounded-sm" :class="getSignalLevel(device.rssi, device.snr) >= 3 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
                                 </div>
                                 <span class="text-xs font-medium" :class="{
-                                    'text-emerald-600': device.rssi > -70,
-                                    'text-yellow-600': device.rssi > -85 && device.rssi <= -70,
-                                    'text-rose-600': device.rssi <= -85
-                                }" x-text="device.rssi + ' dBm'"></span>
+                                    'text-emerald-600': getSignalLevel(device.rssi, device.snr) === 3,
+                                    'text-yellow-600': getSignalLevel(device.rssi, device.snr) === 2,
+                                    'text-rose-600': getSignalLevel(device.rssi, device.snr) <= 1
+                                }" x-text="getSignalText(device.rssi, device.snr)"></span>
                             </div>
                         </div>
 

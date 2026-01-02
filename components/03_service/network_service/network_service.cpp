@@ -21,6 +21,7 @@ static const char* TAG = "NetworkService";
 class NetworkServiceClass {
 public:
     // 초기화/정리
+    static esp_err_t init(void);  // 이벤트 기반 초기화 (EVT_CONFIG_DATA_CHANGED 대기)
     static esp_err_t initWithConfig(const app_network_config_t* config);
     static esp_err_t deinit(void);
 
@@ -66,6 +67,25 @@ network_status_t NetworkServiceClass::s_last_status = {};
 // ============================================================================
 // 초기화/정리
 // ============================================================================
+
+esp_err_t NetworkServiceClass::init(void)
+{
+    if (s_initialized) {
+        T_LOGW(TAG, "이미 초기화됨");
+        return ESP_OK;
+    }
+
+    T_LOGI(TAG, "Network Service 초기화 (이벤트 기반, EVT_CONFIG_DATA_CHANGED 대기)");
+
+    // 이벤트 버스 구독 (재시작 요청, 설정 데이터 변경)
+    event_bus_subscribe(EVT_NETWORK_RESTART_REQUEST, onRestartRequest);
+    event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
+
+    // 드라이버 초기화는 EVT_CONFIG_DATA_CHANGED 이벤트 수신 후 수행
+    T_LOGI(TAG, "이벤트 버스 구독 완료, 설정 이벤트 대기 중");
+
+    return ESP_OK;
+}
 
 esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config)
 {
@@ -453,6 +473,42 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
 
     T_LOGI(TAG, "설정 데이터 업데이트됨 (이벤트)");
 
+    // 초기화되지 않았으면 드라이버 초기화 수행 (이벤트 기반 초기화)
+    if (!s_initialized) {
+        T_LOGI(TAG, "드라이버 초기화 수행 (이벤트 기반)");
+
+        // WiFi Driver 초기화
+        if (s_config.wifi_ap.enabled || s_config.wifi_sta.enabled) {
+            const char* ap_ssid = s_config.wifi_ap.enabled ? s_config.wifi_ap.ssid : nullptr;
+            const char* ap_pass = s_config.wifi_ap.enabled ? s_config.wifi_ap.password : nullptr;
+            const char* sta_ssid = s_config.wifi_sta.enabled ? s_config.wifi_sta.ssid : nullptr;
+            const char* sta_pass = s_config.wifi_sta.enabled ? s_config.wifi_sta.password : nullptr;
+
+            esp_err_t ret = wifi_driver_init(ap_ssid, ap_pass, sta_ssid, sta_pass);
+            if (ret != ESP_OK) {
+                T_LOGE(TAG, "WiFi Driver 초기화 실패 (이벤트 기반)");
+                return ret;
+            }
+        }
+
+        // Ethernet Driver 초기화
+        if (s_config.ethernet.enabled) {
+            esp_err_t ret = ethernet_driver_init(
+                s_config.ethernet.dhcp_enabled,
+                s_config.ethernet.static_ip,
+                s_config.ethernet.static_netmask,
+                s_config.ethernet.static_gateway
+            );
+            if (ret != ESP_OK) {
+                T_LOGW(TAG, "Ethernet Driver 초기화 실패 (이벤트 기반, 하드웨어 미장착 가능성)");
+                // Ethernet은 실패해도 계속 진행
+            }
+        }
+
+        s_initialized = true;
+        T_LOGI(TAG, "Network Service 초기화 완료 (이벤트 기반)");
+    }
+
     return ESP_OK;
 }
 
@@ -461,6 +517,11 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
 // ============================================================================
 
 extern "C" {
+
+esp_err_t network_service_init(void)
+{
+    return NetworkServiceClass::init();
+}
 
 esp_err_t network_service_init_with_config(const app_network_config_t* config)
 {

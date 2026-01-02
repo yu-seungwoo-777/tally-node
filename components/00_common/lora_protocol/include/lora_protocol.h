@@ -39,9 +39,9 @@ extern "C" {
 #define LORA_HDR_ACK           0xD1   // 명령 승인
 #define LORA_HDR_PONG          0xD2   // PING 응답
 
-// Device ID 길이 (MAC 뒤 4자리)
-#define LORA_DEVICE_ID_LEN     4
-#define LORA_BROADCAST_ID      {0xFF, 0xFF, 0xFF, 0xFF}
+// Device ID 길이 (MAC 뒤 2자리)
+#define LORA_DEVICE_ID_LEN     2
+#define LORA_BROADCAST_ID      {0xFF, 0xFF}
 
 // ============================================================================
 // 패킷 구조체
@@ -102,13 +102,9 @@ typedef struct __attribute__((packed)) {
     uint8_t camera_id;
     uint32_t uptime;                 // 초
     uint8_t brightness;              // 0-100
-    uint8_t flags;                   // 비트 플래그
-    float frequency;                 // 현재 주파수 (MHz)
+    uint16_t frequency;              // 현재 주파수 (MHz, 정수)
     uint8_t sync_word;               // 현재 sync word
 } lora_msg_status_t;
-
-// Status 플래그
-#define LORA_STATUS_FLAG_STOPPED   0x01  // 기능 정지 상태
 
 /**
  * @brief ACK 응답 (0xD1)
@@ -152,27 +148,23 @@ typedef struct __attribute__((packed)) {
  * @brief Device ID 비교
  */
 static inline bool lora_device_id_equals(const uint8_t* id1, const uint8_t* id2) {
-    return (id1[0] == id2[0] && id1[1] == id2[1] &&
-            id1[2] == id2[2] && id1[3] == id2[3]);
+    return (id1[0] == id2[0] && id1[1] == id2[1]);
 }
 
 /**
  * @brief Broadcast ID 확인
  */
 static inline bool lora_device_id_is_broadcast(const uint8_t* id) {
-    return (id[0] == 0xFF && id[1] == 0xFF &&
-            id[2] == 0xFF && id[3] == 0xFF);
+    return (id[0] == 0xFF && id[1] == 0xFF);
 }
 
 /**
- * @brief Device ID 문자열 변환 (5바이트 버퍼 필요)
+ * @brief Device ID 문자열 변환 (3바이트 버퍼 필요)
  */
 static inline void lora_device_id_to_str(const uint8_t* id, char* str) {
     str[0] = id[0];
     str[1] = id[1];
-    str[2] = id[2];
-    str[3] = id[3];
-    str[4] = '\0';
+    str[2] = '\0';
 }
 
 // ============================================================================

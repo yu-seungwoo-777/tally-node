@@ -115,20 +115,11 @@ static struct {
     bool running;
     bool initialized;
     packed_data_t last_tally;
-    // Switcher 설정 (ConfigService에서 로드)
-    config_switcher_t primary;
-    config_switcher_t secondary;
-    bool dual_mode;
-    uint8_t secondary_offset;
 } s_app = {
     .service = nullptr,
     .running = false,
     .initialized = false,
-    .last_tally = {nullptr, 0, 0},
-    .primary = {},     // zero-initialized (C++ style)
-    .secondary = {},   // zero-initialized (C++ style)
-    .dual_mode = false,
-    .secondary_offset = 4
+    .last_tally = {nullptr, 0, 0}
 };
 
 // ============================================================================
@@ -281,23 +272,6 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         return false;
     }
 
-    // Switcher 설정 로드
-    config_service_get_primary(&s_app.primary);
-    config_service_get_secondary(&s_app.secondary);
-    s_app.dual_mode = config_service_get_dual_enabled();
-    s_app.secondary_offset = config_service_get_secondary_offset();
-
-    // Switcher 설정 로그
-    T_LOGI(TAG, "Switcher 설정 로드:");
-    T_LOGI(TAG, "  Primary: %s (type=%d, if=%d, port=%d, limit=%d)",
-             s_app.primary.ip, s_app.primary.type, s_app.primary.interface,
-             s_app.primary.port, s_app.primary.camera_limit);
-    T_LOGI(TAG, "  Secondary: %s (type=%d, if=%d, port=%d, limit=%d)",
-             s_app.secondary.ip, s_app.secondary.type, s_app.secondary.interface,
-             s_app.secondary.port, s_app.secondary.camera_limit);
-    T_LOGI(TAG, "  Dual Mode: %s, Offset: %d",
-             s_app.dual_mode ? "Enabled" : "Disabled", s_app.secondary_offset);
-
     // 네트워크 설정 확인 (비어있으면 기본값 저장)
     config_all_t current_config;
     ret = config_service_load_all(&current_config);
@@ -307,21 +281,15 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         config_service_save_all(&current_config);
     }
 
-    // NetworkService 초기화 (설정 포함)
-    app_network_config_t net_config;
-    memset(&net_config, 0, sizeof(net_config));
-    memcpy(&net_config.wifi_ap, &current_config.wifi_ap, sizeof(net_config.wifi_ap));
-    memcpy(&net_config.wifi_sta, &current_config.wifi_sta, sizeof(net_config.wifi_sta));
-    memcpy(&net_config.ethernet, &current_config.ethernet, sizeof(net_config.ethernet));
-
-    esp_err_t net_ret = network_service_init_with_config(&net_config);
-    if (net_ret != ESP_OK) {
-        T_LOGE(TAG, "NetworkService 초기화 실패: %s", esp_err_to_name(net_ret));
+    // NetworkService 초기화 (이벤트 기반, EVT_CONFIG_DATA_CHANGED 대기)
+    ret = network_service_init();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "NetworkService init failed: %s", esp_err_to_name(ret));
         return false;
     }
-    T_LOGI(TAG, "NetworkService 초기화 완료");
+    T_LOGI(TAG, "NetworkService 초기화 완료 (이벤트 기반)");
 
-    // SwitcherService 생성
+    // SwitcherService 생성 (이벤트 기반 설정)
     s_app.service = switcher_service_create();
     if (!s_app.service) {
         T_LOGE(TAG, "SwitcherService 생성 실패");
@@ -333,74 +301,29 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     switcher_service_set_connection_callback(s_app.service, on_connection_change);
     switcher_service_set_switcher_change_callback(s_app.service, on_switcher_change);
 
-    // Primary 스위처 설정 (ConfigService에서 로드한 값 사용)
-    if (!switcher_service_set_atem(s_app.service,
-                                     SWITCHER_ROLE_PRIMARY,
-                                     "Primary",
-                                     s_app.primary.ip,
-                                     s_app.primary.port,
-                                     s_app.primary.camera_limit,
-                                     (tally_network_if_t)s_app.primary.interface)) {
-        T_LOGE(TAG, "Primary 스위처 설정 실패");
-        switcher_service_destroy(s_app.service);
-        s_app.service = nullptr;
-        return false;
-    }
-    T_LOGI(TAG, "Primary 스위처 설정 완료: %s:%d (if=%d, limit=%d)",
-             s_app.primary.ip, s_app.primary.port, s_app.primary.interface, s_app.primary.camera_limit);
-
-    // Secondary 스위처 설정 (듀얼모드인 경우)
-    if (s_app.dual_mode && s_app.secondary.ip[0] != '\0') {
-        if (!switcher_service_set_atem(s_app.service,
-                                        SWITCHER_ROLE_SECONDARY,
-                                        "Secondary",
-                                        s_app.secondary.ip,
-                                        s_app.secondary.port,
-                                        s_app.secondary.camera_limit,
-                                        (tally_network_if_t)s_app.secondary.interface)) {
-            T_LOGW(TAG, "Secondary 스위처 설정 실패 (싱글모드로 동작)");
-        } else {
-            // 듀얼모드 설정
-            switcher_service_set_dual_mode(s_app.service, true);
-            switcher_service_set_secondary_offset(s_app.service, s_app.secondary_offset);
-            T_LOGI(TAG, "듀얼모드 활성화 (offset: %d)", s_app.secondary_offset);
-        }
-    }
-
-    // 서비스 초기화
-    if (!switcher_service_initialize(s_app.service)) {
-        T_LOGE(TAG, "SwitcherService 초기화 실패");
-        switcher_service_destroy(s_app.service);
-        s_app.service = nullptr;
-        return false;
-    }
-
-    // 태스크 시작
+    // 태스크 시작 (EVT_CONFIG_DATA_CHANGED에서 어댑터 자동 생성)
     if (!switcher_service_start(s_app.service)) {
         T_LOGE(TAG, "SwitcherService 태스크 시작 실패");
         switcher_service_destroy(s_app.service);
         s_app.service = nullptr;
         return false;
     }
-    T_LOGI(TAG, "SwitcherService 태스크 시작 (10ms 주기)");
+    T_LOGI(TAG, "SwitcherService 태스크 시작 (이벤트 기반 설정)");
 
-    // LoRa 초기화 (ConfigService에서 RF 설정 가져오기)
-    config_device_t device_config;
-    config_service_get_device(&device_config);
-
+    // LoRa 초기화 (기본값으로, EVT_RF_CHANGED에서 설정 업데이트)
     lora_service_config_t lora_config = {
-        .frequency = device_config.rf.frequency,
-        .spreading_factor = device_config.rf.sf,
-        .coding_rate = device_config.rf.cr,
-        .bandwidth = device_config.rf.bw,
-        .tx_power = device_config.rf.tx_power,
-        .sync_word = device_config.rf.sync_word
+        .frequency = 868.0f,  // 기본값
+        .spreading_factor = 7,
+        .coding_rate = 5,
+        .bandwidth = 250.0f,
+        .tx_power = 22,
+        .sync_word = 0x12
     };
     esp_err_t lora_ret = lora_service_init(&lora_config);
     if (lora_ret != ESP_OK) {
         T_LOGW(TAG, "LoRa 초기화 실패: %s", esp_err_to_name(lora_ret));
     } else {
-        T_LOGI(TAG, "LoRa 초기화 완료");
+        T_LOGI(TAG, "LoRa 초기화 완료 (이벤트 기반 설정)");
     }
 
     // DisplayManager 초기화 (TxPage 자동 등록됨)
@@ -467,14 +390,6 @@ void prod_tx_app_start(void)
 
     // 버튼 서비스 시작
     button_service_start();
-
-    // RF 설정 이벤트 발행 (초기 상태)
-    static lora_rf_event_t s_rf_event;
-    config_device_t device;
-    config_service_get_device(&device);
-    s_rf_event.frequency = device.rf.frequency;
-    s_rf_event.sync_word = device.rf.sync_word;
-    event_bus_publish(EVT_RF_CHANGED, &s_rf_event, sizeof(s_rf_event));
 
     // 부팅 시나리오
     const char* boot_messages[] = {

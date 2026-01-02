@@ -13,6 +13,7 @@
 #include "button_service.h"
 #include "lora_service.h"
 #include "led_service.h"
+#include "ws2812_driver.h"
 #include "TallyTypes.h"
 
 #include "freertos/FreeRTOS.h"
@@ -89,8 +90,23 @@ static void stop_camera_id_timer(void)
 #endif // DEVICE_MODE_RX
 
 // ============================================================================
-// 버튼 이벤트 핸들러
+// 앱 상태
 // ============================================================================
+
+static struct {
+    bool running;
+    bool initialized;
+    // 현재 Tally 상태 (카메라 ID 변경 시 LED 업데이트용)
+    bool program_active;   // 현재 카메라가 PGM인지
+    bool preview_active;   // 현재 카메라가 PVW인지
+} s_app = {
+    .running = false,
+    .initialized = false,
+    .program_active = false,
+    .preview_active = false
+};
+
+extern "C" {
 
 #ifdef DEVICE_MODE_RX
 static esp_err_t handle_button_single_click(const event_data_t* event)
@@ -152,6 +168,19 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
 
                 // WS2812에도 새 카메라 ID 적용
                 led_service_set_camera_id(new_id);
+
+                // 현재 Tally 상태에 따라 LED 즉시 업데이트
+                // (새 패킷을 기다리지 않고 현재 상태 적용)
+                if (s_app.program_active) {
+                    led_service_set_state(WS2812_PROGRAM);
+                    T_LOGI(TAG, "LED 즉시 업데이트: PROGRAM");
+                } else if (s_app.preview_active) {
+                    led_service_set_state(WS2812_PREVIEW);
+                    T_LOGI(TAG, "LED 즉시 업데이트: PREVIEW");
+                } else {
+                    led_service_set_state(WS2812_OFF);
+                    T_LOGI(TAG, "LED 즉시 업데이트: OFF");
+                }
             } else {
                 T_LOGE(TAG, "Camera ID 저장 실패: %s", esp_err_to_name(ret));
             }
@@ -168,21 +197,42 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
 
     return ESP_OK;
 }
+
+/**
+ * @brief Tally 상태 변경 이벤트 핸들러
+ * 현재 상태를 저장하여 카메라 ID 변경 시 LED 즉시 업데이트에 사용
+ */
+static esp_err_t handle_tally_state_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const tally_event_data_t* tally_evt = (const tally_event_data_t*)event->data;
+
+    // packed_data_t 구조체 생성
+    packed_data_t tally = {
+        .data = (uint8_t*)tally_evt->tally_data,
+        .data_size = static_cast<uint8_t>((tally_evt->channel_count + 3) / 4),
+        .channel_count = tally_evt->channel_count
+    };
+
+    // 현재 카메라 ID
+    uint8_t my_camera_id = config_service_get_camera_id();
+
+    // 내 카메라의 Tally 상태 확인 (채널 번호는 1-based)
+    if (my_camera_id > 0 && my_camera_id <= tally.channel_count) {
+        uint8_t status = packed_data_get_channel(&tally, my_camera_id);
+        s_app.program_active = (status == TALLY_STATUS_PROGRAM || status == TALLY_STATUS_BOTH);
+        s_app.preview_active = (status == TALLY_STATUS_PREVIEW || status == TALLY_STATUS_BOTH);
+    } else {
+        s_app.program_active = false;
+        s_app.preview_active = false;
+    }
+
+    return ESP_OK;
+}
 #endif // DEVICE_MODE_RX
-
-// ============================================================================
-// 앱 상태
-// ============================================================================
-
-static struct {
-    bool running;
-    bool initialized;
-} s_app = {
-    .running = false,
-    .initialized = false
-};
-
-extern "C" {
 
 bool prod_rx_app_init(const prod_rx_config_t* config)
 {
@@ -223,48 +273,25 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
         return false;
     }
 
-    // LoRa 초기화 (ConfigService에서 RF 설정 가져오기)
-    config_device_t device_config;
-    config_service_get_device(&device_config);
-
+    // LoRa 초기화 (기본값으로, EVT_RF_CHANGED에서 설정 업데이트)
     lora_service_config_t lora_config = {
-        .frequency = device_config.rf.frequency,
-        .spreading_factor = device_config.rf.sf,
-        .coding_rate = device_config.rf.cr,
-        .bandwidth = device_config.rf.bw,
-        .tx_power = device_config.rf.tx_power,
-        .sync_word = device_config.rf.sync_word
+        .frequency = 868.0f,  // 기본값
+        .spreading_factor = 7,
+        .coding_rate = 5,
+        .bandwidth = 250.0f,
+        .tx_power = 22,
+        .sync_word = 0x12
     };
-
     esp_err_t lora_ret = lora_service_init(&lora_config);
     if (lora_ret != ESP_OK) {
         T_LOGE(TAG, "LoRa 초기화 실패: %s", esp_err_to_name(lora_ret));
         return false;
     }
+    T_LOGI(TAG, "LoRa 초기화 완료 (이벤트 기반 설정)");
 
-    // WS2812 LED 초기화 (색상 포함)
+    // WS2812 LED 초기화 (기본 색상으로)
     uint8_t camera_id = config_service_get_camera_id();
-
-    // ConfigService에서 색상 로드
-    config_led_colors_t config_colors;
-    config_service_get_led_colors(&config_colors);
-
-    led_colors_t led_colors = {
-        .program_r = config_colors.program.r,
-        .program_g = config_colors.program.g,
-        .program_b = config_colors.program.b,
-        .preview_r = config_colors.preview.r,
-        .preview_g = config_colors.preview.g,
-        .preview_b = config_colors.preview.b,
-        .off_r = config_colors.off.r,
-        .off_g = config_colors.off.g,
-        .off_b = config_colors.off.b,
-        .battery_low_r = config_colors.battery_low.r,
-        .battery_low_g = config_colors.battery_low.g,
-        .battery_low_b = config_colors.battery_low.b
-    };
-
-    esp_err_t led_ret = led_service_init_with_colors(-1, 0, camera_id, &led_colors);
+    esp_err_t led_ret = led_service_init_with_colors(-1, 0, camera_id, nullptr);
     if (led_ret == ESP_OK) {
         T_LOGI(TAG, "WS2812 초기화 완료 (카메라 ID: %d)", camera_id);
     } else {
@@ -328,6 +355,10 @@ void prod_rx_app_start(void)
     event_bus_subscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
+
+    // Tally 상태 변경 이벤트 구독 (카메라 ID 변경 시 LED 즉시 업데이트용)
+    event_bus_subscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
+    T_LOGI(TAG, "Tally 상태 이벤트 구독 시작");
 #endif
 
     // 버튼 서비스 시작
@@ -375,6 +406,7 @@ void prod_rx_app_stop(void)
     event_bus_unsubscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_unsubscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_unsubscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
+    event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
 #endif
 
     button_service_stop();

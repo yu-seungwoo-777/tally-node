@@ -1,9 +1,15 @@
-실제 폴더 구조와 문서를 비교한 결과, `web_server/` 하위에 `static_embed/` 폴더가 추가로 있어 이를 반영해야 합니다. 수정된 전체 파일 내용을 출력합니다.
+수정할 내용을 정리합니다.
+
+**문제점 발견:**
+1. 파일开头(1-2줄)에 불필요한 설명 텍스트가 포함되어 있음
+2. 폴더명 불일치: `device_management_service` → 실제는 `device_manager`
+
+수정된 전체 파일 내용:
 
 # 아키텍처
 
-**작성일**: 2025-12-25
-**버전**: 4.0 (디스플레이, 프레젠테이션 계층 추가)
+**작성일**: 2026-01-02
+**버전**: 4.2 (App 중계 제거, 완전한 이벤트 기반 아키텍처)
 
 ---
 
@@ -35,7 +41,7 @@ ESP32-S3 (EoRa-S3) 기반 LoRa 통신 프로젝트의 5계층 아키텍처입니
 │ 03_service (서비스)                                     │
 │ - button_service: 버튼 서비스                          │
 │ - config_service: NVS 설정 관리                        │
-│ - device_management_service: 디바이스 관리             │
+│ - device_manager: 디바이스 관리                        │
 │ - hardware_service: 하드웨어 모니터링                   │
 │ - led_service: LED 서비스                              │
 │ - lora_service: LoRa 통신 서비스                       │
@@ -115,7 +121,7 @@ components/
 ├── 03_service/
 │   ├── button_service/
 │   ├── config_service/
-│   ├── device_management_service/
+│   ├── device_manager/
 │   ├── hardware_service/
 │   ├── led_service/
 │   ├── lora_service/
@@ -198,12 +204,11 @@ X 잘못된 예 (건너뛰기):
 
 ```
 X 잘못된 예:
-led_service → config_service (직접 호출)
-network_service → config_service (직접 호출)
-device_management_service → hardware_service (직접 호출)
+service_a → service_b (직접 호출)
+config_service 이외의 서비스 → nvs_flash (직접 NVS 접근)
 
 O 올바른 예:
-01_app → config_service → 01_app → led_service (App이 중개)
+01_app → service (App이 중개)
 서비스 → event_bus → 서비스 (이벤트 기반 통신)
 ```
 
@@ -213,7 +218,7 @@ O 올바른 예:
 
 ```
 X 잘못된 예:
-device_management_service → nvs_flash (직접 NVS 접근)
+device_manager → nvs_flash (직접 NVS 접근)
 기타 서비스 → nvs_flash
 
 O 올바른 예:
@@ -233,11 +238,18 @@ O 올바른 예:
 
 | 통신 방향 | 방식 | 예시 |
 |-----------|------|------|
-| App → Service | 직접 호출 | `config_service_init()` |
+| App → Service | 직접 호출 (생성/시작만) | `switcher_service_create()`, `network_service_init()` |
+| App → Service | ❌ 제거: 설정 중계 | (이전: App이 ConfigService에서 설정을 읽어 전달) |
 | Service → App | event_bus | `EVT_LORA_PACKET_RECEIVED` |
-| Service → Service | event_bus (금지: 직접 호출) | `EVT_TALLY_STATE_CHANGED` |
+| Service → Service | event_bus | `EVT_CONFIG_DATA_CHANGED` |
 | Service → Driver | 직접 호출 (하위 의존 허용) | `lora_service_send()` |
-| Service → NVS | ConfigService API (금지: 직접 접근) | `config_service_set_camera_id()` |
+| Service → NVS | event_bus → ConfigService | `EVT_CONFIG_CHANGED` |
+
+**v4.2 변경사항:**
+- App이 ConfigService에서 설정을 읽어 다른 서비스에 전달하는 중계 역할 제거
+- ConfigService 초기화 완료 시 `EVT_CONFIG_DATA_CHANGED` 발행
+- 각 서비스가 이벤트를 구독하여 자체 설정 업데이트
+- SwitcherService, NetworkService, LoRaService가 이벤트 기반으로 초기화
 
 ---
 
@@ -283,17 +295,13 @@ O 올바른 예:
 | 컴포넌트 | 역할 | 의존성 | 상태 |
 |---------|------|--------|------|
 | button_service | 버튼 서비스 (폴링 + 상태 머신) | esp_timer, event_bus | ✅ |
-| config_service | NVS 설정 관리 (C++) | nvs_flash | ✅ |
-| device_management_service | 디바이스 관리 (TX/RX 통합) | lora_service, lora_protocol, event_bus | ✅ |
-| hardware_service | 하드웨어 모니터링 (배터리, 온도, RSSI/SNR) | battery_driver, temperature_driver | ✅ |
-| led_service | WS2812 LED 서비스 | ws2812_driver, config_service | ⚠️ |
+| config_service | NVS 설정 관리 (C++) | nvs_flash, event_bus | ✅ |
+| device_manager | 디바이스 관리 (TX/RX 통합) | lora_service, lora_protocol, event_bus | ✅ |
+| hardware_service | 하드웨어 모니터링 (배터리, 온도, RSSI/SNR) | battery_driver, temperature_driver, event_bus | ✅ |
+| led_service | WS2812 LED 서비스 | ws2812_driver, board_led_driver | ✅ |
 | lora_service | LoRa 통신 서비스 | lora_driver, event_bus | ✅ |
-| network_service | 네트워크 통합 관리 (C++) | wifi_driver, ethernet_driver, config_service | ⚠️ |
+| network_service | 네트워크 통합 관리 (C++) | wifi_driver, ethernet_driver, event_bus | ✅ |
 | switcher_service | 스위처 연결 서비스 (C++) | switcher_driver, event_bus, tally_types | ✅ |
-
-**⚠️ 리팩토링 예정:**
-- `led_service`: config_service 직접 호출 제거
-- `network_service`: config_service 직접 호출 제거
 
 ### 04_driver - 드라이버
 
@@ -345,12 +353,11 @@ network_service (03_service)
     │       └─→ wifi_hal (05_hal/C)
     │               └─→ esp_wifi, esp_netif
     │
-    ├─→ ethernet_driver (04_driver/C++)
-    │       └─→ ethernet_hal (05_hal/C)
-    │               └─→ esp_eth, spi_master
+    └─→ ethernet_driver (04_driver/C++)
+            └─→ ethernet_hal (05_hal/C)
+                    └─→ esp_eth, spi_master
     │
-    └─→ config_service (03_service/C++)
-            └─→ nvs_flash
+    └─→ event_bus (EVT_CONFIG_DATA_CHANGED, EVT_NETWORK_RESTART_REQUEST)
 
 # Display
 display_driver (04_driver/C++)
@@ -371,10 +378,8 @@ led_service (03_service)
     └─→ ws2812_driver (04_driver/C++)
             └─→ ws2812_hal (05_hal/C)
                     └─→ rmt, gpio
-
-# Board LED
-board_led_driver (04_driver/C++)
-    └─→ gpio
+    └─→ board_led_driver (04_driver/C++)
+            └─→ gpio
 
 # Battery
 battery_driver (04_driver/C++)

@@ -7,6 +7,7 @@
 #include "ws2812_driver.h"
 #include "board_led_driver.h"
 #include "t_log.h"
+#include "event_bus.h"
 #include <cstring>
 
 static const char* TAG = "LedService";
@@ -14,12 +15,14 @@ static const char* TAG = "LedService";
 // 서비스 상태
 static struct {
     bool initialized;
+    bool event_subscribed;  // 이벤트 구독 여부
 } s_service = {
-    .initialized = false
+    .initialized = false,
+    .event_subscribed = false
 };
 
 // ============================================================================
-// 색상 캐시 (App에서 설정)
+// 색상 캐시 (이벤트 기반 업데이트)
 // ============================================================================
 
 static led_colors_t s_colors = {
@@ -29,6 +32,30 @@ static led_colors_t s_colors = {
     .off_r = 0, .off_g = 0, .off_b = 0,
     .battery_low_r = 255, .battery_low_g = 255, .battery_low_b = 0
 };
+
+// ============================================================================
+// 이벤트 핸들러 (LED 색상 설정)
+// ============================================================================
+
+/**
+ * @brief 설정 데이터 변경 이벤트 핸들러
+ * LED 색상 설정 업데이트
+ */
+static esp_err_t on_config_data_event(const event_data_t* event)
+{
+    if (!event || event->type != EVT_CONFIG_DATA_CHANGED) {
+        return ESP_OK;
+    }
+
+    const auto* config = reinterpret_cast<const config_data_event_t*>(event->data);
+    if (config) {
+        // config_data_event_t에는 LED 색상이 없으므로 기존 색상 유지
+        // 향후 LED 색상이 이벤트에 추가되면 여기서 업데이트
+        T_LOGD(TAG, "설정 데이터 이벤트 수신 (LED 색상은 별도 API로 설정)");
+    }
+
+    return ESP_OK;
+}
 
 // ============================================================================
 // 공개 API

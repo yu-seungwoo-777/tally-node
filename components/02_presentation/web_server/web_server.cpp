@@ -959,11 +959,10 @@ static esp_err_t api_devices_handler(httpd_req_t* req)
 
             cJSON* item = cJSON_CreateObject();
             if (item) {
-                // Device ID (hex 문자열)
-                char id_str[9];
-                snprintf(id_str, sizeof(id_str), "%02X%02X%02X%02X",
-                         dev->device_id[0], dev->device_id[1],
-                         dev->device_id[2], dev->device_id[3]);
+                // Device ID (hex 문자열) - 2바이트
+                char id_str[5];
+                snprintf(id_str, sizeof(id_str), "%02X%02X",
+                         dev->device_id[0], dev->device_id[1]);
                 cJSON_AddStringToObject(item, "id", id_str);
 
                 // RSSI, SNR

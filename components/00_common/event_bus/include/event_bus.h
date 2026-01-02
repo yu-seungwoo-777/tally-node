@@ -84,7 +84,7 @@ typedef struct {
  * @brief 단일 디바이스 정보 (device_list_event_t 내부)
  */
 typedef struct __attribute__((packed)) {
-    uint8_t device_id[4];     ///< 디바이스 ID
+    uint8_t device_id[2];     ///< 디바이스 ID (2바이트)
     int16_t last_rssi;        ///< 마지막 RSSI (dBm)
     int8_t last_snr;          ///< 마지막 SNR (dB)
     uint8_t battery;          ///< 배터리 %

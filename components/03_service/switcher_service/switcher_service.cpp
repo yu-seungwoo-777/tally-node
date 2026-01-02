@@ -516,6 +516,53 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
 
     bool reconnect_needed = false;
 
+    // 어댑터가 없으면 생성 (초기 설정)
+    if (!primary_.adapter) {
+        T_LOGI(TAG, "Primary 어댑터 생성 (이벤트 기반 초기화)");
+        switch (config->primary_type) {
+            case 0: // ATEM
+            case 1: // OBS (OBS 드라이버가 없으므로 ATEM으로 대체)
+                setAtem(SWITCHER_ROLE_PRIMARY, "Primary",
+                        config->primary_ip, config->primary_port,
+                        config->primary_camera_limit,
+                        static_cast<tally_network_if_t>(config->primary_interface));
+                break;
+            case 2: // vMix
+                setVmix(SWITCHER_ROLE_PRIMARY, "Primary",
+                        config->primary_ip, config->primary_port,
+                        config->primary_camera_limit);
+                break;
+        }
+        // 어댑터 초기화 및 연결
+        if (primary_.adapter) {
+            primary_.adapter->initialize();
+            primary_.adapter->connect();
+        }
+    }
+
+    if (!secondary_.adapter && config->dual_enabled) {
+        T_LOGI(TAG, "Secondary 어댑터 생성 (이벤트 기반 초기화)");
+        switch (config->secondary_type) {
+            case 0: // ATEM
+            case 1: // OBS (OBS 드라이버가 없으므로 ATEM으로 대체)
+                setAtem(SWITCHER_ROLE_SECONDARY, "Secondary",
+                        config->secondary_ip, config->secondary_port,
+                        config->secondary_camera_limit,
+                        static_cast<tally_network_if_t>(config->secondary_interface));
+                break;
+            case 2: // vMix
+                setVmix(SWITCHER_ROLE_SECONDARY, "Secondary",
+                        config->secondary_ip, config->secondary_port,
+                        config->secondary_camera_limit);
+                break;
+        }
+        // 어댑터 초기화 및 연결
+        if (secondary_.adapter) {
+            secondary_.adapter->initialize();
+            secondary_.adapter->connect();
+        }
+    }
+
     // 듀얼 모드 또는 오프셋 변경 확인
     bool dual_changed = (config->dual_enabled != dual_mode_enabled_);
     bool offset_changed = (config->secondary_offset != secondary_offset_);

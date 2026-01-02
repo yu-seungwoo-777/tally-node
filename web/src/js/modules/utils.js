@@ -54,6 +54,28 @@ export function utilsModule() {
         },
 
         /**
+         * RSSI와 SNR을 고려한 신호 레벨 (0-3)
+         * icons.c의 getSignalLevel()과 동일한 로직
+         */
+        getSignalLevel(rssi, snr) {
+            if (rssi > -70 && snr > 5) return 3;
+            if (rssi > -85 && snr > 0) return 2;
+            if (rssi > -100 && snr > -5) return 1;
+            return 0;
+        },
+
+        /**
+         * 신호 레벨 텍스트
+         */
+        getSignalText(rssi, snr) {
+            const level = this.getSignalLevel(rssi, snr);
+            if (level === 3) return 'Strong';
+            if (level === 2) return 'Good';
+            if (level === 1) return 'Weak';
+            return 'No Signal';
+        },
+
+        /**
          * 바이트 포맷
          */
         formatBytes(bytes) {

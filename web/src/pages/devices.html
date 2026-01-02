@@ -49,10 +49,6 @@
                                 <p class="text-xs text-slate-500">Cam <span x-text="device.cameraId"></span></p>
                             </div>
                         </div>
-                        <div x-show="device.stopped"
-                             class="px-2 py-0.5 text-xs font-medium bg-rose-100 text-rose-700 rounded-full">
-                            Stopped
-                        </div>
                     </div>
                 </div>
 
@@ -81,23 +77,23 @@
 
                     <!-- 신호 + Ping 2열 -->
                     <div class="grid grid-cols-2 gap-3">
-                        <!-- RSSI -->
+                        <!-- Signal -->
                         <div>
                             <div class="flex items-center justify-between mb-1">
                                 <span class="text-xs text-slate-500">Signal</span>
                             </div>
                             <div class="flex items-center gap-1.5">
+                                <!-- 안테나 아이콘 (3단계) -->
                                 <div class="flex gap-0.5">
-                                    <div class="w-0.5 h-2.5 rounded-sm" :class="device.rssi > -90 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
-                                    <div class="w-0.5 h-3 rounded-sm" :class="device.rssi > -80 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
-                                    <div class="w-0.5 h-3.5 rounded-sm" :class="device.rssi > -70 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
-                                    <div class="w-0.5 h-4 rounded-sm" :class="device.rssi > -60 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
+                                    <div class="w-0.5 h-1.5 rounded-sm" :class="getSignalLevel(device.rssi, device.snr) >= 1 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
+                                    <div class="w-0.5 h-2.5 rounded-sm" :class="getSignalLevel(device.rssi, device.snr) >= 2 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
+                                    <div class="w-0.5 h-3.5 rounded-sm" :class="getSignalLevel(device.rssi, device.snr) >= 3 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
                                 </div>
                                 <span class="text-xs font-medium" :class="{
-                                    'text-emerald-600': device.rssi > -70,
-                                    'text-yellow-600': device.rssi > -85 && device.rssi <= -70,
-                                    'text-rose-600': device.rssi <= -85
-                                }" x-text="device.rssi + ' dBm'"></span>
+                                    'text-emerald-600': getSignalLevel(device.rssi, device.snr) === 3,
+                                    'text-yellow-600': getSignalLevel(device.rssi, device.snr) === 2,
+                                    'text-rose-600': getSignalLevel(device.rssi, device.snr) <= 1
+                                }" x-text="getSignalText(device.rssi, device.snr)"></span>
                             </div>
                         </div>
 

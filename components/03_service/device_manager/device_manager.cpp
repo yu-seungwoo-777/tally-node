@@ -100,7 +100,7 @@ static void on_status_response(const lora_msg_status_t* status, int16_t rssi, fl
         // 새 디바이스 추가
         if (s_tx.device_count < MAX_DEVICES) {
             found_idx = s_tx.device_count++;
-            memcpy(s_tx.devices[found_idx].device_id, status->device_id, 4);
+            memcpy(s_tx.devices[found_idx].device_id, status->device_id, LORA_DEVICE_ID_LEN);
         } else {
             T_LOGW(TAG, "디바이스 리스트 꽉참 (%d)", MAX_DEVICES);
             return;
@@ -114,9 +114,8 @@ static void on_status_response(const lora_msg_status_t* status, int16_t rssi, fl
     s_tx.devices[found_idx].camera_id = status->camera_id;
     s_tx.devices[found_idx].uptime = status->uptime;
     s_tx.devices[found_idx].brightness = status->brightness;
-    s_tx.devices[found_idx].is_stopped = (status->flags & LORA_STATUS_FLAG_STOPPED) != 0;
     s_tx.devices[found_idx].last_seen = now;
-    s_tx.devices[found_idx].frequency = status->frequency;
+    s_tx.devices[found_idx].frequency = (float)status->frequency;
     s_tx.devices[found_idx].sync_word = status->sync_word;
 
     // 디바이스 리스트 변경 이벤트 발행
@@ -292,11 +291,8 @@ static esp_err_t send_status_response(void)
     // 밝기 (TODO: EVT_BRIGHTNESS_CHANGED 이벤트로 수집)
     status.brightness = 100;  // 임시
 
-    // 플래그
-    status.flags = s_rx.system.stopped ? LORA_STATUS_FLAG_STOPPED : 0;
-
     // 주파수/SyncWord
-    status.frequency = s_rx.lora.frequency;
+    status.frequency = (uint16_t)s_rx.lora.frequency;
     status.sync_word = 0x12;  // TODO: lora_service에서 가져오기
 
     esp_err_t ret = lora_service_send((const uint8_t*)&status, sizeof(status));
