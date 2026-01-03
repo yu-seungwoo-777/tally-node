@@ -71,20 +71,20 @@ typedef struct {
     size_t length;           // 데이터 길이
 } lora_send_request_t;
 
-#define LORA_DEVICE_ID_LEN 4
+#define LORA_DEVICE_ID_LEN 2
 
 /**
  * @brief 디바이스 등록 이벤트 데이터 (EVT_DEVICE_REGISTER용)
  */
 typedef struct {
-    uint8_t device_id[LORA_DEVICE_ID_LEN];  // 4바이트 디바이스 ID
+    uint8_t device_id[LORA_DEVICE_ID_LEN];  // 2바이트 디바이스 ID (MAC[4]+MAC[5])
 } device_register_event_t;
 
 /**
  * @brief 단일 디바이스 정보 (device_list_event_t 내부)
  */
 typedef struct __attribute__((packed)) {
-    uint8_t device_id[2];     ///< 디바이스 ID (2바이트)
+    uint8_t device_id[2];     ///< 디바이스 ID (2바이트, MAC[4]+MAC[5])
     int16_t last_rssi;        ///< 마지막 RSSI (dBm)
     int8_t last_snr;          ///< 마지막 SNR (dB)
     uint8_t battery;          ///< 배터리 %

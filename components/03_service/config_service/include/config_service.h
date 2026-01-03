@@ -86,7 +86,7 @@ typedef struct {
 #define CONFIG_MAX_REGISTERED_DEVICES 20
 
 typedef struct {
-    uint8_t device_ids[CONFIG_MAX_REGISTERED_DEVICES][4];  // 4바이트 디바이스 ID
+    uint8_t device_ids[CONFIG_MAX_REGISTERED_DEVICES][2];  // 2바이트 디바이스 ID (MAC[4]+MAC[5])
     uint8_t count;
 } config_registered_devices_t;
 

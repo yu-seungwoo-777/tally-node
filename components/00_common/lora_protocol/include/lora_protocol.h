@@ -39,7 +39,7 @@ extern "C" {
 #define LORA_HDR_ACK           0xD1   // 명령 승인
 #define LORA_HDR_PONG          0xD2   // PING 응답
 
-// Device ID 길이 (MAC 뒤 2자리)
+// Device ID 길이 (MAC[4] + MAC[5])
 #define LORA_DEVICE_ID_LEN     2
 #define LORA_BROADCAST_ID      {0xFF, 0xFF}
 

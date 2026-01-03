@@ -124,11 +124,11 @@ void HardwareService::initDeviceId(void)
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
 
-    // MAC 뒤 4자리 사용 - 상위 nibble만 사용하여 4자리 hex 문자열 생성
-    s_device_id[0] = "0123456789ABCDEF"[(mac[2] >> 4) & 0x0F];
-    s_device_id[1] = "0123456789ABCDEF"[(mac[3] >> 4) & 0x0F];
-    s_device_id[2] = "0123456789ABCDEF"[(mac[4] >> 4) & 0x0F];
-    s_device_id[3] = "0123456789ABCDEF"[(mac[5] >> 4) & 0x0F];
+    // MAC[4] + MAC[5] 사용하여 4자리 hex 문자열 생성
+    s_device_id[0] = "0123456789ABCDEF"[mac[4] >> 4];      // MAC[4] 상위 4비트
+    s_device_id[1] = "0123456789ABCDEF"[mac[4] & 0x0F];     // MAC[4] 하위 4비트
+    s_device_id[2] = "0123456789ABCDEF"[mac[5] >> 4];      // MAC[5] 상위 4비트
+    s_device_id[3] = "0123456789ABCDEF"[mac[5] & 0x0F];     // MAC[5] 하위 4비트
     s_device_id[4] = '\0';
 
     s_device_id_initialized = true;
