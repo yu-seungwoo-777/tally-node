@@ -141,6 +141,8 @@ export function devicesModule() {
                 const data = await res.json();
                 if (data.status === 'ok') {
                     console.log(`Brightness set for ${deviceId}: ${brightnessValue}% (${brightness255})`);
+                    // 임시 입력값 삭제 (실제 디바이스 값 표시)
+                    delete this.brightnessControl[deviceId];
                     // 디바이스 목록 새로고침 (지연된 업데이트 반영)
                     setTimeout(() => this.fetchDevices(), 500);
                 } else {
@@ -195,6 +197,8 @@ export function devicesModule() {
                 const data = await res.json();
                 if (data.status === 'ok') {
                     console.log(`Camera ID set for ${deviceId}: ${cameraIdValue}`);
+                    // 임시 입력값 삭제 (실제 디바이스 값 표시)
+                    delete this.cameraIdControl[deviceId];
                     // 디바이스 목록 새로고침
                     setTimeout(() => this.fetchDevices(), 500);
                 } else {

@@ -970,6 +970,7 @@
           const data = await res.json();
           if (data.status === "ok") {
             console.log(`Brightness set for ${deviceId}: ${brightnessValue}% (${brightness255})`);
+            delete this.brightnessControl[deviceId];
             setTimeout(() => this.fetchDevices(), 500);
           } else {
             throw new Error(data.message || "Failed to set brightness");
@@ -1013,6 +1014,7 @@
           const data = await res.json();
           if (data.status === "ok") {
             console.log(`Camera ID set for ${deviceId}: ${cameraIdValue}`);
+            delete this.cameraIdControl[deviceId];
             setTimeout(() => this.fetchDevices(), 500);
           } else {
             throw new Error(data.message || "Failed to set camera ID");
@@ -1204,9 +1206,29 @@
           this.license.deviceLimit = lic.deviceLimit || 0;
           this.license.graceRemaining = lic.graceRemaining || 0;
           this.license.key = lic.key || "";
+          if (lic.key && lic.key.length === 16) {
+            this.licenseForm.key = this.formatLicenseKeyString(lic.key);
+          }
         } catch (e) {
           console.error("License fetch error:", e);
         }
+      },
+      /**
+       * 라이센스 키 포맷팅 (xxxx-xxxx-xxxx-xxxx)
+       */
+      formatLicenseKeyString(key) {
+        let value = key.replace(/-/g, "").toUpperCase();
+        if (value.length > 16) {
+          value = value.slice(0, 16);
+        }
+        if (value.length > 12) {
+          value = value.slice(0, 4) + "-" + value.slice(4, 8) + "-" + value.slice(8, 12) + "-" + value.slice(12);
+        } else if (value.length > 8) {
+          value = value.slice(0, 4) + "-" + value.slice(4, 8) + "-" + value.slice(8);
+        } else if (value.length > 4) {
+          value = value.slice(0, 4) + "-" + value.slice(4);
+        }
+        return value;
       },
       /**
        * 인터넷 연결 테스트
