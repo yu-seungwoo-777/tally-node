@@ -350,6 +350,25 @@ static esp_err_t on_tally_state_changed(const event_data_t* event)
 
     return ESP_OK;
 }
+
+/**
+ * @brief EVT_CAMERA_ID_CHANGED 핸들러 (RX 전용)
+ *
+ * 카메라 ID 변경 시 RxPage에 반영
+ */
+static esp_err_t on_camera_id_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_OK;
+    }
+
+    const uint8_t* camera_id = (const uint8_t*)event->data;
+    rx_page_set_cam_id(*camera_id);
+    render_current_page();
+    T_LOGI(TAG, "카메라 ID 변경 (디스플레이): %d", *camera_id);
+
+    return ESP_OK;
+}
 #endif // DEVICE_MODE_RX
 
 #ifdef DEVICE_MODE_TX
@@ -489,6 +508,7 @@ extern "C" void display_manager_start(void)
 #ifdef DEVICE_MODE_RX
         // RX 전용 이벤트
         event_bus_subscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
+        event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
 #elif defined(DEVICE_MODE_TX)
         // TX 전용 이벤트
         event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, on_switcher_status_changed);
@@ -499,7 +519,7 @@ extern "C" void display_manager_start(void)
         s_mgr.events_subscribed = true;
         T_LOGI(TAG, "이벤트 구독 완료: EVT_INFO_UPDATED, EVT_LORA_RSSI_CHANGED"
 #ifdef DEVICE_MODE_RX
-               ", EVT_TALLY_STATE_CHANGED"
+               ", EVT_TALLY_STATE_CHANGED, EVT_CAMERA_ID_CHANGED"
 #elif defined(DEVICE_MODE_TX)
                ", EVT_SWITCHER_STATUS_CHANGED, EVT_NETWORK_STATUS_CHANGED, EVT_RF_CHANGED"
 #endif

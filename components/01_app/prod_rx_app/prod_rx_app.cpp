@@ -186,7 +186,7 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
             } else {
                 T_LOGE(TAG, "Camera ID 저장 실패: %s", esp_err_to_name(ret));
             }
-            display_manager_set_cam_id(new_id);
+            // DisplayManager는 EVT_CAMERA_ID_CHANGED 이벤트로 업데이트됨
         } else {
             T_LOGI(TAG, "Camera ID 변경 없음: %d", new_id);
         }
@@ -386,11 +386,15 @@ void prod_rx_app_start(void)
     device_manager_start();
     T_LOGI(TAG, "DeviceManager 시작");
 
-    // 저장된 설정 로드 및 이벤트 발행 (device_manager가 구독 완료 후)
+    // DisplayManager 시작 (이벤트 구독 먼저 완료)
+    display_manager_start();
+    display_manager_set_page(PAGE_BOOT);
+
+    // 저장된 설정 로드 및 이벤트 발행 (device_manager, DisplayManager 구독 완료 후)
     config_all_t saved_config;
     esp_err_t ret = config_service_load_all(&saved_config);
     if (ret == ESP_OK) {
-        // 카메라 ID 이벤트 발행
+        // 카메라 ID 이벤트 발행 (DisplayManager가 구독 완료된 상태)
         event_bus_publish(EVT_CAMERA_ID_CHANGED, &saved_config.device.camera_id, sizeof(uint8_t));
         T_LOGI(TAG, "카메라 ID 이벤트 발행: %d", saved_config.device.camera_id);
         // 밝기 이벤트 발행
@@ -399,10 +403,6 @@ void prod_rx_app_start(void)
     } else {
         T_LOGW(TAG, "설정 로드 실패: %s", esp_err_to_name(ret));
     }
-
-    // DisplayManager 시작, BootPage로 전환
-    display_manager_start();
-    display_manager_set_page(PAGE_BOOT);
 
 #ifdef DEVICE_MODE_RX
     // 버튼 이벤트 구독
@@ -439,12 +439,7 @@ void prod_rx_app_start(void)
     // RX 페이지로 전환
     display_manager_boot_complete();
 
-#ifdef DEVICE_MODE_RX
-    // ConfigService에서 카메라 ID 로드하여 RxPage에 설정
-    uint8_t saved_camera_id = config_service_get_camera_id();
-    display_manager_set_cam_id(saved_camera_id);
-    T_LOGI(TAG, "카메라 ID 로드: %d", saved_camera_id);
-#endif
+    // 카메라 ID는 EVT_CAMERA_ID_CHANGED 이벤트로 DisplayManager에 전달됨
 
     s_app.running = true;
     T_LOGI(TAG, "RX app started");
