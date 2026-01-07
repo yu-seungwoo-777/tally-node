@@ -1145,7 +1145,16 @@ esp_err_t ConfigServiceClass::setCameraId(uint8_t camera_id)
     }
 
     dev.camera_id = camera_id;
-    return setDevice(&dev);
+    ret = setDevice(&dev);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // 카메라 ID 변경 이벤트 발행
+    event_bus_publish(EVT_CAMERA_ID_CHANGED, &camera_id, sizeof(camera_id));
+    T_LOGI(TAG, "카메라 ID 변경: %d, 이벤트 발행", camera_id);
+
+    return ESP_OK;
 }
 
 uint8_t ConfigServiceClass::getCameraId(void)
