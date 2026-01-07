@@ -535,32 +535,7 @@ esp_err_t ConfigServiceClass::init(void)
 
     T_LOGI(TAG, "Config Service 초기화 중...");
 
-    // NVS 초기화 (이미 초기화된 경우 무시)
-    T_LOGD(TAG, "NVS flash init 시작...");
-    esp_err_t ret = nvs_flash_init();
-    T_LOGD(TAG, "NVS flash init 결과: %d", ret);
-
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        T_LOGI(TAG, "NVS erase 필요");
-        ret = nvs_flash_erase();
-        if (ret != ESP_OK) {
-            const char* err_name = esp_err_to_name(ret);
-            T_LOGE(TAG, "NVS erase 실패: %s", err_name ? err_name : "unknown");
-            return ret;
-        }
-        T_LOGD(TAG, "NVS re-init 시작...");
-        ret = nvs_flash_init();
-        T_LOGD(TAG, "NVS re-init 결과: %d", ret);
-    }
-
-    // 초기화 결과 확인
-    if (ret == ESP_ERR_INVALID_STATE) {
-        // 이미 초기화됨, 무시
-        T_LOGD(TAG, "NVS 이미 초기화됨");
-    } else if (ret != ESP_OK) {
-        T_LOGE(TAG, "NVS 초기화 실패: %s", esp_err_to_name(ret));
-        return ret;
-    }
+    // NVS 초기화는 app 계층에서 수행됨 (prod_tx_app_init / prod_rx_app_init)
 
     T_LOGD(TAG, "Event bus 구독 시작...");
     // 디바이스 등록/해제 이벤트 구독
