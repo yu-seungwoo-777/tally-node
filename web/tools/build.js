@@ -59,7 +59,7 @@ function mergePagesToIndex() {
     const indexPath = path.join(DIST_DIR, 'index.html');
     let indexHtml = fs.readFileSync(indexPath, 'utf-8');
 
-    const pages = ['dashboard', 'network', 'switcher', 'broadcast', 'devices', 'system'];
+    const pages = ['dashboard', 'network', 'switcher', 'broadcast', 'devices', 'system', 'license'];
     let pagesHtml = '';
 
     for (const page of pages) {

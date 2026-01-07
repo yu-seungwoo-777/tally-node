@@ -18,6 +18,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
+#include "lwip/dns.h"  // LwIP DNS
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 
@@ -321,6 +322,18 @@ esp_err_t ethernet_hal_start(void)
     esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
     s_netif = esp_netif_new(&netif_cfg);
 
+    // DNS 서버 미리 설정 (DHCP 시작 전에 설정해야 클리어되지 않음)
+    ip_addr_t dns_primary, dns_backup;
+    dns_primary.u_addr.ip4.addr = esp_ip4addr_aton("8.8.8.8");
+    dns_primary.type = IPADDR_TYPE_V4;
+    dns_backup.u_addr.ip4.addr = esp_ip4addr_aton("1.1.1.1");
+    dns_backup.type = IPADDR_TYPE_V4;
+
+    dns_setserver(0, &dns_primary);
+    dns_setserver(1, &dns_backup);
+
+    T_LOGI(TAG, "Ethernet netif 생성 완료 (DNS 미리 설정: 8.8.8.8, 1.1.1.1)");
+
     // netif와 Ethernet 드라이버 연결
     void* glue = esp_eth_new_netif_glue(s_eth_handle);
     ret = esp_netif_attach(s_netif, glue);
@@ -488,6 +501,11 @@ esp_err_t ethernet_hal_get_status(ethernet_hal_status_t* status)
     }
 
     return ESP_OK;
+}
+
+esp_netif_t* ethernet_hal_get_netif(void)
+{
+    return s_netif;
 }
 
 // ============================================================================

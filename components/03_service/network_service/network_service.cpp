@@ -8,6 +8,7 @@
 #include "ethernet_driver.h"
 #include "t_log.h"
 #include "event_bus.h"
+#include "esp_netif.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cstring>
@@ -455,11 +456,15 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
     s_config.wifi_ap.channel = config_event->wifi_ap_channel;
     strncpy(s_config.wifi_ap.ssid, config_event->wifi_ap_ssid, sizeof(s_config.wifi_ap.ssid) - 1);
     s_config.wifi_ap.ssid[sizeof(s_config.wifi_ap.ssid) - 1] = '\0';
+    strncpy(s_config.wifi_ap.password, config_event->wifi_ap_password, sizeof(s_config.wifi_ap.password) - 1);
+    s_config.wifi_ap.password[sizeof(s_config.wifi_ap.password) - 1] = '\0';
 
     // WiFi STA 설정 업데이트
     s_config.wifi_sta.enabled = config_event->wifi_sta_enabled;
     strncpy(s_config.wifi_sta.ssid, config_event->wifi_sta_ssid, sizeof(s_config.wifi_sta.ssid) - 1);
     s_config.wifi_sta.ssid[sizeof(s_config.wifi_sta.ssid) - 1] = '\0';
+    strncpy(s_config.wifi_sta.password, config_event->wifi_sta_password, sizeof(s_config.wifi_sta.password) - 1);
+    s_config.wifi_sta.password[sizeof(s_config.wifi_sta.password) - 1] = '\0';
 
     // Ethernet 설정 업데이트
     s_config.ethernet.dhcp_enabled = config_event->eth_dhcp_enabled;

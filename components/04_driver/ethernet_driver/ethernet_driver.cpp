@@ -11,6 +11,7 @@
 #include "esp_eth.h"
 #include "esp_netif.h"
 #include <cstring>
+#include "lwip/dns.h"  // LwIP DNS (dns_setserver)
 
 static const char* TAG = "EthernetDriver";
 
@@ -127,6 +128,20 @@ void EthernetDriver::eventHandler(void* arg, esp_event_base_t event_base,
             char ip_str[16];
             snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&event->ip_info.ip));
             T_LOGI(TAG, "Ethernet IP 획득: %s", ip_str);
+
+            // DNS 서버 명시적 설정 (Google DNS, Cloudflare) - LwIP 직접 사용
+            ip_addr_t dns_primary, dns_backup;
+            dns_primary.u_addr.ip4.addr = esp_ip4addr_aton("8.8.8.8");
+            dns_primary.type = IPADDR_TYPE_V4;
+            dns_backup.u_addr.ip4.addr = esp_ip4addr_aton("1.1.1.1");
+            dns_backup.type = IPADDR_TYPE_V4;
+
+            // LwIP DNS 서버 직접 설정
+            dns_setserver(0, &dns_primary);   // DNS_INDEX 0 = Primary
+            dns_setserver(1, &dns_backup);    // DNS_INDEX 1 = Backup
+
+            T_LOGI(TAG, "Ethernet DNS 서버 설정 (LwIP): 8.8.8.8 (Primary), 1.1.1.1 (Backup)");
+
             // 이벤트 버스로 네트워크 연결 발행
             event_bus_publish(EVT_NETWORK_CONNECTED, ip_str, sizeof(ip_str));
             if (s_status_callback) {

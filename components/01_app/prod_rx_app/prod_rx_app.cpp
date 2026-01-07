@@ -12,6 +12,7 @@
 #include "DisplayManager.h"
 #include "button_service.h"
 #include "lora_service.h"
+#include "device_manager.h"
 #include "led_service.h"
 #include "ws2812_driver.h"
 #include "TallyTypes.h"
@@ -345,6 +346,11 @@ void prod_rx_app_start(void)
     lora_service_start();
     T_LOGI(TAG, "LoRa 시작");
 
+    // DeviceManager 시작 (상태 요청 수신 처리)
+    device_manager_init();
+    device_manager_start();
+    T_LOGI(TAG, "DeviceManager 시작");
+
     // DisplayManager 시작, BootPage로 전환
     display_manager_start();
     display_manager_set_page(PAGE_BOOT);
@@ -399,6 +405,9 @@ void prod_rx_app_stop(void)
     if (!s_app.running) {
         return;
     }
+
+    // DeviceManager 중지
+    device_manager_stop();
 
 #ifdef DEVICE_MODE_RX
     // 버튼 이벤트 구독 취소

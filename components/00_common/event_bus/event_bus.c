@@ -53,6 +53,8 @@ static const char* EVENT_NAMES[] = {
     "EVT_INFO_UPDATED",
     "EVT_LORA_STATUS_CHANGED",
     "EVT_LORA_RSSI_CHANGED",
+    "EVT_LORA_TX_COMMAND",
+    "EVT_LORA_RX_RESPONSE",
     "EVT_LORA_PACKET_RECEIVED",
     "EVT_LORA_PACKET_SENT",
     "EVT_LORA_SEND_REQUEST",
@@ -72,6 +74,9 @@ static const char* EVENT_NAMES[] = {
     "EVT_LED_STATE_CHANGED",
     "EVT_DEVICE_REGISTER",
     "EVT_DEVICE_UNREGISTER",
+    "EVT_DEVICE_LIST_CHANGED",
+    "EVT_LICENSE_STATE_CHANGED",
+    "EVT_LICENSE_VALIDATE",
 };
 
 const char* event_type_to_string(event_type_t type) {
@@ -134,11 +139,11 @@ esp_err_t event_bus_init(void) {
     // 구독자 테이블 초기화
     memset(g_event_bus.subscribers, 0, sizeof(g_event_bus.subscribers));
 
-    // 이벤트 처리 태스크 생성
+    // 이벤트 처리 태스크 생성 (스택 크기 증가: 4096 → 12288)
     BaseType_t ret = xTaskCreate(
         event_handler_task,
         "event_bus",
-        4096,
+        12288,  // 12KB (HTTPS 응답 처리 등을 위한 충분한 공간)
         NULL,
         5,  // 우선순위 (중간)
         &g_event_bus.handler_task

@@ -9,12 +9,14 @@
 #include "event_bus.h"
 #include "config_service.h"
 #include "hardware_service.h"
+#include "license_service.h"
 #include "DisplayManager.h"
 #include "TxPage.h"
 #include "button_service.h"
 #include "switcher_service.h"
 #include "network_service.h"
 #include "lora_service.h"
+#include "device_manager.h"
 #include "web_server.h"
 #include "TallyTypes.h"
 #include "esp_netif.h"
@@ -94,7 +96,16 @@ static esp_err_t handle_button_single_click(const event_data_t* event)
 static esp_err_t handle_button_long_press(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "Long press (TX mode: no action)");
+    T_LOGI(TAG, "Long press -> 라이센스 검증 시도");
+
+    // 저장된 라이센스 키로 검증
+    char license_key[17] = {0};
+    if (license_service_get_key(license_key) == ESP_OK && strlen(license_key) == 16) {
+        T_LOGI(TAG, "저장된 라이센스 키로 검증: %.16s", license_key);
+        license_service_validate(license_key);
+    } else {
+        T_LOGW(TAG, "라이센스 키 없음, 검증 스킵");
+    }
     return ESP_OK;
 }
 
@@ -272,6 +283,19 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         return false;
     }
 
+    // LicenseService 초기화
+    ret = license_service_init();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "LicenseService init failed: %s", esp_err_to_name(ret));
+        return false;
+    }
+    ret = license_service_start();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "LicenseService start failed: %s", esp_err_to_name(ret));
+        return false;
+    }
+    T_LOGI(TAG, "LicenseService 초기화 완료");
+
     // 네트워크 설정 확인 (비어있으면 기본값 저장)
     config_all_t current_config;
     ret = config_service_load_all(&current_config);
@@ -371,6 +395,11 @@ void prod_tx_app_start(void)
     lora_service_start();
     T_LOGI(TAG, "LoRa 시작");
 
+    // DeviceManager 시작 (상태 요청 태스크)
+    device_manager_init();
+    device_manager_start();
+    T_LOGI(TAG, "DeviceManager 시작");
+
     // DisplayManager 시작, BootPage로 전환
     display_manager_start();
     display_manager_set_page(PAGE_BOOT);
@@ -430,6 +459,9 @@ void prod_tx_app_stop(void)
 
     // WebServer 중지
     web_server_stop();
+
+    // DeviceManager 중지
+    device_manager_stop();
 
 #ifdef DEVICE_MODE_TX
     // 버튼 이벤트 구독 취소

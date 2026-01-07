@@ -92,6 +92,7 @@ typedef struct __attribute__((packed)) {
     uint32_t uptime;          ///< 업타임 (초)
     uint8_t brightness;       ///< 밝기 0-100
     bool is_stopped;          ///< 기능 정지 상태
+    bool is_online;           ///< 온라인 상태 (true=온라인, false=오프라인)
     uint32_t last_seen;       ///< 마지막 수신 시간 (tick)
     uint16_t ping_ms;         ///< 지연시간 (ms)
     float frequency;          ///< 현재 주파수 (MHz)
@@ -110,7 +111,7 @@ typedef struct {
 /**
  * @brief LoRa 패킷 이벤트 데이터 (EVT_LORA_PACKET_RECEIVED용)
  */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t data[LORA_MAX_PACKET_SIZE];  // 패킷 데이터
     size_t length;           // 데이터 길이
     int16_t rssi;            // dBm
@@ -320,11 +321,13 @@ typedef struct {
 typedef struct __attribute__((packed)) {
     // WiFi AP
     char wifi_ap_ssid[33];
+    char wifi_ap_password[65];   ///< AP 비밀번호
     uint8_t wifi_ap_channel;
     bool wifi_ap_enabled;
 
     // WiFi STA
     char wifi_sta_ssid[33];
+    char wifi_sta_password[65];  ///< STA 비밀번호
     bool wifi_sta_enabled;
 
     // Ethernet
@@ -364,6 +367,26 @@ typedef struct __attribute__((packed)) {
     bool dual_enabled;
     uint8_t secondary_offset;
 } config_data_event_t;
+
+/**
+ * @brief 라이센스 상태 이벤트 데이터 (EVT_LICENSE_STATE_CHANGED용)
+ *
+ * license_service에서 발행하는 라이센스 상태 변경 정보
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t device_limit;      ///< 0 = 미등록, 1~255 = 제한
+    uint8_t state;             ///< 라이센스 상태 (license_state_t)
+    uint32_t grace_remaining;  ///< 유예 기간 남은 시간 (초)
+} license_state_event_t;
+
+/**
+ * @brief 라이센스 검증 요청 이벤트 데이터 (EVT_LICENSE_VALIDATE용)
+ *
+ * web_server에서 발행하는 라이센스 키 검증 요청
+ */
+typedef struct {
+    char key[17];              ///< 라이센스 키 (16자 + null)
+} license_validate_event_t;
 
 // ============================================================================
 // 이벤트 타입 정의
@@ -428,6 +451,10 @@ typedef enum {
     EVT_DEVICE_UNREGISTER,       ///< 디바이스 등록 해제 요청 (data: device_register_event_t)
     EVT_DEVICE_LIST_CHANGED,     ///< 디바이스 리스트 변경 (data: device_list_event_t)
 
+    // 라이센스 이벤트 (03_service → 03_service)
+    EVT_LICENSE_STATE_CHANGED,   ///< 라이센스 상태 변경 (data: license_state_event_t)
+    EVT_LICENSE_VALIDATE,        ///< 라이센스 검증 요청 (data: license_validate_event_t)
+
     // 최대 이벤트 수
    _EVT_MAX
 } event_type_t;
@@ -436,9 +463,9 @@ typedef enum {
  * @brief 이벤트 버스 내부 버퍼 크기
  *
  * 가장 큰 이벤트 데이터: lora_scan_complete_t (약 901바이트)
- * 1024바이트로 할당하여 여유 있게 처리
+ * 2048바이트로 할당하여 여유 있게 처리
  */
-#define EVENT_DATA_BUFFER_SIZE 1024
+#define EVENT_DATA_BUFFER_SIZE 2048
 
 /**
  * @brief 이벤트 데이터 구조체 (내부 버퍼 방식)

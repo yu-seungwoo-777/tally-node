@@ -159,12 +159,15 @@ static inline bool lora_device_id_is_broadcast(const uint8_t* id) {
 }
 
 /**
- * @brief Device ID 문자열 변환 (3바이트 버퍼 필요)
+ * @brief Device ID 문자열 변환 (5바이트 버퍼 필요: "XXXX\0")
  */
 static inline void lora_device_id_to_str(const uint8_t* id, char* str) {
-    str[0] = id[0];
-    str[1] = id[1];
-    str[2] = '\0';
+    const char hex[] = "0123456789ABCDEF";
+    str[0] = hex[(id[0] >> 4) & 0x0F];
+    str[1] = hex[id[0] & 0x0F];
+    str[2] = hex[(id[1] >> 4) & 0x0F];
+    str[3] = hex[id[1] & 0x0F];
+    str[4] = '\0';
 }
 
 // ============================================================================

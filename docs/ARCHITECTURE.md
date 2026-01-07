@@ -1,10 +1,4 @@
-수정할 내용을 정리합니다.
-
-**문제점 발견:**
-1. 파일开头(1-2줄)에 불필요한 설명 텍스트가 포함되어 있음
-2. 폴더명 불일치: `device_management_service` → 실제는 `device_manager`
-
-수정된 전체 파일 내용:
+수정이 필요합니다. 파일 시작 부분의 불필요한 텍스트를 제거해야 합니다.
 
 # 아키텍처
 
@@ -44,6 +38,7 @@ ESP32-S3 (EoRa-S3) 기반 LoRa 통신 프로젝트의 5계층 아키텍처입니
 │ - device_manager: 디바이스 관리                        │
 │ - hardware_service: 하드웨어 모니터링                   │
 │ - led_service: LED 서비스                              │
+│ - license_service: 라이선스 서비스                     │
 │ - lora_service: LoRa 통신 서비스                       │
 │ - network_service: 네트워크 통합 관리                  │
 │ - switcher_service: 스위처 연결 서비스                 │
@@ -55,10 +50,10 @@ ESP32-S3 (EoRa-S3) 기반 LoRa 통신 프로젝트의 5계층 아키텍처입니
 │ - board_led_driver: 보드 LED 드라이버                  │
 │ - display_driver: 디스플레이 드라이버                  │
 │ - ethernet_driver: W5500 Ethernet 제어                 │
+│ - license_client: 라이선스 클라이언트 드라이버         │
 │ - lora_driver: RadioLib 래퍼                           │
 │ - switcher_driver: 스위처 프로토콜 드라이버            │
 │   └─ atem: Blackmagic ATEM 프로토콜                   │
-│   └─ obs: OBS WebSocket 프로토콜                      │
 │   └─ vmix: vMix TCP 프로토콜                          │
 │ - temperature_driver: 온도 센서 드라이버               │
 │ - wifi_driver: WiFi AP+STA 제어                        │
@@ -124,6 +119,7 @@ components/
 │   ├── device_manager/
 │   ├── hardware_service/
 │   ├── led_service/
+│   ├── license_service/
 │   ├── lora_service/
 │   ├── network_service/
 │   └── switcher_service/
@@ -132,10 +128,10 @@ components/
 │   ├── board_led_driver/
 │   ├── display_driver/
 │   ├── ethernet_driver/
+│   ├── license_client/
 │   ├── lora_driver/
 │   ├── switcher_driver/
 │   │   ├── atem/
-│   │   ├── obs/
 │   │   └── vmix/
 │   ├── temperature_driver/
 │   ├── wifi_driver/
@@ -299,6 +295,7 @@ O 올바른 예:
 | device_manager | 디바이스 관리 (TX/RX 통합) | lora_service, lora_protocol, event_bus | ✅ |
 | hardware_service | 하드웨어 모니터링 (배터리, 온도, RSSI/SNR) | battery_driver, temperature_driver, event_bus | ✅ |
 | led_service | WS2812 LED 서비스 | ws2812_driver, board_led_driver | ✅ |
+| license_service | 라이선스 인증 서비스 (C++) | license_client, event_bus | 🚧 |
 | lora_service | LoRa 통신 서비스 | lora_driver, event_bus | ✅ |
 | network_service | 네트워크 통합 관리 (C++) | wifi_driver, ethernet_driver, event_bus | ✅ |
 | switcher_service | 스위처 연결 서비스 (C++) | switcher_driver, event_bus, tally_types | ✅ |
@@ -311,13 +308,13 @@ O 올바른 예:
 | wifi_driver | WiFi AP+STA 제어 (C++) | wifi_hal | ✅ |
 | ethernet_driver | W5500 Ethernet 제어 (C++) | ethernet_hal | ✅ |
 | switcher_driver/atem | Blackmagic ATEM 프로토콜 (C++) | esp_netif | ✅ |
-| switcher_driver/obs | OBS WebSocket 프로토콜 (C++) | esp_netif | ✅ |
 | switcher_driver/vmix | vMix TCP 프로토콜 (C++) | esp_netif | ✅ |
 | display_driver | 디스플레이 드라이버 (C++) | display_hal | ✅ |
 | battery_driver | 배터리 드라이버 (C++) | battery_hal, adc | ✅ |
 | board_led_driver | 보드 LED 드라이버 (C++) | gpio | ✅ |
 | temperature_driver | 온도 센서 드라이버 (C++) | temperature_hal, adc | ✅ |
 | ws2812_driver | WS2812 RGB LED 드라이버 (C++) | ws2812_hal, rmt | ✅ |
+| license_client | 라이선스 클라이언트 드라이버 (C++) | esp_http_client, event_bus | 🚧 |
 
 ### 05_hal - 하드웨어 추상화
 
@@ -396,7 +393,6 @@ prod_tx_app (01_app)
     │
     ├─→ switcher_service (03_service)
     │       ├─→ switcher_driver/atem (04_driver)
-    │       ├─→ switcher_driver/obs (04_driver)
     │       └─→ switcher_driver/vmix (04_driver)
     │
     └─→ lora_service (03_service)

@@ -1,9 +1,10 @@
 # 라이선스 인증 기능 설계 (Device Limit 기반)
 
 **작성일**: 2026-01-03
-**버전**: 2.1
+**버전**: 2.2
 
 ## 변경사항
+- v2.2 (2026-01-03): 구현 진행상황 추가, 이벤트 기반 아키텍처 변경 계획 추가
 - v2.1 (2026-01-03): 30분 device_limit 유예 기간 추가, 최대 20개 device_id 저장, LIFO 기능정지
 - v2.0 (2026-01-03): Device Limit 기반 라이선스 시스템 설계
 
@@ -584,20 +585,185 @@ bool license_service_can_send_tally(void) {
 
 ---
 
-## 10. 구현 순서
+## 10. 구현 현황
 
-1. **LicenseClient** (04_driver) - HTTP 통신
-2. **LicenseService** (03_service) - 상태 관리, NVS 저장, device_limit 관리
-3. **DeviceManager** 수정 - RX device_id 등록, device_limit 체크
-4. **LoRaService** 수정 - 기능정지 패킷 전송
-5. **LicensePage** (02_presentation/display) - 디스플레이
-6. **prod_tx_app** - 초기화 순서 변경
-7. **web_server** - 라이선스 입력 API
-8. **RX 펌웨어** - 기능정지 패킷 수신 처리
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| **LicenseClient** (04_driver) | ✅ 완료 | HTTP 통신, JSON 파싱, 연결 테스트 |
+| **LicenseService** (03_service) | ✅ 완료 | NVS 직접 관리, 30분 유예 기간, 상태 관리 |
+| **DeviceManager** | ⚠️ 부분 완료 | device_limit 체크 로직 추가 (아키텍처 이슈 있음) |
+| **LoRaService** | ⏳ 예정 | 기능정지 패킷 (0xE4) 전송 |
+| **LicensePage** | ⏳ 예정 | 디스플레이 UI |
+| **prod_tx_app** | ⏳ 예정 | 초기화 순서 변경 |
+| **web_server** | ⏳ 예정 | 라이선스 입력 API |
+| **RX 펌웨어** | ⏳ 예정 | 기능정지 패킷 수신 처리 |
+
+### 10.1 완료된 구현 상세
+
+#### LicenseClient (04_driver)
+```cpp
+// components/04_driver/license_client/
+├── include/license_client.h
+├── license_client.cpp
+└── CMakeLists.txt
+```
+- `license_client_validate()`: 라이선스 검증 API 호출
+- `license_client_connection_test()`: 서버 연결 테스트
+- `license_client_is_connected()`: WiFi 연결 상태 확인
+
+#### LicenseService (03_service)
+```cpp
+// components/03_service/license_service/
+├── include/license_service.h
+├── license_service.cpp
+└── CMakeLists.txt
+```
+- `license_service_init()`: NVS 초기화, 라이선스 정보 로드
+- `license_service_validate()`: 라이선스 검증 요청
+- `license_service_get_device_limit()`: device_limit 반환
+- `license_service_is_valid()`: 유효성 확인 (VALID 또는 GRACE 상태)
+- `license_service_get_state()`: 현재 상태 반환
+- `license_service_is_grace_active()`: 유예 기간 확인
+- `license_service_get_grace_remaining()`: 유예 기간 남은 시간
+- `license_service_can_send_tally()`: Tally 전송 가능 여부
+
+**NVS 직접 관리**:
+- `NVS_NAMESPACE = "license"` 로 독립 네임스페이스 사용
+- ConfigService를 통하지 않고 직접 NVS 접근 (서비스 간 직접 호출 방지)
+
+### 10.2 아키텍처 이슈 및 변경 계획
+
+#### 현재 문제점
+```
+DeviceManager (03_service)
+    ↓ 직접 호출 (아키텍처 위반)
+LicenseService (03_service)
+```
+
+**문제**: 서비스 레이어 간 직접 호출은 5계층 아키텍처 규칙 위반
+
+#### 이벤트 기반 변경 계획
+```
+LicenseService (03_service)
+    ↓ EVT_LICENSE_LIMIT_CHANGED 이벤트 발행
+EventBus (00_common)
+    ↓ 이벤트 전달
+DeviceManager (03_service)
+    ↓ 이벤트 구독, 내부 캐시 업데이트
+device_limit (로컬 캐시)
+```
+
+#### 이벤트 정의 (event_bus.h에 추가)
+```cpp
+// 라이선스 상태 변경 이벤트
+typedef struct {
+    uint8_t device_limit;      // 0 = 미등록, 1~255 = 제한
+    license_state_t state;     // 현재 라이선스 상태
+    uint32_t grace_remaining;  // 유예 기간 남은 시간 (초)
+} license_state_event_t;
+
+// 이벤트 타입
+#define EVT_LICENSE_STATE_CHANGED    EVT_LICENSE_BASE + 0  // 라이선스 상태 변경
+#define EVT_LICENSE_LIMIT_CHANGED    EVT_LICENSE_BASE + 1  // device_limit 변경
+```
+
+#### DeviceManager 변경 사항
+```cpp
+// device_manager.cpp
+
+// 내부 캐시 추가
+static struct {
+    uint8_t device_limit;       // license_service에서 이벤트로 수신
+    bool limit_valid;           // 캐시 유효성 플래그
+    // ...
+} s_tx = {
+    .device_limit = 0,          // 기본값: 무제한 (체크 안함)
+    .limit_valid = false,
+};
+
+// 이벤트 핸들러
+static esp_err_t on_license_state_changed(const event_data_t* event)
+{
+    const license_state_event_t* license =
+        (const license_state_event_t*)event->data;
+
+    s_tx.device_limit = license->device_limit;
+    s_tx.limit_valid = true;
+
+    T_LOGI(TAG, "license 상태 변경: limit=%d, state=%d",
+             license->device_limit, license->state);
+
+    return ESP_OK;
+}
+
+// 초기화 시 이벤트 구독
+esp_err_t device_manager_start(void)
+{
+    // ...
+    event_bus_subscribe(EVT_LICENSE_STATE_CHANGED, on_license_state_changed);
+    // ...
+}
+
+// on_status_response에서 직접 호출 대신 캐시 사용
+static void on_status_response(...)
+{
+    // ...
+    uint8_t device_limit = s_tx.device_limit;  // 캐시된 값 사용
+
+    if (device_limit == 0) {
+        // 라이선스 미등록: 체크 안함
+    } else if (s_tx.device_count > device_limit) {
+        // 초과 시 처리
+    }
+}
+```
+
+### 10.3 NVS 관리 변경사항
+
+**문서 13.9항 "NVS 접근 규칙" 변경**:
+- ~~ConfigService 통해 접근~~ (기존 계획)
+- **LicenseService가 NVS 직접 관리** (실제 구현)
+
+**이유**:
+- ConfigService도 서비스 레이어 (03_service)
+- 서비스 간 직접 호출 방지를 위해 독립 NVS 네임스페이스 사용
+- `license_service` 네임스페이스로 독립적 데이터 관리
 
 ---
 
-## 11. 이벤트 정의
+## 11. 구현 순서 (수정)
+
+| 단계 | 항목 | 상태 | 비고 |
+|------|------|------|------|
+| 1 | **LicenseClient** (04_driver) | ✅ 완료 | HTTP 통신, JSON 파싱 |
+| 2 | **LicenseService** (03_service) | ✅ 완료 | NVS 직접 관리, 상태 관리 |
+| 3 | **이벤트 기반 변경** | ⏳ 예정 | LicenseService 이벤트 발행, DeviceManager 구독 |
+| 4 | **DeviceManager** 수정 | ⚠️ 부분 | 직접 호출 → 이벤트 기반으로 변경 필요 |
+| 5 | **LoRaService** 수정 | ⏳ 예정 | 기능정지 패킷 (0xE4) 전송 |
+| 6 | **LicensePage** (02_presentation) | ⏳ 예정 | 디스플레이 UI |
+| 7 | **prod_tx_app** 수정 | ⏳ 예정 | 초기화 순서 변경, 라이선스 체크 |
+| 8 | **web_server** 수정 | ⏳ 예정 | 라이선스 입력 API |
+| 9 | **RX 펌웨어** 수정 | ⏳ 예정 | 기능정지 패킷 수신 처리 |
+
+### 11.1 이벤트 기반 변경 세부 단계
+
+1. **event_bus.h에 이벤트 정의**
+   - `EVT_LICENSE_STATE_CHANGED` 추가
+   - `license_state_event_t` 구조체 정의
+
+2. **LicenseService 수정**
+   - `validate()` 성공 시 이벤트 발행
+   - `init()` 시 기존 상태로 이벤트 발행
+
+3. **DeviceManager 수정**
+   - `license_service` REQUIRES 제거
+   - 내부 `device_limit` 캐시 추가
+   - `on_license_state_changed()` 핸들러 추가
+   - 이벤트 구독 추가
+
+---
+
+## 12. 이벤트 정의
 
 ```cpp
 // event_bus.h
@@ -610,7 +776,7 @@ EVT_DEVICE_LIMIT_EXCEEDED     // device_limit 초과
 
 ---
 
-## 12. API 연결 정보
+## 13. API 연결 정보
 
 | 항목 | 값 |
 |------|------|
@@ -625,9 +791,9 @@ EVT_DEVICE_LIMIT_EXCEEDED     // device_limit 초과
 
 ---
 
-## 13. 코딩 룰 (CLAUDE.md, ARCHITECTURE.md 기반)
+## 14. 코딩 룰 (CLAUDE.md, ARCHITECTURE.md 기반)
 
-### 13.1 언어 선택
+### 14.1 언어 선택
 
 | 계층 | 언어 | 라이선스 컴포넌트 |
 |------|------|------------------|
@@ -637,7 +803,7 @@ EVT_DEVICE_LIMIT_EXCEEDED     // device_limit 초과
 | 02_presentation | **C++** | LicensePage |
 | 01_app | **C++** | prod_tx_app, prod_rx_app |
 
-### 13.2 네이밍 규칙
+### 14.2 네이밍 규칙
 
 | 항목 | 규칙 | 예시 |
 |------|------|------|
@@ -647,7 +813,7 @@ EVT_DEVICE_LIMIT_EXCEEDED     // device_limit 초과
 | 타입 접미사 | `_t` | `license_config_t`, `license_state_t` |
 | 주석 | 한글 | `// 라이선스 검증 요청` |
 
-### 13.3 싱글톤 패턴 (C++)
+### 14.3 싱글톤 패턴 (C++)
 
 ```cpp
 // license_service.h
@@ -740,18 +906,34 @@ ESP_LOGW(TAG, "유예 기간 시작 (30분)");
 ESP_LOGE(TAG, "라이선스 검증 실패: %s", error);
 ```
 
-### 13.9 NVS 접근 규칙
+### 13.9 NVS 접근 규칙 (수정됨)
+
+**서비스 간 직접 호출 방지를 위해 LicenseService가 NVS 직접 관리**
 
 ```cpp
-// X 잘못된 예: LicenseService가 직접 NVS 접근
-nvs_handle_t handle;
-nvs_open("license", NVS_READONLY, &handle);
+// O 올바른 예: LicenseService가 독립 네임스페이스로 NVS 직접 관리
+// components/03_service/license_service/license_service.cpp
 
-// O 올바른 예: ConfigService 통해 접근
-// ConfigService에 license 관련 API 추가
-// config_service_set_license_key()
-// config_service_get_device_limit()
+#define NVS_NAMESPACE "license"
+
+// LicenseService 내부 NVS 헬퍼
+static esp_err_t nvsSetDeviceLimit(uint8_t limit);
+static uint8_t nvsGetDeviceLimit(void);
+static esp_err_t nvsSetLicenseKey(const char* key);
+static esp_err_t nvsGetLicenseKey(char* key, size_t len);
 ```
+
+**이유**:
+- ConfigService도 서비스 레이어 (03_service)
+- 서비스 간 직접 호출은 5계층 아키텍처 규칙 위반
+- 독립 NVS 네임스페이스 `license`로 데이터 격리
+
+**NVSC 저장 항목**:
+| 키 | 타입 | 설명 |
+|---|------|------|
+| `license_key` | string | 라이선스 키 (16자리) |
+| `device_limit` | uint8 | 디바이스 제한 (0=미등록) |
+| `grace_start` | uint32 | 유예 기간 시작 시간 (epoch 초) |
 
 ### 13.10 NVS 쓰기 최적화 (Flash 수명 보호)
 

@@ -34,30 +34,6 @@ static led_colors_t s_colors = {
 };
 
 // ============================================================================
-// 이벤트 핸들러 (LED 색상 설정)
-// ============================================================================
-
-/**
- * @brief 설정 데이터 변경 이벤트 핸들러
- * LED 색상 설정 업데이트
- */
-static esp_err_t on_config_data_event(const event_data_t* event)
-{
-    if (!event || event->type != EVT_CONFIG_DATA_CHANGED) {
-        return ESP_OK;
-    }
-
-    const auto* config = reinterpret_cast<const config_data_event_t*>(event->data);
-    if (config) {
-        // config_data_event_t에는 LED 색상이 없으므로 기존 색상 유지
-        // 향후 LED 색상이 이벤트에 추가되면 여기서 업데이트
-        T_LOGD(TAG, "설정 데이터 이벤트 수신 (LED 색상은 별도 API로 설정)");
-    }
-
-    return ESP_OK;
-}
-
-// ============================================================================
 // 공개 API
 // ============================================================================
 

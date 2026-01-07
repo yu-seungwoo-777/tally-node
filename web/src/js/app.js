@@ -11,6 +11,7 @@ import { switcherModule } from './modules/switcher.js';
 import { broadcastModule } from './modules/broadcast.js';
 import { devicesModule } from './modules/devices.js';
 import { deviceModule } from './modules/device.js';
+import { licenseModule } from './modules/license.js';
 import { utilsModule } from './modules/utils.js';
 
 function tallyApp() {
@@ -25,6 +26,7 @@ function tallyApp() {
         ...broadcastModule(),
         ...devicesModule(),
         ...deviceModule(),
+        ...licenseModule(),
         ...utilsModule()
     };
 }

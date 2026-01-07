@@ -117,9 +117,46 @@ for cmake_file in $(find "$COMPONENT_DIR" -name "CMakeLists.txt" -type f); do
             fi
         done
     fi
+
+    # 3.5 동일 계층 내 컴포넌트 간 의존성 검사
+    # 컴포넌트가 속한 계층 확인
+    COMP_LAYER=""
+    for layer in 03_service 04_driver; do
+        if echo "$COMP_DIR" | grep -q "$COMPONENT_DIR/$layer"; then
+            COMP_LAYER="$layer"
+            break
+        fi
+    done
+
+    if [ -n "$COMP_LAYER" ]; then
+        # 동일 계층 컴포넌트 목록 수집
+        LAYER_COMPS=$(find "$COMPONENT_DIR/$COMP_LAYER" -mindepth 1 -maxdepth 3 -name "CMakeLists.txt" -type f 2>/dev/null | \
+            while read f; do
+                d=$(dirname "$f")
+                basename "$d"
+            done | sort -u)
+
+        # REQUIRES 라인 추출
+        REQUIRES_SECTION=$(sed -n '/REQUIRES/,/^[^[:space:]]/p' "$cmake_file" 2>/dev/null | head -n -1 || true)
+
+        # 동일 계층 컴포넌트 참조 검사
+        for layer_comp in $LAYER_COMPS; do
+            # 자기 자신은 건너뜀
+            CURRENT_COMP=$(basename "$COMP_DIR")
+            if [ "$layer_comp" = "$CURRENT_COMP" ]; then
+                continue
+            fi
+
+            # REQUIRES에 동일 계층 컴포넌트가 있는지 확인
+            if echo "$REQUIRES_SECTION" | grep -qE "^\s*$layer_comp\b"; then
+                echo "❌ [$COMP_LAYER] $CURRENT_COMP → $layer_comp (동일 계층 의존)"
+                CMAKE_ERRORS=$((CMAKE_ERRORS + 1))
+            fi
+        done
+    fi
 done
 
-# 3.5 루트 CMakeLists.txt의 5계층 구조 확인
+# 3.6 루트 CMakeLists.txt의 5계층 구조 확인
 ROOT_CMAKE="CMakeLists.txt"
 if [ -f "$ROOT_CMAKE" ]; then
     # 필수 레이어 등록 확인

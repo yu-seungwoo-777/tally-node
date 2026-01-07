@@ -75,6 +75,15 @@
                     <span class="font-medium">Devices</span>
                 </a>
 
+                <a href="#license"
+                   :class="currentView === 'license' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'"
+                   class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                    </svg>
+                    <span class="font-medium">License</span>
+                </a>
+
                 <a href="#system"
                    :class="currentView === 'system' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'"
                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all">
@@ -1092,9 +1101,11 @@
                     <span class="text-sm text-slate-600"><span class="font-medium" x-text="devices.onlineCount"></span> Online</span>
                 </div>
                 <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
-                    <span class="text-sm text-slate-600"><span class="font-medium" x-text="devices.registeredCount"></span> Registered</span>
+                    <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                    <span class="text-sm text-slate-600"><span class="font-medium" x-text="devices.list.filter(d => !d.is_online).length"></span> Offline</span>
                 </div>
+                <div class="w-px h-4 bg-slate-200"></div>
+                <span class="text-xs text-slate-500">Total: <span class="font-medium" x-text="devices.list.length"></span></span>
             </div>
             <button @click="fetchDevices()"
                     :disabled="devices.loading"
@@ -1110,102 +1121,155 @@
     <!-- 디바이스 그리드 -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <template x-for="device in devices.list" :key="device.id">
-            <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                <!-- 디바이스 카드 헤더 -->
-                <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-transparent">
+            <div class="bg-white rounded-2xl border overflow-hidden hover:shadow-lg hover:border-slate-300 transition-all duration-200"
+                 :class="{
+                     'border-slate-200': device.is_online,
+                     'border-slate-200 opacity-60': !device.is_online
+                 }">
+                <!-- 디바이스 카드 헤더 - 상태 인디케이터 -->
+                <div class="relative px-4 py-3"
+                     :class="{
+                         'bg-gradient-to-r from-slate-50 to-white': device.is_online,
+                         'bg-slate-100': !device.is_online
+                     }">
+                    <!-- 연결 상태 인디케이터 (왼쪽 테두리) -->
+                    <div class="absolute left-0 top-0 bottom-0 w-1"
+                         :class="{
+                             'bg-emerald-500': device.is_online && getSignalLevel(device.rssi, device.snr) === 3,
+                             'bg-yellow-500': device.is_online && getSignalLevel(device.rssi, device.snr) === 2,
+                             'bg-rose-500': device.is_online && getSignalLevel(device.rssi, device.snr) <= 1,
+                             'bg-slate-300': !device.is_online
+                         }"></div>
+
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
-                                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <!-- 디바이스 아이콘 -->
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center relative"
+                                 :class="{
+                                     'bg-emerald-100': device.is_online && getSignalLevel(device.rssi, device.snr) === 3,
+                                     'bg-yellow-100': device.is_online && getSignalLevel(device.rssi, device.snr) === 2,
+                                     'bg-rose-100': device.is_online && getSignalLevel(device.rssi, device.snr) <= 1,
+                                     'bg-slate-200': !device.is_online
+                                 }">
+                                <svg class="w-5 h-5"
+                                     :class="{
+                                         'text-emerald-600': device.is_online && getSignalLevel(device.rssi, device.snr) === 3,
+                                         'text-yellow-600': device.is_online && getSignalLevel(device.rssi, device.snr) === 2,
+                                         'text-rose-600': device.is_online && getSignalLevel(device.rssi, device.snr) <= 1,
+                                         'text-slate-400': !device.is_online
+                                     }"
+                                     fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
                                 </svg>
+                                <!-- 오프라인 배지 -->
+                                <div x-show="!device.is_online" x-cloak
+                                     class="absolute -top-1 -right-1 w-3 h-3 bg-slate-400 rounded-full border-2 border-white"></div>
                             </div>
                             <div>
-                                <p class="font-semibold text-slate-900 text-sm" x-text="device.id"></p>
-                                <p class="text-xs text-slate-500">Cam <span x-text="device.cameraId"></span></p>
+                                <p class="font-bold text-slate-900" x-text="device.id"></p>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs text-slate-500">Camera</span>
+                                    <span class="px-1.5 py-0.5 text-xs font-bold rounded-md bg-blue-100 text-blue-700" x-text="device.cameraId"></span>
+                                    <!-- 온라인 상태 배지 -->
+                                    <span class="px-1.5 py-0.5 text-xs font-medium rounded-md"
+                                          :class="{
+                                              'bg-emerald-100 text-emerald-700': device.is_online,
+                                              'bg-slate-200 text-slate-500': !device.is_online
+                                          }"
+                                          x-text="device.is_online ? 'Online' : 'Offline'"></span>
+                                </div>
                             </div>
+                        </div>
+                        <!-- Ping 수치 -->
+                        <div class="text-right">
+                            <template x-if="device.is_online">
+                                <p class="text-xs font-medium" :class="{
+                                    'text-emerald-600': device.ping < 200,
+                                    'text-yellow-600': device.ping >= 200 && device.ping < 500,
+                                    'text-rose-600': device.ping >= 500
+                                }" x-text="device.ping + ' ms'"></p>
+                            </template>
+                            <template x-if="!device.is_online">
+                                <p class="text-xs font-medium text-slate-400">--</p>
+                            </template>
+                            <p class="text-xs text-slate-400">Latency</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- 디바이스 카드 내용 -->
-                <div class="p-4 space-y-3">
-                    <!-- 배터리 -->
+                <div class="p-4 space-y-4">
+                    <!-- 배터리 - 크게 강조 -->
                     <div>
-                        <div class="flex items-center justify-between mb-1">
-                            <span class="text-xs text-slate-500">Battery</span>
-                            <span class="text-xs font-medium" :class="{
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-1.5">
+                                <svg class="w-4 h-4" :class="{
+                                    'text-emerald-500': device.battery > 50,
+                                    'text-yellow-500': device.battery > 20 && device.battery <= 50,
+                                    'text-rose-500': device.battery <= 20
+                                }" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="6" width="16" height="12" rx="2" />
+                                    <path d="M22 14v-4" />
+                                </svg>
+                                <span class="text-xs font-medium text-slate-600">Battery</span>
+                            </div>
+                            <span class="text-sm font-bold" :class="{
                                 'text-emerald-600': device.battery > 50,
                                 'text-yellow-600': device.battery > 20 && device.battery <= 50,
                                 'text-rose-600': device.battery <= 20
                             }" x-text="device.battery + '%'"></span>
                         </div>
-                        <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div class="h-full rounded-full transition-all"
+                        <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full transition-all duration-500"
                                  :class="{
-                                     'bg-emerald-500': device.battery > 50,
-                                     'bg-yellow-500': device.battery > 20 && device.battery <= 50,
-                                     'bg-rose-500': device.battery <= 20
+                                     'bg-gradient-to-r from-emerald-400 to-emerald-600': device.battery > 50,
+                                     'bg-gradient-to-r from-yellow-400 to-yellow-600': device.battery > 20 && device.battery <= 50,
+                                     'bg-gradient-to-r from-rose-400 to-rose-600': device.battery <= 20
                                  }"
                                  :style="`width: ${device.battery}%`"></div>
                         </div>
                     </div>
 
-                    <!-- 신호 + Ping 2열 -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <!-- RSSI -->
-                        <div>
-                            <div class="flex items-center justify-between mb-1">
-                                <span class="text-xs text-slate-500">Signal</span>
-                            </div>
-                            <div class="flex items-center gap-1.5">
-                                <!-- 안테나 아이콘 (3단계) -->
-                                <div class="flex gap-0.5">
-                                    <div class="w-0.5 h-1.5 rounded-sm" :class="getSignalLevel(device.rssi, device.snr) >= 1 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
-                                    <div class="w-0.5 h-2.5 rounded-sm" :class="getSignalLevel(device.rssi, device.snr) >= 2 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
-                                    <div class="w-0.5 h-3.5 rounded-sm" :class="getSignalLevel(device.rssi, device.snr) >= 3 ? 'bg-emerald-500' : 'bg-slate-200'"></div>
-                                </div>
-                                <span class="text-xs font-medium" :class="{
-                                    'text-emerald-600': getSignalLevel(device.rssi, device.snr) === 3,
-                                    'text-yellow-600': getSignalLevel(device.rssi, device.snr) === 2,
-                                    'text-rose-600': getSignalLevel(device.rssi, device.snr) <= 1
-                                }" x-text="getSignalText(device.rssi, device.snr)"></span>
-                            </div>
+                    <!-- 상태 메트릭스 3열 -->
+                    <div class="grid grid-cols-3 gap-3">
+                        <!-- 주파수 -->
+                        <div class="text-center p-2 rounded-xl bg-slate-50">
+                            <p class="text-sm font-bold text-slate-700" x-text="device.frequency"></p>
+                            <p class="text-xs text-slate-500">MHz</p>
                         </div>
 
-                        <!-- Ping -->
-                        <div>
-                            <div class="flex items-center justify-between mb-1">
-                                <span class="text-xs text-slate-500">Ping</span>
-                            </div>
-                            <span class="text-xs font-medium" :class="{
-                                'text-emerald-600': device.ping < 200,
-                                'text-yellow-600': device.ping >= 200 && device.ping < 500,
-                                'text-rose-600': device.ping >= 500
-                            }" x-text="device.ping + ' ms'"></span>
+                        <!-- Sync Word -->
+                        <div class="text-center p-2 rounded-xl bg-slate-50">
+                            <p class="text-sm font-bold text-slate-700" x-text="'0x' + device.syncWord.toString(16).toUpperCase()"></p>
+                            <p class="text-xs text-slate-500">Sync</p>
+                        </div>
+
+                        <!-- 신호 강도 -->
+                        <div class="text-center p-2 rounded-xl bg-slate-50">
+                            <p class="text-sm font-bold" :class="{
+                                'text-emerald-600': getSignalLevel(device.rssi, device.snr) === 3,
+                                'text-yellow-600': getSignalLevel(device.rssi, device.snr) === 2,
+                                'text-rose-600': getSignalLevel(device.rssi, device.snr) <= 1
+                            }" x-text="getSignalText(device.rssi, device.snr)"></p>
+                            <p class="text-xs text-slate-500">Signal</p>
                         </div>
                     </div>
 
-                    <!-- 업타임 + RF 2열 -->
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <span class="text-xs text-slate-500 block mb-1">Uptime</span>
-                            <span class="text-xs font-medium text-slate-700" x-text="formatUptime(device.uptime)"></span>
-                        </div>
-                        <div>
-                            <span class="text-xs text-slate-500 block mb-1">Frequency</span>
-                            <span class="text-xs font-medium text-slate-700" x-text="device.frequency + ' MHz'"></span>
-                        </div>
-                    </div>
-
-                    <!-- 밝기 -->
+                    <!-- 하단 정보: 업타임 + 밝기 -->
                     <div class="flex items-center justify-between pt-2 border-t border-slate-100">
-                        <span class="text-xs text-slate-500">Brightness</span>
+                        <div class="flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M12 6v6l4 2"></path>
+                            </svg>
+                            <span class="text-xs text-slate-500" x-text="formatUptime(device.uptime)"></span>
+                        </div>
                         <div class="flex items-center gap-2">
-                            <div class="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
-                                <div class="h-full bg-slate-700 rounded-full" :style="`width: ${device.brightness}%`"></div>
-                            </div>
-                            <span class="text-xs font-medium text-slate-700" x-text="device.brightness + '%'"></span>
+                            <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="4"></circle>
+                                <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+                            </svg>
+                            <span class="text-xs font-medium text-slate-600" x-text="device.brightness + '%'"></span>
                         </div>
                     </div>
                 </div>
@@ -1229,7 +1293,7 @@
                 <div x-show="currentView === 'system'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-cloak>
                     <div class="mb-4">
                         <h2 class="text-lg md:text-xl font-semibold text-slate-900">System Settings</h2>
-                        <p class="text-xs md:text-sm text-slate-500 hidden sm:block">디스플레이 설정을 구성합니다</p>
+                        <p class="text-xs md:text-sm text-slate-500 hidden sm:block">Configure display and system settings</p>
                     </div>
 
                     <div class="grid gap-4 lg:grid-cols-2">
@@ -1268,6 +1332,181 @@
                                 <button @click="reboot()" class="w-full px-5 py-2.5 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors">
                                     Reboot Device
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div x-show="currentView === 'license'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-cloak>
+                    <div class="mb-4">
+                        <h2 class="text-lg md:text-xl font-semibold text-slate-900">License Management</h2>
+                        <p class="text-xs md:text-sm text-slate-500 hidden sm:block">License verification and internet connection test</p>
+                    </div>
+
+                    <div class="grid gap-4 lg:grid-cols-2">
+                        <!-- Internet Connection Test Card -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-cyan-50 to-transparent">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-cyan-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"></path>
+                                        </svg>
+                                    </div>
+                                    <h3 class="font-semibold text-slate-900">Internet Connection</h3>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <p class="text-sm text-slate-600">Check external internet connection status.</p>
+
+                                <!-- Test Results -->
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
+                                        <div class="flex items-center gap-2">
+                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path>
+                                            </svg>
+                                            <span class="text-sm text-slate-600">DNS (8.8.8.8)</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span x-show="internetTest.status === 'none'" class="text-xs text-slate-400">Not tested</span>
+                                            <span x-show="internetTest.status === 'testing'" class="text-xs text-blue-600">Testing...</span>
+                                            <span x-show="internetTest.status === 'success'" class="flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                <span x-text="internetTest.ping + ' ms'"></span>
+                                            </span>
+                                            <span x-show="internetTest.status === 'fail'" class="flex items-center gap-1 text-xs text-rose-600 font-medium">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                                Failed
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
+                                        <div class="flex items-center gap-2">
+                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"></path>
+                                            </svg>
+                                            <span class="text-sm text-slate-600">License Server</span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span x-show="internetTest.serverStatus === 'none'" class="text-xs text-slate-400">Not tested</span>
+                                            <span x-show="internetTest.serverStatus === 'testing'" class="text-xs text-blue-600">Testing...</span>
+                                            <span x-show="internetTest.serverStatus === 'success'" class="flex items-center gap-1 text-xs text-emerald-600 font-medium">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                                Success
+                                            </span>
+                                            <span x-show="internetTest.serverStatus === 'fail'" class="flex items-center gap-1 text-xs text-rose-600 font-medium">
+                                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                                Failed
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button @click="testInternet()"
+                                        :disabled="internetTest.testing"
+                                        class="w-full px-4 py-2.5 text-sm font-medium text-white bg-cyan-600 rounded-xl hover:bg-cyan-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                                    <svg x-show="internetTest.testing" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
+                                    <span x-text="internetTest.testing ? 'Testing...' : 'Connection Test'"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- License Status Card -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-transparent">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-7 h-7 bg-violet-100 rounded-lg flex items-center justify-center">
+                                            <svg class="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                            </svg>
+                                        </div>
+                                        <h3 class="font-semibold text-slate-900">License Status</h3>
+                                    </div>
+                                    <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                                          :class="getLicenseStatusClass()">
+                                        <span class="w-1.5 h-1.5 rounded-full" :class="getLicenseIndicatorClass()"></span>
+                                        <span x-text="getLicenseStatusText()"></span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <p class="text-sm text-slate-600">View current license information.</p>
+
+                                <!-- Details -->
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
+                                        <div class="flex items-center gap-2">
+                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                                            </svg>
+                                            <span class="text-sm text-slate-600">Device Limit</span>
+                                        </div>
+                                        <span class="text-sm font-semibold text-slate-900" x-text="license.deviceLimit + ' devices'"></span>
+                                    </div>
+
+                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
+                                        <div class="flex items-center gap-2">
+                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                            </svg>
+                                            <span class="text-sm text-slate-600">License Key</span>
+                                        </div>
+                                        <span class="text-sm font-mono text-slate-900" x-text="license.key || 'Not registered'"></span>
+                                    </div>
+
+                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
+                                        <div class="flex items-center gap-2">
+                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                            </svg>
+                                            <span class="text-sm text-slate-600">State</span>
+                                        </div>
+                                        <span class="text-sm font-semibold" :class="license.isValid ? 'text-emerald-600' : 'text-rose-600'" x-text="license.stateStr.toUpperCase()"></span>
+                                    </div>
+                                </div>
+
+                                <button @click="fetchLicense()" class="w-full px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
+                                    Refresh Status
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Activate License Card -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden lg:col-span-2">
+                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-transparent">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-indigo-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                                        </svg>
+                                    </div>
+                                    <h3 class="font-semibold text-slate-900">Activate License</h3>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <p class="text-sm text-slate-600">Enter license key to activate the product.</p>
+
+                                <div class="flex gap-3">
+                                    <input type="text" x-model="licenseForm.key"
+                                           class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm"
+                                           placeholder="XXXX-XXXX-XXXX-XXXX"
+                                           maxlength="32"
+                                           @keyup.enter="validateLicense()">
+                                    <button @click="validateLicense()"
+                                            :disabled="license.loading || !licenseForm.key"
+                                            class="px-6 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center gap-2">
+                                        <svg x-show="license.loading" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                        </svg>
+                                        <span x-text="license.loading ? 'Validating...' : 'Activate'"></span>
+                                    </button>
+                                </div>
+                                <p class="text-xs text-slate-500">Contact administrator for license key.</p>
                             </div>
                         </div>
                     </div>
@@ -1422,7 +1661,7 @@
                         <label class="block text-sm font-medium text-slate-700 mb-1">Camera Limit</label>
                         <input type="number" x-model="form.switcher.primary.cameraLimit" min="0" max="20"
                                class="w-full px-3 py-2 border border-slate-300 rounded-lg">
-                        <p class="text-xs text-slate-500 mt-1">0 = Unlimited (Max 20 cameras)</p>
+                        <p class="text-xs text-slate-500 mt-1">Max 20 cameras (0 = disabled)</p>
                     </div>
 
                     <!-- Buttons -->
@@ -1557,7 +1796,7 @@
                         <label class="block text-sm font-medium text-slate-700 mb-1">Camera Limit</label>
                         <input type="number" x-model="form.switcher.secondary.cameraLimit" min="0" max="20"
                                class="w-full px-3 py-2 border border-slate-300 rounded-lg">
-                        <p class="text-xs text-slate-500 mt-1">0 = Unlimited (Max 20 cameras)</p>
+                        <p class="text-xs text-slate-500 mt-1">Max 20 cameras (0 = disabled)</p>
                     </div>
 
                     <!-- Buttons -->

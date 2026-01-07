@@ -75,6 +75,15 @@
                     <span class="font-medium">Devices</span>
                 </a>
 
+                <a href="#license"
+                   :class="currentView === 'license' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'"
+                   class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                    </svg>
+                    <span class="font-medium">License</span>
+                </a>
+
                 <a href="#system"
                    :class="currentView === 'system' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'"
                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all">
@@ -267,7 +276,7 @@
                         <label class="block text-sm font-medium text-slate-700 mb-1">Camera Limit</label>
                         <input type="number" x-model="form.switcher.primary.cameraLimit" min="0" max="20"
                                class="w-full px-3 py-2 border border-slate-300 rounded-lg">
-                        <p class="text-xs text-slate-500 mt-1">0 = Unlimited (Max 20 cameras)</p>
+                        <p class="text-xs text-slate-500 mt-1">Max 20 cameras (0 = disabled)</p>
                     </div>
 
                     <!-- Buttons -->
@@ -402,7 +411,7 @@
                         <label class="block text-sm font-medium text-slate-700 mb-1">Camera Limit</label>
                         <input type="number" x-model="form.switcher.secondary.cameraLimit" min="0" max="20"
                                class="w-full px-3 py-2 border border-slate-300 rounded-lg">
-                        <p class="text-xs text-slate-500 mt-1">0 = Unlimited (Max 20 cameras)</p>
+                        <p class="text-xs text-slate-500 mt-1">Max 20 cameras (0 = disabled)</p>
                     </div>
 
                     <!-- Buttons -->

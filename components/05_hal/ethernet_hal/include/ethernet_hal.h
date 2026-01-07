@@ -16,6 +16,7 @@
 #include <stdbool.h>
 #include "esp_err.h"
 #include "esp_event.h"
+#include "esp_netif.h"  // for esp_netif_t
 
 #ifdef __cplusplus
 extern "C" {
@@ -136,6 +137,12 @@ bool ethernet_hal_has_ip(void);
  * @return ESP_OK 성공, ESP_ERR_INVALID_ARG 실패
  */
 esp_err_t ethernet_hal_get_status(ethernet_hal_status_t* status);
+
+/**
+ * @brief netif 포인터 조회 (DNS 설정 등을 위해)
+ * @return netif 포인터, 초기화되지 않은 경우 NULL
+ */
+esp_netif_t* ethernet_hal_get_netif(void);
 
 // ============================================================================
 // 이벤트 핸들러

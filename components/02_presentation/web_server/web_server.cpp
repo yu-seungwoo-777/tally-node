@@ -4,14 +4,19 @@
  */
 
 #include "web_server.h"
+#include "license_service.h"
 #include "event_bus.h"
 #include "cJSON.h"
 #include "esp_http_server.h"
+#include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "esp_netif.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include <cstring>
 #include <cmath>
+#include <sys/socket.h>
 
 static const char* TAG = "WebServer";
 static const char* TAG_RF = "RF";
@@ -48,6 +53,10 @@ typedef struct {
     // 디바이스 리스트 (TX 전용)
     device_list_event_t devices;      // EVT_DEVICE_LIST_CHANGED
     bool devices_valid;
+
+    // 라이센스 상태
+    license_state_event_t license;    // EVT_LICENSE_STATE_CHANGED
+    bool license_valid;
 } web_server_data_t;
 
 static web_server_data_t s_cache;
@@ -64,6 +73,7 @@ static void init_cache(void)
     s_cache.lora_scanning = false;
     s_cache.lora_scan_progress = 0;
     s_cache.devices_valid = false;
+    s_cache.license_valid = false;
 }
 
 // ============================================================================
@@ -206,6 +216,25 @@ static esp_err_t onDeviceListEvent(const event_data_t* event)
     return ESP_OK;
 }
 
+/**
+ * @brief 라이센스 상태 이벤트 핸들러 (EVT_LICENSE_STATE_CHANGED)
+ */
+static esp_err_t onLicenseStateEvent(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const license_state_event_t* license = (const license_state_event_t*)event->data;
+    memcpy(&s_cache.license, license, sizeof(license_state_event_t));
+    s_cache.license_valid = true;
+
+    ESP_LOGD(TAG, "License state updated: limit=%d, state=%d, grace=%u",
+             license->device_limit, license->state, license->grace_remaining);
+
+    return ESP_OK;
+}
+
 // ============================================================================
 // Packed 데이터 → PGM/PVW 리스트 변환
 // ============================================================================
@@ -259,6 +288,7 @@ static esp_err_t api_status_handler(httpd_req_t* req)
     if (s_cache.config_valid) {
         cJSON_AddBoolToObject(ap, "enabled", s_cache.config.wifi_ap_enabled);
         cJSON_AddStringToObject(ap, "ssid", s_cache.config.wifi_ap_ssid);
+        cJSON_AddStringToObject(ap, "password", s_cache.config.wifi_ap_password);
         cJSON_AddNumberToObject(ap, "channel", s_cache.config.wifi_ap_channel);
         // AP IP는 상태에서 (시작 후 할당됨)
         if (s_cache.network_valid) {
@@ -269,6 +299,7 @@ static esp_err_t api_status_handler(httpd_req_t* req)
     } else {
         cJSON_AddBoolToObject(ap, "enabled", false);
         cJSON_AddStringToObject(ap, "ssid", "--");
+        cJSON_AddStringToObject(ap, "password", "");
         cJSON_AddNumberToObject(ap, "channel", 1);
         cJSON_AddStringToObject(ap, "ip", "--");
     }
@@ -279,9 +310,11 @@ static esp_err_t api_status_handler(httpd_req_t* req)
     if (s_cache.config_valid) {
         cJSON_AddBoolToObject(wifi, "enabled", s_cache.config.wifi_sta_enabled);
         cJSON_AddStringToObject(wifi, "ssid", s_cache.config.wifi_sta_ssid);
+        cJSON_AddStringToObject(wifi, "password", s_cache.config.wifi_sta_password);
     } else {
         cJSON_AddBoolToObject(wifi, "enabled", false);
         cJSON_AddStringToObject(wifi, "ssid", "--");
+        cJSON_AddStringToObject(wifi, "password", "");
     }
     // 연결 상태는 network 이벤트에서
     if (s_cache.network_valid) {
@@ -704,6 +737,8 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
         }
         if (password && cJSON_IsString(password)) {
             strncpy(save_req.wifi_ap_password, password->valuestring, sizeof(save_req.wifi_ap_password) - 1);
+        } else {
+            save_req.wifi_ap_password[0] = '\0';  // password 없음
         }
         if (channel && cJSON_IsNumber(channel)) {
             save_req.wifi_ap_channel = (uint8_t)channel->valueint;
@@ -712,8 +747,8 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
             save_req.wifi_ap_enabled = cJSON_IsTrue(enabled);
         }
 
-        ESP_LOGI(TAG, "Publishing AP save event: ssid=%s, ch=%d, en=%d",
-                 save_req.wifi_ap_ssid, save_req.wifi_ap_channel, save_req.wifi_ap_enabled);
+        ESP_LOGI(TAG, "Publishing AP save event: ssid=%s, pass_len=%d, ch=%d, en=%d",
+                 save_req.wifi_ap_ssid, strlen(save_req.wifi_ap_password), save_req.wifi_ap_channel, save_req.wifi_ap_enabled);
     }
     else if (strncmp(path, "network/wifi", 13) == 0) {
         cJSON* ssid = cJSON_GetObjectItem(root, "ssid");
@@ -726,13 +761,15 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
         }
         if (password && cJSON_IsString(password)) {
             strncpy(save_req.wifi_sta_password, password->valuestring, sizeof(save_req.wifi_sta_password) - 1);
+        } else {
+            save_req.wifi_sta_password[0] = '\0';  // password 없음
         }
         if (enabled && cJSON_IsBool(enabled)) {
             save_req.wifi_sta_enabled = cJSON_IsTrue(enabled);
         }
 
-        ESP_LOGI(TAG, "Publishing STA save event: ssid=%s, en=%d",
-                 save_req.wifi_sta_ssid, save_req.wifi_sta_enabled);
+        ESP_LOGI(TAG, "Publishing STA save event: ssid=%s, pass_len=%d, en=%d",
+                 save_req.wifi_sta_ssid, strlen(save_req.wifi_sta_password), save_req.wifi_sta_enabled);
     }
     else if (strncmp(path, "network/ethernet", 16) == 0) {
         cJSON* ip = cJSON_GetObjectItem(root, "staticIp");
@@ -1008,6 +1045,215 @@ static esp_err_t api_devices_handler(httpd_req_t* req)
 }
 
 /**
+ * @brief GET /api/license - 라이센스 상태 반환
+ */
+static esp_err_t api_license_handler(httpd_req_t* req)
+{
+    cJSON* root = cJSON_CreateObject();
+    if (!root) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    // 라이센스 서비스에서 직접 현재 값 읽기 (캐시 의존 제거)
+    uint8_t device_limit = license_service_get_device_limit();
+    license_state_t state = license_service_get_state();
+
+    cJSON_AddNumberToObject(root, "deviceLimit", device_limit);
+    cJSON_AddNumberToObject(root, "state", (int)state);
+    cJSON_AddNumberToObject(root, "graceRemaining", 0);  // 미사용
+
+    // 상태 문자열
+    const char* state_str = "unknown";
+    switch (state) {
+        case LICENSE_STATE_VALID: state_str = "valid"; break;
+        case LICENSE_STATE_INVALID: state_str = "invalid"; break;
+        case LICENSE_STATE_GRACE: state_str = "grace"; break;
+        case LICENSE_STATE_CHECKING: state_str = "checking"; break;
+    }
+    cJSON_AddStringToObject(root, "stateStr", state_str);
+
+    // 유효성
+    bool is_valid = (state == LICENSE_STATE_VALID || state == LICENSE_STATE_GRACE);
+    cJSON_AddBoolToObject(root, "isValid", is_valid);
+
+    // 라이센스 키
+    char key[17];
+    if (license_service_get_key(key) == ESP_OK && key[0] != '\0') {
+        cJSON_AddStringToObject(root, "key", key);
+    } else {
+        cJSON_AddStringToObject(root, "key", "");
+    }
+
+    char* json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (json_str) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, json_str);
+        free(json_str);
+    } else {
+        httpd_resp_send_500(req);
+    }
+
+    return ESP_OK;
+}
+
+
+/**
+ * @brief POST /api/license/validate - 라이센스 키 검증 (이벤트 기반)
+ */
+static esp_err_t api_license_validate_handler(httpd_req_t* req)
+{
+    // 요청 바디 읽기
+    char* buf = new char[512];
+    int ret = httpd_req_recv(req, buf, 511);
+    if (ret <= 0) {
+        delete[] buf;
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    // JSON 파싱
+    cJSON* root = cJSON_Parse(buf);
+    delete[] buf;
+    if (!root) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    // 라이센스 키 추출
+    cJSON* key_json = cJSON_GetObjectItem(root, "key");
+    if (!key_json || !cJSON_IsString(key_json)) {
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing 'key' field");
+        return ESP_FAIL;
+    }
+
+    const char* key = key_json->valuestring;
+    if (strlen(key) != 16) {
+        cJSON_Delete(root);
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid key length\"}");
+        return ESP_OK;
+    }
+
+    // 라이센스 검증 이벤트 발행
+    license_validate_event_t validate_req;
+    strncpy(validate_req.key, key, 16);
+    validate_req.key[16] = '\0';
+    event_bus_publish(EVT_LICENSE_VALIDATE, &validate_req, sizeof(validate_req));
+
+    cJSON_Delete(root);
+
+    // 응답 (검증은 비동기로 처리됨, 상태는 EVT_LICENSE_STATE_CHANGED로 업데이트됨)
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"accepted\"}");
+
+    return ESP_OK;
+}
+
+/**
+ * @brief POST /api/test/internet - 인터넷 연결 테스트 (8.8.8.8 핑)
+ */
+static esp_err_t api_test_internet_handler(httpd_req_t* req)
+{
+    cJSON* root = cJSON_CreateObject();
+    if (!root) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    bool success = false;
+    int ping_ms = 0;
+
+    // 8.8.8.8 (Google DNS) 핑 테스트
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock >= 0) {
+        struct sockaddr_in addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(53);  // DNS 포트
+        addr.sin_addr.s_addr = esp_ip4addr_aton("8.8.8.8");
+
+        // 타이머 시작
+        int64_t start = esp_timer_get_time();
+
+        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+            int64_t end = esp_timer_get_time();
+            ping_ms = (end - start) / 1000;  // ms 변환
+            success = true;
+        }
+
+        close(sock);
+    }
+
+    cJSON_AddBoolToObject(root, "success", success);
+    if (success) {
+        cJSON_AddNumberToObject(root, "ping", ping_ms);
+    }
+
+    char* json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (json_str) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, json_str);
+        free(json_str);
+    } else {
+        httpd_resp_send_500(req);
+    }
+
+    return ESP_OK;
+}
+
+/**
+ * @brief POST /api/test/license-server - 라이센스 서버 연결 테스트
+ */
+static esp_err_t api_test_license_server_handler(httpd_req_t* req)
+{
+    cJSON* root = cJSON_CreateObject();
+    if (!root) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    bool success = false;
+
+    // 라이센스 서버 연결 테스트
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock >= 0) {
+        struct sockaddr_in addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(33333);
+        addr.sin_addr.s_addr = esp_ip4addr_aton("3.37.87.214");
+
+        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+            success = true;
+        }
+
+        close(sock);
+    }
+
+    cJSON_AddBoolToObject(root, "success", success);
+
+    char* json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (json_str) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, json_str);
+        free(json_str);
+    } else {
+        httpd_resp_send_500(req);
+    }
+
+    return ESP_OK;
+}
+
+/**
  * @brief index.html 핸들러
  */
 static esp_err_t index_handler(httpd_req_t* req)
@@ -1165,6 +1411,36 @@ static const httpd_uri_t uri_api_devices = {
     .user_ctx = nullptr
 };
 
+// License API URI
+static const httpd_uri_t uri_api_license = {
+    .uri = "/api/license",
+    .method = HTTP_GET,
+    .handler = api_license_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_license_validate = {
+    .uri = "/api/license/validate",
+    .method = HTTP_POST,
+    .handler = api_license_validate_handler,
+    .user_ctx = nullptr
+};
+
+// Test API URI
+static const httpd_uri_t uri_api_test_internet = {
+    .uri = "/api/test/internet",
+    .method = HTTP_POST,
+    .handler = api_test_internet_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_test_license_server = {
+    .uri = "/api/test/license-server",
+    .method = HTTP_POST,
+    .handler = api_test_license_server_handler,
+    .user_ctx = nullptr
+};
+
 // 정적 파일 URI
 static const httpd_uri_t uri_css = {
     .uri = "/css/styles.css",
@@ -1206,7 +1482,7 @@ esp_err_t web_server_init(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     config.max_open_sockets = 5;
-    config.max_uri_handlers = 25;  // API + 정적 파일 + LoRa + Device
+    config.max_uri_handlers = 27;  // API + 정적 파일 + LoRa + Device + License
     config.lru_purge_enable = true;
 
     esp_err_t ret = httpd_start(&s_server, &config);
@@ -1237,6 +1513,12 @@ esp_err_t web_server_init(void)
     httpd_register_uri_handler(s_server, &uri_api_lora_scan_stop);
     // Device API (TX only)
     httpd_register_uri_handler(s_server, &uri_api_devices);
+    // License API
+    httpd_register_uri_handler(s_server, &uri_api_license);
+    httpd_register_uri_handler(s_server, &uri_api_license_validate);
+    // Test API
+    httpd_register_uri_handler(s_server, &uri_api_test_internet);
+    httpd_register_uri_handler(s_server, &uri_api_test_license_server);
 
     // 이벤트 구독
     event_bus_subscribe(EVT_INFO_UPDATED, onSystemInfoEvent);
@@ -1249,6 +1531,8 @@ esp_err_t web_server_init(void)
     event_bus_subscribe(EVT_LORA_SCAN_COMPLETE, onLoraScanCompleteEvent);
     // 디바이스 리스트 이벤트 (TX 전용)
     event_bus_subscribe(EVT_DEVICE_LIST_CHANGED, onDeviceListEvent);
+    // 라이센스 상태 이벤트
+    event_bus_subscribe(EVT_LICENSE_STATE_CHANGED, onLicenseStateEvent);
 
     // 설정 데이터 요청 (초기 캐시 populate)
     event_bus_publish(EVT_CONFIG_DATA_REQUEST, nullptr, 0);

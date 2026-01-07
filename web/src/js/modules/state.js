@@ -21,7 +21,8 @@ export function stateModule() {
             switcher: 'Switcher',
             broadcast: 'Broadcast',
             devices: 'Devices',
-            system: 'System'
+            system: 'System',
+            license: 'License Management'
         },
 
         // WebSocket 연결 상태
@@ -122,14 +123,14 @@ export function stateModule() {
 
             // URL 해시에서 현재 뷰 복원
             const hash = window.location.hash.slice(1);
-            if (hash && ['dashboard', 'network', 'switcher', 'broadcast', 'devices', 'system'].includes(hash)) {
+            if (hash && ['dashboard', 'network', 'switcher', 'broadcast', 'devices', 'system', 'license'].includes(hash)) {
                 this.currentView = hash;
             }
 
             // 해시 변경 감지
             window.addEventListener('hashchange', () => {
                 const newHash = window.location.hash.slice(1);
-                if (newHash && ['dashboard', 'network', 'switcher', 'broadcast', 'devices', 'system'].includes(newHash)) {
+                if (newHash && ['dashboard', 'network', 'switcher', 'broadcast', 'devices', 'system', 'license'].includes(newHash)) {
                     this.currentView = newHash;
                 }
             });
@@ -138,6 +139,9 @@ export function stateModule() {
 
             // 디바이스 모듈 초기화
             await this.initDevices();
+
+            // 라이센스 모듈 초기화
+            await this.initLicense();
 
             // 상태 폴링 시작 (모든 페이지)
             this.startStatusPolling();

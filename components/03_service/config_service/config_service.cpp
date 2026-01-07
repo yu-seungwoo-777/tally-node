@@ -264,12 +264,16 @@ static esp_err_t on_config_save_request(const event_data_t* event) {
             // WiFi AP
             strncpy(data_event.wifi_ap_ssid, full_config.wifi_ap.ssid, sizeof(data_event.wifi_ap_ssid) - 1);
             data_event.wifi_ap_ssid[sizeof(data_event.wifi_ap_ssid) - 1] = '\0';
+            strncpy(data_event.wifi_ap_password, full_config.wifi_ap.password, sizeof(data_event.wifi_ap_password) - 1);
+            data_event.wifi_ap_password[sizeof(data_event.wifi_ap_password) - 1] = '\0';
             data_event.wifi_ap_channel = full_config.wifi_ap.channel;
             data_event.wifi_ap_enabled = full_config.wifi_ap.enabled;
 
             // WiFi STA
             strncpy(data_event.wifi_sta_ssid, full_config.wifi_sta.ssid, sizeof(data_event.wifi_sta_ssid) - 1);
             data_event.wifi_sta_ssid[sizeof(data_event.wifi_sta_ssid) - 1] = '\0';
+            strncpy(data_event.wifi_sta_password, full_config.wifi_sta.password, sizeof(data_event.wifi_sta_password) - 1);
+            data_event.wifi_sta_password[sizeof(data_event.wifi_sta_password) - 1] = '\0';
             data_event.wifi_sta_enabled = full_config.wifi_sta.enabled;
 
             // Ethernet
@@ -351,12 +355,16 @@ static esp_err_t on_config_data_request(const event_data_t* event)
     // WiFi AP
     strncpy(data_event.wifi_ap_ssid, full_config.wifi_ap.ssid, sizeof(data_event.wifi_ap_ssid) - 1);
     data_event.wifi_ap_ssid[sizeof(data_event.wifi_ap_ssid) - 1] = '\0';
+    strncpy(data_event.wifi_ap_password, full_config.wifi_ap.password, sizeof(data_event.wifi_ap_password) - 1);
+    data_event.wifi_ap_password[sizeof(data_event.wifi_ap_password) - 1] = '\0';
     data_event.wifi_ap_channel = full_config.wifi_ap.channel;
     data_event.wifi_ap_enabled = full_config.wifi_ap.enabled;
 
     // WiFi STA
     strncpy(data_event.wifi_sta_ssid, full_config.wifi_sta.ssid, sizeof(data_event.wifi_sta_ssid) - 1);
     data_event.wifi_sta_ssid[sizeof(data_event.wifi_sta_ssid) - 1] = '\0';
+    strncpy(data_event.wifi_sta_password, full_config.wifi_sta.password, sizeof(data_event.wifi_sta_password) - 1);
+    data_event.wifi_sta_password[sizeof(data_event.wifi_sta_password) - 1] = '\0';
     data_event.wifi_sta_enabled = full_config.wifi_sta.enabled;
 
     // Ethernet
@@ -453,12 +461,16 @@ static esp_err_t on_rf_saved(const event_data_t* event) {
     // WiFi AP
     strncpy(data_event.wifi_ap_ssid, config.wifi_ap.ssid, sizeof(data_event.wifi_ap_ssid) - 1);
     data_event.wifi_ap_ssid[sizeof(data_event.wifi_ap_ssid) - 1] = '\0';
+    strncpy(data_event.wifi_ap_password, config.wifi_ap.password, sizeof(data_event.wifi_ap_password) - 1);
+    data_event.wifi_ap_password[sizeof(data_event.wifi_ap_password) - 1] = '\0';
     data_event.wifi_ap_channel = config.wifi_ap.channel;
     data_event.wifi_ap_enabled = config.wifi_ap.enabled;
 
     // WiFi STA
     strncpy(data_event.wifi_sta_ssid, config.wifi_sta.ssid, sizeof(data_event.wifi_sta_ssid) - 1);
     data_event.wifi_sta_ssid[sizeof(data_event.wifi_sta_ssid) - 1] = '\0';
+    strncpy(data_event.wifi_sta_password, config.wifi_sta.password, sizeof(data_event.wifi_sta_password) - 1);
+    data_event.wifi_sta_password[sizeof(data_event.wifi_sta_password) - 1] = '\0';
     data_event.wifi_sta_enabled = config.wifi_sta.enabled;
 
     // Ethernet
@@ -575,12 +587,16 @@ esp_err_t ConfigServiceClass::init(void)
         // WiFi AP
         strncpy(data_event.wifi_ap_ssid, full_config.wifi_ap.ssid, sizeof(data_event.wifi_ap_ssid) - 1);
         data_event.wifi_ap_ssid[sizeof(data_event.wifi_ap_ssid) - 1] = '\0';
+        strncpy(data_event.wifi_ap_password, full_config.wifi_ap.password, sizeof(data_event.wifi_ap_password) - 1);
+        data_event.wifi_ap_password[sizeof(data_event.wifi_ap_password) - 1] = '\0';
         data_event.wifi_ap_channel = full_config.wifi_ap.channel;
         data_event.wifi_ap_enabled = full_config.wifi_ap.enabled;
 
         // WiFi STA
         strncpy(data_event.wifi_sta_ssid, full_config.wifi_sta.ssid, sizeof(data_event.wifi_sta_ssid) - 1);
         data_event.wifi_sta_ssid[sizeof(data_event.wifi_sta_ssid) - 1] = '\0';
+        strncpy(data_event.wifi_sta_password, full_config.wifi_sta.password, sizeof(data_event.wifi_sta_password) - 1);
+        data_event.wifi_sta_password[sizeof(data_event.wifi_sta_password) - 1] = '\0';
         data_event.wifi_sta_enabled = full_config.wifi_sta.enabled;
 
         // Ethernet
@@ -750,8 +766,11 @@ esp_err_t ConfigServiceClass::setWiFiAP(const config_wifi_ap_t* config)
     if (config->ssid[0] != '\0') {
         nvs_set_str(handle, "wifi_ap_ssid", config->ssid);
     }
+    // password: 빈 문자열이면 NVS 키 삭제, otherwise 저장
     if (config->password[0] != '\0') {
         nvs_set_str(handle, "wifi_ap_pass", config->password);
+    } else {
+        nvs_erase_key(handle, "wifi_ap_pass");  // 빈 password = 삭제
     }
     nvs_set_u8(handle, "wifi_ap_chan", config->channel);
     nvs_set_u8(handle, "wifi_ap_enbl", config->enabled ? 1 : 0);
@@ -808,8 +827,13 @@ esp_err_t ConfigServiceClass::setWiFiSTA(const config_wifi_sta_t* config)
     if (config->ssid[0] != '\0') {
         nvs_set_str(handle, "wifi_sta_ssid", config->ssid);
     }
+    // password: 빈 문자열이면 NVS 키 삭제, otherwise 저장
     if (config->password[0] != '\0') {
         nvs_set_str(handle, "wifi_sta_pass", config->password);
+        T_LOGI(TAG, "WiFi STA password 저장: 길이=%d", strlen(config->password));
+    } else {
+        nvs_erase_key(handle, "wifi_sta_pass");  // 빈 password = 삭제
+        T_LOGI(TAG, "WiFi STA password 삭제 (빈 값)");
     }
     nvs_set_u8(handle, "wifi_sta_enbl", config->enabled ? 1 : 0);
 
