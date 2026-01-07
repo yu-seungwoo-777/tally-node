@@ -383,9 +383,24 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         return false;
     }
 
-    // 네트워크 이벤트 구독 (재연결 트리거)
+    // 모든 이벤트 구독 (init 단계에서 일괄 구독)
+    // 네트워크 이벤트
     event_bus_subscribe(EVT_NETWORK_DISCONNECTED, handle_network_disconnected);
     event_bus_subscribe(EVT_NETWORK_CONNECTED, handle_network_connected);
+    // 스위처 연결 상태 이벤트
+    event_bus_subscribe(EVT_SWITCHER_CONNECTED, handle_switcher_connected);
+    event_bus_subscribe(EVT_SWITCHER_DISCONNECTED, handle_switcher_disconnected);
+#ifdef DEVICE_MODE_TX
+    // 버튼 이벤트
+    event_bus_subscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
+    event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
+    event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
+    // 디바이스 제어 이벤트
+    event_bus_subscribe(EVT_DEVICE_BRIGHTNESS_REQUEST, handle_device_brightness_request);
+    event_bus_subscribe(EVT_DEVICE_CAMERA_ID_REQUEST, handle_device_camera_id_request);
+    event_bus_subscribe(EVT_DEVICE_PING_REQUEST, handle_device_ping_request);
+#endif
+    T_LOGI(TAG, "이벤트 구독 완료");
 
     // ConfigService 초기화
     ret = config_service_init();
@@ -527,23 +542,6 @@ void prod_tx_app_start(void)
     // DisplayManager 시작, BootPage로 전환
     display_manager_start();
     display_manager_set_page(PAGE_BOOT);
-
-#ifdef DEVICE_MODE_TX
-    // 버튼 이벤트 구독
-    event_bus_subscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
-    event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
-    event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
-    // 디바이스 제어 이벤트 구독
-    event_bus_subscribe(EVT_DEVICE_BRIGHTNESS_REQUEST, handle_device_brightness_request);
-    event_bus_subscribe(EVT_DEVICE_CAMERA_ID_REQUEST, handle_device_camera_id_request);
-    event_bus_subscribe(EVT_DEVICE_PING_REQUEST, handle_device_ping_request);
-#endif
-
-    // 스위처/네트워크 연결 상태 이벤트 구독
-    event_bus_subscribe(EVT_SWITCHER_CONNECTED, handle_switcher_connected);
-    event_bus_subscribe(EVT_SWITCHER_DISCONNECTED, handle_switcher_disconnected);
-    event_bus_subscribe(EVT_NETWORK_CONNECTED, handle_network_connected);
-    event_bus_subscribe(EVT_NETWORK_DISCONNECTED, handle_network_disconnected);
 
     // 버튼 서비스 시작
     button_service_start();
