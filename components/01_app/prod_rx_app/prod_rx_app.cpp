@@ -346,6 +346,20 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
         T_LOGW(TAG, "DeviceManager init failed: %s", esp_err_to_name(ret));
     }
 
+    // 저장된 설정 로드 및 이벤트 발행 (device_manager가 수집)
+    config_all_t saved_config;
+    ret = config_service_load_all(&saved_config);
+    if (ret == ESP_OK) {
+        // 카메라 ID 이벤트 발행
+        event_bus_publish(EVT_CAMERA_ID_CHANGED, &saved_config.device.camera_id, sizeof(uint8_t));
+        T_LOGI(TAG, "카메라 ID 이벤트 발행: %d", saved_config.device.camera_id);
+        // 밝기 이벤트 발행
+        event_bus_publish(EVT_BRIGHTNESS_CHANGED, &saved_config.device.brightness, sizeof(uint8_t));
+        T_LOGI(TAG, "밝기 이벤트 발행: %d", saved_config.device.brightness);
+    } else {
+        T_LOGW(TAG, "설정 로드 실패: %s", esp_err_to_name(ret));
+    }
+
     s_app.initialized = true;
     T_LOGI(TAG, "RX app init complete");
 
