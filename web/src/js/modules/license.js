@@ -124,6 +124,35 @@ export function licenseModule() {
         },
 
         /**
+         * 라이센스 키 입력 포맷팅 (xxxx-xxxx-xxxx-xxxx)
+         */
+        formatLicenseKey(event) {
+            let value = event.target.value.toUpperCase();
+
+            // 하이픈 제거
+            value = value.replace(/-/g, '');
+
+            // 영숫자만 남기기
+            value = value.replace(/[^A-Z0-9]/g, '');
+
+            // 16자 제한
+            if (value.length > 16) {
+                value = value.slice(0, 16);
+            }
+
+            // 하이픈 추가 (xxxx-xxxx-xxxx-xxxx)
+            if (value.length > 12) {
+                value = value.slice(0, 4) + '-' + value.slice(4, 8) + '-' + value.slice(8, 12) + '-' + value.slice(12);
+            } else if (value.length > 8) {
+                value = value.slice(0, 4) + '-' + value.slice(4, 8) + '-' + value.slice(8);
+            } else if (value.length > 4) {
+                value = value.slice(0, 4) + '-' + value.slice(4);
+            }
+
+            this.licenseForm.key = value;
+        },
+
+        /**
          * 라이센스 키 검증 요청
          */
         async validateLicense() {
@@ -134,9 +163,12 @@ export function licenseModule() {
                 return;
             }
 
-            // 16자리 확인
-            if (key.length < 8) {
-                this.showToast('Invalid license key format', 'alert-error');
+            // 하이픈 제거 (xxxx-xxxx-xxxx-xxxx 형식 지원)
+            const cleanKey = key.replace(/-/g, '');
+
+            // 16자리 확인 (백엔드와 동일)
+            if (cleanKey.length !== 16) {
+                this.showToast('License key must be 16 characters (xxxx-xxxx-xxxx-xxxx)', 'alert-error');
                 return;
             }
 
@@ -146,7 +178,7 @@ export function licenseModule() {
                 const res = await fetch('/api/validate-license', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key })
+                    body: JSON.stringify({ key: cleanKey })
                 });
 
                 if (!res.ok) {

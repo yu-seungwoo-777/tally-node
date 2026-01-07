@@ -90,7 +90,7 @@ typedef struct __attribute__((packed)) {
     uint8_t battery;          ///< 배터리 %
     uint8_t camera_id;        ///< 카메라 ID
     uint32_t uptime;          ///< 업타임 (초)
-    uint8_t brightness;       ///< 밝기 0-100
+    uint8_t brightness;       ///< 밝기 0-255
     bool is_stopped;          ///< 기능 정지 상태
     bool is_online;           ///< 온라인 상태 (true=온라인, false=오프라인)
     uint32_t last_seen;       ///< 마지막 수신 시간 (tick)
@@ -450,6 +450,9 @@ typedef enum {
     EVT_DEVICE_REGISTER,         ///< 디바이스 등록 요청 (data: device_register_event_t)
     EVT_DEVICE_UNREGISTER,       ///< 디바이스 등록 해제 요청 (data: device_register_event_t)
     EVT_DEVICE_LIST_CHANGED,     ///< 디바이스 리스트 변경 (data: device_list_event_t)
+    EVT_DEVICE_BRIGHTNESS_REQUEST, ///< 디바이스 밝기 설정 요청 (data: uint8_t[3] = {device_id[0], device_id[1], brightness})
+    EVT_DEVICE_CAMERA_ID_REQUEST, ///< 디바이스 카메라 ID 설정 요청 (data: uint8_t[3] = {device_id[0], device_id[1], camera_id})
+    EVT_DEVICE_PING_REQUEST,     ///< 디바이스 PING 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
 
     // 라이센스 이벤트 (03_service → 03_service)
     EVT_LICENSE_STATE_CHANGED,   ///< 라이센스 상태 변경 (data: license_state_event_t)

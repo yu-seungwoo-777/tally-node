@@ -22,9 +22,6 @@ static const char* TAG = "LicenseService";
 // ============================================================================
 
 #define NVS_NAMESPACE "license"
-#define LICENSE_TASK_STACK_SIZE  (8 * 1024)
-#define LICENSE_TASK_PRIORITY   5
-#define LICENSE_QUEUE_LENGTH     2
 
 // ============================================================================
 // LicenseService 클래스 (싱글톤)
@@ -50,7 +47,6 @@ private:
     static void publishStateEvent(void);
     static esp_err_t onValidateRequest(const event_data_t* event);
     static esp_err_t onNetworkStatusChanged(const event_data_t* event);
-    static void taskHandler(void* arg);
     static void validateInTask(const char* key);
 
     static esp_err_t nvsSetDeviceLimit(uint8_t limit);
@@ -67,8 +63,6 @@ private:
     static char s_license_key[17];
     static bool s_sta_connected;
     static bool s_eth_connected;
-    static TaskHandle_t s_task;
-    static QueueHandle_t s_queue;
 };
 
 // ============================================================================
@@ -82,8 +76,6 @@ uint8_t LicenseService::s_device_limit = 0;
 char LicenseService::s_license_key[17] = {0};
 bool LicenseService::s_sta_connected = false;
 bool LicenseService::s_eth_connected = false;
-TaskHandle_t LicenseService::s_task = nullptr;
-QueueHandle_t LicenseService::s_queue = nullptr;
 
 // ============================================================================
 // 이벤트 발행 헬퍼
@@ -91,15 +83,17 @@ QueueHandle_t LicenseService::s_queue = nullptr;
 
 void LicenseService::publishStateEvent(void)
 {
-    static license_state_event_t s_event;
-    s_event.device_limit = s_device_limit;
-    s_event.state = static_cast<uint8_t>(s_state);
-    s_event.grace_remaining = 0;
+    // 스택 할당 구조체 사용 (static 변수 문제 회피)
+    license_state_event_t event;
+    memset(&event, 0, sizeof(event));
+    event.device_limit = s_device_limit;
+    event.state = static_cast<uint8_t>(s_state);
+    event.grace_remaining = 0;
 
-    event_bus_publish(EVT_LICENSE_STATE_CHANGED, &s_event, sizeof(s_event));
+    T_LOGD(TAG, "라이센스 상태 이벤트 발행: limit=%d, state=%d, addr=%p",
+           event.device_limit, event.state, &event);
 
-    T_LOGD(TAG, "라이센스 상태 이벤트 발행: limit=%d, state=%d",
-           s_event.device_limit, s_event.state);
+    event_bus_publish(EVT_LICENSE_STATE_CHANGED, &event, sizeof(event));
 }
 
 // ============================================================================
@@ -119,15 +113,7 @@ esp_err_t LicenseService::onValidateRequest(const event_data_t* event)
     }
 
     T_LOGI(TAG, "라이센스 검증 요청 수신: %.16s", req->key);
-
-    if (s_queue) {
-        char key_copy[17];
-        strncpy(key_copy, req->key, 16);
-        key_copy[16] = '\0';
-        xQueueSend(s_queue, key_copy, 0);
-    } else {
-        T_LOGE(TAG, "검증 큐가 생성되지 않음");
-    }
+    validateInTask(req->key);
 
     return ESP_OK;
 }
@@ -158,24 +144,8 @@ esp_err_t LicenseService::onNetworkStatusChanged(const event_data_t* event)
 }
 
 // ============================================================================
-// 검증 태스크
+// 검증 함수
 // ============================================================================
-
-void LicenseService::taskHandler(void* arg)
-{
-    (void)arg;
-    char key[17];
-
-    T_LOGI(TAG, "라이센스 검증 태스크 시작");
-
-    while (true) {
-        if (xQueueReceive(s_queue, key, portMAX_DELAY) == pdTRUE) {
-            validateInTask(key);
-        }
-    }
-
-    vTaskDelete(nullptr);
-}
 
 void LicenseService::validateInTask(const char* key)
 {
@@ -322,16 +292,6 @@ esp_err_t LicenseService::init(void)
 
     T_LOGI(TAG, "LicenseService 초기화 중...");
 
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        nvs_flash_erase();
-        ret = nvs_flash_init();
-    }
-    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
-        T_LOGE(TAG, "NVS 초기화 실패: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
     // license_client 초기화 (드라이버 계층)
     license_client_init();
 
@@ -346,7 +306,7 @@ esp_err_t LicenseService::init(void)
     T_LOGI(TAG, "LicenseService 초기화 완료 (상태: %d, limit: %d)",
            s_state, s_device_limit);
 
-    publishStateEvent();
+    // init()에서는 이벤트 발행 안 함 (start()에서 함)
 
     return ESP_OK;
 }
@@ -361,33 +321,15 @@ esp_err_t LicenseService::start(void)
         return ESP_OK;
     }
 
-    s_queue = xQueueCreate(LICENSE_QUEUE_LENGTH, 17);
-    if (!s_queue) {
-        T_LOGE(TAG, "큐 생성 실패");
-        return ESP_ERR_NO_MEM;
-    }
-
-    BaseType_t ret = xTaskCreate(
-        taskHandler,
-        "license_task",
-        LICENSE_TASK_STACK_SIZE,
-        nullptr,
-        LICENSE_TASK_PRIORITY,
-        &s_task
-    );
-
-    if (ret != pdPASS) {
-        T_LOGE(TAG, "태스크 생성 실패");
-        vQueueDelete(s_queue);
-        s_queue = nullptr;
-        return ESP_ERR_NO_MEM;
-    }
-
     event_bus_subscribe(EVT_LICENSE_VALIDATE, onValidateRequest);
     event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusChanged);
 
     s_started = true;
     T_LOGI(TAG, "LicenseService 시작 (이벤트 구독 완료)");
+
+    // 초기화 시점에는 이벤트 발행 스킵 (웹 연결 시 상태 조회로 대체)
+    // 네트워크 연결 시 onNetworkStatusChanged에서 필요시 발행
+
     return ESP_OK;
 }
 
@@ -398,16 +340,7 @@ void LicenseService::stop(void)
     }
 
     event_bus_unsubscribe(EVT_LICENSE_VALIDATE, onValidateRequest);
-
-    if (s_task) {
-        vTaskDelete(s_task);
-        s_task = nullptr;
-    }
-
-    if (s_queue) {
-        vQueueDelete(s_queue);
-        s_queue = nullptr;
-    }
+    event_bus_unsubscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusChanged);
 
     s_started = false;
 
@@ -420,19 +353,7 @@ esp_err_t LicenseService::validate(const char* key)
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (s_queue) {
-        char key_copy[17];
-        strncpy(key_copy, key, 16);
-        key_copy[16] = '\0';
-        if (xQueueSend(s_queue, key_copy, pdMS_TO_TICKS(1000)) != pdTRUE) {
-            T_LOGE(TAG, "검증 큐 전송 실패 (타임아웃)");
-            return ESP_ERR_TIMEOUT;
-        }
-    } else {
-        T_LOGE(TAG, "검증 큐가 생성되지 않음");
-        return ESP_ERR_INVALID_STATE;
-    }
-
+    validateInTask(key);
     return ESP_OK;
 }
 

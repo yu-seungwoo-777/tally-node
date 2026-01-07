@@ -865,6 +865,21 @@
         loading: false,
         _pollingTimer: null
       },
+      // 밝기 제어 상태
+      brightnessControl: {
+        sending: null
+        // 전송 중인 디바이스 ID
+      },
+      // 카메라 ID 제어 상태
+      cameraIdControl: {
+        sending: null
+        // 전송 중인 디바이스 ID
+      },
+      // PING 제어 상태
+      pingControl: {
+        sending: null
+        // 전송 중인 디바이스 ID
+      },
       /**
        * 초기화
        */
@@ -920,6 +935,141 @@
         if (this.devices._pollingTimer) {
           clearInterval(this.devices._pollingTimer);
           this.devices._pollingTimer = null;
+        }
+      },
+      /**
+       * 디바이스 밝기 설정
+       * @param {string} deviceId - 디바이스 ID (예: "A1B2")
+       * @param {number} brightness - 밝기 값 (0-100)
+       */
+      async setDeviceBrightness(deviceId, brightness) {
+        const brightnessValue = parseInt(brightness, 10);
+        if (isNaN(brightnessValue) || brightnessValue < 0 || brightnessValue > 100) {
+          console.error("Invalid brightness value:", brightness);
+          return;
+        }
+        const brightness255 = Math.round(brightnessValue * 255 / 100);
+        try {
+          this.brightnessControl.sending = deviceId;
+          const deviceIdBytes = [
+            parseInt(deviceId.substring(0, 2), 16),
+            parseInt(deviceId.substring(2, 4), 16)
+          ];
+          const res = await fetch("/api/device/brightness", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              deviceId: deviceIdBytes,
+              brightness: brightness255
+            })
+          });
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.message || "Failed to set brightness");
+          }
+          const data = await res.json();
+          if (data.status === "ok") {
+            console.log(`Brightness set for ${deviceId}: ${brightnessValue}% (${brightness255})`);
+            setTimeout(() => this.fetchDevices(), 500);
+          } else {
+            throw new Error(data.message || "Failed to set brightness");
+          }
+        } catch (e) {
+          console.error("Set brightness error:", e);
+          alert(`\uBC1D\uAE30 \uC124\uC815 \uC2E4\uD328: ${e.message}`);
+        } finally {
+          this.brightnessControl.sending = null;
+        }
+      },
+      /**
+       * 디바이스 카메라 ID 설정
+       * @param {string} deviceId - 디바이스 ID (예: "A1B2")
+       * @param {number} cameraId - 카메라 ID (1-20)
+       */
+      async setDeviceCameraId(deviceId, cameraId) {
+        const cameraIdValue = parseInt(cameraId, 10);
+        if (isNaN(cameraIdValue) || cameraIdValue < 1 || cameraIdValue > 20) {
+          console.error("Invalid camera ID:", cameraId);
+          return;
+        }
+        try {
+          this.cameraIdControl.sending = deviceId;
+          const deviceIdBytes = [
+            parseInt(deviceId.substring(0, 2), 16),
+            parseInt(deviceId.substring(2, 4), 16)
+          ];
+          const res = await fetch("/api/device/camera-id", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              deviceId: deviceIdBytes,
+              cameraId: cameraIdValue
+            })
+          });
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.message || "Failed to set camera ID");
+          }
+          const data = await res.json();
+          if (data.status === "ok") {
+            console.log(`Camera ID set for ${deviceId}: ${cameraIdValue}`);
+            setTimeout(() => this.fetchDevices(), 500);
+          } else {
+            throw new Error(data.message || "Failed to set camera ID");
+          }
+        } catch (e) {
+          console.error("Set camera ID error:", e);
+          alert(`\uCE74\uBA54\uB77C ID \uC124\uC815 \uC2E4\uD328: ${e.message}`);
+        } finally {
+          this.cameraIdControl.sending = null;
+        }
+      },
+      /**
+       * 카메라 ID 조정 (+/- 버튼)
+       * @param {string} deviceId - 디바이스 ID
+       * @param {number} delta - 변경량 (-1 또는 +1)
+       */
+      adjustCameraId(deviceId, delta) {
+        const currentId = this.cameraIdControl[deviceId] ?? this.devices.list.find((d) => d.id === deviceId)?.cameraId ?? 1;
+        const newId = currentId + delta;
+        if (newId >= 1 && newId <= 20) {
+          this.cameraIdControl[deviceId] = newId;
+          this.setDeviceCameraId(deviceId, newId);
+        }
+      },
+      /**
+       * 디바이스 PING 전송
+       * @param {string} deviceId - 디바이스 ID (예: "A1B2")
+       */
+      async pingDevice(deviceId) {
+        try {
+          this.pingControl.sending = deviceId;
+          const deviceIdBytes = [
+            parseInt(deviceId.substring(0, 2), 16),
+            parseInt(deviceId.substring(2, 4), 16)
+          ];
+          const res = await fetch("/api/device/ping", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              deviceId: deviceIdBytes
+            })
+          });
+          if (!res.ok) {
+            const errorData = await res.json().catch(() => ({}));
+            throw new Error(errorData.message || "Failed to send ping");
+          }
+          const data = await res.json();
+          if (data.status === "ok") {
+            console.log(`PING sent to ${deviceId}`);
+          } else {
+            throw new Error(data.message || "Failed to send ping");
+          }
+        } catch (e) {
+          console.error("PING error:", e);
+          alert(`PING \uC2E4\uD328: ${e.message}`);
+        } finally {
+          this.pingControl.sending = null;
         }
       },
       /**
@@ -1097,6 +1247,25 @@
         }
       },
       /**
+       * 라이센스 키 입력 포맷팅 (xxxx-xxxx-xxxx-xxxx)
+       */
+      formatLicenseKey(event) {
+        let value = event.target.value.toUpperCase();
+        value = value.replace(/-/g, "");
+        value = value.replace(/[^A-Z0-9]/g, "");
+        if (value.length > 16) {
+          value = value.slice(0, 16);
+        }
+        if (value.length > 12) {
+          value = value.slice(0, 4) + "-" + value.slice(4, 8) + "-" + value.slice(8, 12) + "-" + value.slice(12);
+        } else if (value.length > 8) {
+          value = value.slice(0, 4) + "-" + value.slice(4, 8) + "-" + value.slice(8);
+        } else if (value.length > 4) {
+          value = value.slice(0, 4) + "-" + value.slice(4);
+        }
+        this.licenseForm.key = value;
+      },
+      /**
        * 라이센스 키 검증 요청
        */
       async validateLicense() {
@@ -1105,8 +1274,9 @@
           this.showToast("Please enter license key", "alert-warning");
           return;
         }
-        if (key.length < 8) {
-          this.showToast("Invalid license key format", "alert-error");
+        const cleanKey = key.replace(/-/g, "");
+        if (cleanKey.length !== 16) {
+          this.showToast("License key must be 16 characters (xxxx-xxxx-xxxx-xxxx)", "alert-error");
           return;
         }
         try {
@@ -1114,7 +1284,7 @@
           const res = await fetch("/api/validate-license", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ key })
+            body: JSON.stringify({ key: cleanKey })
           });
           if (!res.ok) {
             throw new Error("Validation request failed");

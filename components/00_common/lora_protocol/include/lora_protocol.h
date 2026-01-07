@@ -53,7 +53,7 @@ extern "C" {
 typedef struct __attribute__((packed)) {
     uint8_t header;                  // 0xE1
     uint8_t device_id[LORA_DEVICE_ID_LEN];
-    uint8_t brightness;              // 0-100
+    uint8_t brightness;              // 0-255
 } lora_cmd_brightness_t;
 
 /**
@@ -101,9 +101,10 @@ typedef struct __attribute__((packed)) {
     uint8_t battery;                 // 0-100
     uint8_t camera_id;
     uint32_t uptime;                 // 초
-    uint8_t brightness;              // 0-100
+    uint8_t brightness;              // 0-255
     uint16_t frequency;              // 현재 주파수 (MHz, 정수)
     uint8_t sync_word;               // 현재 sync word
+    uint8_t stopped;                 // 0: 정상, 1: 기능 정지 상태
 } lora_msg_status_t;
 
 /**

@@ -77,10 +77,13 @@ static const char* EVENT_NAMES[] = {
     "EVT_DEVICE_LIST_CHANGED",
     "EVT_LICENSE_STATE_CHANGED",
     "EVT_LICENSE_VALIDATE",
+    "EVT_DEVICE_BRIGHTNESS_REQUEST",
+    "EVT_DEVICE_CAMERA_ID_REQUEST",
+    "EVT_DEVICE_PING_REQUEST",
 };
 
 const char* event_type_to_string(event_type_t type) {
-    if (type < _EVT_MAX) {
+    if (type >= 0 && type < sizeof(EVENT_NAMES) / sizeof(EVENT_NAMES[0])) {
         return EVENT_NAMES[type];
     }
     return "UNKNOWN";
@@ -178,11 +181,19 @@ esp_err_t event_bus_publish(event_type_t type, const void* data, size_t data_siz
         return ESP_ERR_INVALID_ARG;
     }
 
-    event_data_t event = {
-        .type = type,
-        .data_size = data_size,
-        .timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS
-    };
+    // 큐 유효성 검사
+    if (g_event_bus.queue == NULL) {
+        T_LOGE(TAG, "Event queue is NULL!");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // 스택 할당 (구조체 크기 약 2064바이트)
+    // 필드 순서: type, data[], data_size, timestamp
+    event_data_t event;
+    memset(&event, 0, sizeof(event));
+    event.type = type;
+    event.data_size = data_size;
+    event.timestamp = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
     // 데이터 복사 (발행자의 데이터를 내부 버퍼로)
     if (data != NULL && data_size > 0) {

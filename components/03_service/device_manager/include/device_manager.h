@@ -50,6 +50,12 @@ void device_manager_set_request_interval(uint32_t interval_ms);
  */
 esp_err_t device_manager_request_status_now(void);
 
+/**
+ * @brief PING 송신 (TX 전용)
+ * @param device_id 2바이트 디바이스 ID (NULL이면 Broadcast)
+ */
+esp_err_t device_manager_send_ping(const uint8_t* device_id);
+
 #endif // DEVICE_MODE_TX
 
 #ifdef __cplusplus

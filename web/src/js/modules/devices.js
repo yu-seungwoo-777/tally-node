@@ -14,6 +14,21 @@ export function devicesModule() {
             _pollingTimer: null
         },
 
+        // 밝기 제어 상태
+        brightnessControl: {
+            sending: null  // 전송 중인 디바이스 ID
+        },
+
+        // 카메라 ID 제어 상태
+        cameraIdControl: {
+            sending: null  // 전송 중인 디바이스 ID
+        },
+
+        // PING 제어 상태
+        pingControl: {
+            sending: null  // 전송 중인 디바이스 ID
+        },
+
         /**
          * 초기화
          */
@@ -80,6 +95,176 @@ export function devicesModule() {
             if (this.devices._pollingTimer) {
                 clearInterval(this.devices._pollingTimer);
                 this.devices._pollingTimer = null;
+            }
+        },
+
+        /**
+         * 디바이스 밝기 설정
+         * @param {string} deviceId - 디바이스 ID (예: "A1B2")
+         * @param {number} brightness - 밝기 값 (0-100)
+         */
+        async setDeviceBrightness(deviceId, brightness) {
+            // 밝기 정수 변환
+            const brightnessValue = parseInt(brightness, 10);
+            if (isNaN(brightnessValue) || brightnessValue < 0 || brightnessValue > 100) {
+                console.error('Invalid brightness value:', brightness);
+                return;
+            }
+
+            // 0-100 → 0-255 변환
+            const brightness255 = Math.round((brightnessValue * 255) / 100);
+
+            try {
+                // 전송 중 표시
+                this.brightnessControl.sending = deviceId;
+
+                // 디바이스 ID 파싱 (hex 문자열 → 바이트 배열)
+                const deviceIdBytes = [
+                    parseInt(deviceId.substring(0, 2), 16),
+                    parseInt(deviceId.substring(2, 4), 16)
+                ];
+
+                const res = await fetch('/api/device/brightness', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        deviceId: deviceIdBytes,
+                        brightness: brightness255
+                    })
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.message || 'Failed to set brightness');
+                }
+
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    console.log(`Brightness set for ${deviceId}: ${brightnessValue}% (${brightness255})`);
+                    // 디바이스 목록 새로고침 (지연된 업데이트 반영)
+                    setTimeout(() => this.fetchDevices(), 500);
+                } else {
+                    throw new Error(data.message || 'Failed to set brightness');
+                }
+            } catch (e) {
+                console.error('Set brightness error:', e);
+                // 사용자 피드백 (간단한 alert 또는 toast)
+                alert(`밝기 설정 실패: ${e.message}`);
+            } finally {
+                // 전송 중 표시 해제
+                this.brightnessControl.sending = null;
+            }
+        },
+
+        /**
+         * 디바이스 카메라 ID 설정
+         * @param {string} deviceId - 디바이스 ID (예: "A1B2")
+         * @param {number} cameraId - 카메라 ID (1-20)
+         */
+        async setDeviceCameraId(deviceId, cameraId) {
+            const cameraIdValue = parseInt(cameraId, 10);
+            if (isNaN(cameraIdValue) || cameraIdValue < 1 || cameraIdValue > 20) {
+                console.error('Invalid camera ID:', cameraId);
+                return;
+            }
+
+            try {
+                // 전송 중 표시
+                this.cameraIdControl.sending = deviceId;
+
+                // 디바이스 ID 파싱 (hex 문자열 → 바이트 배열)
+                const deviceIdBytes = [
+                    parseInt(deviceId.substring(0, 2), 16),
+                    parseInt(deviceId.substring(2, 4), 16)
+                ];
+
+                const res = await fetch('/api/device/camera-id', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        deviceId: deviceIdBytes,
+                        cameraId: cameraIdValue
+                    })
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.message || 'Failed to set camera ID');
+                }
+
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    console.log(`Camera ID set for ${deviceId}: ${cameraIdValue}`);
+                    // 디바이스 목록 새로고침
+                    setTimeout(() => this.fetchDevices(), 500);
+                } else {
+                    throw new Error(data.message || 'Failed to set camera ID');
+                }
+            } catch (e) {
+                console.error('Set camera ID error:', e);
+                alert(`카메라 ID 설정 실패: ${e.message}`);
+            } finally {
+                // 전송 중 표시 해제
+                this.cameraIdControl.sending = null;
+            }
+        },
+
+        /**
+         * 카메라 ID 조정 (+/- 버튼)
+         * @param {string} deviceId - 디바이스 ID
+         * @param {number} delta - 변경량 (-1 또는 +1)
+         */
+        adjustCameraId(deviceId, delta) {
+            const currentId = this.cameraIdControl[deviceId] ?? this.devices.list.find(d => d.id === deviceId)?.cameraId ?? 1;
+            const newId = currentId + delta;
+            if (newId >= 1 && newId <= 20) {
+                this.cameraIdControl[deviceId] = newId;
+                this.setDeviceCameraId(deviceId, newId);
+            }
+        },
+
+        /**
+         * 디바이스 PING 전송
+         * @param {string} deviceId - 디바이스 ID (예: "A1B2")
+         */
+        async pingDevice(deviceId) {
+            try {
+                // 전송 중 표시
+                this.pingControl.sending = deviceId;
+
+                // 디바이스 ID 파싱 (hex 문자열 → 바이트 배열)
+                const deviceIdBytes = [
+                    parseInt(deviceId.substring(0, 2), 16),
+                    parseInt(deviceId.substring(2, 4), 16)
+                ];
+
+                const res = await fetch('/api/device/ping', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        deviceId: deviceIdBytes
+                    })
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.message || 'Failed to send ping');
+                }
+
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    console.log(`PING sent to ${deviceId}`);
+                    // PONG 응답은 디바이스 목록 폴링으로 업데이트됨
+                } else {
+                    throw new Error(data.message || 'Failed to send ping');
+                }
+            } catch (e) {
+                console.error('PING error:', e);
+                // 사용자 피드백
+                alert(`PING 실패: ${e.message}`);
+            } finally {
+                // 전송 중 표시 해제
+                this.pingControl.sending = null;
             }
         },
 

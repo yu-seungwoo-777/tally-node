@@ -3,7 +3,7 @@
  * @brief Device Manager 구현 (이벤트 기반)
  *
  * TX: 주기적 상태 요청, RX 디바이스 리스트 관리
- * RX: 상태 요청 수신 시 응답 송신
+ * RX: 상태 요청 수신 시 응답 송신, 밝기/카메라ID 설정 명령 처리
  *
  * 의존성: event_bus만 직접 사용
  *         나머지는 이벤트로 데이터 수신
@@ -15,9 +15,16 @@
 #include "t_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_random.h"
 #include <string.h>
 
 static const char* TAG = "DeviceMgr";
+
+// ============================================================================
+// 전방 선언 (static 함수)
+// ============================================================================
+static esp_err_t send_status_request(void);
+static esp_err_t send_status_response(void);
 
 // ============================================================================
 // 공통 상태
@@ -113,6 +120,36 @@ static esp_err_t send_stop_command(const uint8_t* device_id)
 }
 
 /**
+ * @brief PING 명령 송신 (0xE6) (이벤트 기반)
+ */
+static esp_err_t send_ping_command(const uint8_t* device_id)
+{
+    // 정적 버퍼
+    static lora_cmd_ping_t s_ping;
+
+    s_ping.header = LORA_HDR_PING;
+    memcpy(s_ping.device_id, device_id, LORA_DEVICE_ID_LEN);
+    // 송신 시간 하위 2바이트 (ms)
+    s_ping.timestamp_low = (uint16_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+
+    lora_send_request_t req = {
+        .data = (const uint8_t*)&s_ping,
+        .length = sizeof(s_ping)
+    };
+
+    esp_err_t ret = event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
+    if (ret == ESP_OK) {
+        char device_id_str[5];
+        lora_device_id_to_str(device_id, device_id_str);
+        T_LOGI(TAG, "PING 송신: ID=%s, TS=%u", device_id_str, s_ping.timestamp_low);
+    } else {
+        T_LOGE(TAG, "PING 송신 실패: %d", ret);
+    }
+
+    return ret;
+}
+
+/**
  * @brief 상태 응답 수신 처리 (0xD0)
  */
 static void on_status_response(const lora_msg_status_t* status, int16_t rssi, float snr)
@@ -159,6 +196,7 @@ static void on_status_response(const lora_msg_status_t* status, int16_t rssi, fl
     s_tx.devices[found_idx].last_seen = now;
     s_tx.devices[found_idx].frequency = (float)status->frequency;
     s_tx.devices[found_idx].sync_word = status->sync_word;
+    s_tx.devices[found_idx].is_stopped = (status->stopped == 1);
     s_tx.devices[found_idx].is_online = true;  // 상태 응답 수신 = 온라인
 
     // 라이센스 device_limit 체크 (새 디바이스 추가 시만)
@@ -385,11 +423,17 @@ static void status_request_task(void* arg)
 static struct {
     system_info_event_t system;      // EVT_INFO_UPDATED
     lora_rssi_event_t lora;          // EVT_LORA_RSSI_CHANGED
+    uint8_t brightness;              // 현재 밝기 (0-255)
+    uint8_t camera_id;               // 현재 카메라 ID (1-20)
+    bool stopped;                    // 기능 정지 상태
     bool system_valid;
     bool lora_valid;
 } s_rx = {
     .system = {},
     .lora = {},
+    .brightness = 255,  // 기본값
+    .camera_id = 1,      // 기본값
+    .stopped = false,    // 기본값: 정상
     .system_valid = false,
     .lora_valid = false
 };
@@ -422,6 +466,44 @@ static esp_err_t on_lora_rssi_changed(const event_data_t* event)
     const lora_rssi_event_t* rssi = (const lora_rssi_event_t*)event->data;
     s_rx.lora = *rssi;
     s_rx.lora_valid = true;
+
+    return ESP_OK;
+}
+
+/**
+ * @brief 밝기 변경 이벤트 핸들러
+ */
+static esp_err_t on_brightness_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* brightness = (const uint8_t*)event->data;
+    s_rx.brightness = *brightness;
+    T_LOGI(TAG, "밝기 변경: %d", s_rx.brightness);
+
+    // 변경 즉시 상태 응답 송신 (TX에 새 값 알림)
+    send_status_response();
+
+    return ESP_OK;
+}
+
+/**
+ * @brief 카메라 ID 변경 이벤트 핸들러
+ */
+static esp_err_t on_camera_id_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* camera_id = (const uint8_t*)event->data;
+    s_rx.camera_id = *camera_id;
+    T_LOGI(TAG, "카메라 ID 변경: %d", s_rx.camera_id);
+
+    // 변경 즉시 상태 응답 송신 (TX에 새 값 알림)
+    send_status_response();
 
     return ESP_OK;
 }
@@ -462,18 +544,21 @@ static esp_err_t send_status_response(void)
     s_status.battery = s_rx.system.battery;
     // voltage는 status 구조체에 없음
 
-    // 카메라 ID (TODO: EVT_CAMERA_ID_CHANGED 이벤트로 수집)
-    s_status.camera_id = 1;  // 임시
+    // 카메라 ID (EVT_CAMERA_ID_CHANGED 이벤트로 수집)
+    s_status.camera_id = s_rx.camera_id;
 
     // 업타임
     s_status.uptime = s_rx.system.uptime;
 
-    // 밝기 (TODO: EVT_BRIGHTNESS_CHANGED 이벤트로 수집)
-    s_status.brightness = 100;  // 임시
+    // 밝기 (EVT_BRIGHTNESS_CHANGED 이벤트로 수집)
+    s_status.brightness = s_rx.brightness;
 
     // 주파수/SyncWord
     s_status.frequency = (uint16_t)s_rx.lora.frequency;
     s_status.sync_word = 0x12;  // TODO: lora_service에서 가져오기
+
+    // 기능 정지 상태
+    s_status.stopped = s_rx.stopped ? 1 : 0;
 
     lora_send_request_t req = {
         .data = (const uint8_t*)&s_status,
@@ -484,9 +569,43 @@ static esp_err_t send_status_response(void)
     if (ret == ESP_OK) {
         char device_id_str[5];
         lora_device_id_to_str(s_status.device_id, device_id_str);
-        T_LOGI(TAG, "상태 응답 송신: ID=%s Bat=%d%% Up=%us", device_id_str, s_status.battery, s_status.uptime);
+        T_LOGI(TAG, "상태 응답 송신: ID=%s Bat=%d%% Up=%us Stop=%d",
+                 device_id_str, s_status.battery, s_status.uptime, s_status.stopped);
     } else {
         T_LOGE(TAG, "상태 응답 송신 실패: %d", ret);
+    }
+
+    return ret;
+}
+
+/**
+ * @brief PONG 응답 송신 (0xD2)
+ */
+static esp_err_t send_pong_response(const uint8_t* device_id, uint16_t tx_timestamp_low)
+{
+    if (!s_rx.system_valid) {
+        T_LOGW(TAG, "시스템 정보 없음, PONG 송신 생략");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // 정적 버퍼
+    static lora_msg_pong_t s_pong;
+    s_pong.header = LORA_HDR_PONG;
+    memcpy(s_pong.device_id, device_id, LORA_DEVICE_ID_LEN);
+    s_pong.tx_timestamp_low = tx_timestamp_low;
+
+    lora_send_request_t req = {
+        .data = (const uint8_t*)&s_pong,
+        .length = sizeof(s_pong)
+    };
+
+    esp_err_t ret = event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
+    if (ret == ESP_OK) {
+        char device_id_str[5];
+        lora_device_id_to_str(device_id, device_id_str);
+        T_LOGI(TAG, "PONG 송신: ID=%s, TS=%u", device_id_str, tx_timestamp_low);
+    } else {
+        T_LOGE(TAG, "PONG 송신 실패: %d", ret);
     }
 
     return ret;
@@ -514,7 +633,107 @@ static esp_err_t on_lora_tx_command(const event_data_t* event)
     // 상태 요청 (0xE0)
     if (header == LORA_HDR_STATUS_REQ) {
         T_LOGI(TAG, "상태 요청 수신 (RSSI:%d)", packet->rssi);
+
+        // 충돌 방지를 위한 랜덤 지연 (0-1000ms)
+        uint32_t delay_ms = esp_random() % 1000;
+        T_LOGD(TAG, "상태 응답 지연: %u ms", delay_ms);
+        vTaskDelay(pdMS_TO_TICKS(delay_ms));
+
         send_status_response();
+    }
+    // 밝기 설정 (0xE1)
+    else if (header == LORA_HDR_SET_BRIGHTNESS) {
+        if (len >= sizeof(lora_cmd_brightness_t)) {
+            const lora_cmd_brightness_t* cmd = (const lora_cmd_brightness_t*)data;
+            T_LOGI(TAG, "밝기 설정 수신: %d", cmd->brightness);
+
+            // 밝기 변경 이벤트 발행 (led_service가 구독)
+            event_bus_publish(EVT_BRIGHTNESS_CHANGED, &cmd->brightness, sizeof(cmd->brightness));
+        } else {
+            T_LOGW(TAG, "밝기 명령 길이 부족: %d < %zu", len, sizeof(lora_cmd_brightness_t));
+        }
+    }
+    // 카메라 ID 설정 (0xE2)
+    else if (header == LORA_HDR_SET_CAMERA_ID) {
+        if (len >= sizeof(lora_cmd_camera_id_t)) {
+            const lora_cmd_camera_id_t* cmd = (const lora_cmd_camera_id_t*)data;
+            T_LOGI(TAG, "카메라 ID 설정 수신: %d", cmd->camera_id);
+
+            // 카메라 ID 변경 이벤트 발행 (display_manager가 구독)
+            event_bus_publish(EVT_CAMERA_ID_CHANGED, &cmd->camera_id, sizeof(cmd->camera_id));
+        } else {
+            T_LOGW(TAG, "카메라 ID 명령 길이 부족: %d < %zu", len, sizeof(lora_cmd_camera_id_t));
+        }
+    }
+    // 기능 정지 (0xE4)
+    else if (header == LORA_HDR_STOP) {
+        if (len >= sizeof(lora_cmd_stop_t)) {
+            const lora_cmd_stop_t* cmd = (const lora_cmd_stop_t*)data;
+
+            // Broadcast 또는 자신의 Device ID 확인
+            bool is_target = lora_device_id_is_broadcast(cmd->device_id);
+
+            if (!is_target && strlen(s_rx.system.device_id) == 4) {
+                // 자신의 ID와 비교
+                uint8_t my_id[2];
+                char hex_str[3];
+                hex_str[0] = s_rx.system.device_id[0];
+                hex_str[1] = s_rx.system.device_id[1];
+                hex_str[2] = '\0';
+                my_id[0] = (uint8_t)strtol(hex_str, NULL, 16);
+                hex_str[0] = s_rx.system.device_id[2];
+                hex_str[1] = s_rx.system.device_id[3];
+                my_id[1] = (uint8_t)strtol(hex_str, NULL, 16);
+                is_target = lora_device_id_equals(my_id, cmd->device_id);
+            }
+
+            if (is_target) {
+                s_rx.stopped = true;
+                char device_id_str[5];
+                lora_device_id_to_str(cmd->device_id, device_id_str);
+                T_LOGW(TAG, "기능 정지 명령 수신: ID=%s, 디스플레이/LED 정지", device_id_str);
+
+                // 기능 정지 이벤트 발행 (다른 서비스에서 처리)
+                bool stopped_val = true;
+                event_bus_publish(EVT_STOP_CHANGED, &stopped_val, sizeof(stopped_val));
+            }
+        } else {
+            T_LOGW(TAG, "기능 정지 명령 길이 부족: %d < %zu", len, sizeof(lora_cmd_stop_t));
+        }
+    }
+    // PING (0xE6)
+    else if (header == LORA_HDR_PING) {
+        if (len >= sizeof(lora_cmd_ping_t)) {
+            const lora_cmd_ping_t* cmd = (const lora_cmd_ping_t*)data;
+
+            // Broadcast 또는 자신의 Device ID 확인
+            bool is_target = lora_device_id_is_broadcast(cmd->device_id);
+
+            if (!is_target && strlen(s_rx.system.device_id) == 4) {
+                // 자신의 ID와 비교
+                uint8_t my_id[2];
+                char hex_str[3];
+                hex_str[0] = s_rx.system.device_id[0];
+                hex_str[1] = s_rx.system.device_id[1];
+                hex_str[2] = '\0';
+                my_id[0] = (uint8_t)strtol(hex_str, NULL, 16);
+                hex_str[0] = s_rx.system.device_id[2];
+                hex_str[1] = s_rx.system.device_id[3];
+                my_id[1] = (uint8_t)strtol(hex_str, NULL, 16);
+                is_target = lora_device_id_equals(my_id, cmd->device_id);
+            }
+
+            if (is_target) {
+                char device_id_str[5];
+                lora_device_id_to_str(cmd->device_id, device_id_str);
+                T_LOGI(TAG, "PING 수신: ID=%s, TS=%u", device_id_str, cmd->timestamp_low);
+
+                // PONG 응답 송신
+                send_pong_response(cmd->device_id, cmd->timestamp_low);
+            }
+        } else {
+            T_LOGW(TAG, "PING 명령 길이 부족: %d < %zu", len, sizeof(lora_cmd_ping_t));
+        }
     }
     // 기타 TX 명령은 추후 구현
     else {
@@ -590,6 +809,8 @@ esp_err_t device_manager_start(void)
     // 시스템 정보 이벤트 구독
     event_bus_subscribe(EVT_INFO_UPDATED, on_info_updated);
     event_bus_subscribe(EVT_LORA_RSSI_CHANGED, on_lora_rssi_changed);
+    event_bus_subscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
+    event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
 
     // TX 명령 이벤트 구독 (0xE0~0xEF)
     event_bus_subscribe(EVT_LORA_TX_COMMAND, on_lora_tx_command);
@@ -616,6 +837,8 @@ void device_manager_stop(void)
 #ifdef DEVICE_MODE_RX
     event_bus_unsubscribe(EVT_INFO_UPDATED, on_info_updated);
     event_bus_unsubscribe(EVT_LORA_RSSI_CHANGED, on_lora_rssi_changed);
+    event_bus_unsubscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
+    event_bus_unsubscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
     event_bus_unsubscribe(EVT_LORA_TX_COMMAND, on_lora_tx_command);
 #endif
 
@@ -645,6 +868,23 @@ esp_err_t device_manager_request_status_now(void)
         return ESP_ERR_INVALID_STATE;
     }
     return send_status_request();
+}
+
+esp_err_t device_manager_send_ping(const uint8_t* device_id)
+{
+    if (!s_mgr.running) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // NULL이면 Broadcast ID 사용
+    uint8_t target_id[2];
+    if (device_id == NULL) {
+        target_id[0] = 0xFF;
+        target_id[1] = 0xFF;
+        device_id = target_id;
+    }
+
+    return send_ping_command(device_id);
 }
 
 #endif // DEVICE_MODE_TX

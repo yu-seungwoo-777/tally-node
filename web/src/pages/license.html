@@ -22,9 +22,10 @@
 
                                 <div class="flex gap-3">
                                     <input type="text" x-model="licenseForm.key"
-                                           class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm"
+                                           class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm uppercase"
                                            placeholder="XXXX-XXXX-XXXX-XXXX"
-                                           maxlength="32"
+                                           maxlength="19"
+                                           @input="formatLicenseKey"
                                            @keyup.enter="validateLicense()">
                                     <button @click="validateLicense()"
                                             :disabled="license.loading || !licenseForm.key"

@@ -34,7 +34,7 @@
     </div>
 
     <!-- 디바이스 그리드 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="device-grid">
         <template x-for="device in devices.list" :key="device.id">
             <div class="bg-white rounded-2xl border overflow-hidden hover:shadow-lg hover:border-slate-300 transition-all duration-200"
                  :class="{
@@ -95,14 +95,26 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- Ping 수치 -->
+                        <!-- Ping 수치 + 버튼 -->
                         <div class="text-right">
                             <template x-if="device.is_online">
-                                <p class="text-xs font-medium" :class="{
-                                    'text-emerald-600': device.ping < 200,
-                                    'text-yellow-600': device.ping >= 200 && device.ping < 500,
-                                    'text-rose-600': device.ping >= 500
-                                }" x-text="device.ping + ' ms'"></p>
+                                <div class="flex items-center gap-2">
+                                    <p class="text-xs font-medium" :class="{
+                                        'text-emerald-600': device.ping < 200,
+                                        'text-yellow-600': device.ping >= 200 && device.ping < 500,
+                                        'text-rose-600': device.ping >= 500
+                                    }" x-text="device.ping + ' ms'"></p>
+                                    <button @click="pingDevice(device.id)"
+                                            :disabled="pingControl.sending === device.id"
+                                            class="p-1 rounded hover:bg-slate-100 disabled:opacity-50"
+                                            :title="'PING ' + device.id">
+                                        <svg class="w-3.5 h-3.5 text-slate-500" :class="{
+                                            'animate-spin': pingControl.sending === device.id
+                                        }" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </button>
+                                </div>
                             </template>
                             <template x-if="!device.is_online">
                                 <p class="text-xs font-medium text-slate-400">--</p>
@@ -185,6 +197,47 @@
                                 <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
                             </svg>
                             <span class="text-xs font-medium text-slate-600" x-text="device.brightness + '%'"></span>
+                        </div>
+                    </div>
+
+                    <!-- 밝기 제어 (온라인 디바이스만) -->
+                    <div x-show="device.is_online" class="pt-3 border-t border-slate-100">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-medium text-slate-600">Brightness</span>
+                            <span class="text-xs font-bold text-slate-700" x-text="(brightnessControl[device.id] ?? device.brightness) + '%'"></span>
+                        </div>
+                        <input type="range"
+                               min="0" max="100"
+                               :value="brightnessControl[device.id] || device.brightness"
+                               @input="brightnessControl[device.id] = $event.target.value"
+                               @change="setDeviceBrightness(device.id, $event.target.value)"
+                               :disabled="brightnessControl.sending === device.id"
+                               class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                    </div>
+
+                    <!-- 카메라 ID 제어 (온라인 디바이스만) -->
+                    <div x-show="device.is_online" class="pt-3 border-t border-slate-100">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-medium text-slate-600">Camera ID</span>
+                            <span class="text-xs font-bold text-slate-700" x-text="cameraIdControl[device.id] ?? device.cameraId"></span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button @click="adjustCameraId(device.id, -1)"
+                                    :disabled="cameraIdControl.sending === device.id"
+                                    class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 font-bold">
+                                -
+                            </button>
+                            <input type="number"
+                                   min="1" max="20"
+                                   :value="cameraIdControl[device.id] || device.cameraId"
+                                   @change="setDeviceCameraId(device.id, $event.target.value)"
+                                   :disabled="cameraIdControl.sending === device.id"
+                                   class="flex-1 text-center text-sm font-medium border border-slate-200 rounded-lg px-2 py-1.5 disabled:opacity-50">
+                            <button @click="adjustCameraId(device.id, 1)"
+                                    :disabled="cameraIdControl.sending === device.id"
+                                    class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed text-slate-600 font-bold">
+                                +
+                            </button>
                         </div>
                     </div>
                 </div>
