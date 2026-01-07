@@ -23,8 +23,12 @@ static const char* TAG = "DeviceMgr";
 // ============================================================================
 // 전방 선언 (static 함수)
 // ============================================================================
+#ifdef DEVICE_MODE_TX
 static esp_err_t send_status_request(void);
+#endif
+#ifdef DEVICE_MODE_RX
 static esp_err_t send_status_response(void);
+#endif
 
 // ============================================================================
 // 공통 상태
@@ -659,7 +663,7 @@ static esp_err_t on_lora_tx_command(const event_data_t* event)
             const lora_cmd_camera_id_t* cmd = (const lora_cmd_camera_id_t*)data;
             T_LOGI(TAG, "카메라 ID 설정 수신: %d", cmd->camera_id);
 
-            // 카메라 ID 변경 이벤트 발행 (display_manager가 구독)
+            // 이벤트 발행 (config_service가 NVS 저장)
             event_bus_publish(EVT_CAMERA_ID_CHANGED, &cmd->camera_id, sizeof(cmd->camera_id));
         } else {
             T_LOGW(TAG, "카메라 ID 명령 길이 부족: %d < %zu", len, sizeof(lora_cmd_camera_id_t));

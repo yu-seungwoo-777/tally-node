@@ -33,12 +33,17 @@ private:
     // 이벤트 콜백
     static esp_err_t brightnessEventCallback(const event_data_t* event);
     static esp_err_t tallyEventCallback(const event_data_t* event);
+    static esp_err_t cameraIdEventCallback(const event_data_t* event);
 
     static bool s_initialized;
     static uint32_t s_num_leds;
     static uint8_t s_brightness;
     static uint8_t s_camera_id;
     static ws2812_state_t s_led_states[8];
+
+    // 마지막 Tally 데이터 (카메라 ID 변경 시 재사용)
+    static tally_event_data_t s_last_tally;
+    static bool s_last_tally_valid;
 };
 
 bool WS2812Driver::s_initialized = false;

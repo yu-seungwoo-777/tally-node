@@ -58,6 +58,7 @@ public:
     static esp_err_t setDevice(const config_device_t* config);
     static esp_err_t setBrightness(uint8_t brightness);
     static esp_err_t setCameraId(uint8_t camera_id);
+    static esp_err_t setCameraIdInternal(uint8_t camera_id);  // 이벤트 핸들러용 (이벤트 미발행)
     static uint8_t getCameraId(void);
     static esp_err_t setRf(float frequency, uint8_t sync_word);
 
@@ -522,6 +523,37 @@ static esp_err_t on_rf_saved(const event_data_t* event) {
     return ESP_OK;
 }
 
+/**
+ * @brief 카메라 ID 변경 이벤트 핸들러 (LoRa 수신 시 NVS 저장)
+ */
+static esp_err_t on_camera_id_changed(const event_data_t* event) {
+    if (event->type != EVT_CAMERA_ID_CHANGED) {
+        return ESP_OK;
+    }
+
+    if (event->data_size < sizeof(uint8_t)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* camera_id = reinterpret_cast<const uint8_t*>(event->data);
+
+    // 내부 함수 호출 (이벤트 미발행으로 무한 루프 방지)
+    esp_err_t ret = ConfigServiceClass::setCameraIdInternal(*camera_id);
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "카메라 ID 저장 (LoRa 수신): %d (NVS)", *camera_id);
+
+        // 설정 변경 후 전체 데이터 이벤트 발행
+        config_data_event_t data_event = {};
+        memset(&data_event, 0, sizeof(data_event));
+        data_event.device_camera_id = *camera_id;
+        event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
+    } else {
+        T_LOGE(TAG, "카메라 ID NVS 저장 실패: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
+}
+
 // ============================================================================
 // 초기화
 // ============================================================================
@@ -546,6 +578,8 @@ esp_err_t ConfigServiceClass::init(void)
     event_bus_subscribe(EVT_CONFIG_DATA_REQUEST, on_config_data_request);
     // RF 저장 이벤트 구독 (TX broadcast 완료 후 NVS 저장)
     event_bus_subscribe(EVT_RF_SAVED, on_rf_saved);
+    // 카메라 ID 변경 이벤트 구독 (LoRa 수신 시 NVS 저장)
+    event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
     T_LOGD(TAG, "Event bus 구독 완료");
 
     s_initialized = true;
@@ -1136,7 +1170,8 @@ esp_err_t ConfigServiceClass::setBrightness(uint8_t brightness)
     return ESP_OK;
 }
 
-esp_err_t ConfigServiceClass::setCameraId(uint8_t camera_id)
+// 내부용 (이벤트 발행 안 함)
+esp_err_t ConfigServiceClass::setCameraIdInternal(uint8_t camera_id)
 {
     config_device_t dev;
     esp_err_t ret = getDevice(&dev);
@@ -1145,7 +1180,12 @@ esp_err_t ConfigServiceClass::setCameraId(uint8_t camera_id)
     }
 
     dev.camera_id = camera_id;
-    ret = setDevice(&dev);
+    return setDevice(&dev);
+}
+
+esp_err_t ConfigServiceClass::setCameraId(uint8_t camera_id)
+{
+    esp_err_t ret = setCameraIdInternal(camera_id);
     if (ret != ESP_OK) {
         return ret;
     }
