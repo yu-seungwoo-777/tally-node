@@ -235,4 +235,41 @@ bool license_client_connection_test(void)
     return success;
 }
 
+esp_err_t license_client_search_license(const char* name, const char* phone,
+                                        const char* email, char* out_response,
+                                        size_t response_size)
+{
+    if (!name || !phone || !email || !out_response) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // 요청 URL 생성
+    char url[256];
+    snprintf(url, sizeof(url), "%s%s", LICENSE_SERVER_BASE, LICENSE_SEARCH_PATH);
+
+    // JSON 요청 본문 생성
+    cJSON* req_json = cJSON_CreateObject();
+    cJSON_AddStringToObject(req_json, "name", name);
+    cJSON_AddStringToObject(req_json, "phone", phone);
+    cJSON_AddStringToObject(req_json, "email", email);
+
+    char* request_body = cJSON_PrintUnformatted(req_json);
+    cJSON_Delete(req_json);
+
+    T_LOGI(TAG, "라이센스 검색 요청: name=%s, phone=%s, email=%s", name, phone, email);
+
+    // HTTP POST 전송
+    esp_err_t err = http_post(url, request_body, out_response, response_size);
+
+    free(request_body);
+
+    if (err == ESP_OK) {
+        T_LOGI(TAG, "라이센스 검색 응답: %s", out_response);
+    } else {
+        T_LOGE(TAG, "라이센스 검색 실패");
+    }
+
+    return err;
+}
+
 }  // extern "C"

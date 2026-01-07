@@ -5,7 +5,95 @@
                     </div>
 
                     <div class="grid gap-4 lg:grid-cols-2">
-                        <!-- Internet Connection Test Card -->
+                        <!-- 1. Activate License Card -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-transparent">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-indigo-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                                        </svg>
+                                    </div>
+                                    <h3 class="font-semibold text-slate-900">Activate License</h3>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <p class="text-sm text-slate-600">Enter license key to activate the product.</p>
+
+                                <div class="flex gap-3">
+                                    <input type="text" x-model="licenseForm.key"
+                                           class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm"
+                                           placeholder="XXXX-XXXX-XXXX-XXXX"
+                                           maxlength="32"
+                                           @keyup.enter="validateLicense()">
+                                    <button @click="validateLicense()"
+                                            :disabled="license.loading || !licenseForm.key"
+                                            class="px-6 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center gap-2">
+                                        <svg x-show="license.loading" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                        </svg>
+                                        <span x-text="license.loading ? 'Validating...' : 'Activate'"></span>
+                                    </button>
+                                </div>
+                                <p class="text-xs text-slate-500">Contact administrator for license key.</p>
+                            </div>
+                        </div>
+
+                        <!-- 2. License Status Card -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-transparent">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-violet-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                        </svg>
+                                    </div>
+                                    <h3 class="font-semibold text-slate-900">License Status</h3>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <p class="text-sm text-slate-600">View current license information.</p>
+
+                                <!-- Details -->
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
+                                        <div class="flex items-center gap-2">
+                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                                            </svg>
+                                            <span class="text-sm text-slate-600">Device Limit</span>
+                                        </div>
+                                        <span class="text-sm font-semibold text-slate-900" x-text="license.deviceLimit + ' devices'"></span>
+                                    </div>
+
+                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
+                                        <div class="flex items-center gap-2">
+                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                            </svg>
+                                            <span class="text-sm text-slate-600">License Key</span>
+                                        </div>
+                                        <span class="text-sm font-mono text-slate-900" x-text="license.key || 'Not registered'"></span>
+                                    </div>
+
+                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
+                                        <div class="flex items-center gap-2">
+                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                            </svg>
+                                            <span class="text-sm text-slate-600">State</span>
+                                        </div>
+                                        <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                                              :class="getLicenseStatusClass()">
+                                            <span class="w-1.5 h-1.5 rounded-full" :class="getLicenseIndicatorClass()"></span>
+                                            <span x-text="getLicenseStatusText()"></span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 3. Internet Connection Test Card -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-cyan-50 to-transparent">
                                 <div class="flex items-center gap-2">
@@ -76,99 +164,40 @@
                             </div>
                         </div>
 
-                        <!-- License Status Card -->
+                        <!-- 4. Search License Card -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-transparent">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-2">
-                                        <div class="w-7 h-7 bg-violet-100 rounded-lg flex items-center justify-center">
-                                            <svg class="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                            </svg>
-                                        </div>
-                                        <h3 class="font-semibold text-slate-900">License Status</h3>
-                                    </div>
-                                    <span class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
-                                          :class="getLicenseStatusClass()">
-                                        <span class="w-1.5 h-1.5 rounded-full" :class="getLicenseIndicatorClass()"></span>
-                                        <span x-text="getLicenseStatusText()"></span>
-                                    </span>
-                                </div>
-                            </div>
-                            <div class="p-4 space-y-4">
-                                <p class="text-sm text-slate-600">View current license information.</p>
-
-                                <!-- Details -->
-                                <div class="space-y-2">
-                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
-                                        <div class="flex items-center gap-2">
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
-                                            </svg>
-                                            <span class="text-sm text-slate-600">Device Limit</span>
-                                        </div>
-                                        <span class="text-sm font-semibold text-slate-900" x-text="license.deviceLimit + ' devices'"></span>
-                                    </div>
-
-                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
-                                        <div class="flex items-center gap-2">
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-                                            </svg>
-                                            <span class="text-sm text-slate-600">License Key</span>
-                                        </div>
-                                        <span class="text-sm font-mono text-slate-900" x-text="license.key || 'Not registered'"></span>
-                                    </div>
-
-                                    <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-50">
-                                        <div class="flex items-center gap-2">
-                                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                            </svg>
-                                            <span class="text-sm text-slate-600">State</span>
-                                        </div>
-                                        <span class="text-sm font-semibold" :class="license.isValid ? 'text-emerald-600' : 'text-rose-600'" x-text="license.stateStr.toUpperCase()"></span>
-                                    </div>
-                                </div>
-
-                                <button @click="fetchLicense()" class="w-full px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors">
-                                    Refresh Status
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Activate License Card -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden lg:col-span-2">
-                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-transparent">
+                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-amber-50 to-transparent">
                                 <div class="flex items-center gap-2">
-                                    <div class="w-7 h-7 bg-indigo-100 rounded-lg flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                                    <div class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                                         </svg>
                                     </div>
-                                    <h3 class="font-semibold text-slate-900">Activate License</h3>
+                                    <h3 class="font-semibold text-slate-900">Search License</h3>
                                 </div>
                             </div>
-                            <div class="p-4 space-y-4">
-                                <p class="text-sm text-slate-600">Enter license key to activate the product.</p>
+                            <div class="p-4 space-y-3">
+                                <p class="text-sm text-slate-600">Find your registered license by personal information.</p>
 
-                                <div class="flex gap-3">
-                                    <input type="text" x-model="licenseForm.key"
-                                           class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm"
-                                           placeholder="XXXX-XXXX-XXXX-XXXX"
-                                           maxlength="32"
-                                           @keyup.enter="validateLicense()">
-                                    <button @click="validateLicense()"
-                                            :disabled="license.loading || !licenseForm.key"
-                                            class="px-6 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center gap-2">
-                                        <svg x-show="license.loading" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                        </svg>
-                                        <span x-text="license.loading ? 'Validating...' : 'Activate'"></span>
-                                    </button>
+                                <input type="text" x-model="licenseSearch.name" placeholder="Name" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                                <input type="tel" x-model="licenseSearch.phone" placeholder="Phone Number" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                                <input type="email" x-model="licenseSearch.email" placeholder="Email" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+
+                                <button @click="searchLicenseServer()" :disabled="licenseSearch.searching"
+                                        class="w-full px-4 py-2.5 text-sm font-medium text-white bg-amber-600 rounded-xl hover:bg-amber-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                                    <svg x-show="licenseSearch.searching" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
+                                    <span x-text="licenseSearch.searching ? 'Searching...' : 'Search License'"></span>
+                                </button>
+
+                                <!-- Search Result -->
+                                <div x-show="licenseSearch.result" class="p-3 rounded-lg text-sm"
+                                     :class="licenseSearch.success ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'">
+                                    <span x-text="licenseSearch.result"></span>
                                 </div>
-                                <p class="text-xs text-slate-500">Contact administrator for license key.</p>
                             </div>
                         </div>
                     </div>
                 </div>
+

@@ -68,9 +68,7 @@
           dualEnabled: false,
           secondaryOffset: 4
         },
-        device: {
-          brightness: 128,
-          cameraId: 1,
+        broadcast: {
           rf: {
             frequency: 868,
             syncWord: 18,
@@ -233,39 +231,31 @@
               }
             }
           }
-          if (data.device) {
-            this.config.device.brightness = data.device.brightness || 128;
-            this.config.device.cameraId = data.device.cameraId || 1;
-            if (data.device && data.device.rf) {
-              this.config.device.rf = {
-                frequency: data.device.rf.frequency || 868,
-                syncWord: data.device.rf.syncWord || 18,
-                spreadingFactor: data.device.rf.spreadingFactor || 7,
-                codingRate: data.device.rf.codingRate || 7,
-                bandwidth: data.device.rf.bandwidth || 250,
-                txPower: data.device.rf.txPower || 22
-              };
-              if (!this._initialized) {
-                this.form.display.brightness = data.device.brightness || 128;
-                this.form.display.cameraId = data.device.cameraId || 1;
-                this.form.broadcast.syncCode = data.device.rf.syncWord || 18;
-                this.form.broadcast.frequency = data.device.rf.frequency || 868;
-              }
-            } else {
-              this.config.device.rf = {
-                frequency: 868,
-                syncWord: 18,
-                spreadingFactor: 7,
-                codingRate: 7,
-                bandwidth: 250,
-                txPower: 22
-              };
-              if (!this._initialized) {
-                this.form.display.brightness = data.device.brightness || 128;
-                this.form.display.cameraId = data.device.cameraId || 1;
-                this.form.broadcast.syncCode = 18;
-                this.form.broadcast.frequency = 868;
-              }
+          if (data.broadcast && data.broadcast.rf) {
+            this.config.broadcast.rf = {
+              frequency: data.broadcast.rf.frequency || 868,
+              syncWord: data.broadcast.rf.syncWord || 18,
+              spreadingFactor: data.broadcast.rf.spreadingFactor || 7,
+              codingRate: data.broadcast.rf.codingRate || 7,
+              bandwidth: data.broadcast.rf.bandwidth || 250,
+              txPower: data.broadcast.rf.txPower || 22
+            };
+            if (!this._initialized) {
+              this.form.broadcast.syncCode = data.broadcast.rf.syncWord || 18;
+              this.form.broadcast.frequency = data.broadcast.rf.frequency || 868;
+            }
+          } else {
+            this.config.broadcast.rf = {
+              frequency: 868,
+              syncWord: 18,
+              spreadingFactor: 7,
+              codingRate: 7,
+              bandwidth: 250,
+              txPower: 22
+            };
+            if (!this._initialized) {
+              this.form.broadcast.syncCode = 18;
+              this.form.broadcast.frequency = 868;
             }
           }
           this._initialized = true;
@@ -1011,6 +1001,15 @@
         key: "",
         loading: false
       },
+      // 라이센스 서버 검색
+      licenseSearch: {
+        name: "",
+        phone: "",
+        email: "",
+        searching: false,
+        result: null,
+        success: false
+      },
       // 인터넷 테스트 데이터
       internetTest: {
         status: "none",
@@ -1040,20 +1039,21 @@
         await this.fetchLicense();
       },
       /**
-       * 라이센스 상태 조회
+       * 라이센스 상태 조회 (/api/status에서 가져옴)
        */
       async fetchLicense() {
         try {
-          const res = await fetch("/api/license");
+          const res = await fetch("/api/status");
           if (!res.ok)
-            throw new Error("License fetch failed");
+            throw new Error("Status fetch failed");
           const data = await res.json();
-          this.license.state = data.state || 1;
-          this.license.stateStr = data.stateStr || "invalid";
-          this.license.isValid = data.isValid || false;
-          this.license.deviceLimit = data.deviceLimit || 0;
-          this.license.graceRemaining = data.graceRemaining || 0;
-          this.license.key = data.key || "";
+          const lic = data.license || {};
+          this.license.state = lic.state ?? 1;
+          this.license.stateStr = lic.stateStr || "invalid";
+          this.license.isValid = lic.isValid || false;
+          this.license.deviceLimit = lic.deviceLimit || 0;
+          this.license.graceRemaining = lic.graceRemaining || 0;
+          this.license.key = lic.key || "";
         } catch (e) {
           console.error("License fetch error:", e);
         }
@@ -1111,7 +1111,7 @@
         }
         try {
           this.license.loading = true;
-          const res = await fetch("/api/license/validate", {
+          const res = await fetch("/api/validate-license", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ key })
@@ -1132,6 +1132,46 @@
           this.showToast("Validation request failed", "alert-error");
         } finally {
           this.license.loading = false;
+        }
+      },
+      /**
+       * 라이센스 서버 검색 (ESP32 경유 - 이름/전화번호/이메일)
+       */
+      async searchLicenseServer() {
+        const { name, phone, email } = this.licenseSearch;
+        if (!name || !phone || !email) {
+          this.showToast("Please fill in all fields (Name, Phone, Email)", "alert-warning");
+          return;
+        }
+        try {
+          this.licenseSearch.searching = true;
+          this.licenseSearch.result = null;
+          const res = await fetch("/api/search-license", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, phone, email })
+          });
+          if (!res.ok) {
+            throw new Error("Search request failed");
+          }
+          const data = await res.json();
+          if (data.success && data.count > 0 && data.licenses && data.licenses.length > 0) {
+            this.licenseSearch.success = true;
+            const license = data.licenses[0];
+            this.licenseSearch.result = `License Key: ${license.license_key}, Device Limit: ${license.device_limit}`;
+          } else if (data.success && data.count === 0) {
+            this.licenseSearch.success = false;
+            this.licenseSearch.result = "No license found for the provided information";
+          } else {
+            this.licenseSearch.success = false;
+            this.licenseSearch.result = data.error || "License not found";
+          }
+        } catch (e) {
+          console.error("License search error:", e);
+          this.licenseSearch.success = false;
+          this.licenseSearch.result = "Search failed. Please try again.";
+        } finally {
+          this.licenseSearch.searching = false;
         }
       },
       /**

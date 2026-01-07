@@ -5,6 +5,7 @@
 
 #include "web_server.h"
 #include "license_service.h"
+#include "license_client.h"
 #include "event_bus.h"
 #include "cJSON.h"
 #include "esp_http_server.h"
@@ -17,6 +18,7 @@
 #include <cstring>
 #include <cmath>
 #include <sys/socket.h>
+#include <netdb.h>  // gethostbyname
 
 static const char* TAG = "WebServer";
 static const char* TAG_RF = "RF";
@@ -269,6 +271,16 @@ static void packed_to_hex(const uint8_t* data, uint8_t size, char* out, size_t o
     }
 }
 
+/**
+ * @brief CORS 헤더 설정
+ */
+static void set_cors_headers(httpd_req_t* req)
+{
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
+}
+
 // ============================================================================
 // API 핸들러
 // ============================================================================
@@ -278,6 +290,8 @@ static void packed_to_hex(const uint8_t* data, uint8_t size, char* out, size_t o
  */
 static esp_err_t api_status_handler(httpd_req_t* req)
 {
+    set_cors_headers(req);
+
     cJSON* root = cJSON_CreateObject();
 
     // Network (상태 + 설정 통합)
@@ -504,12 +518,9 @@ static esp_err_t api_status_handler(httpd_req_t* req)
     }
     cJSON_AddItemToObject(root, "system", system);
 
-    // Device 설정 (config에서)
-    cJSON* device = cJSON_CreateObject();
+    // Broadcast 설정 (config에서)
+    cJSON* broadcast = cJSON_CreateObject();
     if (s_cache.config_valid) {
-        cJSON_AddNumberToObject(device, "brightness", s_cache.config.device_brightness);
-        cJSON_AddNumberToObject(device, "cameraId", s_cache.config.device_camera_id);
-
         cJSON* rf = cJSON_CreateObject();
         cJSON_AddNumberToObject(rf, "frequency", s_cache.config.device_rf_frequency);
         cJSON_AddNumberToObject(rf, "syncWord", s_cache.config.device_rf_sync_word);
@@ -517,11 +528,8 @@ static esp_err_t api_status_handler(httpd_req_t* req)
         cJSON_AddNumberToObject(rf, "codingRate", s_cache.config.device_rf_cr);
         cJSON_AddNumberToObject(rf, "bandwidth", s_cache.config.device_rf_bw);
         cJSON_AddNumberToObject(rf, "txPower", s_cache.config.device_rf_tx_power);
-        cJSON_AddItemToObject(device, "rf", rf);
+        cJSON_AddItemToObject(broadcast, "rf", rf);
     } else {
-        cJSON_AddNumberToObject(device, "brightness", 128);
-        cJSON_AddNumberToObject(device, "cameraId", 1);
-
         cJSON* rf = cJSON_CreateObject();
         cJSON_AddNumberToObject(rf, "frequency", 868);
         cJSON_AddNumberToObject(rf, "syncWord", 0x12);
@@ -529,11 +537,42 @@ static esp_err_t api_status_handler(httpd_req_t* req)
         cJSON_AddNumberToObject(rf, "codingRate", 7);
         cJSON_AddNumberToObject(rf, "bandwidth", 250);
         cJSON_AddNumberToObject(rf, "txPower", 22);
-        cJSON_AddItemToObject(device, "rf", rf);
+        cJSON_AddItemToObject(broadcast, "rf", rf);
     }
-    cJSON_AddItemToObject(root, "device", device);
+    cJSON_AddItemToObject(root, "broadcast", broadcast);
 
-    char* json_str = cJSON_Print(root);
+    // License (라이센스 상태)
+    cJSON* license = cJSON_CreateObject();
+    uint8_t device_limit = license_service_get_device_limit();
+    license_state_t state = license_service_get_state();
+
+    cJSON_AddNumberToObject(license, "deviceLimit", device_limit);
+    cJSON_AddNumberToObject(license, "state", (int)state);
+
+    // 상태 문자열
+    const char* state_str = "unknown";
+    switch (state) {
+        case LICENSE_STATE_VALID: state_str = "valid"; break;
+        case LICENSE_STATE_INVALID: state_str = "invalid"; break;
+        case LICENSE_STATE_GRACE: state_str = "grace"; break;
+        case LICENSE_STATE_CHECKING: state_str = "checking"; break;
+    }
+    cJSON_AddStringToObject(license, "stateStr", state_str);
+
+    // 유효성
+    bool is_valid = (state == LICENSE_STATE_VALID || state == LICENSE_STATE_GRACE);
+    cJSON_AddBoolToObject(license, "isValid", is_valid);
+
+    // 라이센스 키 (일부만 노출)
+    char key[17];
+    if (license_service_get_key(key) == ESP_OK && key[0] != '\0') {
+        cJSON_AddStringToObject(license, "key", key);
+    } else {
+        cJSON_AddStringToObject(license, "key", "");
+    }
+    cJSON_AddItemToObject(root, "license", license);
+
+    char* json_str = cJSON_PrintUnformatted(root);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, json_str, strlen(json_str));
 
@@ -547,6 +586,8 @@ static esp_err_t api_status_handler(httpd_req_t* req)
  */
 static esp_err_t api_config_post_handler(httpd_req_t* req)
 {
+    set_cors_headers(req);
+
     const char* uri = req->uri;
     const char* prefix = "/api/config/";
     size_t prefix_len = strlen(prefix);
@@ -583,29 +624,7 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
     config_save_request_t save_req = {};
 
     // 경로별 처리
-    if (strncmp(path, "device/brightness", 16) == 0) {
-        cJSON* item = cJSON_GetObjectItem(root, "value");
-        if (item && cJSON_IsNumber(item)) {
-            save_req.type = CONFIG_SAVE_DEVICE_BRIGHTNESS;
-            save_req.brightness = (uint8_t)item->valueint;
-        } else {
-            cJSON_Delete(root);
-            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing or invalid 'value'");
-            return ESP_FAIL;
-        }
-    }
-    else if (strncmp(path, "device/camera_id", 15) == 0) {
-        cJSON* item = cJSON_GetObjectItem(root, "value");
-        if (item && cJSON_IsNumber(item)) {
-            save_req.type = CONFIG_SAVE_DEVICE_CAMERA_ID;
-            save_req.camera_id = (uint8_t)item->valueint;
-        } else {
-            cJSON_Delete(root);
-            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing or invalid 'value'");
-            return ESP_FAIL;
-        }
-    }
-    else if (strncmp(path, "device/rf", 9) == 0) {
+    if (strncmp(path, "device/rf", 9) == 0) {
         cJSON* freq = cJSON_GetObjectItem(root, "frequency");
         cJSON* sync = cJSON_GetObjectItem(root, "syncWord");
         if (freq && sync && cJSON_IsNumber(freq) && cJSON_IsNumber(sync)) {
@@ -855,6 +874,7 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
  */
 static esp_err_t api_reboot_handler(httpd_req_t* req)
 {
+    set_cors_headers(req);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"rebooting\"}");
 
@@ -868,6 +888,8 @@ static esp_err_t api_reboot_handler(httpd_req_t* req)
  */
 static esp_err_t api_lora_scan_get_handler(httpd_req_t* req)
 {
+    set_cors_headers(req);
+
     cJSON* root = cJSON_CreateObject();
 
     cJSON_AddBoolToObject(root, "scanning", s_cache.lora_scanning);
@@ -889,7 +911,7 @@ static esp_err_t api_lora_scan_get_handler(httpd_req_t* req)
     }
     cJSON_AddItemToObject(root, "results", results);
 
-    char* json_str = cJSON_Print(root);
+    char* json_str = cJSON_PrintUnformatted(root);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, json_str, strlen(json_str));
 
@@ -903,6 +925,8 @@ static esp_err_t api_lora_scan_get_handler(httpd_req_t* req)
  */
 static esp_err_t api_lora_scan_start_handler(httpd_req_t* req)
 {
+    set_cors_headers(req);
+
     // 요청 바디 읽기
     char* buf = new char[256];
     int ret = httpd_req_recv(req, buf, 255);
@@ -962,6 +986,8 @@ static esp_err_t api_lora_scan_start_handler(httpd_req_t* req)
  */
 static esp_err_t api_lora_scan_stop_handler(httpd_req_t* req)
 {
+    set_cors_headers(req);
+
     // 스캔 중지 이벤트 발행
     event_bus_publish(EVT_LORA_SCAN_STOP, nullptr, 0);
 
@@ -978,6 +1004,8 @@ static esp_err_t api_lora_scan_stop_handler(httpd_req_t* req)
  */
 static esp_err_t api_devices_handler(httpd_req_t* req)
 {
+    set_cors_headers(req);
+
     cJSON* root = cJSON_CreateObject();
     if (!root) {
         httpd_resp_send_500(req);
@@ -1006,13 +1034,11 @@ static esp_err_t api_devices_handler(httpd_req_t* req)
                 cJSON_AddNumberToObject(item, "rssi", dev->last_rssi);
                 cJSON_AddNumberToObject(item, "snr", dev->last_snr);
 
-                // 배터리, 카메라 ID
+                // 배터리
                 cJSON_AddNumberToObject(item, "battery", dev->battery);
-                cJSON_AddNumberToObject(item, "cameraId", dev->camera_id);
 
-                // 업타임, 밝기
+                // 업타임
                 cJSON_AddNumberToObject(item, "uptime", dev->uptime);
-                cJSON_AddNumberToObject(item, "brightness", dev->brightness);
 
                 // 상태 플래그
                 cJSON_AddBoolToObject(item, "stopped", dev->is_stopped);
@@ -1045,66 +1071,12 @@ static esp_err_t api_devices_handler(httpd_req_t* req)
 }
 
 /**
- * @brief GET /api/license - 라이센스 상태 반환
- */
-static esp_err_t api_license_handler(httpd_req_t* req)
-{
-    cJSON* root = cJSON_CreateObject();
-    if (!root) {
-        httpd_resp_send_500(req);
-        return ESP_FAIL;
-    }
-
-    // 라이센스 서비스에서 직접 현재 값 읽기 (캐시 의존 제거)
-    uint8_t device_limit = license_service_get_device_limit();
-    license_state_t state = license_service_get_state();
-
-    cJSON_AddNumberToObject(root, "deviceLimit", device_limit);
-    cJSON_AddNumberToObject(root, "state", (int)state);
-    cJSON_AddNumberToObject(root, "graceRemaining", 0);  // 미사용
-
-    // 상태 문자열
-    const char* state_str = "unknown";
-    switch (state) {
-        case LICENSE_STATE_VALID: state_str = "valid"; break;
-        case LICENSE_STATE_INVALID: state_str = "invalid"; break;
-        case LICENSE_STATE_GRACE: state_str = "grace"; break;
-        case LICENSE_STATE_CHECKING: state_str = "checking"; break;
-    }
-    cJSON_AddStringToObject(root, "stateStr", state_str);
-
-    // 유효성
-    bool is_valid = (state == LICENSE_STATE_VALID || state == LICENSE_STATE_GRACE);
-    cJSON_AddBoolToObject(root, "isValid", is_valid);
-
-    // 라이센스 키
-    char key[17];
-    if (license_service_get_key(key) == ESP_OK && key[0] != '\0') {
-        cJSON_AddStringToObject(root, "key", key);
-    } else {
-        cJSON_AddStringToObject(root, "key", "");
-    }
-
-    char* json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (json_str) {
-        httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, json_str);
-        free(json_str);
-    } else {
-        httpd_resp_send_500(req);
-    }
-
-    return ESP_OK;
-}
-
-
-/**
  * @brief POST /api/license/validate - 라이센스 키 검증 (이벤트 기반)
  */
 static esp_err_t api_license_validate_handler(httpd_req_t* req)
 {
+    set_cors_headers(req);
+
     // 요청 바디 읽기
     char* buf = new char[512];
     int ret = httpd_req_recv(req, buf, 511);
@@ -1159,6 +1131,8 @@ static esp_err_t api_license_validate_handler(httpd_req_t* req)
  */
 static esp_err_t api_test_internet_handler(httpd_req_t* req)
 {
+    set_cors_headers(req);
+
     cJSON* root = cJSON_CreateObject();
     if (!root) {
         httpd_resp_send_500(req);
@@ -1209,10 +1183,12 @@ static esp_err_t api_test_internet_handler(httpd_req_t* req)
 }
 
 /**
- * @brief POST /api/test/license-server - 라이센스 서버 연결 테스트
+ * @brief POST /api/test/license-server - 라이센스 서버 연결 테스트 (프록시 통해)
  */
 static esp_err_t api_test_license_server_handler(httpd_req_t* req)
 {
+    set_cors_headers(req);
+
     cJSON* root = cJSON_CreateObject();
     if (!root) {
         httpd_resp_send_500(req);
@@ -1220,24 +1196,51 @@ static esp_err_t api_test_license_server_handler(httpd_req_t* req)
     }
 
     bool success = false;
+    int ping_ms = 0;
 
-    // 라이센스 서버 연결 테스트
+    // 프록시 서버 연결 테스트 (tally-node.duckdns.org:80)
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock >= 0) {
+        // 소켓 타임아웃 설정 (5초)
+        struct timeval tv;
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
         struct sockaddr_in addr;
         memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
-        addr.sin_port = htons(33333);
-        addr.sin_addr.s_addr = esp_ip4addr_aton("3.37.87.214");
+        addr.sin_port = htons(80);  // HTTP 포트
 
-        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
-            success = true;
+        // DNS 해석 (프록시 호스트)
+        struct hostent* hp = gethostbyname("tally-node.duckdns.org");
+        if (hp != nullptr && hp->h_addrtype == AF_INET && hp->h_length > 0) {
+            memcpy(&addr.sin_addr, hp->h_addr_list[0], sizeof(struct in_addr));
+
+            int64_t start = esp_timer_get_time();
+
+            if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+                int64_t end = esp_timer_get_time();
+                ping_ms = (end - start) / 1000;
+                success = true;
+                ESP_LOGI(TAG, "License server test success: %d ms", ping_ms);
+            } else {
+                ESP_LOGW(TAG, "License server test: connect failed");
+            }
+        } else {
+            ESP_LOGW(TAG, "License server test: DNS resolution failed");
         }
 
         close(sock);
+    } else {
+        ESP_LOGE(TAG, "License server test: socket creation failed");
     }
 
     cJSON_AddBoolToObject(root, "success", success);
+    if (success) {
+        cJSON_AddNumberToObject(root, "ping", ping_ms);
+    }
 
     char* json_str = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -1250,6 +1253,75 @@ static esp_err_t api_test_license_server_handler(httpd_req_t* req)
         httpd_resp_send_500(req);
     }
 
+    return ESP_OK;
+}
+
+/**
+ * @brief POST /api/search-license - 라이센스 조회 (미들웨어 통해)
+ */
+static esp_err_t api_search_license_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 요청 바디 읽기
+    char* buf = new char[512];
+    int ret = httpd_req_recv(req, buf, 511);
+    if (ret <= 0) {
+        delete[] buf;
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    // JSON 파싱
+    cJSON* root = cJSON_Parse(buf);
+    delete[] buf;
+    if (!root) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    // 필드 추출
+    cJSON* name_json = cJSON_GetObjectItem(root, "name");
+    cJSON* phone_json = cJSON_GetObjectItem(root, "phone");
+    cJSON* email_json = cJSON_GetObjectItem(root, "email");
+
+    if (!name_json || !phone_json || !email_json ||
+        !cJSON_IsString(name_json) || !cJSON_IsString(phone_json) || !cJSON_IsString(email_json)) {
+        cJSON_Delete(root);
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"name, phone, email are required\"}");
+        return ESP_OK;
+    }
+
+    const char* name = name_json->valuestring;
+    const char* phone = phone_json->valuestring;
+    const char* email = email_json->valuestring;
+
+    // 미들웨어 서버로 요청 전송 (스택 오버플로우 방지: 힙 할당)
+    char* response_buffer = (char*)malloc(512);
+    if (!response_buffer) {
+        cJSON_Delete(root);
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Memory allocation failed\"}");
+        return ESP_OK;
+    }
+    memset(response_buffer, 0, 512);
+
+    esp_err_t err = license_client_search_license(name, phone, email, response_buffer, 512);
+
+    cJSON_Delete(root);
+
+    // 미들웨어 응답을 그대로 클라이언트에게 전달
+    httpd_resp_set_type(req, "application/json");
+    if (err == ESP_OK) {
+        ESP_LOGI(TAG, "라이선스 검색 응답: %s", response_buffer);
+        httpd_resp_sendstr(req, response_buffer);
+    } else {
+        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Failed to connect to license server\"}");
+    }
+
+    free(response_buffer);
     return ESP_OK;
 }
 
@@ -1290,6 +1362,27 @@ static esp_err_t alpine_handler(httpd_req_t* req)
 {
     httpd_resp_set_type(req, "text/javascript");
     httpd_resp_send(req, (const char*)alpine_js_data, alpine_js_len);
+    return ESP_OK;
+}
+
+/**
+ * @brief Favicon 핸들러 (빈 응답 반환으로 404 방지)
+ */
+static esp_err_t favicon_handler(httpd_req_t* req)
+{
+    httpd_resp_set_status(req, "204 No Content");
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+/**
+ * @brief CORS Preflight 핸들러 (OPTIONS 요청)
+ */
+static esp_err_t options_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+    httpd_resp_set_status(req, "204 No Content");
+    httpd_resp_send(req, NULL, 0);
     return ESP_OK;
 }
 
@@ -1360,21 +1453,7 @@ static const httpd_uri_t uri_api_config_switcher_dual = {
     .user_ctx = nullptr
 };
 
-// Device API URI
-static const httpd_uri_t uri_api_config_device_brightness = {
-    .uri = "/api/config/device/brightness",
-    .method = HTTP_POST,
-    .handler = api_config_post_handler,
-    .user_ctx = nullptr
-};
-
-static const httpd_uri_t uri_api_config_device_camera_id = {
-    .uri = "/api/config/device/camera_id",
-    .method = HTTP_POST,
-    .handler = api_config_post_handler,
-    .user_ctx = nullptr
-};
-
+// Broadcast API URI (RF 설정만)
 static const httpd_uri_t uri_api_config_device_rf = {
     .uri = "/api/config/device/rf",
     .method = HTTP_POST,
@@ -1411,16 +1490,8 @@ static const httpd_uri_t uri_api_devices = {
     .user_ctx = nullptr
 };
 
-// License API URI
-static const httpd_uri_t uri_api_license = {
-    .uri = "/api/license",
-    .method = HTTP_GET,
-    .handler = api_license_handler,
-    .user_ctx = nullptr
-};
-
 static const httpd_uri_t uri_api_license_validate = {
-    .uri = "/api/license/validate",
+    .uri = "/api/validate-license",
     .method = HTTP_POST,
     .handler = api_license_validate_handler,
     .user_ctx = nullptr
@@ -1438,6 +1509,13 @@ static const httpd_uri_t uri_api_test_license_server = {
     .uri = "/api/test/license-server",
     .method = HTTP_POST,
     .handler = api_test_license_server_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_search_license = {
+    .uri = "/api/search-license",
+    .method = HTTP_POST,
+    .handler = api_search_license_handler,
     .user_ctx = nullptr
 };
 
@@ -1463,6 +1541,84 @@ static const httpd_uri_t uri_alpine = {
     .user_ctx = nullptr
 };
 
+static const httpd_uri_t uri_favicon = {
+    .uri = "/favicon.ico",
+    .method = HTTP_GET,
+    .handler = favicon_handler,
+    .user_ctx = nullptr
+};
+
+// CORS Preflight URI (OPTIONS)
+static const httpd_uri_t uri_options_api_status = {
+    .uri = "/api/status",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_reboot = {
+    .uri = "/api/reboot",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_config = {
+    .uri = "/api/config/*",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_lora = {
+    .uri = "/api/lora/*",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_devices = {
+    .uri = "/api/devices",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_license_validate = {
+    .uri = "/api/validate-license",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_test_internet = {
+    .uri = "/api/test/internet",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_test_license_server = {
+    .uri = "/api/test/license-server",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_test = {
+    .uri = "/api/test/*",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_search_license = {
+    .uri = "/api/search-license",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
 // ============================================================================
 // C 인터페이스
 // ============================================================================
@@ -1482,7 +1638,7 @@ esp_err_t web_server_init(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     config.max_open_sockets = 5;
-    config.max_uri_handlers = 27;  // API + 정적 파일 + LoRa + Device + License
+    config.max_uri_handlers = 40;  // API + OPTIONS + 정적 파일 + LoRa + Device + License
     config.lru_purge_enable = true;
 
     esp_err_t ret = httpd_start(&s_server, &config);
@@ -1496,6 +1652,7 @@ esp_err_t web_server_init(void)
     httpd_register_uri_handler(s_server, &uri_css);
     httpd_register_uri_handler(s_server, &uri_js);
     httpd_register_uri_handler(s_server, &uri_alpine);
+    httpd_register_uri_handler(s_server, &uri_favicon);
     httpd_register_uri_handler(s_server, &uri_api_status);
     httpd_register_uri_handler(s_server, &uri_api_reboot);
     httpd_register_uri_handler(s_server, &uri_api_config_network_ap);
@@ -1504,8 +1661,6 @@ esp_err_t web_server_init(void)
     httpd_register_uri_handler(s_server, &uri_api_config_switcher_primary);
     httpd_register_uri_handler(s_server, &uri_api_config_switcher_secondary);
     httpd_register_uri_handler(s_server, &uri_api_config_switcher_dual);
-    httpd_register_uri_handler(s_server, &uri_api_config_device_brightness);
-    httpd_register_uri_handler(s_server, &uri_api_config_device_camera_id);
     httpd_register_uri_handler(s_server, &uri_api_config_device_rf);
     // LoRa API (internal)
     httpd_register_uri_handler(s_server, &uri_api_lora_scan);
@@ -1514,11 +1669,23 @@ esp_err_t web_server_init(void)
     // Device API (TX only)
     httpd_register_uri_handler(s_server, &uri_api_devices);
     // License API
-    httpd_register_uri_handler(s_server, &uri_api_license);
     httpd_register_uri_handler(s_server, &uri_api_license_validate);
     // Test API
     httpd_register_uri_handler(s_server, &uri_api_test_internet);
     httpd_register_uri_handler(s_server, &uri_api_test_license_server);
+    // License Search API
+    httpd_register_uri_handler(s_server, &uri_api_search_license);
+    // CORS Preflight (OPTIONS)
+    httpd_register_uri_handler(s_server, &uri_options_api_status);
+    httpd_register_uri_handler(s_server, &uri_options_api_reboot);
+    httpd_register_uri_handler(s_server, &uri_options_api_config);
+    httpd_register_uri_handler(s_server, &uri_options_api_lora);
+    httpd_register_uri_handler(s_server, &uri_options_api_devices);
+    httpd_register_uri_handler(s_server, &uri_options_api_license_validate);
+    httpd_register_uri_handler(s_server, &uri_options_api_test_internet);
+    httpd_register_uri_handler(s_server, &uri_options_api_test_license_server);
+    httpd_register_uri_handler(s_server, &uri_options_api_test);
+    httpd_register_uri_handler(s_server, &uri_options_api_search_license);
 
     // 이벤트 구독
     event_bus_subscribe(EVT_INFO_UPDATED, onSystemInfoEvent);

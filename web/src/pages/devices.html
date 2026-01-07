@@ -20,7 +20,7 @@
                     <span class="text-sm text-slate-600"><span class="font-medium" x-text="devices.list.filter(d => !d.is_online).length"></span> Offline</span>
                 </div>
                 <div class="w-px h-4 bg-slate-200"></div>
-                <span class="text-xs text-slate-500">Total: <span class="font-medium" x-text="devices.list.length"></span></span>
+                <span class="text-xs text-slate-500">Total: <span class="font-medium" x-text="devices.list.length"></span> / <span class="font-medium" x-text="license.deviceLimit"></span> Limit</span>
             </div>
             <button @click="fetchDevices()"
                     :disabled="devices.loading"

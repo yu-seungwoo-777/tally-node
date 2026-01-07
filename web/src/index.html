@@ -125,6 +125,29 @@
 
             <!-- 페이지 컨텐츠 (pages/*.html에서 주입) -->
             <main class="flex-1 p-4 lg:p-6 overflow-auto max-w-6xl mx-auto w-full">
+                <!-- 라이센스 경고 배너 (상단 전역) -->
+                <div x-show="license.state !== 0" class="mb-4 bg-gradient-to-r from-rose-50 to-orange-50 border-l-4 border-rose-500 rounded-r-xl p-4 shadow-sm">
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div class="flex items-start gap-3 flex-1">
+                            <div class="bg-rose-100 rounded-full p-2">
+                                <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01"></path>
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-semibold text-rose-900">License Required for Full Functionality</p>
+                                <p class="text-xs text-rose-700 mt-0.5">TX/RX communication is limited without license activation.</p>
+                            </div>
+                        </div>
+                        <a href="#license" class="self-start sm:self-auto px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 rounded-lg transition-all shadow-sm hover:shadow flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                            </svg>
+                            <span>Activate License</span>
+                        </a>
+                    </div>
+                </div>
                 <!-- PAGES_PLACEHOLDER: 빌드 시 pages/*.html 내용으로 교체 -->
             </main>
         </div>

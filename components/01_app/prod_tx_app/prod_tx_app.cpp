@@ -62,6 +62,12 @@ static void send_tally_via_lora(const packed_data_t* tally)
         return;
     }
 
+    // 라이센스 확인
+    if (!license_service_can_send_tally()) {
+        T_LOGW(TAG, "LoRa 송신 스킵: 라이센스 미인증 상태");
+        return;
+    }
+
     char hex_str[16];
     packed_data_to_hex(tally, hex_str, sizeof(hex_str));
 

@@ -26,11 +26,11 @@
                                     <div class="flex-1 space-y-2">
                                         <div class="flex items-baseline gap-2">
                                             <span class="text-sm text-slate-500">Frequency</span>
-                                            <span class="text-xl font-mono font-bold text-slate-900" x-text="Math.round(config.device.rf.frequency) + ' MHz'"></span>
+                                            <span class="text-xl font-mono font-bold text-slate-900" x-text="Math.round(config.broadcast.rf.frequency) + ' MHz'"></span>
                                         </div>
                                         <div class="flex items-baseline gap-2">
                                             <span class="text-sm text-slate-500">Sync Word</span>
-                                            <span class="text-xl font-mono font-bold text-blue-600">0x<span x-text="Number(config.device.rf.syncWord).toString(16).toUpperCase().padStart(2, '0')"></span></span>
+                                            <span class="text-xl font-mono font-bold text-blue-600">0x<span x-text="Number(config.broadcast.rf.syncWord).toString(16).toUpperCase().padStart(2, '0')"></span></span>
                                         </div>
                                     </div>
                                     <!-- Circular RSSI Gauge -->

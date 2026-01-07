@@ -16,6 +16,16 @@ export function licenseModule() {
             loading: false
         },
 
+        // 라이센스 서버 검색
+        licenseSearch: {
+            name: '',
+            phone: '',
+            email: '',
+            searching: false,
+            result: null,
+            success: false
+        },
+
         // 인터넷 테스트 데이터
         internetTest: {
             status: 'none',      // none, testing, success, fail
@@ -47,21 +57,22 @@ export function licenseModule() {
         },
 
         /**
-         * 라이센스 상태 조회
+         * 라이센스 상태 조회 (/api/status에서 가져옴)
          */
         async fetchLicense() {
             try {
-                const res = await fetch('/api/license');
-                if (!res.ok) throw new Error('License fetch failed');
+                const res = await fetch('/api/status');
+                if (!res.ok) throw new Error('Status fetch failed');
 
                 const data = await res.json();
+                const lic = data.license || {};
 
-                this.license.state = data.state || 1;
-                this.license.stateStr = data.stateStr || 'invalid';
-                this.license.isValid = data.isValid || false;
-                this.license.deviceLimit = data.deviceLimit || 0;
-                this.license.graceRemaining = data.graceRemaining || 0;
-                this.license.key = data.key || '';
+                this.license.state = lic.state ?? 1;
+                this.license.stateStr = lic.stateStr || 'invalid';
+                this.license.isValid = lic.isValid || false;
+                this.license.deviceLimit = lic.deviceLimit || 0;
+                this.license.graceRemaining = lic.graceRemaining || 0;
+                this.license.key = lic.key || '';
             } catch (e) {
                 console.error('License fetch error:', e);
             }
@@ -132,7 +143,7 @@ export function licenseModule() {
             try {
                 this.license.loading = true;
 
-                const res = await fetch('/api/license/validate', {
+                const res = await fetch('/api/validate-license', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ key })
@@ -158,6 +169,54 @@ export function licenseModule() {
                 this.showToast('Validation request failed', 'alert-error');
             } finally {
                 this.license.loading = false;
+            }
+        },
+
+        /**
+         * 라이센스 서버 검색 (ESP32 경유 - 이름/전화번호/이메일)
+         */
+        async searchLicenseServer() {
+            const { name, phone, email } = this.licenseSearch;
+
+            if (!name || !phone || !email) {
+                this.showToast('Please fill in all fields (Name, Phone, Email)', 'alert-warning');
+                return;
+            }
+
+            try {
+                this.licenseSearch.searching = true;
+                this.licenseSearch.result = null;
+
+                // ESP32 엔드포인트 호출 (API 주소 보호)
+                const res = await fetch('/api/search-license', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, phone, email })
+                });
+
+                if (!res.ok) {
+                    throw new Error('Search request failed');
+                }
+
+                const data = await res.json();
+
+                if (data.success && data.count > 0 && data.licenses && data.licenses.length > 0) {
+                    this.licenseSearch.success = true;
+                    const license = data.licenses[0];
+                    this.licenseSearch.result = `License Key: ${license.license_key}, Device Limit: ${license.device_limit}`;
+                } else if (data.success && data.count === 0) {
+                    this.licenseSearch.success = false;
+                    this.licenseSearch.result = 'No license found for the provided information';
+                } else {
+                    this.licenseSearch.success = false;
+                    this.licenseSearch.result = data.error || 'License not found';
+                }
+            } catch (e) {
+                console.error('License search error:', e);
+                this.licenseSearch.success = false;
+                this.licenseSearch.result = 'Search failed. Please try again.';
+            } finally {
+                this.licenseSearch.searching = false;
             }
         },
 

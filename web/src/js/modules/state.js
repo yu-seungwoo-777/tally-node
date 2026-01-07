@@ -78,12 +78,10 @@ export function stateModule() {
                 dualEnabled: false,
                 secondaryOffset: 4
             },
-            device: {
-                brightness: 128,
-                cameraId: 1,
+            broadcast: {
                 rf: {
                     frequency: 868,
-                    syncWord: 0x12,
+                    syncWord: 18,
                     spreadingFactor: 7,
                     codingRate: 7,
                     bandwidth: 250,
@@ -284,44 +282,34 @@ export function stateModule() {
                     }
                 }
 
-                // Device 설정 업데이트
-                if (data.device) {
-                    this.config.device.brightness = data.device.brightness || 128;
-                    this.config.device.cameraId = data.device.cameraId || 1;
-
-                    if (data.device && data.device.rf) {
-                        this.config.device.rf = {
-                            frequency: data.device.rf.frequency || 868,
-                            syncWord: data.device.rf.syncWord || 0x12,
-                            spreadingFactor: data.device.rf.spreadingFactor || 7,
-                            codingRate: data.device.rf.codingRate || 7,
-                            bandwidth: data.device.rf.bandwidth || 250,
-                            txPower: data.device.rf.txPower || 22
-                        };
-                        // 첫 로드 시 폼 초기화
-                        if (!this._initialized) {
-                            this.form.display.brightness = data.device.brightness || 128;
-                            this.form.display.cameraId = data.device.cameraId || 1;
-                            // RF 설정 초기화
-                            this.form.broadcast.syncCode = data.device.rf.syncWord || 18;
-                            this.form.broadcast.frequency = data.device.rf.frequency || 868.0;
-                        }
-                    } else {
-                        // device.rf가 없는 경우 기본값 설정
-                        this.config.device.rf = {
-                            frequency: 868,
-                            syncWord: 18,
-                            spreadingFactor: 7,
-                            codingRate: 7,
-                            bandwidth: 250,
-                            txPower: 22
-                        };
-                        if (!this._initialized) {
-                            this.form.display.brightness = data.device.brightness || 128;
-                            this.form.display.cameraId = data.device.cameraId || 1;
-                            this.form.broadcast.syncCode = 18;
-                            this.form.broadcast.frequency = 868.0;
-                        }
+                // Broadcast 설정 업데이트 (RF 설정만 포함)
+                if (data.broadcast && data.broadcast.rf) {
+                    this.config.broadcast.rf = {
+                        frequency: data.broadcast.rf.frequency || 868,
+                        syncWord: data.broadcast.rf.syncWord || 18,
+                        spreadingFactor: data.broadcast.rf.spreadingFactor || 7,
+                        codingRate: data.broadcast.rf.codingRate || 7,
+                        bandwidth: data.broadcast.rf.bandwidth || 250,
+                        txPower: data.broadcast.rf.txPower || 22
+                    };
+                    // 첫 로드 시 폼 초기화
+                    if (!this._initialized) {
+                        this.form.broadcast.syncCode = data.broadcast.rf.syncWord || 18;
+                        this.form.broadcast.frequency = data.broadcast.rf.frequency || 868.0;
+                    }
+                } else {
+                    // broadcast.rf가 없는 경우 기본값 설정
+                    this.config.broadcast.rf = {
+                        frequency: 868,
+                        syncWord: 18,
+                        spreadingFactor: 7,
+                        codingRate: 7,
+                        bandwidth: 250,
+                        txPower: 22
+                    };
+                    if (!this._initialized) {
+                        this.form.broadcast.syncCode = 18;
+                        this.form.broadcast.frequency = 868.0;
                     }
                 }
 
