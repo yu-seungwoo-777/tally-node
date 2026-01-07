@@ -96,12 +96,14 @@ static void stop_camera_id_timer(void)
 static struct {
     bool running;
     bool initialized;
+    bool stopped;         // 기능 정지 상태
     // 현재 Tally 상태 (카메라 ID 변경 시 LED 업데이트용)
     bool program_active;   // 현재 카메라가 PGM인지
     bool preview_active;   // 현재 카메라가 PVW인지
 } s_app = {
     .running = false,
     .initialized = false,
+    .stopped = false,
     .program_active = false,
     .preview_active = false
 };
@@ -208,6 +210,11 @@ static esp_err_t handle_tally_state_changed(const event_data_t* event)
         return ESP_ERR_INVALID_ARG;
     }
 
+    // 기능 정지 상태에서는 Tally 무시
+    if (s_app.stopped) {
+        return ESP_OK;
+    }
+
     const tally_event_data_t* tally_evt = (const tally_event_data_t*)event->data;
 
     // packed_data_t 구조체 생성
@@ -228,6 +235,29 @@ static esp_err_t handle_tally_state_changed(const event_data_t* event)
     } else {
         s_app.program_active = false;
         s_app.preview_active = false;
+    }
+
+    return ESP_OK;
+}
+
+/**
+ * @brief 기능 정지 상태 변경 이벤트 핸들러
+ */
+static esp_err_t handle_stop_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const bool* stopped = (const bool*)event->data;
+    s_app.stopped = *stopped;
+
+    if (s_app.stopped) {
+        T_LOGW(TAG, "기능 정지: LED OFF");
+        // LED 전체 소등
+        led_service_off();
+    } else {
+        T_LOGI(TAG, "기능 정지 해제");
     }
 
     return ESP_OK;
@@ -310,6 +340,12 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
         T_LOGW(TAG, "Button service init failed: %s", esp_err_to_name(ret));
     }
 
+    // DeviceManager 초기화 (이벤트 구독)
+    ret = device_manager_init();
+    if (ret != ESP_OK) {
+        T_LOGW(TAG, "DeviceManager init failed: %s", esp_err_to_name(ret));
+    }
+
     s_app.initialized = true;
     T_LOGI(TAG, "RX app init complete");
 
@@ -347,7 +383,6 @@ void prod_rx_app_start(void)
     T_LOGI(TAG, "LoRa 시작");
 
     // DeviceManager 시작 (상태 요청 수신 처리)
-    device_manager_init();
     device_manager_start();
     T_LOGI(TAG, "DeviceManager 시작");
 
@@ -363,6 +398,7 @@ void prod_rx_app_start(void)
 
     // Tally 상태 변경 이벤트 구독 (카메라 ID 변경 시 LED 즉시 업데이트용)
     event_bus_subscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
+    event_bus_subscribe(EVT_STOP_CHANGED, handle_stop_changed);
     T_LOGI(TAG, "Tally 상태 이벤트 구독 시작");
 #endif
 
@@ -415,6 +451,7 @@ void prod_rx_app_stop(void)
     event_bus_unsubscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_unsubscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
     event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
+    event_bus_unsubscribe(EVT_STOP_CHANGED, handle_stop_changed);
 #endif
 
     button_service_stop();

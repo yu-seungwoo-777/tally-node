@@ -501,6 +501,12 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         T_LOGW(TAG, "WebServer init failed: %s", esp_err_to_name(ret));
     }
 
+    // DeviceManager 초기화 (이벤트 구독)
+    ret = device_manager_init();
+    if (ret != ESP_OK) {
+        T_LOGW(TAG, "DeviceManager init failed: %s", esp_err_to_name(ret));
+    }
+
     s_app.initialized = true;
     T_LOGI(TAG, "TX app init complete");
 
@@ -535,7 +541,6 @@ void prod_tx_app_start(void)
     T_LOGI(TAG, "LoRa 시작");
 
     // DeviceManager 시작 (상태 요청 태스크)
-    device_manager_init();
     device_manager_start();
     T_LOGI(TAG, "DeviceManager 시작");
 
