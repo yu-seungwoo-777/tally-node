@@ -1037,14 +1037,22 @@ static esp_err_t api_devices_handler(httpd_req_t* req)
                 // 배터리
                 cJSON_AddNumberToObject(item, "battery", dev->battery);
 
+                // 카메라 ID
+                cJSON_AddNumberToObject(item, "cameraId", dev->camera_id);
+
                 // 업타임
                 cJSON_AddNumberToObject(item, "uptime", dev->uptime);
 
                 // 상태 플래그
                 cJSON_AddBoolToObject(item, "stopped", dev->is_stopped);
+                cJSON_AddBoolToObject(item, "is_online", dev->is_online);
 
                 // Ping
                 cJSON_AddNumberToObject(item, "ping", dev->ping_ms);
+
+                // 밝기 (0-255 → 0-100 변환)
+                uint8_t brightness_percent = (dev->brightness * 100) / 255;
+                cJSON_AddNumberToObject(item, "brightness", brightness_percent);
 
                 // RF 설정
                 cJSON_AddNumberToObject(item, "frequency", dev->frequency);
@@ -1326,6 +1334,182 @@ static esp_err_t api_search_license_handler(httpd_req_t* req)
 }
 
 /**
+ * @brief POST /api/device/brightness - 디바이스 밝기 설정 (LoRa 전송)
+ */
+static esp_err_t api_device_brightness_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 요청 바디 읽기
+    char* buf = new char[256];
+    int ret = httpd_req_recv(req, buf, 255);
+    if (ret <= 0) {
+        delete[] buf;
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    // JSON 파싱
+    cJSON* root = cJSON_Parse(buf);
+    delete[] buf;
+    if (!root) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        return ESP_OK;
+    }
+
+    // 필드 추출
+    cJSON* deviceId_json = cJSON_GetObjectItem(root, "deviceId");
+    cJSON* brightness_json = cJSON_GetObjectItem(root, "brightness");
+
+    if (!deviceId_json || !brightness_json) {
+        cJSON_Delete(root);
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"deviceId and brightness are required\"}");
+        return ESP_OK;
+    }
+
+    // deviceId 배열 파싱
+    uint8_t device_id[2] = {0xFF, 0xFF};  // 기본 broadcast
+    if (cJSON_IsArray(deviceId_json) && cJSON_GetArraySize(deviceId_json) >= 2) {
+        device_id[0] = (uint8_t)cJSON_GetArrayItem(deviceId_json, 0)->valueint;
+        device_id[1] = (uint8_t)cJSON_GetArrayItem(deviceId_json, 1)->valueint;
+    }
+
+    uint8_t brightness = (uint8_t)brightness_json->valueint;
+
+    cJSON_Delete(root);
+
+    // 밝기 변경 이벤트 발행 (lora_service가 구독하여 LoRa 전송)
+    // 이벤트 데이터: [device_id[0], device_id[1], brightness]
+    uint8_t event_data[3] = {device_id[0], device_id[1], brightness};
+    event_bus_publish(EVT_DEVICE_BRIGHTNESS_REQUEST, event_data, sizeof(event_data));
+
+    ESP_LOGI(TAG, "디바이스 밝기 설정 요청: ID[%02X%02X], 밝기=%d",
+             device_id[0], device_id[1], brightness);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+
+    return ESP_OK;
+}
+
+/**
+ * @brief POST /api/device/camera-id - 디바이스 카메라 ID 설정 (LoRa 전송)
+ */
+static esp_err_t api_device_camera_id_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 요청 바디 읽기
+    char* buf = new char[256];
+    int ret = httpd_req_recv(req, buf, 255);
+    if (ret <= 0) {
+        delete[] buf;
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    // JSON 파싱
+    cJSON* root = cJSON_Parse(buf);
+    delete[] buf;
+    if (!root) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        return ESP_OK;
+    }
+
+    // 필드 추출
+    cJSON* deviceId_json = cJSON_GetObjectItem(root, "deviceId");
+    cJSON* cameraId_json = cJSON_GetObjectItem(root, "cameraId");
+
+    if (!deviceId_json || !cameraId_json) {
+        cJSON_Delete(root);
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"deviceId and cameraId are required\"}");
+        return ESP_OK;
+    }
+
+    // deviceId 배열 파싱
+    uint8_t device_id[2] = {0xFF, 0xFF};  // 기본 broadcast
+    if (cJSON_IsArray(deviceId_json) && cJSON_GetArraySize(deviceId_json) >= 2) {
+        device_id[0] = (uint8_t)cJSON_GetArrayItem(deviceId_json, 0)->valueint;
+        device_id[1] = (uint8_t)cJSON_GetArrayItem(deviceId_json, 1)->valueint;
+    }
+
+    uint8_t camera_id = (uint8_t)cameraId_json->valueint;
+
+    cJSON_Delete(root);
+
+    // 카메라 ID 변경 이벤트 발행 (lora_service가 구독하여 LoRa 전송)
+    // 이벤트 데이터: [device_id[0], device_id[1], camera_id]
+    uint8_t event_data[3] = {device_id[0], device_id[1], camera_id};
+    event_bus_publish(EVT_DEVICE_CAMERA_ID_REQUEST, event_data, sizeof(event_data));
+
+    ESP_LOGI(TAG, "디바이스 카메라 ID 설정 요청: ID[%02X%02X], CameraID=%d",
+             device_id[0], device_id[1], camera_id);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+
+    return ESP_OK;
+}
+
+#ifdef DEVICE_MODE_TX
+/**
+ * @brief 디바이스 PING 핸들러
+ * POST /api/device/ping
+ * Body: {"deviceId": [0x2D, 0x20]}
+ */
+static esp_err_t api_device_ping_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 요청 바디 읽기
+    char* buf = new char[256];
+    int ret = httpd_req_recv(req, buf, 255);
+    if (ret <= 0) {
+        delete[] buf;
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    // JSON 파싱
+    cJSON* root = cJSON_Parse(buf);
+    delete[] buf;
+    if (!root) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        return ESP_OK;
+    }
+
+    // 필드 추출
+    cJSON* deviceId_json = cJSON_GetObjectItem(root, "deviceId");
+
+    // deviceId 배열 파싱
+    uint8_t device_id[2] = {0xFF, 0xFF};  // 기본 broadcast
+    if (deviceId_json && cJSON_IsArray(deviceId_json) && cJSON_GetArraySize(deviceId_json) >= 2) {
+        device_id[0] = (uint8_t)cJSON_GetArrayItem(deviceId_json, 0)->valueint;
+        device_id[1] = (uint8_t)cJSON_GetArrayItem(deviceId_json, 1)->valueint;
+    }
+
+    cJSON_Delete(root);
+
+    // PING 요청 이벤트 발행 (device_manager가 구독하여 LoRa 전송)
+    event_bus_publish(EVT_DEVICE_PING_REQUEST, device_id, sizeof(device_id));
+
+    ESP_LOGI(TAG, "디바이스 PING 요청: ID[%02X%02X]", device_id[0], device_id[1]);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+
+    return ESP_OK;
+}
+#endif // DEVICE_MODE_TX
+
+/**
  * @brief index.html 핸들러
  */
 static esp_err_t index_handler(httpd_req_t* req)
@@ -1519,6 +1703,29 @@ static const httpd_uri_t uri_api_search_license = {
     .user_ctx = nullptr
 };
 
+static const httpd_uri_t uri_api_device_brightness = {
+    .uri = "/api/device/brightness",
+    .method = HTTP_POST,
+    .handler = api_device_brightness_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_device_camera_id = {
+    .uri = "/api/device/camera-id",
+    .method = HTTP_POST,
+    .handler = api_device_camera_id_handler,
+    .user_ctx = nullptr
+};
+
+#ifdef DEVICE_MODE_TX
+static const httpd_uri_t uri_api_device_ping = {
+    .uri = "/api/device/ping",
+    .method = HTTP_POST,
+    .handler = api_device_ping_handler,
+    .user_ctx = nullptr
+};
+#endif
+
 // 정적 파일 URI
 static const httpd_uri_t uri_css = {
     .uri = "/css/styles.css",
@@ -1619,19 +1826,75 @@ static const httpd_uri_t uri_options_api_search_license = {
     .user_ctx = nullptr
 };
 
+static const httpd_uri_t uri_options_api_device_brightness = {
+    .uri = "/api/device/brightness",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_device_camera_id = {
+    .uri = "/api/device/camera-id",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+#ifdef DEVICE_MODE_TX
+static const httpd_uri_t uri_options_api_device_ping = {
+    .uri = "/api/device/ping",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+#endif
+
 // ============================================================================
 // C 인터페이스
 // ============================================================================
 
 extern "C" {
 
+static bool s_initialized = false;
+
 esp_err_t web_server_init(void)
 {
+    if (s_initialized) {
+        ESP_LOGW(TAG, "Web server already initialized");
+        return ESP_OK;
+    }
+
     // 캐시 초기화
     init_cache();
 
+    // 이벤트 구독
+    event_bus_subscribe(EVT_INFO_UPDATED, onSystemInfoEvent);
+    event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, onSwitcherStatusEvent);
+    event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
+    event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
+    // LoRa 스캔 이벤트
+    event_bus_subscribe(EVT_LORA_SCAN_START, onLoraScanStartEvent);
+    event_bus_subscribe(EVT_LORA_SCAN_PROGRESS, onLoraScanProgressEvent);
+    event_bus_subscribe(EVT_LORA_SCAN_COMPLETE, onLoraScanCompleteEvent);
+    // 디바이스 리스트 이벤트 (TX 전용)
+    event_bus_subscribe(EVT_DEVICE_LIST_CHANGED, onDeviceListEvent);
+    // 라이센스 상태 이벤트
+    event_bus_subscribe(EVT_LICENSE_STATE_CHANGED, onLicenseStateEvent);
+
+    s_initialized = true;
+    ESP_LOGI(TAG, "Web server initialized (event subscriptions ready)");
+    return ESP_OK;
+}
+
+esp_err_t web_server_start(void)
+{
+    if (!s_initialized) {
+        ESP_LOGE(TAG, "Web server not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+
     if (s_server != nullptr) {
-        ESP_LOGW(TAG, "Web server already initialized");
+        ESP_LOGW(TAG, "Web server already running");
         return ESP_OK;
     }
 
@@ -1675,6 +1938,14 @@ esp_err_t web_server_init(void)
     httpd_register_uri_handler(s_server, &uri_api_test_license_server);
     // License Search API
     httpd_register_uri_handler(s_server, &uri_api_search_license);
+    // Device Brightness API
+    httpd_register_uri_handler(s_server, &uri_api_device_brightness);
+    // Device Camera ID API
+    httpd_register_uri_handler(s_server, &uri_api_device_camera_id);
+#ifdef DEVICE_MODE_TX
+    // Device PING API
+    httpd_register_uri_handler(s_server, &uri_api_device_ping);
+#endif
     // CORS Preflight (OPTIONS)
     httpd_register_uri_handler(s_server, &uri_options_api_status);
     httpd_register_uri_handler(s_server, &uri_options_api_reboot);
@@ -1686,20 +1957,11 @@ esp_err_t web_server_init(void)
     httpd_register_uri_handler(s_server, &uri_options_api_test_license_server);
     httpd_register_uri_handler(s_server, &uri_options_api_test);
     httpd_register_uri_handler(s_server, &uri_options_api_search_license);
-
-    // 이벤트 구독
-    event_bus_subscribe(EVT_INFO_UPDATED, onSystemInfoEvent);
-    event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, onSwitcherStatusEvent);
-    event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
-    event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
-    // LoRa 스캔 이벤트
-    event_bus_subscribe(EVT_LORA_SCAN_START, onLoraScanStartEvent);
-    event_bus_subscribe(EVT_LORA_SCAN_PROGRESS, onLoraScanProgressEvent);
-    event_bus_subscribe(EVT_LORA_SCAN_COMPLETE, onLoraScanCompleteEvent);
-    // 디바이스 리스트 이벤트 (TX 전용)
-    event_bus_subscribe(EVT_DEVICE_LIST_CHANGED, onDeviceListEvent);
-    // 라이센스 상태 이벤트
-    event_bus_subscribe(EVT_LICENSE_STATE_CHANGED, onLicenseStateEvent);
+    httpd_register_uri_handler(s_server, &uri_options_api_device_brightness);
+    httpd_register_uri_handler(s_server, &uri_options_api_device_camera_id);
+#ifdef DEVICE_MODE_TX
+    httpd_register_uri_handler(s_server, &uri_options_api_device_ping);
+#endif
 
     // 설정 데이터 요청 (초기 캐시 populate)
     event_bus_publish(EVT_CONFIG_DATA_REQUEST, nullptr, 0);
@@ -1716,6 +1978,9 @@ esp_err_t web_server_stop(void)
 
     ESP_LOGI(TAG, "Stopping web server");
 
+    esp_err_t ret = httpd_stop(s_server);
+    s_server = nullptr;
+
     // 이벤트 구독 해제
     event_bus_unsubscribe(EVT_INFO_UPDATED, onSystemInfoEvent);
     event_bus_unsubscribe(EVT_SWITCHER_STATUS_CHANGED, onSwitcherStatusEvent);
@@ -1725,15 +1990,20 @@ esp_err_t web_server_stop(void)
     event_bus_unsubscribe(EVT_LORA_SCAN_START, onLoraScanStartEvent);
     event_bus_unsubscribe(EVT_LORA_SCAN_PROGRESS, onLoraScanProgressEvent);
     event_bus_unsubscribe(EVT_LORA_SCAN_COMPLETE, onLoraScanCompleteEvent);
+    // 디바이스 리스트 이벤트 해제
+    event_bus_unsubscribe(EVT_DEVICE_LIST_CHANGED, onDeviceListEvent);
+    // 라이센스 상태 이벤트 해제
+    event_bus_unsubscribe(EVT_LICENSE_STATE_CHANGED, onLicenseStateEvent);
 
     // 캐시 무효화
     s_cache.system_valid = false;
     s_cache.switcher_valid = false;
     s_cache.network_valid = false;
     s_cache.config_valid = false;
+    s_cache.devices_valid = false;
+    s_cache.license_valid = false;
 
-    esp_err_t ret = httpd_stop(s_server);
-    s_server = nullptr;
+    s_initialized = false;
     return ret;
 }
 

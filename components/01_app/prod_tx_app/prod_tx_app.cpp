@@ -121,6 +121,118 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
     T_LOGD(TAG, "Long press release");
     return ESP_OK;
 }
+
+/**
+ * @brief 디바이스 밝기 설정 요청 핸들러
+ * 이벤트 데이터: uint8_t[3] = {device_id[0], device_id[1], brightness}
+ */
+static esp_err_t handle_device_brightness_request(const event_data_t* event)
+{
+    if (!event || event->data_size < 3) {
+        T_LOGW(TAG, "밝기 요청 이벤트 데이터 부족");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* data = event->data;
+    uint8_t device_id[2] = {data[0], data[1]};
+    uint8_t brightness = data[2];
+
+    // 라이센스 확인
+    if (!license_service_can_send_tally()) {
+        T_LOGW(TAG, "밝기 명령 송신 스킵: 라이센스 미인증 상태");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // LoRa 밝기 설정 명령 패킷 구성
+    // [0xE1][device_id[0]][device_id[1]][brightness]
+    uint8_t pkt[4];
+    pkt[0] = 0xE1;  // LORA_HDR_SET_BRIGHTNESS
+    pkt[1] = device_id[0];
+    pkt[2] = device_id[1];
+    pkt[3] = brightness;
+
+    esp_err_t ret = lora_service_send(pkt, sizeof(pkt));
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "밝기 명령 LoRa 송신: ID[%02X%02X], 밝기=%d",
+                 device_id[0], device_id[1], brightness);
+    } else {
+        T_LOGE(TAG, "밝기 명령 LoRa 송신 실패: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 디바이스 카메라 ID 설정 요청 핸들러
+ * 이벤트 데이터: uint8_t[3] = {device_id[0], device_id[1], camera_id}
+ */
+static esp_err_t handle_device_camera_id_request(const event_data_t* event)
+{
+    if (!event || event->data_size < 3) {
+        T_LOGW(TAG, "카메라 ID 요청 이벤트 데이터 부족");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* data = event->data;
+    uint8_t device_id[2] = {data[0], data[1]};
+    uint8_t camera_id = data[2];
+
+    // 라이센스 확인
+    if (!license_service_can_send_tally()) {
+        T_LOGW(TAG, "카메라 ID 명령 송신 스킵: 라이센스 미인증 상태");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // LoRa 카메라 ID 설정 명령 패킷 구성
+    // [0xE2][device_id[0]][device_id[1]][camera_id]
+    uint8_t pkt[4];
+    pkt[0] = 0xE2;  // LORA_HDR_SET_CAMERA_ID
+    pkt[1] = device_id[0];
+    pkt[2] = device_id[1];
+    pkt[3] = camera_id;
+
+    esp_err_t ret = lora_service_send(pkt, sizeof(pkt));
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "카메라 ID 명령 LoRa 송신: ID[%02X%02X], CameraID=%d",
+                 device_id[0], device_id[1], camera_id);
+    } else {
+        T_LOGE(TAG, "카메라 ID 명령 LoRa 송신 실패: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 디바이스 PING 요청 핸들러
+ * 이벤트 데이터: uint8_t[2] = {device_id[0], device_id[1]}
+ */
+static esp_err_t handle_device_ping_request(const event_data_t* event)
+{
+    if (!event || event->data_size < 2) {
+        T_LOGW(TAG, "PING 요청 이벤트 데이터 부족");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* device_id = event->data;
+
+    // PING 명령 패킷 구성 (send_ping_command 호출 또는 직접 전송)
+    // [0xE6][device_id[0]][device_id[1]][timestamp_low]
+    uint8_t pkt[4];
+    pkt[0] = 0xE6;  // LORA_HDR_PING
+    pkt[1] = device_id[0];
+    pkt[2] = device_id[1];
+    pkt[3] = (uint8_t)(xTaskGetTickCount() * portTICK_PERIOD_MS & 0xFF);  // timestamp 하위 바이트만 사용
+
+    esp_err_t ret = lora_service_send(pkt, sizeof(pkt));
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "PING 명령 LoRa 송신: ID[%02X%02X]",
+                 device_id[0], device_id[1]);
+    } else {
+        T_LOGE(TAG, "PING 명령 LoRa 송신 실패: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
+}
 #endif // DEVICE_MODE_TX
 
 // ============================================================================
@@ -368,6 +480,12 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         T_LOGW(TAG, "Button service init failed: %s", esp_err_to_name(ret));
     }
 
+    // WebServer 초기화 (이벤트 구독)
+    ret = web_server_init();
+    if (ret != ESP_OK) {
+        T_LOGW(TAG, "WebServer init failed: %s", esp_err_to_name(ret));
+    }
+
     s_app.initialized = true;
     T_LOGI(TAG, "TX app init complete");
 
@@ -415,6 +533,10 @@ void prod_tx_app_start(void)
     event_bus_subscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
+    // 디바이스 제어 이벤트 구독
+    event_bus_subscribe(EVT_DEVICE_BRIGHTNESS_REQUEST, handle_device_brightness_request);
+    event_bus_subscribe(EVT_DEVICE_CAMERA_ID_REQUEST, handle_device_camera_id_request);
+    event_bus_subscribe(EVT_DEVICE_PING_REQUEST, handle_device_ping_request);
 #endif
 
     // 스위처/네트워크 연결 상태 이벤트 구독
@@ -446,8 +568,8 @@ void prod_tx_app_start(void)
     // TX 페이지로 전환
     display_manager_boot_complete();
 
-    // WebServer 시작 (이벤트 기반)
-    if (web_server_init() == ESP_OK) {
+    // WebServer 시작 (HTTP 서버)
+    if (web_server_start() == ESP_OK) {
         T_LOGI(TAG, "WebServer 시작");
     } else {
         T_LOGW(TAG, "WebServer 시작 실패");
@@ -474,6 +596,10 @@ void prod_tx_app_stop(void)
     event_bus_unsubscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_unsubscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_unsubscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
+    // 디바이스 제어 이벤트 구독 취소
+    event_bus_unsubscribe(EVT_DEVICE_BRIGHTNESS_REQUEST, handle_device_brightness_request);
+    event_bus_unsubscribe(EVT_DEVICE_CAMERA_ID_REQUEST, handle_device_camera_id_request);
+    event_bus_unsubscribe(EVT_DEVICE_PING_REQUEST, handle_device_ping_request);
 #endif
 
     // 스위처/네트워크 연결 상태 이벤트 구독 취소
