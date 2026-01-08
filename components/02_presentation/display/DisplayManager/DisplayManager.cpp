@@ -47,6 +47,13 @@ typedef struct {
         bool valid;
     } tally;
 
+    // 디바이스 설정 (RX용)
+    struct {
+        uint8_t brightness;
+        uint8_t camera_id;
+        bool valid;
+    } device;
+
     switcher_status_event_t switcher;  // EVT_SWITCHER_STATUS_CHANGED
     bool switcher_valid;
 
@@ -187,6 +194,13 @@ static void print_status_log(void)
         T_LOGI(TAG, "Tally PGM:%d PVW:%d",
                s_mgr.data.tally.pgm_count,
                s_mgr.data.tally.pvw_count);
+    }
+
+    // 디바이스 정보 (RX)
+    if (s_mgr.data.device.valid) {
+        T_LOGI(TAG, "Bri:%d Cam:%d",
+               s_mgr.data.device.brightness,
+               s_mgr.data.device.camera_id);
     }
 #elif defined(DEVICE_MODE_TX)
     // Switcher 정보 (TX)
@@ -363,9 +377,30 @@ static esp_err_t on_camera_id_changed(const event_data_t* event)
     }
 
     const uint8_t* camera_id = (const uint8_t*)event->data;
+    s_mgr.data.device.camera_id = *camera_id;
+    s_mgr.data.device.valid = true;
     rx_page_set_cam_id(*camera_id);
     render_current_page();
     T_LOGI(TAG, "카메라 ID 변경 (디스플레이): %d", *camera_id);
+
+    return ESP_OK;
+}
+
+/**
+ * @brief EVT_BRIGHTNESS_CHANGED 핸들러 (RX 전용)
+ *
+ * 밝기 변경 시 저장 (상태 로그용)
+ */
+static esp_err_t on_brightness_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_OK;
+    }
+
+    const uint8_t* brightness = (const uint8_t*)event->data;
+    s_mgr.data.device.brightness = *brightness;
+    s_mgr.data.device.valid = true;
+    T_LOGI(TAG, "밝기 변경 (디스플레이): %d", *brightness);
 
     return ESP_OK;
 }
@@ -514,6 +549,7 @@ extern "C" void display_manager_start(void)
         // RX 전용 이벤트
         event_bus_subscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
         event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
+        event_bus_subscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
         event_bus_subscribe(EVT_RF_CHANGED, on_rf_changed);
 #elif defined(DEVICE_MODE_TX)
         // TX 전용 이벤트
@@ -525,7 +561,7 @@ extern "C" void display_manager_start(void)
         s_mgr.events_subscribed = true;
         T_LOGI(TAG, "이벤트 구독 완료: EVT_INFO_UPDATED, EVT_LORA_RSSI_CHANGED"
 #ifdef DEVICE_MODE_RX
-               ", EVT_TALLY_STATE_CHANGED, EVT_CAMERA_ID_CHANGED, EVT_RF_CHANGED"
+               ", EVT_TALLY_STATE_CHANGED, EVT_CAMERA_ID_CHANGED, EVT_BRIGHTNESS_CHANGED, EVT_RF_CHANGED"
 #elif defined(DEVICE_MODE_TX)
                ", EVT_SWITCHER_STATUS_CHANGED, EVT_NETWORK_STATUS_CHANGED, EVT_RF_CHANGED"
 #endif
