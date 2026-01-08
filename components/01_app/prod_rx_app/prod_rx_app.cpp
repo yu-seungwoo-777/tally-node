@@ -400,6 +400,14 @@ void prod_rx_app_start(void)
         // 밝기 이벤트 발행
         event_bus_publish(EVT_BRIGHTNESS_CHANGED, &saved_config.device.brightness, sizeof(uint8_t));
         T_LOGI(TAG, "밝기 이벤트 발행: %d", saved_config.device.brightness);
+        // RF 설정 이벤트 발행 (frequency, sync_word)
+        lora_rf_event_t rf_event = {
+            .frequency = saved_config.device.rf.frequency,
+            .sync_word = saved_config.device.rf.sync_word
+        };
+        event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
+        T_LOGI(TAG, "RF 설정 이벤트 발행: %.1f MHz, Sync 0x%02X",
+                 rf_event.frequency, rf_event.sync_word);
     } else {
         T_LOGW(TAG, "설정 로드 실패: %s", esp_err_to_name(ret));
     }

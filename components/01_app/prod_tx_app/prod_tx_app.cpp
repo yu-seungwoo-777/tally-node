@@ -548,6 +548,22 @@ void prod_tx_app_start(void)
     display_manager_start();
     display_manager_set_page(PAGE_BOOT);
 
+    // 저장된 RF 설정 로드 및 이벤트 발행 (lora_service, DisplayManager 구독 완료 후)
+    config_all_t saved_config;
+    esp_err_t ret = config_service_load_all(&saved_config);
+    if (ret == ESP_OK) {
+        // RF 설정 이벤트 발행 (frequency, sync_word)
+        lora_rf_event_t rf_event = {
+            .frequency = saved_config.device.rf.frequency,
+            .sync_word = saved_config.device.rf.sync_word
+        };
+        event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
+        T_LOGI(TAG, "RF 설정 이벤트 발행: %.1f MHz, Sync 0x%02X",
+                 rf_event.frequency, rf_event.sync_word);
+    } else {
+        T_LOGW(TAG, "RF 설정 로드 실패: %s", esp_err_to_name(ret));
+    }
+
     // 버튼 서비스 시작
     button_service_start();
 
