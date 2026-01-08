@@ -9,6 +9,7 @@
 #include "t_log.h"
 #include "nvs_flash.h"
 #include "nvs.h"
+#include "license_service.h"
 #include <cstring>
 #include <cstdio>
 
@@ -1726,55 +1727,18 @@ esp_err_t ConfigServiceClass::registerDevice(const uint8_t* device_id)
         return ret;
     }
 
+    // 용량 초과 확인
+    if (devices.count >= CONFIG_MAX_REGISTERED_DEVICES) {
+        T_LOGE(TAG, "등록된 디바이스 수 초과: %d", devices.count);
+        return ESP_ERR_NO_MEM;
+    }
+
     // NVS 저장
     nvs_handle_t handle;
     ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READWRITE, &handle);
     if (ret != ESP_OK) {
         T_LOGE(TAG, "NVS 열기 실패");
         return ESP_FAIL;
-    }
-
-    // 용량 초과 시: 가장 오래된 데이터 삭제 후 시프트
-    if (devices.count >= CONFIG_MAX_REGISTERED_DEVICES) {
-        T_LOGW(TAG, "등록된 디바이스 꽉참, 가장 오래된 데이터 삭제 후 추가");
-
-        // 인덱스 0 삭제
-        char key_old[16];
-        snprintf(key_old, sizeof(key_old), "%s0", NVS_KEY_DEVICE_PREFIX);
-        nvs_erase_key(handle, key_old);
-
-        // 나머지 디바이스 시프트 (1→0, 2→1, ...)
-        for (uint8_t i = 1; i < CONFIG_MAX_REGISTERED_DEVICES; i++) {
-            char key_src[16], key_dst[16];
-            snprintf(key_src, sizeof(key_src), "%s%d", NVS_KEY_DEVICE_PREFIX, i);
-            snprintf(key_dst, sizeof(key_dst), "%s%d", NVS_KEY_DEVICE_PREFIX, i - 1);
-
-            uint8_t id_bytes[LORA_DEVICE_ID_LEN];
-            size_t len = sizeof(id_bytes);
-            ret = nvs_get_blob(handle, key_src, id_bytes, &len);
-
-            if (ret == ESP_OK) {
-                // 이동
-                nvs_set_blob(handle, key_dst, id_bytes, len);
-            }
-
-            // 원본 삭제 (마지막은 삭제 안 함)
-            if (i < CONFIG_MAX_REGISTERED_DEVICES - 1) {
-                nvs_erase_key(handle, key_src);
-            }
-        }
-
-        nvs_commit(handle);
-
-        // 메모리 상태도 시프트
-        for (uint8_t i = 0; i < devices.count - 1; i++) {
-            memcpy(devices.device_ids[i], devices.device_ids[i + 1], LORA_DEVICE_ID_LEN);
-        }
-        devices.count--;
-
-        char id_str[5];
-        device_id_to_str((uint8_t*)devices.device_ids[0], id_str);
-        T_LOGW(TAG, "가장 오래된 디바이스 삭제: %s (남은 %d개)", id_str, devices.count);
     }
 
     // 디바이스 추가
@@ -1894,7 +1858,7 @@ esp_err_t ConfigServiceClass::getRegisteredDevices(config_registered_devices_t* 
     memset(devices, 0, sizeof(config_registered_devices_t));
 
     nvs_handle_t handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READONLY, &handle);
+    esp_err_t ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READWRITE, &handle);
     if (ret != ESP_OK) {
         // NVS 없으면 빈 목록 반환
         return ESP_OK;
@@ -1917,6 +1881,27 @@ esp_err_t ConfigServiceClass::getRegisteredDevices(config_registered_devices_t* 
         if (ret == ESP_OK && len == LORA_DEVICE_ID_LEN) {
             devices->count++;
         }
+    }
+
+    // device_limit 초과분 삭제 (라이선스 다운그레이드 대응)
+    uint8_t device_limit = license_service_get_device_limit();
+    if (device_limit > 0 && devices->count > device_limit) {
+        T_LOGW(TAG, "등록된 디바이스(%d)가 device_limit(%d) 초과, 초과분 삭제",
+                 devices->count, device_limit);
+
+        // device_limit까지만 유지, 나머지는 NVS에서 삭제
+        for (uint8_t i = device_limit; i < devices->count; i++) {
+            char key[16];
+            snprintf(key, sizeof(key), "%s%d", NVS_KEY_DEVICE_PREFIX, i);
+            nvs_erase_key(handle, key);
+        }
+
+        // count 업데이트
+        devices->count = device_limit;
+        nvs_set_u8(handle, NVS_KEY_DEVICE_COUNT, devices->count);
+        nvs_commit(handle);
+
+        T_LOGI(TAG, "초과분 삭제 완료, 유지된 디바이스: %d개", devices->count);
     }
 
     nvs_close(handle);
@@ -1989,50 +1974,11 @@ esp_err_t ConfigServiceClass::setDeviceCameraId(const uint8_t* device_id, uint8_
     // 기존 매핑 업데이트 또는 새 매핑 추가
     int target_idx = (existing_idx >= 0) ? existing_idx : empty_idx;
 
-    // NVS 꽉 찼을 때: 가장 오래된 데이터(인덱스 0) 삭제 후 시프트
+    // NVS 꽉 찼을 때
     if (target_idx < 0) {
-        T_LOGW(TAG, "디바이스-카메라 매핑 꽉참, 가장 오래된 데이터 삭제 후 추가");
-
-        // 인덱스 0 삭제
-        char key_old[32];
-        snprintf(key_old, sizeof(key_old), "%s0", NVS_KEY_DEV_CAM_PREFIX);
-        nvs_erase_key(handle, key_old);
-
-        // 나머지 매핑 시프트 (1→0, 2→1, ...)
-        for (uint8_t i = 1; i < CONFIG_MAX_DEVICE_CAM_MAP; i++) {
-            char key_src[32], key_dst[32];
-            snprintf(key_src, sizeof(key_src), "%s%d", NVS_KEY_DEV_CAM_PREFIX, i);
-            snprintf(key_dst, sizeof(key_dst), "%s%d", NVS_KEY_DEV_CAM_PREFIX, i - 1);
-
-            uint8_t data[3];
-            size_t len = sizeof(data);
-            ret = nvs_get_blob(handle, key_src, data, &len);
-
-            if (ret == ESP_OK) {
-                // 이동
-                nvs_set_blob(handle, key_dst, data, len);
-            }
-
-            // 원본 삭제 (마지막은 삭제 안 함)
-            if (i < CONFIG_MAX_DEVICE_CAM_MAP - 1) {
-                nvs_erase_key(handle, key_src);
-            }
-        }
-
-        nvs_commit(handle);
-
-        // 캐시도 시프트
-        for (uint8_t i = 0; i < s_device_cam_map.count - 1; i++) {
-            s_device_cam_map.device_ids[i][0] = s_device_cam_map.device_ids[i + 1][0];
-            s_device_cam_map.device_ids[i][1] = s_device_cam_map.device_ids[i + 1][1];
-            s_device_cam_map.camera_ids[i] = s_device_cam_map.camera_ids[i + 1];
-        }
-        if (s_device_cam_map.count > 0) {
-            s_device_cam_map.count--;
-        }
-
-        // 마지막 빈 슬롯 사용
-        target_idx = CONFIG_MAX_DEVICE_CAM_MAP - 1;
+        nvs_close(handle);
+        T_LOGW(TAG, "디바이스-카메라 매핑 꽉참");
+        return ESP_ERR_NO_MEM;
     }
 
     uint8_t data[3] = {device_id[0], device_id[1], camera_id};
@@ -2127,7 +2073,7 @@ esp_err_t ConfigServiceClass::getDeviceCamMap(config_device_cam_map_t* map)
     }
 
     nvs_handle_t handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READONLY, &handle);
+    esp_err_t ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READWRITE, &handle);
     if (ret != ESP_OK) {
         // NVS 없으면 캐시 반환
         *map = s_device_cam_map;
@@ -2149,6 +2095,25 @@ esp_err_t ConfigServiceClass::getDeviceCamMap(config_device_cam_map_t* map)
             map->camera_ids[map->count] = data[2];
             map->count++;
         }
+    }
+
+    // device_limit 초과분 삭제 (라이선스 다운그레이드 대응)
+    uint8_t device_limit = license_service_get_device_limit();
+    if (device_limit > 0 && map->count > device_limit) {
+        T_LOGW(TAG, "디바이스-카메라 매핑(%d)가 device_limit(%d) 초과, 초과분 삭제",
+                 map->count, device_limit);
+
+        // device_limit까지만 유지, 나머지는 NVS에서 삭제
+        for (uint8_t i = device_limit; i < map->count; i++) {
+            char key[32];
+            snprintf(key, sizeof(key), "%s%d", NVS_KEY_DEV_CAM_PREFIX, i);
+            nvs_erase_key(handle, key);
+        }
+
+        map->count = device_limit;
+        nvs_commit(handle);
+
+        T_LOGI(TAG, "초과분 삭제 완료, 유지된 매핑: %d개", map->count);
     }
 
     nvs_close(handle);
