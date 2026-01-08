@@ -125,6 +125,89 @@ static esp_err_t send_stop_command(const uint8_t* device_id)
 }
 
 /**
+ * @brief 밝기 설정 명령 송신 (0xE1) (이벤트 기반)
+ */
+static esp_err_t send_brightness_command(const uint8_t* device_id, uint8_t brightness)
+{
+    static lora_cmd_brightness_t s_cmd;
+
+    s_cmd.header = LORA_HDR_SET_BRIGHTNESS;
+    memcpy(s_cmd.device_id, device_id, LORA_DEVICE_ID_LEN);
+    s_cmd.brightness = brightness;
+
+    lora_send_request_t req = {
+        .data = (const uint8_t*)&s_cmd,
+        .length = sizeof(s_cmd)
+    };
+
+    esp_err_t ret = event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
+    if (ret == ESP_OK) {
+        char device_id_str[5];
+        lora_device_id_to_str(device_id, device_id_str);
+        T_LOGI(TAG, "밝기 설정 명령 송신: ID=%s 밝기=%d", device_id_str, brightness);
+    } else {
+        T_LOGE(TAG, "밝기 설정 명령 송신 실패: %d", ret);
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 카메라 ID 설정 명령 송신 (0xE2) (이벤트 기반)
+ */
+static esp_err_t send_camera_id_command(const uint8_t* device_id, uint8_t camera_id)
+{
+    static lora_cmd_camera_id_t s_cmd;
+
+    s_cmd.header = LORA_HDR_SET_CAMERA_ID;
+    memcpy(s_cmd.device_id, device_id, LORA_DEVICE_ID_LEN);
+    s_cmd.camera_id = camera_id;
+
+    lora_send_request_t req = {
+        .data = (const uint8_t*)&s_cmd,
+        .length = sizeof(s_cmd)
+    };
+
+    esp_err_t ret = event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
+    if (ret == ESP_OK) {
+        char device_id_str[5];
+        lora_device_id_to_str(device_id, device_id_str);
+        T_LOGI(TAG, "카메라 ID 설정 명령 송신: ID=%s CameraID=%d", device_id_str, camera_id);
+    } else {
+        T_LOGE(TAG, "카메라 ID 설정 명령 송신 실패: %d", ret);
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 재부팅 명령 송신 (0xE5) (이벤트 기반)
+ */
+static esp_err_t send_reboot_command(const uint8_t* device_id)
+{
+    static lora_cmd_reboot_t s_cmd;
+
+    s_cmd.header = LORA_HDR_REBOOT;
+    memcpy(s_cmd.device_id, device_id, LORA_DEVICE_ID_LEN);
+
+    lora_send_request_t req = {
+        .data = (const uint8_t*)&s_cmd,
+        .length = sizeof(s_cmd)
+    };
+
+    esp_err_t ret = event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
+    if (ret == ESP_OK) {
+        char device_id_str[5];
+        lora_device_id_to_str(device_id, device_id_str);
+        T_LOGW(TAG, "재부팅 명령 송신: ID=%s", device_id_str);
+    } else {
+        T_LOGE(TAG, "재부팅 명령 송신 실패: %d", ret);
+    }
+
+    return ret;
+}
+
+/**
  * @brief PING 명령 송신 (0xE6) (이벤트 기반)
  */
 static esp_err_t send_ping_command(const uint8_t* device_id)
@@ -348,6 +431,90 @@ static esp_err_t on_lora_packet_sent(const event_data_t* event)
     }
 
     return ESP_OK;
+}
+
+// ============================================================================
+// 디바이스 제어 이벤트 핸들러 (TX 전용)
+// ============================================================================
+
+/**
+ * @brief 디바이스 밝기 설정 요청 이벤트 핸들러
+ */
+static esp_err_t on_device_brightness_request(const event_data_t* event)
+{
+    if (!event || event->data_size < 3) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* data = event->data;
+    uint8_t device_id[2] = {data[0], data[1]};
+    uint8_t brightness = data[2];
+
+    return send_brightness_command(device_id, brightness);
+}
+
+/**
+ * @brief 디바이스 카메라 ID 설정 요청 이벤트 핸들러
+ */
+static esp_err_t on_device_camera_id_request(const event_data_t* event)
+{
+    if (!event || event->data_size < 3) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* data = event->data;
+    uint8_t device_id[2] = {data[0], data[1]};
+    uint8_t camera_id = data[2];
+
+    return send_camera_id_command(device_id, camera_id);
+}
+
+/**
+ * @brief 디바이스 PING 요청 이벤트 핸들러
+ */
+static esp_err_t on_device_ping_request(const event_data_t* event)
+{
+    if (!event || event->data_size < 2) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* device_id = event->data;
+    return send_ping_command(device_id);
+}
+
+/**
+ * @brief 디바이스 기능 정지 요청 이벤트 핸들러
+ */
+static esp_err_t on_device_stop_request(const event_data_t* event)
+{
+    if (!event || event->data_size < 2) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* device_id = event->data;
+    return send_stop_command(device_id);
+}
+
+/**
+ * @brief 디바이스 재부팅 요청 이벤트 핸들러
+ */
+static esp_err_t on_device_reboot_request(const event_data_t* event)
+{
+    if (!event || event->data_size < 2) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* device_id = event->data;
+    return send_reboot_command(device_id);
+}
+
+/**
+ * @brief 상태 요청 이벤트 핸들러
+ */
+static esp_err_t on_status_request(const event_data_t* event)
+{
+    (void)event;
+    return send_status_request();
 }
 
 /**
@@ -860,6 +1027,14 @@ esp_err_t device_manager_start(void)
     // 라이센스 상태 변경 이벤트 구독
     event_bus_subscribe(EVT_LICENSE_STATE_CHANGED, on_license_state_changed);
 
+    // 디바이스 제어 이벤트 구독
+    event_bus_subscribe(EVT_DEVICE_BRIGHTNESS_REQUEST, on_device_brightness_request);
+    event_bus_subscribe(EVT_DEVICE_CAMERA_ID_REQUEST, on_device_camera_id_request);
+    event_bus_subscribe(EVT_DEVICE_PING_REQUEST, on_device_ping_request);
+    event_bus_subscribe(EVT_DEVICE_STOP_REQUEST, on_device_stop_request);
+    event_bus_subscribe(EVT_DEVICE_REBOOT_REQUEST, on_device_reboot_request);
+    event_bus_subscribe(EVT_STATUS_REQUEST, on_status_request);
+
     // 상태 요청 태스크 시작
     BaseType_t ret = xTaskCreatePinnedToCore(
         status_request_task,
@@ -905,6 +1080,12 @@ void device_manager_stop(void)
     event_bus_unsubscribe(EVT_LORA_RX_RESPONSE, on_lora_rx_response);
     event_bus_unsubscribe(EVT_LORA_PACKET_SENT, on_lora_packet_sent);
     event_bus_unsubscribe(EVT_LICENSE_STATE_CHANGED, on_license_state_changed);
+    event_bus_unsubscribe(EVT_DEVICE_BRIGHTNESS_REQUEST, on_device_brightness_request);
+    event_bus_unsubscribe(EVT_DEVICE_CAMERA_ID_REQUEST, on_device_camera_id_request);
+    event_bus_unsubscribe(EVT_DEVICE_PING_REQUEST, on_device_ping_request);
+    event_bus_unsubscribe(EVT_DEVICE_STOP_REQUEST, on_device_stop_request);
+    event_bus_unsubscribe(EVT_DEVICE_REBOOT_REQUEST, on_device_reboot_request);
+    event_bus_unsubscribe(EVT_STATUS_REQUEST, on_status_request);
 #endif
 
 #ifdef DEVICE_MODE_RX

@@ -8,17 +8,29 @@
 #include "board_led_driver.h"
 #include "t_log.h"
 #include "event_bus.h"
+#include "config_service.h"
+#include "TallyTypes.h"
 #include <cstring>
 
 static const char* TAG = "LedService";
 
+// ============================================================================
 // 서비스 상태
+// ============================================================================
+
 static struct {
     bool initialized;
     bool event_subscribed;  // 이벤트 구독 여부
+    bool stopped;           // 기능 정지 상태
+    // 현재 Tally 상태 (카메라 ID 변경 시 LED 즉시 업데이트용)
+    bool program_active;    // 현재 카메라가 PGM인지
+    bool preview_active;    // 현재 카메라가 PVW인지
 } s_service = {
     .initialized = false,
-    .event_subscribed = false
+    .event_subscribed = false,
+    .stopped = false,
+    .program_active = false,
+    .preview_active = false
 };
 
 // ============================================================================
@@ -32,6 +44,111 @@ static led_colors_t s_colors = {
     .off_r = 0, .off_g = 0, .off_b = 0,
     .battery_low_r = 255, .battery_low_g = 255, .battery_low_b = 0
 };
+
+// ============================================================================
+// 이벤트 핸들러
+// ============================================================================
+
+/**
+ * @brief 카메라 ID 변경 이벤트 핸들러 (EVT_CAMERA_ID_CHANGED)
+ */
+static esp_err_t on_camera_id_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t camera_id = *(uint8_t*)event->data;
+    T_LOGI(TAG, "카메라 ID 변경 이벤트 수신: %d", camera_id);
+
+    // WS2812Driver에 카메라 ID 업데이트
+    ws2812_set_camera_id(camera_id);
+
+    // 현재 Tally 상태에 따라 LED 즉시 업데이트
+    // (새 패킷을 기다리지 않고 현재 상태 적용)
+    if (!s_service.stopped) {
+        if (s_service.program_active) {
+            ws2812_set_state(WS2812_PROGRAM);
+            T_LOGI(TAG, "LED 즉시 업데이트: PROGRAM");
+        } else if (s_service.preview_active) {
+            ws2812_set_state(WS2812_PREVIEW);
+            T_LOGI(TAG, "LED 즉시 업데이트: PREVIEW");
+        } else {
+            ws2812_set_state(WS2812_OFF);
+            T_LOGI(TAG, "LED 즉시 업데이트: OFF");
+        }
+    }
+
+    return ESP_OK;
+}
+
+/**
+ * @brief Tally 상태 변경 이벤트 핸들러 (EVT_TALLY_STATE_CHANGED)
+ */
+static esp_err_t on_tally_state_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // 기능 정지 상태에서는 Tally 무시
+    if (s_service.stopped) {
+        return ESP_OK;
+    }
+
+    const tally_event_data_t* tally_evt = (const tally_event_data_t*)event->data;
+
+    // packed_data_t 구조체 생성
+    packed_data_t tally = {
+        .data = (uint8_t*)tally_evt->tally_data,
+        .data_size = static_cast<uint8_t>((tally_evt->channel_count + 3) / 4),
+        .channel_count = tally_evt->channel_count
+    };
+
+    // 현재 카메라 ID
+    uint8_t my_camera_id = config_service_get_camera_id();
+
+    // 내 카메라의 Tally 상태 확인 (채널 번호는 1-based)
+    if (my_camera_id > 0 && my_camera_id <= tally.channel_count) {
+        uint8_t status = packed_data_get_channel(&tally, my_camera_id);
+        s_service.program_active = (status == TALLY_STATUS_PROGRAM || status == TALLY_STATUS_BOTH);
+        s_service.preview_active = (status == TALLY_STATUS_PREVIEW || status == TALLY_STATUS_BOTH);
+    } else {
+        s_service.program_active = false;
+        s_service.preview_active = false;
+    }
+
+    return ESP_OK;
+}
+
+/**
+ * @brief 기능 정지 상태 변경 이벤트 핸들러 (EVT_STOP_CHANGED)
+ */
+static esp_err_t on_stop_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const bool* stopped = (const bool*)event->data;
+    s_service.stopped = *stopped;
+
+    if (s_service.stopped) {
+        T_LOGW(TAG, "기능 정지: LED OFF");
+        // LED 전체 소등
+        ws2812_off();
+    } else {
+        T_LOGI(TAG, "기능 정지 해제");
+        // 정지 해제 시 현재 상태로 LED 복구
+        if (s_service.program_active) {
+            ws2812_set_state(WS2812_PROGRAM);
+        } else if (s_service.preview_active) {
+            ws2812_set_state(WS2812_PREVIEW);
+        }
+    }
+
+    return ESP_OK;
+}
 
 // ============================================================================
 // 공개 API
@@ -64,6 +181,13 @@ esp_err_t led_service_init_with_colors(int gpio_num, uint32_t num_leds, uint8_t 
         T_LOGE(TAG, "WS2812Driver 초기화 실패: %s", esp_err_to_name(ret));
         return ret;
     }
+
+    // 이벤트 버스 구독
+    event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
+    event_bus_subscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
+    event_bus_subscribe(EVT_STOP_CHANGED, on_stop_changed);
+    s_service.event_subscribed = true;
+    T_LOGI(TAG, "이벤트 버스 구독: CAMERA_ID, TALLY_STATE, STOP_CHANGED");
 
     s_service.initialized = true;
     T_LOGI(TAG, "LED 서비스 초기화 완료");
@@ -158,6 +282,15 @@ void led_service_deinit(void)
     if (!s_service.initialized) {
         return;
     }
+
+    // 이벤트 버스 구독 해제
+    if (s_service.event_subscribed) {
+        event_bus_unsubscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
+        event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
+        event_bus_unsubscribe(EVT_STOP_CHANGED, on_stop_changed);
+        s_service.event_subscribed = false;
+    }
+
     ws2812_deinit();
     s_service.initialized = false;
     T_LOGI(TAG, "LED 서비스 해제");

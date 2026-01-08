@@ -29,6 +29,10 @@ static const char* TAG = "SwitcherService";
 // 전역 인스턴스 포인터 (이벤트 핸들러에서 사용)
 static SwitcherService* g_switcher_service_instance = nullptr;
 
+// 정적 멤버 정의
+char SwitcherService::s_cached_eth_ip[16] = "";
+char SwitcherService::s_cached_wifi_sta_ip[16] = "";
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -132,6 +136,35 @@ static esp_err_t onConfigDataEvent(const event_data_t* event) {
     return ESP_OK;
 }
 
+/**
+ * @brief 네트워크 상태 변경 이벤트 핸들러 (EVT_NETWORK_STATUS_CHANGED)
+ *
+ * Ethernet/WiFi IP를 캐시하여 AtemDriver 설정에 사용
+ * 네트워크 연결 시 스위처가 미리 생성되어 있으면 재설정
+ */
+static esp_err_t onNetworkStatusEvent(const event_data_t* event) {
+    if (!event) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const network_status_event_t* net_status = (const network_status_event_t*)event->data;
+
+    // public static 메서드를 통해 캐시 갱신
+    const char* eth_ip = (net_status->eth_connected && net_status->eth_ip[0] != '\0')
+                         ? net_status->eth_ip : nullptr;
+    const char* wifi_ip = (net_status->sta_connected && net_status->sta_ip[0] != '\0')
+                          ? net_status->sta_ip : nullptr;
+
+    bool needs_reconfigure = SwitcherService::updateNetworkIPCache(eth_ip, wifi_ip);
+
+    // 새 네트워크 연결이 감지되고 스위처가 있으면 재설정
+    if (needs_reconfigure && g_switcher_service_instance) {
+        g_switcher_service_instance->reconfigureSwitchersForNetwork();
+    }
+
+    return ESP_OK;
+}
+
 // ============================================================================
 // 초기화
 // ============================================================================
@@ -187,7 +220,38 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
     config.ip = ip ? ip : "";
     config.port = (port > 0) ? port : ATEM_DEFAULT_PORT;
     config.camera_limit = camera_limit;
-    config.interface = network_interface;
+
+    // 인터페이스별 로컬 바인딩 IP 설정 (캐시된 IP 사용)
+    if (network_interface == TALLY_NET_ETHERNET) {
+        if (s_cached_eth_ip[0] != '\0') {
+            config.local_bind_ip = s_cached_eth_ip;
+            T_LOGI(TAG, "Ethernet 인터페이스 사용: %s", s_cached_eth_ip);
+        } else {
+            // Ethernet 선택했지만 연결 안됨 -> WiFi로 폴백
+            T_LOGW(TAG, "Ethernet 인터페이스 선택했지만 연결 안됨");
+            if (s_cached_wifi_sta_ip[0] != '\0') {
+                config.local_bind_ip = s_cached_wifi_sta_ip;
+                T_LOGW(TAG, "  -> WiFi STA로 폴백: %s", s_cached_wifi_sta_ip);
+            } else {
+                T_LOGW(TAG, "  -> WiFi도 연결 안됨, INADDR_ANY 사용 (연결 실패 예상)");
+            }
+        }
+    } else if (network_interface == TALLY_NET_WIFI) {
+        if (s_cached_wifi_sta_ip[0] != '\0') {
+            config.local_bind_ip = s_cached_wifi_sta_ip;
+            T_LOGI(TAG, "WiFi STA 인터페이스 사용: %s", s_cached_wifi_sta_ip);
+        } else {
+            // WiFi 선택했지만 연결 안됨 -> Ethernet으로 폴백
+            T_LOGW(TAG, "WiFi STA 인터페이스 선택했지만 연결 안됨");
+            if (s_cached_eth_ip[0] != '\0') {
+                config.local_bind_ip = s_cached_eth_ip;
+                T_LOGW(TAG, "  -> Ethernet으로 폴백: %s", s_cached_eth_ip);
+            } else {
+                T_LOGW(TAG, "  -> Ethernet도 연결 안됨, INADDR_ANY 사용 (연결 실패 예상)");
+            }
+        }
+    }
+    // TALLY_NET_AUTO인 경우 local_bind_ip는 비워둠 (INADDR_ANY 사용)
 
     // AtemDriver 생성
     auto driver = std::unique_ptr<AtemDriver>(new AtemDriver(config));
@@ -234,6 +298,7 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
     strncpy(info->type, "ATEM", sizeof(info->type) - 1);
     strncpy(info->ip, config.ip.c_str(), sizeof(info->ip) - 1);
     info->port = config.port;
+    info->network_interface = network_interface;
 
     // 인터페이스 로그
     const char* if_str = "Auto";
@@ -383,6 +448,10 @@ bool SwitcherService::start() {
     // 이벤트 버스 구독 (설정 변경 감지)
     event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
     T_LOGI(TAG, "이벤트 버스 구독: EVT_CONFIG_DATA_CHANGED");
+
+    // 이벤트 버스 구독 (네트워크 상태 변경 감지 - IP 캐시용)
+    event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
+    T_LOGI(TAG, "이벤트 버스 구독: EVT_NETWORK_STATUS_CHANGED");
 
     // 플래그 먼저 설정 (태스크가 즉시 시작되도록)
     task_running_ = true;
@@ -589,17 +658,23 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
         return 0; // default ATEM
     };
 
-    // Primary 스위처 설정 변경 확인 (타입, IP, Port)
+    // Primary 스위처 설정 변경 확인 (타입, IP, Port, Interface)
     if (primary_.adapter) {
         int current_type = getCurrentType(primary_.type);
         bool type_changed = (current_type != config->primary_type);
         bool ip_changed = (strncmp(config->primary_ip, primary_.ip, sizeof(config->primary_ip)) != 0);
         bool port_changed = (config->primary_port != primary_.port);
+        bool interface_changed = (config->primary_interface != primary_.network_interface);
 
-        if (type_changed || ip_changed || port_changed) {
-            T_LOGI(TAG, "Primary 스위처 설정 변경: %s -> %s, %s:%d -> %s:%d",
+        if (type_changed || ip_changed || port_changed || interface_changed) {
+            const char* if_str = "Auto";
+            if (config->primary_interface == 1) if_str = "Ethernet";
+            else if (config->primary_interface == 2) if_str = "WiFi";
+
+            T_LOGI(TAG, "Primary 스위처 설정 변경: %s -> %s, %s:%d(if=%d) -> %s:%d(if=%s)",
                     primary_.type, (config->primary_type == 0 ? "ATEM" : "vMix"),
-                    primary_.ip, primary_.port, config->primary_ip, config->primary_port);
+                    primary_.ip, primary_.port, primary_.network_interface,
+                    config->primary_ip, config->primary_port, if_str);
 
             // 타입에 따라 올바른 메서드 호출
             switch (config->primary_type) {
@@ -629,11 +704,17 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
         bool type_changed = (current_type != config->secondary_type);
         bool ip_changed = (strncmp(config->secondary_ip, secondary_.ip, sizeof(config->secondary_ip)) != 0);
         bool port_changed = (config->secondary_port != secondary_.port);
+        bool interface_changed = (config->secondary_interface != secondary_.network_interface);
 
-        if (type_changed || ip_changed || port_changed) {
-            T_LOGI(TAG, "Secondary 스위처 설정 변경: %s -> %s, %s:%d -> %s:%d",
+        if (type_changed || ip_changed || port_changed || interface_changed) {
+            const char* if_str = "Auto";
+            if (config->secondary_interface == 1) if_str = "Ethernet";
+            else if (config->secondary_interface == 2) if_str = "WiFi";
+
+            T_LOGI(TAG, "Secondary 스위처 설정 변경: %s -> %s, %s:%d(if=%d) -> %s:%d(if=%s)",
                     secondary_.type, (config->secondary_type == 0 ? "ATEM" : "vMix"),
-                    secondary_.ip, secondary_.port, config->secondary_ip, config->secondary_port);
+                    secondary_.ip, secondary_.port, secondary_.network_interface,
+                    config->secondary_ip, config->secondary_port, if_str);
 
             // 타입에 따라 올바른 메서드 호출
             switch (config->secondary_type) {
@@ -699,6 +780,21 @@ void SwitcherService::taskLoop() {
 
         // 어댑터 루프 처리
         primary_.adapter->loop();
+
+        // 네트워크 스택 오류 확인 (AtemDriver 타임아웃 감지)
+        if (primary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
+            AtemDriver* atem = static_cast<AtemDriver*>(primary_.adapter.get());
+            if (atem->checkAndClearNetworkRestart()) {
+                T_LOGE(TAG, "네트워크 스택 오류 감지 - 전체 네트워크 재시작 이벤트 발행");
+                network_restart_request_t restart_req = {
+                    .type = NETWORK_RESTART_ALL,
+                    .ssid = "",
+                    .password = ""
+                };
+                event_bus_publish(EVT_NETWORK_RESTART_REQUEST, &restart_req, sizeof(restart_req));
+            }
+        }
+
         // packed 데이터 변경 감지
         checkSwitcherChange(SWITCHER_ROLE_PRIMARY);
     }
@@ -733,6 +829,21 @@ void SwitcherService::taskLoop() {
         }
 
         secondary_.adapter->loop();
+
+        // 네트워크 스택 오류 확인 (AtemDriver 타임아웃 감지)
+        if (secondary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
+            AtemDriver* atem_sec = static_cast<AtemDriver*>(secondary_.adapter.get());
+            if (atem_sec->checkAndClearNetworkRestart()) {
+                T_LOGE(TAG, "Secondary 네트워크 스택 오류 감지 - 전체 네트워크 재시작 이벤트 발행");
+                network_restart_request_t restart_req = {
+                    .type = NETWORK_RESTART_ALL,
+                    .ssid = "",
+                    .password = ""
+                };
+                event_bus_publish(EVT_NETWORK_RESTART_REQUEST, &restart_req, sizeof(restart_req));
+            }
+        }
+
         checkSwitcherChange(SWITCHER_ROLE_SECONDARY);
     }
     else if (!dual_mode_enabled_ && secondary_.adapter &&
@@ -993,6 +1104,68 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
     // 사용자 콜백 호출 (Tally 변경 알림)
     if (tally_callback_) {
         tally_callback_();
+    }
+}
+
+// ============================================================================
+// 네트워크 IP 캐시 관리
+// ============================================================================
+
+bool SwitcherService::updateNetworkIPCache(const char* eth_ip, const char* wifi_sta_ip) {
+    bool was_empty_eth = (s_cached_eth_ip[0] == '\0');
+    bool was_empty_wifi = (s_cached_wifi_sta_ip[0] == '\0');
+    bool needs_reconfigure = false;
+
+    // Ethernet IP 캐시
+    if (eth_ip && eth_ip[0] != '\0') {
+        strncpy(s_cached_eth_ip, eth_ip, sizeof(s_cached_eth_ip) - 1);
+        s_cached_eth_ip[sizeof(s_cached_eth_ip) - 1] = '\0';
+        T_LOGI(TAG, "Ethernet IP 캐시: %s", s_cached_eth_ip);
+        if (was_empty_eth) {
+            T_LOGI(TAG, "Ethernet 새 연결 감지, 스위처 재설정 필요");
+            needs_reconfigure = true;
+        }
+    }
+
+    // WiFi STA IP 캐시
+    if (wifi_sta_ip && wifi_sta_ip[0] != '\0') {
+        strncpy(s_cached_wifi_sta_ip, wifi_sta_ip, sizeof(s_cached_wifi_sta_ip) - 1);
+        s_cached_wifi_sta_ip[sizeof(s_cached_wifi_sta_ip) - 1] = '\0';
+        T_LOGI(TAG, "WiFi STA IP 캐시: %s", s_cached_wifi_sta_ip);
+        if (was_empty_wifi) {
+            T_LOGI(TAG, "WiFi STA 새 연결 감지, 스위처 재설정 필요");
+            needs_reconfigure = true;
+        }
+    }
+
+    return needs_reconfigure;
+}
+
+void SwitcherService::reconfigureSwitchersForNetwork() {
+    // Primary 스위처가 ATEM이고 설정된 인터페이스가 있으면 재설정
+    if (primary_.adapter && primary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
+        tally_network_if_t iface = static_cast<tally_network_if_t>(primary_.network_interface);
+        if (iface != TALLY_NET_AUTO) {
+            T_LOGI(TAG, "Primary 스위처 네트워크 재설정 (if=%d)", iface);
+            setAtem(SWITCHER_ROLE_PRIMARY, "Primary",
+                    primary_.ip, primary_.port, 0, iface);
+            if (primary_.adapter) {
+                primary_.adapter->connect();
+            }
+        }
+    }
+
+    // Secondary 스위처가 ATEM이고 설정된 인터페이스가 있으면 재설정
+    if (secondary_.adapter && secondary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
+        tally_network_if_t iface = static_cast<tally_network_if_t>(secondary_.network_interface);
+        if (iface != TALLY_NET_AUTO) {
+            T_LOGI(TAG, "Secondary 스위처 네트워크 재설정 (if=%d)", iface);
+            setAtem(SWITCHER_ROLE_SECONDARY, "Secondary",
+                    secondary_.ip, secondary_.port, 0, iface);
+            if (secondary_.adapter) {
+                secondary_.adapter->connect();
+            }
+        }
     }
 }
 

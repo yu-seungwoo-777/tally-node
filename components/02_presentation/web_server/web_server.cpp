@@ -237,6 +237,24 @@ static esp_err_t onLicenseStateEvent(const event_data_t* event)
     return ESP_OK;
 }
 
+/**
+ * @brief 네트워크 재시작 완료 이벤트 핸들러 (EVT_NETWORK_RESTARTED)
+ */
+static esp_err_t onNetworkRestartedEvent(const event_data_t* event)
+{
+    ESP_LOGI(TAG, "네트워크 재시작 완료 - 웹서버 재시작");
+
+    // 웹서버가 실행 중이면 재시작
+    if (s_server != nullptr) {
+        httpd_stop(s_server);
+        s_server = nullptr;
+        vTaskDelay(pdMS_TO_TICKS(100));  // 100ms 대기
+    }
+
+    // 웹서버 재시작
+    return web_server_start();
+}
+
 // ============================================================================
 // Packed 데이터 → PGM/PVW 리스트 변환
 // ============================================================================
@@ -1459,6 +1477,65 @@ static esp_err_t api_device_camera_id_handler(httpd_req_t* req)
 
 #ifdef DEVICE_MODE_TX
 /**
+ * @brief 일괄 밝기 제어 핸들러 (TX → all RX Broadcast)
+ * POST /api/brightness/broadcast
+ * Body: {"brightness": 128} (0-255)
+ */
+static esp_err_t api_brightness_broadcast_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 요청 바디 읽기
+    char* buf = new char[256];
+    int ret = httpd_req_recv(req, buf, 255);
+    if (ret <= 0) {
+        delete[] buf;
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    // JSON 파싱
+    cJSON* root = cJSON_Parse(buf);
+    delete[] buf;
+    if (!root) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        return ESP_OK;
+    }
+
+    // 필드 추출
+    cJSON* brightness_json = cJSON_GetObjectItem(root, "brightness");
+    if (!brightness_json || !cJSON_IsNumber(brightness_json)) {
+        cJSON_Delete(root);
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"brightness required\"}");
+        return ESP_OK;
+    }
+
+    int brightness = brightness_json->valueint;
+    if (brightness < 0 || brightness > 255) {
+        cJSON_Delete(root);
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"brightness must be 0-255\"}");
+        return ESP_OK;
+    }
+
+    cJSON_Delete(root);
+
+    ESP_LOGI(TAG, "일괄 밝기 제어 요청 (Broadcast): brightness=%d", brightness);
+
+    // TODO: LoRa Broadcast로 밝기 명령 송신
+    // lora_cmd_brightness_t cmd = { ... };
+    // event_bus_publish(EVT_LORA_SEND_REQUEST, ...);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+
+    return ESP_OK;
+}
+
+/**
  * @brief 디바이스 PING 핸들러
  * POST /api/device/ping
  * Body: {"deviceId": [0x2D, 0x20]}
@@ -1629,7 +1706,7 @@ static esp_err_t api_status_request_handler(httpd_req_t* req)
 #endif // DEVICE_MODE_TX
 
 /**
- * @brief index.html 핸들러
+ * @brief 인덱스 HTML 핸들러
  */
 static esp_err_t index_handler(httpd_req_t* req)
 {
@@ -1837,6 +1914,13 @@ static const httpd_uri_t uri_api_device_camera_id = {
 };
 
 #ifdef DEVICE_MODE_TX
+static const httpd_uri_t uri_api_brightness_broadcast = {
+    .uri = "/api/brightness/broadcast",
+    .method = HTTP_POST,
+    .handler = api_brightness_broadcast_handler,
+    .user_ctx = nullptr
+};
+
 static const httpd_uri_t uri_api_device_ping = {
     .uri = "/api/device/ping",
     .method = HTTP_POST,
@@ -1981,6 +2065,13 @@ static const httpd_uri_t uri_options_api_device_camera_id = {
 };
 
 #ifdef DEVICE_MODE_TX
+static const httpd_uri_t uri_options_api_brightness_broadcast = {
+    .uri = "/api/brightness/broadcast",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
 static const httpd_uri_t uri_options_api_device_ping = {
     .uri = "/api/device/ping",
     .method = HTTP_OPTIONS,
@@ -2041,6 +2132,8 @@ esp_err_t web_server_init(void)
     event_bus_subscribe(EVT_DEVICE_LIST_CHANGED, onDeviceListEvent);
     // 라이센스 상태 이벤트
     event_bus_subscribe(EVT_LICENSE_STATE_CHANGED, onLicenseStateEvent);
+    // 네트워크 재시작 완료 이벤트
+    event_bus_subscribe(EVT_NETWORK_RESTARTED, onNetworkRestartedEvent);
 
     s_initialized = true;
     ESP_LOGI(TAG, "Web server initialized (event subscriptions ready)");
@@ -2061,13 +2154,9 @@ esp_err_t web_server_start(void)
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
-    config.max_open_sockets = 5;
+    config.max_open_sockets = 10;  // 5 → 10 (동시 연결 증가)
     config.max_uri_handlers = 40;  // API + OPTIONS + 정적 파일 + LoRa + Device + License
     config.lru_purge_enable = true;
-    // 대용량 파일 전송을 위한 스택 증가 (기본 4KB → 8KB)
-    config.stack_size = 8192;
-    // 소켓 송신 버퍼 증가 (기본값 사용 시 error 11 발생)
-    config.send_wait_timeout = 10;  // 초
 
     esp_err_t ret = httpd_start(&s_server, &config);
     if (ret != ESP_OK) {
@@ -2108,6 +2197,8 @@ esp_err_t web_server_start(void)
     // Device Camera ID API
     httpd_register_uri_handler(s_server, &uri_api_device_camera_id);
 #ifdef DEVICE_MODE_TX
+    // Global Brightness Broadcast API
+    httpd_register_uri_handler(s_server, &uri_api_brightness_broadcast);
     // Device PING API
     httpd_register_uri_handler(s_server, &uri_api_device_ping);
     // Device STOP API
@@ -2131,6 +2222,7 @@ esp_err_t web_server_start(void)
     httpd_register_uri_handler(s_server, &uri_options_api_device_brightness);
     httpd_register_uri_handler(s_server, &uri_options_api_device_camera_id);
 #ifdef DEVICE_MODE_TX
+    httpd_register_uri_handler(s_server, &uri_options_api_brightness_broadcast);
     httpd_register_uri_handler(s_server, &uri_options_api_device_ping);
     httpd_register_uri_handler(s_server, &uri_options_api_device_stop);
     httpd_register_uri_handler(s_server, &uri_options_api_device_reboot);

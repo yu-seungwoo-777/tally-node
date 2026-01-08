@@ -6,7 +6,6 @@
  */
 
 #include "atem_driver.h"
-#include "event_bus.h"
 #include "t_log.h"
 
 // =============================================================================
@@ -48,6 +47,8 @@ AtemDriver::AtemDriver(const AtemConfig& config)
     , connection_callback_()
     , connect_attempt_time_(0)
     , last_hello_time_(0)
+    , lastNetworkRestart_(0)
+    , needsNetworkRestart_(false)
 {
     rx_buffer_.fill(0);
     tx_buffer_.fill(0);
@@ -90,12 +91,20 @@ bool AtemDriver::initialize() {
     int flags = fcntl(sock_fd_, F_GETFL, 0);
     fcntl(sock_fd_, F_SETFL, flags | O_NONBLOCK);
 
-    // 로컬 포트 바인드 (자동 할당)
+    // 로컬 포트 바인드 (인터페이스 선택 지원)
     struct sockaddr_in local_addr;
     memset(&local_addr, 0, sizeof(local_addr));
     local_addr.sin_family = AF_INET;
-    local_addr.sin_addr.s_addr = INADDR_ANY;
     local_addr.sin_port = 0;  // 자동 할당
+
+    // 서비스 레이어에서 설정한 로컬 바인딩 IP 사용
+    if (!config_.local_bind_ip.empty()) {
+        local_addr.sin_addr.s_addr = inet_addr(config_.local_bind_ip.c_str());
+        T_LOGI(TAG, "인터페이스 바인딩: %s", config_.local_bind_ip.c_str());
+    } else {
+        local_addr.sin_addr.s_addr = INADDR_ANY;
+        T_LOGI(TAG, "인터페이스: AUTO (INADDR_ANY)");
+    }
 
     if (bind(sock_fd_, (struct sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
         T_LOGE(TAG, "바인드 실패 (errno=%d)", errno);
@@ -242,6 +251,15 @@ int AtemDriver::loop() {
     if (state_.connected &&
         now - state_.last_contact_ms > ATEM_MAX_SILENCE_TIME_MS) {
         T_LOGW(TAG, "타임아웃 (무응답 %dms)", (int)(now - state_.last_contact_ms));
+
+        // 연결된 상태에서 타임아웃 = 네트워크 스택 오류 가능성
+        uint32_t now_ms = getMillis();
+        if (now_ms - lastNetworkRestart_ > RESTART_COOLDOWN_MS) {
+            T_LOGE(TAG, "네트워크 스택 오류 감지 - 재시작 필요 플래그 설정");
+            lastNetworkRestart_ = now_ms;
+            needsNetworkRestart_ = true;
+        }
+
         disconnect();
         return -1;
     }
@@ -827,13 +845,6 @@ void AtemDriver::setConnectionState(connection_state_t new_state) {
 
         const char* state_name = connection_state_to_string(new_state);
         T_LOGI(TAG, "[%s] 연결 상태: %s", config_.name.c_str(), state_name);
-
-        // 이벤트 버스로 상태 변경 발행
-        if (new_state == CONNECTION_STATE_READY || new_state == CONNECTION_STATE_CONNECTED) {
-            event_bus_publish(EVT_SWITCHER_CONNECTED, nullptr, 0);
-        } else if (new_state == CONNECTION_STATE_DISCONNECTED) {
-            event_bus_publish(EVT_SWITCHER_DISCONNECTED, nullptr, 0);
-        }
 
         if (connection_callback_) {
             connection_callback_(new_state);

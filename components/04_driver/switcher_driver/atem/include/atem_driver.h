@@ -26,14 +26,14 @@ struct AtemConfig {
     std::string ip;              ///< ATEM IP 주소
     uint16_t port;               ///< 포트 (기본 9910)
     uint8_t camera_limit;        ///< 카메라 제한 (0 = 자동)
-    tally_network_if_t interface; ///< 네트워크 인터페이스 (0=Auto, 1=Ethernet, 2=WiFi)
+    std::string local_bind_ip;   ///< 로컬 바인딩 IP (비어있으면 INADDR_ANY)
 
     AtemConfig()
         : name("ATEM")
         , ip("")
         , port(ATEM_DEFAULT_PORT)
         , camera_limit(0)
-        , interface(TALLY_NET_AUTO)  // 기본값: 자동 선택
+        , local_bind_ip("")  // 기본값: 자동 선택 (INADDR_ANY)
     {}
 };
 
@@ -136,6 +136,20 @@ public:
     void setTallyCallback(std::function<void()> callback) override;
     void setConnectionCallback(std::function<void(connection_state_t)> callback) override;
 
+    // ========================================================================
+    // 네트워크 오류 상태 확인 (서비스 레이어용)
+    // ========================================================================
+
+    /**
+     * @brief 네트워크 재시작 필요 여부 확인 및 플래그 클리어
+     * @return 네트워크 재시작이 필요하면 true
+     */
+    bool checkAndClearNetworkRestart() {
+        bool result = needsNetworkRestart_;
+        needsNetworkRestart_ = false;
+        return result;
+    }
+
 private:
     // 설정
     AtemConfig config_;
@@ -161,6 +175,11 @@ private:
     // 연결 타임아웃 추적
     uint32_t connect_attempt_time_;  ///< 연결 시도 시작 시간 (ms)
     uint32_t last_hello_time_;       ///< 마지막 Hello 전송 시간 (ms)
+
+    // 네트워크 오류 감지
+    uint32_t lastNetworkRestart_;    ///< 마지막 네트워크 재시작 시간 (ms)
+    bool needsNetworkRestart_;       ///< 네트워크 재시작 필요 플래그
+    static constexpr uint32_t RESTART_COOLDOWN_MS = 30000; ///< 30초 쿨다운
 
     // ========================================================================
     // 패킷 생성

@@ -433,6 +433,7 @@ typedef enum {
     EVT_NETWORK_CONNECTED,
     EVT_NETWORK_DISCONNECTED,
     EVT_NETWORK_RESTART_REQUEST,  ///< Network restart request (data: network_restart_request_t)
+    EVT_NETWORK_RESTARTED,        ///< Network restart completed (data: none)
 
     // Switcher events (03_service)
     EVT_SWITCHER_CONNECTED,

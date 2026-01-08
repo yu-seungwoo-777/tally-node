@@ -75,6 +75,8 @@ static bool s_stopped = false;  // 기능 정지 상태 플래그
 // ============================================================================
 
 static void draw_rx_header(u8g2_t* u8g2);
+static void draw_channel_list(u8g2_t* u8g2, const uint8_t* channels, uint8_t count,
+                              int y_pos, int max_width);
 static void draw_tally_page(u8g2_t* u8g2);
 static void draw_system_page(u8g2_t* u8g2);
 static void draw_camera_id_popup(u8g2_t* u8g2);
@@ -161,6 +163,87 @@ static void draw_rx_header(u8g2_t* u8g2)
 }
 
 /**
+ * @brief 채널 리스트 문자열 생성 (가운데 정렬 + 생략)
+ * @param channels 채널 배열
+ * @param count 채널 수
+ * @param buf 출력 버퍼
+ * @param buf_size 버퍼 크기
+ * @param max_width 최대 너비 (픽셀)
+ * @param u8g2 U8g2 인스턴스 (너비 계산용)
+ */
+static void draw_channel_list(u8g2_t* u8g2, const uint8_t* channels, uint8_t count,
+                               int y_pos, int max_width)
+{
+    u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
+
+    if (count == 0) {
+        // 채널 없음
+        const char* empty = "---";
+        int width = u8g2_GetStrWidth(u8g2, empty);
+        u8g2_DrawStr(u8g2, (max_width - width) / 2, y_pos, empty);
+        return;
+    }
+
+    // 전체 문자열 생성 (예: "1,2,3,4,5")
+    char full_str[64];
+    int offset = 0;
+    for (uint8_t i = 0; i < count && i < 20; i++) {
+        if (i > 0) {
+            offset += snprintf(full_str + offset, sizeof(full_str) - offset, ",");
+        }
+        offset += snprintf(full_str + offset, sizeof(full_str) - offset, "%d", channels[i]);
+    }
+
+    // 전체 너비 계산
+    int full_width = u8g2_GetStrWidth(u8g2, full_str);
+
+    if (full_width <= max_width) {
+        // 가운데 정렬로 그리기
+        u8g2_DrawStr(u8g2, (max_width - full_width) / 2, y_pos, full_str);
+    } else {
+        // 너무 길면 생략 (...) 처리
+        const char ellipsis[] = "...";
+        u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+        int ellipsis_width = u8g2_GetStrWidth(u8g2, ellipsis);
+
+        u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
+
+        // 가능한 많이 표시하고 나머지는 ...으로
+        char truncated[64];
+        int trunc_offset = 0;
+        int trunc_width = 0;
+
+        for (uint8_t i = 0; i < count && i < 20; i++) {
+            char num_str[8];
+            int len = snprintf(num_str, sizeof(num_str), "%d%s",
+                              channels[i], (i < count - 1) ? "," : "");
+            int num_width = u8g2_GetStrWidth(u8g2, num_str);
+
+            if (trunc_width + num_width + ellipsis_width > max_width) {
+                break;
+            }
+
+            strncpy(truncated + trunc_offset, num_str, sizeof(truncated) - trunc_offset);
+            trunc_offset += len;
+            trunc_width += num_width;
+        }
+
+        if (trunc_offset > 0) {
+            truncated[trunc_offset] = '\0';
+            // trunc_width + ellipsis_width가 max_width를 넘지 않도록 조정
+            int display_width = trunc_width + ellipsis_width;
+            if (display_width > max_width) {
+                display_width = max_width;
+            }
+            u8g2_DrawStr(u8g2, (max_width - display_width) / 2, y_pos, truncated);
+
+            u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+            u8g2_DrawStr(u8g2, (max_width - display_width) / 2 + trunc_width, y_pos, ellipsis);
+        }
+    }
+}
+
+/**
  * @brief Tally 페이지 그리기 (Page 1)
  */
 static void draw_tally_page(u8g2_t* u8g2)
@@ -179,105 +262,18 @@ static void draw_tally_page(u8g2_t* u8g2)
     // 화면 절반 나누기
     u8g2_DrawHLine(u8g2, 0, 39, 128);
 
+    // 리스트 영역 너비: 전체 128px - 라벨 영역(약23px) - 여백(5px) = 100px
+    const int list_width = 100;
+
     // PGM 영역 (위쪽 절반)
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
     u8g2_DrawStr(u8g2, 110, 26, "PGM");
-
-    if (s_tally_data.pgm_count > 0) {
-        int max_x_pos = 110 - u8g2_GetStrWidth(u8g2, "PGM") - 5;
-
-        u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
-        char num_str[8];
-        snprintf(num_str, sizeof(num_str), "%d", s_tally_data.pgm_channels[0]);
-        u8g2_DrawStr(u8g2, 2, 34, num_str);
-
-        int x_pos = 2 + u8g2_GetStrWidth(u8g2, num_str);
-        bool overflow = false;
-
-        for (uint8_t i = 1; i < s_tally_data.pgm_count && i < 6; i++) {
-            u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-            int comma_width = u8g2_GetStrWidth(u8g2, ",");
-
-            u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
-            char next_num_str[8];
-            snprintf(next_num_str, sizeof(next_num_str), "%d", s_tally_data.pgm_channels[i]);
-            int next_num_width = u8g2_GetStrWidth(u8g2, next_num_str);
-
-            if (x_pos + comma_width + next_num_width > max_x_pos) {
-                overflow = true;
-                break;
-            }
-
-            u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-            u8g2_DrawStr(u8g2, x_pos, 34, ",");
-            x_pos += comma_width;
-
-            u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
-            u8g2_DrawStr(u8g2, x_pos, 34, next_num_str);
-            x_pos += next_num_width;
-        }
-
-        if (overflow) {
-            u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-            if (x_pos > 10) {
-                x_pos -= u8g2_GetStrWidth(u8g2, num_str);
-                u8g2_DrawStr(u8g2, x_pos + 8, 34, "...");
-            }
-        }
-    } else {
-        u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
-        u8g2_DrawStr(u8g2, 2, 34, "---");
-    }
+    draw_channel_list(u8g2, s_tally_data.pgm_channels, s_tally_data.pgm_count, 34, list_width);
 
     // PVW 영역 (아래쪽 절반)
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
     u8g2_DrawStr(u8g2, 110, 51, "PVW");
-
-    if (s_tally_data.pvw_count > 0) {
-        int max_x_pos = 110 - u8g2_GetStrWidth(u8g2, "PVW") - 5;
-
-        u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
-        char num_str[8];
-        snprintf(num_str, sizeof(num_str), "%d", s_tally_data.pvw_channels[0]);
-        u8g2_DrawStr(u8g2, 2, 59, num_str);
-
-        int x_pos = 2 + u8g2_GetStrWidth(u8g2, num_str);
-        bool overflow = false;
-
-        for (uint8_t i = 1; i < s_tally_data.pvw_count && i < 6; i++) {
-            u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-            int comma_width = u8g2_GetStrWidth(u8g2, ",");
-
-            u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
-            char next_num_str[8];
-            snprintf(next_num_str, sizeof(next_num_str), "%d", s_tally_data.pvw_channels[i]);
-            int next_num_width = u8g2_GetStrWidth(u8g2, next_num_str);
-
-            if (x_pos + comma_width + next_num_width > max_x_pos) {
-                overflow = true;
-                break;
-            }
-
-            u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-            u8g2_DrawStr(u8g2, x_pos, 59, ",");
-            x_pos += comma_width;
-
-            u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
-            u8g2_DrawStr(u8g2, x_pos, 59, next_num_str);
-            x_pos += next_num_width;
-        }
-
-        if (overflow) {
-            u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-            if (x_pos > 10) {
-                x_pos -= u8g2_GetStrWidth(u8g2, num_str);
-                u8g2_DrawStr(u8g2, x_pos + 8, 59, "...");
-            }
-        }
-    } else {
-        u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
-        u8g2_DrawStr(u8g2, 2, 59, "---");
-    }
+    draw_channel_list(u8g2, s_tally_data.pvw_channels, s_tally_data.pvw_count, 59, list_width);
 }
 
 /**

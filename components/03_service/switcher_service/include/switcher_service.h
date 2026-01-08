@@ -386,6 +386,21 @@ public:
      */
     void checkConfigAndReconnect(const config_data_event_t* config);
 
+    /**
+     * @brief 네트워크 IP 캐시 갱신 (이벤트 핸들러에서 호출)
+     * @param eth_ip Ethernet IP (NULL 또는 빈 문자열이면 갱신 안함)
+     * @param wifi_sta_ip WiFi STA IP (NULL 또는 빈 문자열이면 갱신 안함)
+     * @return IP 변경으로 재설정이 필요하면 true (빈값→값으로 변경)
+     */
+    static bool updateNetworkIPCache(const char* eth_ip, const char* wifi_sta_ip);
+
+    /**
+     * @brief 네트워크 연결로 스위처 재설정 (캐시된 IP 적용)
+     *
+     * 네트워크 연결 후 기존 스위처에 새 IP 바인딩 적용
+     */
+    void reconfigureSwitchersForNetwork();
+
 private:
     struct SwitcherInfo {
         std::unique_ptr<ISwitcherPort> adapter;
@@ -398,8 +413,9 @@ private:
         char type[8];              ///< 스위처 타입 ("ATEM", "OBS", "vMix")
         char ip[16];               ///< IP 주소
         uint16_t port;             ///< 포트 번호
+        uint8_t network_interface; ///< 네트워크 인터페이스 (0=Auto, 1=Ethernet, 2=WiFi)
 
-        SwitcherInfo() : adapter(nullptr), last_packed{nullptr, 0, 0}, has_changed(false), change_notified(false), last_reconnect_attempt(0), last_packed_change_time(0), is_connected(false), type(""), ip(""), port(0) {}
+        SwitcherInfo() : adapter(nullptr), last_packed{nullptr, 0, 0}, has_changed(false), change_notified(false), last_reconnect_attempt(0), last_packed_change_time(0), is_connected(false), type(""), ip(""), port(0), network_interface(0) {}
 
         void cleanup() {
             adapter.reset();
@@ -441,6 +457,10 @@ private:
 
     // 결합된 Packed 데이터 캐시
     mutable packed_data_t combined_packed_;
+
+    // 네트워크 인터페이스 IP 캐시 (EVT_NETWORK_STATUS_CHANGED 이벤트로 갱신)
+    static char s_cached_eth_ip[16];    ///< Ethernet IP 캐시
+    static char s_cached_wifi_sta_ip[16]; ///< WiFi STA IP 캐시
 
     StaticTask_t task_buffer_;          ///< 정적 태스크 메모리
     StackType_t task_stack_[4096];      ///< 태스크 스택 (4KB)

@@ -15,8 +15,6 @@
 #include "lora_service.h"
 #include "device_manager.h"
 #include "led_service.h"
-#include "ws2812_driver.h"
-#include "TallyTypes.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -97,16 +95,9 @@ static void stop_camera_id_timer(void)
 static struct {
     bool running;
     bool initialized;
-    bool stopped;         // 기능 정지 상태
-    // 현재 Tally 상태 (카메라 ID 변경 시 LED 업데이트용)
-    bool program_active;   // 현재 카메라가 PGM인지
-    bool preview_active;   // 현재 카메라가 PVW인지
 } s_app = {
     .running = false,
-    .initialized = false,
-    .stopped = false,
-    .program_active = false,
-    .preview_active = false
+    .initialized = false
 };
 
 extern "C" {
@@ -168,26 +159,10 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
             if (ret == ESP_OK) {
                 uint8_t saved_id = config_service_get_camera_id();
                 T_LOGI(TAG, "Camera ID 저장: %d -> %d (확인: %d)", old_id, new_id, saved_id);
-
-                // WS2812에도 새 카메라 ID 적용
-                led_service_set_camera_id(new_id);
-
-                // 현재 Tally 상태에 따라 LED 즉시 업데이트
-                // (새 패킷을 기다리지 않고 현재 상태 적용)
-                if (s_app.program_active) {
-                    led_service_set_state(WS2812_PROGRAM);
-                    T_LOGI(TAG, "LED 즉시 업데이트: PROGRAM");
-                } else if (s_app.preview_active) {
-                    led_service_set_state(WS2812_PREVIEW);
-                    T_LOGI(TAG, "LED 즉시 업데이트: PREVIEW");
-                } else {
-                    led_service_set_state(WS2812_OFF);
-                    T_LOGI(TAG, "LED 즉시 업데이트: OFF");
-                }
             } else {
                 T_LOGE(TAG, "Camera ID 저장 실패: %s", esp_err_to_name(ret));
             }
-            // DisplayManager는 EVT_CAMERA_ID_CHANGED 이벤트로 업데이트됨
+            // LED 업데이트는 led_service에서 EVT_CAMERA_ID_CHANGED로 처리
         } else {
             T_LOGI(TAG, "Camera ID 변경 없음: %d", new_id);
         }
@@ -196,69 +171,6 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
         display_manager_hide_camera_id_popup();
         display_manager_force_refresh();
         T_LOGI(TAG, "Camera ID 팝업 닫기 (롱프레스 해제)");
-    }
-
-    return ESP_OK;
-}
-
-/**
- * @brief Tally 상태 변경 이벤트 핸들러
- * 현재 상태를 저장하여 카메라 ID 변경 시 LED 즉시 업데이트에 사용
- */
-static esp_err_t handle_tally_state_changed(const event_data_t* event)
-{
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    // 기능 정지 상태에서는 Tally 무시
-    if (s_app.stopped) {
-        return ESP_OK;
-    }
-
-    const tally_event_data_t* tally_evt = (const tally_event_data_t*)event->data;
-
-    // packed_data_t 구조체 생성
-    packed_data_t tally = {
-        .data = (uint8_t*)tally_evt->tally_data,
-        .data_size = static_cast<uint8_t>((tally_evt->channel_count + 3) / 4),
-        .channel_count = tally_evt->channel_count
-    };
-
-    // 현재 카메라 ID
-    uint8_t my_camera_id = config_service_get_camera_id();
-
-    // 내 카메라의 Tally 상태 확인 (채널 번호는 1-based)
-    if (my_camera_id > 0 && my_camera_id <= tally.channel_count) {
-        uint8_t status = packed_data_get_channel(&tally, my_camera_id);
-        s_app.program_active = (status == TALLY_STATUS_PROGRAM || status == TALLY_STATUS_BOTH);
-        s_app.preview_active = (status == TALLY_STATUS_PREVIEW || status == TALLY_STATUS_BOTH);
-    } else {
-        s_app.program_active = false;
-        s_app.preview_active = false;
-    }
-
-    return ESP_OK;
-}
-
-/**
- * @brief 기능 정지 상태 변경 이벤트 핸들러
- */
-static esp_err_t handle_stop_changed(const event_data_t* event)
-{
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    const bool* stopped = (const bool*)event->data;
-    s_app.stopped = *stopped;
-
-    if (s_app.stopped) {
-        T_LOGW(TAG, "기능 정지: LED OFF");
-        // LED 전체 소등
-        led_service_off();
-    } else {
-        T_LOGI(TAG, "기능 정지 해제");
     }
 
     return ESP_OK;
@@ -440,11 +352,7 @@ void prod_rx_app_start(void)
     event_bus_subscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
-
-    // Tally 상태 변경 이벤트 구독 (카메라 ID 변경 시 LED 즉시 업데이트용)
-    event_bus_subscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
-    event_bus_subscribe(EVT_STOP_CHANGED, handle_stop_changed);
-    T_LOGI(TAG, "Tally 상태 이벤트 구독 시작");
+    T_LOGI(TAG, "버튼 이벤트 구독 시작");
 #endif
 
     // 버튼 서비스 시작
@@ -490,8 +398,6 @@ void prod_rx_app_stop(void)
     event_bus_unsubscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_unsubscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_unsubscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
-    event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
-    event_bus_unsubscribe(EVT_STOP_CHANGED, handle_stop_changed);
 #endif
 
     button_service_stop();

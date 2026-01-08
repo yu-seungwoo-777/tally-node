@@ -49,39 +49,6 @@ static esp_err_t init_nvs(void)
 static const char* TAG = "prod_tx_app";
 
 // ============================================================================
-// LoRa 송신 헬퍼
-// ============================================================================
-
-/**
- * @brief LoRa로 Tally 데이터 송신
- * 패킷 구조: [F1][ChannelCount][Data...]
- */
-static void send_tally_via_lora(const packed_data_t* tally)
-{
-    if (!packed_data_is_valid(tally)) {
-        T_LOGW(TAG, "LoRa 송신 스킵: 잘못된 Tally 데이터");
-        return;
-    }
-
-    // 라이센스 확인
-    if (!license_service_can_send_tally()) {
-        T_LOGW(TAG, "LoRa 송신 스킵: 라이센스 미인증 상태");
-        return;
-    }
-
-    char hex_str[16];
-    packed_data_to_hex(tally, hex_str, sizeof(hex_str));
-
-    esp_err_t ret = lora_service_send_tally(tally);
-    if (ret == ESP_OK) {
-        T_LOGI(TAG, "LoRa 송신: [F1][%d][%s] (%d채널, %d바이트)",
-                 tally->channel_count, hex_str, tally->channel_count, tally->data_size);
-    } else {
-        T_LOGE(TAG, "LoRa 송신 실패: [%s] -> %s", hex_str, esp_err_to_name(ret));
-    }
-}
-
-// ============================================================================
 // 버튼 이벤트 핸들러 (TX 전용)
 // ============================================================================
 
@@ -122,198 +89,6 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
     T_LOGD(TAG, "Long press release");
     return ESP_OK;
 }
-
-/**
- * @brief 디바이스 밝기 설정 요청 핸들러
- * 이벤트 데이터: uint8_t[3] = {device_id[0], device_id[1], brightness}
- */
-static esp_err_t handle_device_brightness_request(const event_data_t* event)
-{
-    if (!event || event->data_size < 3) {
-        T_LOGW(TAG, "밝기 요청 이벤트 데이터 부족");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    const uint8_t* data = event->data;
-    uint8_t device_id[2] = {data[0], data[1]};
-    uint8_t brightness = data[2];
-
-    // 라이센스 확인
-    if (!license_service_can_send_tally()) {
-        T_LOGW(TAG, "밝기 명령 송신 스킵: 라이센스 미인증 상태");
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    // LoRa 밝기 설정 명령 패킷 구성
-    // [0xE1][device_id[0]][device_id[1]][brightness]
-    uint8_t pkt[4];
-    pkt[0] = 0xE1;  // LORA_HDR_SET_BRIGHTNESS
-    pkt[1] = device_id[0];
-    pkt[2] = device_id[1];
-    pkt[3] = brightness;
-
-    esp_err_t ret = lora_service_send(pkt, sizeof(pkt));
-    if (ret == ESP_OK) {
-        T_LOGI(TAG, "밝기 명령 LoRa 송신: ID[%02X%02X], 밝기=%d",
-                 device_id[0], device_id[1], brightness);
-    } else {
-        T_LOGE(TAG, "밝기 명령 LoRa 송신 실패: %s", esp_err_to_name(ret));
-    }
-
-    return ret;
-}
-
-/**
- * @brief 디바이스 카메라 ID 설정 요청 핸들러
- * 이벤트 데이터: uint8_t[3] = {device_id[0], device_id[1], camera_id}
- */
-static esp_err_t handle_device_camera_id_request(const event_data_t* event)
-{
-    if (!event || event->data_size < 3) {
-        T_LOGW(TAG, "카메라 ID 요청 이벤트 데이터 부족");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    const uint8_t* data = event->data;
-    uint8_t device_id[2] = {data[0], data[1]};
-    uint8_t camera_id = data[2];
-
-    // 라이센스 확인
-    if (!license_service_can_send_tally()) {
-        T_LOGW(TAG, "카메라 ID 명령 송신 스킵: 라이센스 미인증 상태");
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    // LoRa 카메라 ID 설정 명령 패킷 구성
-    // [0xE2][device_id[0]][device_id[1]][camera_id]
-    uint8_t pkt[4];
-    pkt[0] = 0xE2;  // LORA_HDR_SET_CAMERA_ID
-    pkt[1] = device_id[0];
-    pkt[2] = device_id[1];
-    pkt[3] = camera_id;
-
-    esp_err_t ret = lora_service_send(pkt, sizeof(pkt));
-    if (ret == ESP_OK) {
-        T_LOGI(TAG, "카메라 ID 명령 LoRa 송신: ID[%02X%02X], CameraID=%d",
-                 device_id[0], device_id[1], camera_id);
-    } else {
-        T_LOGE(TAG, "카메라 ID 명령 LoRa 송신 실패: %s", esp_err_to_name(ret));
-    }
-
-    return ret;
-}
-
-/**
- * @brief 디바이스 PING 요청 핸들러
- * 이벤트 데이터: uint8_t[2] = {device_id[0], device_id[1]}
- */
-static esp_err_t handle_device_ping_request(const event_data_t* event)
-{
-    if (!event || event->data_size < 2) {
-        T_LOGW(TAG, "PING 요청 이벤트 데이터 부족");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    const uint8_t* device_id = event->data;
-
-    // PING 명령 패킷 구성 (lora_cmd_ping_t 구조체 사용)
-    // [0xE6][device_id[0]][device_id[1]][timestamp_low(2바이트)]
-    uint8_t pkt[5];
-    pkt[0] = 0xE6;  // LORA_HDR_PING
-    pkt[1] = device_id[0];
-    pkt[2] = device_id[1];
-    // timestamp_low: 송신 시간 하위 2바이트 (ms)
-    uint16_t timestamp_low = (uint16_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
-    pkt[3] = timestamp_low & 0xFF;        // 하위 바이트
-    pkt[4] = (timestamp_low >> 8) & 0xFF; // 상위 바이트
-
-    esp_err_t ret = lora_service_send(pkt, sizeof(pkt));
-    if (ret == ESP_OK) {
-        T_LOGI(TAG, "PING 명령 LoRa 송신: ID[%02X%02X], TS=%u",
-                 device_id[0], device_id[1], timestamp_low);
-    } else {
-        T_LOGE(TAG, "PING 명령 LoRa 송신 실패: %s", esp_err_to_name(ret));
-    }
-
-    return ret;
-}
-
-/**
- * @brief 디바이스 기능 정지 요청 핸들러
- * 이벤트 데이터: uint8_t[2] = {device_id[0], device_id[1]}
- */
-static esp_err_t handle_device_stop_request(const event_data_t* event)
-{
-    if (!event || event->data_size < 2) {
-        T_LOGW(TAG, "STOP 요청 이벤트 데이터 부족");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    const uint8_t* device_id = event->data;
-
-    // STOP 명령 패킷 구성
-    uint8_t pkt[3];
-    pkt[0] = 0xE4;  // LORA_HDR_STOP
-    pkt[1] = device_id[0];
-    pkt[2] = device_id[1];
-
-    esp_err_t ret = lora_service_send(pkt, sizeof(pkt));
-    if (ret == ESP_OK) {
-        T_LOGW(TAG, "기능 정지 명령 LoRa 송신: ID[%02X%02X]",
-                 device_id[0], device_id[1]);
-    } else {
-        T_LOGE(TAG, "기능 정지 명령 LoRa 송신 실패: %s", esp_err_to_name(ret));
-    }
-
-    return ret;
-}
-
-/**
- * @brief 디바이스 재부팅 요청 핸들러
- * 이벤트 데이터: uint8_t[2] = {device_id[0], device_id[1]}
- */
-static esp_err_t handle_device_reboot_request(const event_data_t* event)
-{
-    if (!event || event->data_size < 2) {
-        T_LOGW(TAG, "REBOOT 요청 이벤트 데이터 부족");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    const uint8_t* device_id = event->data;
-
-    // REBOOT 명령 패킷 구성
-    uint8_t pkt[3];
-    pkt[0] = 0xE5;  // LORA_HDR_REBOOT
-    pkt[1] = device_id[0];
-    pkt[2] = device_id[1];
-
-    esp_err_t ret = lora_service_send(pkt, sizeof(pkt));
-    if (ret == ESP_OK) {
-        T_LOGW(TAG, "재부팅 명령 LoRa 송신: ID[%02X%02X]",
-                 device_id[0], device_id[1]);
-    } else {
-        T_LOGE(TAG, "재부팅 명령 LoRa 송신 실패: %s", esp_err_to_name(ret));
-    }
-
-    return ret;
-}
-
-/**
- * @brief 상태 요청 핸들러
- */
-static esp_err_t handle_status_request(const event_data_t* event)
-{
-    (void)event;
-
-    esp_err_t ret = device_manager_request_status_now();
-    if (ret == ESP_OK) {
-        T_LOGI(TAG, "상태 요청 송신 (API 요청)");
-    } else {
-        T_LOGE(TAG, "상태 요청 송신 실패: %s", esp_err_to_name(ret));
-    }
-
-    return ret;
-}
 #endif // DEVICE_MODE_TX
 
 // ============================================================================
@@ -344,7 +119,23 @@ static void on_tally_change(void)
     }
 
     packed_data_t tally = switcher_service_get_combined_tally(s_app.service);
-    send_tally_via_lora(&tally);
+
+    // 라이센스 확인
+    if (!license_service_can_send_tally()) {
+        T_LOGW(TAG, "LoRa 송신 스킵: 라이센스 미인증 상태");
+        return;
+    }
+
+    char hex_str[16];
+    packed_data_to_hex(&tally, hex_str, sizeof(hex_str));
+
+    esp_err_t ret = lora_service_send_tally(&tally);
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "LoRa 송신: [F1][%d][%s] (%d채널, %d바이트)",
+                 tally.channel_count, hex_str, tally.channel_count, tally.data_size);
+    } else {
+        T_LOGE(TAG, "LoRa 송신 실패: [%s] -> %s", hex_str, esp_err_to_name(ret));
+    }
 
     // 마지막 Tally 저장
     if (s_app.last_tally.data) {
@@ -476,13 +267,6 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     event_bus_subscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
-    // 디바이스 제어 이벤트
-    event_bus_subscribe(EVT_DEVICE_BRIGHTNESS_REQUEST, handle_device_brightness_request);
-    event_bus_subscribe(EVT_DEVICE_CAMERA_ID_REQUEST, handle_device_camera_id_request);
-    event_bus_subscribe(EVT_DEVICE_PING_REQUEST, handle_device_ping_request);
-    event_bus_subscribe(EVT_DEVICE_STOP_REQUEST, handle_device_stop_request);
-    event_bus_subscribe(EVT_DEVICE_REBOOT_REQUEST, handle_device_reboot_request);
-    event_bus_subscribe(EVT_STATUS_REQUEST, handle_status_request);
 #endif
     T_LOGI(TAG, "이벤트 구독 완료");
 
@@ -721,13 +505,6 @@ void prod_tx_app_stop(void)
     event_bus_unsubscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_unsubscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_unsubscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
-    // 디바이스 제어 이벤트 구독 취소
-    event_bus_unsubscribe(EVT_DEVICE_BRIGHTNESS_REQUEST, handle_device_brightness_request);
-    event_bus_unsubscribe(EVT_DEVICE_CAMERA_ID_REQUEST, handle_device_camera_id_request);
-    event_bus_unsubscribe(EVT_DEVICE_PING_REQUEST, handle_device_ping_request);
-    event_bus_unsubscribe(EVT_DEVICE_STOP_REQUEST, handle_device_stop_request);
-    event_bus_unsubscribe(EVT_DEVICE_REBOOT_REQUEST, handle_device_reboot_request);
-    event_bus_unsubscribe(EVT_STATUS_REQUEST, handle_status_request);
 #endif
 
     // 스위처/네트워크 연결 상태 이벤트 구독 취소
