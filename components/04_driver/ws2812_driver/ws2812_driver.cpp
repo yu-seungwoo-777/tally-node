@@ -51,6 +51,8 @@ uint32_t WS2812Driver::s_num_leds = 1;
 uint8_t WS2812Driver::s_brightness = 255;
 uint8_t WS2812Driver::s_camera_id = 1;
 ws2812_state_t WS2812Driver::s_led_states[8] = {WS2812_OFF};
+tally_event_data_t WS2812Driver::s_last_tally = {};
+bool WS2812Driver::s_last_tally_valid = false;
 
 esp_err_t WS2812Driver::init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
 {
@@ -298,6 +300,44 @@ void WS2812Driver::setCameraId(uint8_t camera_id)
     }
     s_camera_id = camera_id;
     T_LOGI("WS2812Drv", "카메라 ID 설정: %d", s_camera_id);
+
+    // 마지막 Tally 데이터로 LED 즉시 갱신
+    if (s_last_tally_valid) {
+        // 이벤트 데이터를 packed_data_t로 변환
+        uint8_t data_size = (s_last_tally.channel_count + 3) / 4;
+        packed_data_t tally = {
+            .data = const_cast<uint8_t*>(s_last_tally.tally_data),
+            .data_size = data_size,
+            .channel_count = s_last_tally.channel_count
+        };
+        uint8_t my_status = packed_data_get_channel(&tally, s_camera_id);
+
+        // Tally 상태 → LED 상태 매핑
+        ws2812_state_t led_state;
+        const char* state_str;
+
+        switch (my_status) {
+        case TALLY_STATUS_PROGRAM:
+            led_state = WS2812_PROGRAM;
+            state_str = "PROGRAM";
+            break;
+        case TALLY_STATUS_PREVIEW:
+            led_state = WS2812_PREVIEW;
+            state_str = "PREVIEW";
+            break;
+        case TALLY_STATUS_BOTH:
+            led_state = WS2812_PROGRAM;
+            state_str = "BOTH (PGM+PVW)";
+            break;
+        default:
+            led_state = WS2812_OFF;
+            state_str = "OFF";
+            break;
+        }
+
+        setState(led_state);
+        T_LOGI("WS2812Drv", "카메라 ID 변경 후 LED 갱신: %d → %s", s_camera_id, state_str);
+    }
 }
 
 esp_err_t WS2812Driver::tallyEventCallback(const event_data_t* event)
@@ -307,6 +347,10 @@ esp_err_t WS2812Driver::tallyEventCallback(const event_data_t* event)
     }
 
     const tally_event_data_t* tally_data = (const tally_event_data_t*)event->data;
+
+    // Tally 데이터 저장 (카메라 ID 변경 시 재사용)
+    s_last_tally = *tally_data;
+    s_last_tally_valid = true;
 
     // 내 카메라 ID의 Tally 상태 확인
     // 이벤트 데이터를 packed_data_t로 변환
