@@ -1903,6 +1903,10 @@ esp_err_t web_server_start(void)
     config.max_open_sockets = 5;
     config.max_uri_handlers = 40;  // API + OPTIONS + 정적 파일 + LoRa + Device + License
     config.lru_purge_enable = true;
+    // 대용량 파일 전송을 위한 스택 증가 (기본 4KB → 8KB)
+    config.stack_size = 8192;
+    // 소켓 송신 버퍼 증가 (기본값 사용 시 error 11 발생)
+    config.send_wait_timeout = 10;  // 초
 
     esp_err_t ret = httpd_start(&s_server, &config);
     if (ret != ESP_OK) {
