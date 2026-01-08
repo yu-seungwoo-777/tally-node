@@ -51,7 +51,7 @@ static led_colors_t s_colors = {
 
 /**
  * @brief 카메라 ID 변경 이벤트 핸들러 (EVT_CAMERA_ID_CHANGED)
- * @note WS2812Driver에 카메라 ID 전달 (드라이버가 Tally 데이터로 LED 갱신)
+ * @note WS2812Driver에 카메라 ID 전달 후 캐시된 Tally 상태로 LED 즉시 업데이트
  */
 static esp_err_t on_camera_id_changed(const event_data_t* event)
 {
@@ -60,10 +60,38 @@ static esp_err_t on_camera_id_changed(const event_data_t* event)
     }
 
     uint8_t camera_id = *(uint8_t*)event->data;
-    T_LOGI(TAG, "카메라 ID 변경 이벤트 수신: %d", camera_id);
+    T_LOGI(TAG, "카메라 ID 변경 이벤트 수신: %d (PGM:%d PVW:%d)",
+           camera_id, s_service.program_active, s_service.preview_active);
 
-    // WS2812Driver에 카메라 ID 설정 (내부에서 Tally 데이터로 LED 갱신)
+    // WS2812Driver에 카메라 ID 설정
     ws2812_set_camera_id(camera_id);
+
+    // 캐시된 Tally 상태로 LED 즉시 업데이트
+    if (s_service.program_active) {
+        ws2812_set_state(WS2812_PROGRAM);
+    } else if (s_service.preview_active) {
+        ws2812_set_state(WS2812_PREVIEW);
+    } else {
+        ws2812_set_state(WS2812_OFF);
+    }
+
+    return ESP_OK;
+}
+
+/**
+ * @brief 밝기 변경 이벤트 핸들러 (EVT_BRIGHTNESS_CHANGED)
+ */
+static esp_err_t on_brightness_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* brightness = (const uint8_t*)event->data;
+    T_LOGI(TAG, "밝기 변경 이벤트 수신: %d", *brightness);
+
+    // WS2812Driver에 밝기 설정 (내부에서 LED 즉시 업데이트)
+    ws2812_set_brightness(*brightness);
 
     return ESP_OK;
 }
@@ -173,10 +201,11 @@ esp_err_t led_service_init_with_colors(int gpio_num, uint32_t num_leds, uint8_t 
 
     // 이벤트 버스 구독
     event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
+    event_bus_subscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
     event_bus_subscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
     event_bus_subscribe(EVT_STOP_CHANGED, on_stop_changed);
     s_service.event_subscribed = true;
-    T_LOGI(TAG, "이벤트 버스 구독: CAMERA_ID, TALLY_STATE, STOP_CHANGED");
+    T_LOGI(TAG, "이벤트 버스 구독: CAMERA_ID, BRIGHTNESS, TALLY_STATE, STOP_CHANGED");
 
     s_service.initialized = true;
     T_LOGI(TAG, "LED 서비스 초기화 완료");
@@ -275,6 +304,7 @@ void led_service_deinit(void)
     // 이벤트 버스 구독 해제
     if (s_service.event_subscribed) {
         event_bus_unsubscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
+        event_bus_unsubscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
         event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
         event_bus_unsubscribe(EVT_STOP_CHANGED, on_stop_changed);
         s_service.event_subscribed = false;
