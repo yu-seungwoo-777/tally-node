@@ -183,11 +183,11 @@ esp_err_t led_service_init_with_colors(int gpio_num, uint32_t num_leds, uint8_t 
     }
 
     // 이벤트 버스 구독
-    event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
+    // CAMERA_ID_CHANGED는 WS2812Driver에서 처리 (Tally 데이터 기반 LED 갱신)
     event_bus_subscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
     event_bus_subscribe(EVT_STOP_CHANGED, on_stop_changed);
     s_service.event_subscribed = true;
-    T_LOGI(TAG, "이벤트 버스 구독: CAMERA_ID, TALLY_STATE, STOP_CHANGED");
+    T_LOGI(TAG, "이벤트 버스 구독: TALLY_STATE, STOP_CHANGED");
 
     s_service.initialized = true;
     T_LOGI(TAG, "LED 서비스 초기화 완료");
@@ -285,7 +285,6 @@ void led_service_deinit(void)
 
     // 이벤트 버스 구독 해제
     if (s_service.event_subscribed) {
-        event_bus_unsubscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
         event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
         event_bus_unsubscribe(EVT_STOP_CHANGED, on_stop_changed);
         s_service.event_subscribed = false;
