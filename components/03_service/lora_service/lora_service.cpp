@@ -47,6 +47,13 @@ static bool s_initialized = false;
 static bool s_running = false;
 static lora_service_receive_callback_t s_user_callback = nullptr;
 
+#ifdef DEVICE_MODE_TX
+// RF 상태 추가 (부팅 시 불필요한 broadcast 방지)
+static bool s_rf_initialized = false;  // RF 초기화 완료 플래그
+static float s_last_frequency = 0;     // 마지막 주파수
+static uint8_t s_last_sync_word = 0;   // 마지막 sync word
+#endif
+
 // 통계
 static uint32_t s_packets_sent = 0;
 static uint32_t s_packets_received = 0;
@@ -130,7 +137,27 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
     }
 
 #ifdef DEVICE_MODE_TX
-    // TX: 1. 먼저 broadcast (이전 sync word로 RX에 전송)
+    // 부팅 시 첫 호출인지 확인 (값이 변경되었는지도 체크)
+    bool values_changed = (!s_rf_initialized ||
+                           s_last_frequency != rf->frequency ||
+                           s_last_sync_word != rf->sync_word);
+
+    // 첫 호출은 부팅 시점이므로 broadcast 스킵
+    if (!s_rf_initialized) {
+        s_rf_initialized = true;
+        s_last_frequency = rf->frequency;
+        s_last_sync_word = rf->sync_word;
+        T_LOGI(TAG_RF, "RF 초기화 완료: %.1f MHz, Sync 0x%02X (부팅 시 broadcast 스킵)",
+                 rf->frequency, rf->sync_word);
+        return ESP_OK;
+    }
+
+    // 값이 변경되지 않았으면 무시
+    if (!values_changed) {
+        return ESP_OK;
+    }
+
+    // TX: 값이 변경된 경우에만 broadcast
     T_LOGI(TAG_RF, "RF broadcast 시작 (10회): %.1f MHz, Sync 0x%02X",
              rf->frequency, rf->sync_word);
 
@@ -146,13 +173,17 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
 
     T_LOGI(TAG_RF, "RF broadcast 완료: %.1f MHz, Sync 0x%02X (10회)", rf->frequency, rf->sync_word);
 
-    // 2. 드라이버에 RF 설정 적용 (broadcast 완료 후)
+    // 드라이버에 RF 설정 적용 (broadcast 완료 후)
     lora_driver_set_frequency(rf->frequency);
     lora_driver_set_sync_word(rf->sync_word);
 
     T_LOGI(TAG_RF, "드라이버 적용 완료: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
 
-    // 3. NVS 저장 요청
+    // 현재 값 저장
+    s_last_frequency = rf->frequency;
+    s_last_sync_word = rf->sync_word;
+
+    // NVS 저장 요청
     event_bus_publish(EVT_RF_SAVED, rf, sizeof(*rf));
 #else
     // RX: 드라이버에 바로 적용
@@ -314,6 +345,14 @@ static void lora_txq_task(void* arg)
     while (s_running) {
         // 비블로킹으로 큐 체크 (패킷 있으면 즉시 송신)
         if (xQueueReceive(s_tx_queue, &packet, 0) == pdTRUE) {
+            // 디버그: 수신된 패킷 크기
+            T_LOGI(TAG, "TX 큐 수신: length=%zu", packet.length);
+            if (packet.length <= 8) {
+                for (size_t i = 0; i < packet.length; i++) {
+                    T_LOGI(TAG, "  data[%zu]=0x%02X", i, packet.data[i]);
+                }
+            }
+
             // 드라이버가 송신 중이면 대기
             while (s_running && lora_driver_is_transmitting()) {
                 vTaskDelay(pdMS_TO_TICKS(1));
@@ -328,7 +367,7 @@ static void lora_txq_task(void* arg)
 
             if (ret == ESP_OK) {
                 s_packets_sent++;
-                T_LOGV(TAG, "송신: %zu bytes", packet.length);
+                T_LOGI(TAG, "송신: %zu bytes", packet.length);
                 event_bus_publish(EVT_LORA_PACKET_SENT, &s_packets_sent, sizeof(s_packets_sent));
             } else {
                 T_LOGI(TAG, "송신 실패: %d", ret);
@@ -543,13 +582,21 @@ esp_err_t lora_service_send(const uint8_t* data, size_t length)
     };
     memcpy(packet.data, data, length);
 
+    // 디버그: 전송 데이터 확인
+    T_LOGI(TAG, "lora_service_send: length=%zu", length);
+    if (length <= 8) {
+        for (size_t i = 0; i < length; i++) {
+            T_LOGI(TAG, "  data[%zu]=0x%02X", i, data[i]);
+        }
+    }
+
     // 비블로킹 모드로 큐에 추가
     if (xQueueSend(s_tx_queue, &packet, 0) == pdTRUE) {
         return ESP_OK;
     }
 
     s_tx_dropped++;
-    T_LOGI(TAG, "송신 큐 full (패킷 폐기)");
+    T_LOGW(TAG, "송신 큐 full (패킷 폐기)");
     return ESP_ERR_NO_MEM;
 }
 

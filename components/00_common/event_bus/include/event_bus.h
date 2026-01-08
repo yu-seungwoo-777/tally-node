@@ -453,6 +453,9 @@ typedef enum {
     EVT_DEVICE_BRIGHTNESS_REQUEST, ///< 디바이스 밝기 설정 요청 (data: uint8_t[3] = {device_id[0], device_id[1], brightness})
     EVT_DEVICE_CAMERA_ID_REQUEST, ///< 디바이스 카메라 ID 설정 요청 (data: uint8_t[3] = {device_id[0], device_id[1], camera_id})
     EVT_DEVICE_PING_REQUEST,     ///< 디바이스 PING 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
+    EVT_DEVICE_STOP_REQUEST,     ///< 디바이스 기능 정지 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
+    EVT_DEVICE_REBOOT_REQUEST,   ///< 디바이스 재부팅 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
+    EVT_STATUS_REQUEST,          ///< 상태 요청 (Broadcast, data: none)
 
     // 라이센스 이벤트 (03_service → 03_service)
     EVT_LICENSE_STATE_CHANGED,   ///< 라이센스 상태 변경 (data: license_state_event_t)

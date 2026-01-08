@@ -216,20 +216,100 @@ static esp_err_t handle_device_ping_request(const event_data_t* event)
 
     const uint8_t* device_id = event->data;
 
-    // PING 명령 패킷 구성 (send_ping_command 호출 또는 직접 전송)
-    // [0xE6][device_id[0]][device_id[1]][timestamp_low]
-    uint8_t pkt[4];
+    // PING 명령 패킷 구성 (lora_cmd_ping_t 구조체 사용)
+    // [0xE6][device_id[0]][device_id[1]][timestamp_low(2바이트)]
+    uint8_t pkt[5];
     pkt[0] = 0xE6;  // LORA_HDR_PING
     pkt[1] = device_id[0];
     pkt[2] = device_id[1];
-    pkt[3] = (uint8_t)(xTaskGetTickCount() * portTICK_PERIOD_MS & 0xFF);  // timestamp 하위 바이트만 사용
+    // timestamp_low: 송신 시간 하위 2바이트 (ms)
+    uint16_t timestamp_low = (uint16_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
+    pkt[3] = timestamp_low & 0xFF;        // 하위 바이트
+    pkt[4] = (timestamp_low >> 8) & 0xFF; // 상위 바이트
 
     esp_err_t ret = lora_service_send(pkt, sizeof(pkt));
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "PING 명령 LoRa 송신: ID[%02X%02X]",
-                 device_id[0], device_id[1]);
+        T_LOGI(TAG, "PING 명령 LoRa 송신: ID[%02X%02X], TS=%u",
+                 device_id[0], device_id[1], timestamp_low);
     } else {
         T_LOGE(TAG, "PING 명령 LoRa 송신 실패: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 디바이스 기능 정지 요청 핸들러
+ * 이벤트 데이터: uint8_t[2] = {device_id[0], device_id[1]}
+ */
+static esp_err_t handle_device_stop_request(const event_data_t* event)
+{
+    if (!event || event->data_size < 2) {
+        T_LOGW(TAG, "STOP 요청 이벤트 데이터 부족");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* device_id = event->data;
+
+    // STOP 명령 패킷 구성
+    uint8_t pkt[3];
+    pkt[0] = 0xE4;  // LORA_HDR_STOP
+    pkt[1] = device_id[0];
+    pkt[2] = device_id[1];
+
+    esp_err_t ret = lora_service_send(pkt, sizeof(pkt));
+    if (ret == ESP_OK) {
+        T_LOGW(TAG, "기능 정지 명령 LoRa 송신: ID[%02X%02X]",
+                 device_id[0], device_id[1]);
+    } else {
+        T_LOGE(TAG, "기능 정지 명령 LoRa 송신 실패: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 디바이스 재부팅 요청 핸들러
+ * 이벤트 데이터: uint8_t[2] = {device_id[0], device_id[1]}
+ */
+static esp_err_t handle_device_reboot_request(const event_data_t* event)
+{
+    if (!event || event->data_size < 2) {
+        T_LOGW(TAG, "REBOOT 요청 이벤트 데이터 부족");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* device_id = event->data;
+
+    // REBOOT 명령 패킷 구성
+    uint8_t pkt[3];
+    pkt[0] = 0xE5;  // LORA_HDR_REBOOT
+    pkt[1] = device_id[0];
+    pkt[2] = device_id[1];
+
+    esp_err_t ret = lora_service_send(pkt, sizeof(pkt));
+    if (ret == ESP_OK) {
+        T_LOGW(TAG, "재부팅 명령 LoRa 송신: ID[%02X%02X]",
+                 device_id[0], device_id[1]);
+    } else {
+        T_LOGE(TAG, "재부팅 명령 LoRa 송신 실패: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 상태 요청 핸들러
+ */
+static esp_err_t handle_status_request(const event_data_t* event)
+{
+    (void)event;
+
+    esp_err_t ret = device_manager_request_status_now();
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "상태 요청 송신 (API 요청)");
+    } else {
+        T_LOGE(TAG, "상태 요청 송신 실패: %s", esp_err_to_name(ret));
     }
 
     return ret;
@@ -400,6 +480,9 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     event_bus_subscribe(EVT_DEVICE_BRIGHTNESS_REQUEST, handle_device_brightness_request);
     event_bus_subscribe(EVT_DEVICE_CAMERA_ID_REQUEST, handle_device_camera_id_request);
     event_bus_subscribe(EVT_DEVICE_PING_REQUEST, handle_device_ping_request);
+    event_bus_subscribe(EVT_DEVICE_STOP_REQUEST, handle_device_stop_request);
+    event_bus_subscribe(EVT_DEVICE_REBOOT_REQUEST, handle_device_reboot_request);
+    event_bus_subscribe(EVT_STATUS_REQUEST, handle_status_request);
 #endif
     T_LOGI(TAG, "이벤트 구독 완료");
 
@@ -642,6 +725,9 @@ void prod_tx_app_stop(void)
     event_bus_unsubscribe(EVT_DEVICE_BRIGHTNESS_REQUEST, handle_device_brightness_request);
     event_bus_unsubscribe(EVT_DEVICE_CAMERA_ID_REQUEST, handle_device_camera_id_request);
     event_bus_unsubscribe(EVT_DEVICE_PING_REQUEST, handle_device_ping_request);
+    event_bus_unsubscribe(EVT_DEVICE_STOP_REQUEST, handle_device_stop_request);
+    event_bus_unsubscribe(EVT_DEVICE_REBOOT_REQUEST, handle_device_reboot_request);
+    event_bus_unsubscribe(EVT_STATUS_REQUEST, handle_status_request);
 #endif
 
     // 스위처/네트워크 연결 상태 이벤트 구독 취소

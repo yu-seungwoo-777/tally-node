@@ -54,6 +54,9 @@ typedef struct {
         bool valid;
     } device;
 
+    // 기능 정지 상태 (RX용)
+    bool stopped;
+
     switcher_status_event_t switcher;  // EVT_SWITCHER_STATUS_CHANGED
     bool switcher_valid;
 
@@ -404,6 +407,35 @@ static esp_err_t on_brightness_changed(const event_data_t* event)
 
     return ESP_OK;
 }
+
+/**
+ * @brief EVT_STOP_CHANGED 핸들러 (RX 전용)
+ *
+ * 기능 정지 상태 변경 시 처리
+ */
+static esp_err_t on_stop_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_OK;
+    }
+
+    const bool* stopped = (const bool*)event->data;
+    s_mgr.data.stopped = *stopped;
+
+    // RxPage에 정지 상태 전달
+    rx_page_set_stopped(*stopped);
+
+    if (*stopped) {
+        T_LOGW(TAG, "기능 정지 상태 (디스플레이)");
+    } else {
+        T_LOGI(TAG, "기능 정지 해제 (디스플레이)");
+    }
+
+    // 즉시 갱신
+    render_current_page();
+
+    return ESP_OK;
+}
 #endif // DEVICE_MODE_RX
 
 #ifdef DEVICE_MODE_TX
@@ -551,6 +583,7 @@ extern "C" void display_manager_start(void)
         event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
         event_bus_subscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
         event_bus_subscribe(EVT_RF_CHANGED, on_rf_changed);
+        event_bus_subscribe(EVT_STOP_CHANGED, on_stop_changed);
 #elif defined(DEVICE_MODE_TX)
         // TX 전용 이벤트
         event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, on_switcher_status_changed);
@@ -561,7 +594,7 @@ extern "C" void display_manager_start(void)
         s_mgr.events_subscribed = true;
         T_LOGI(TAG, "이벤트 구독 완료: EVT_INFO_UPDATED, EVT_LORA_RSSI_CHANGED"
 #ifdef DEVICE_MODE_RX
-               ", EVT_TALLY_STATE_CHANGED, EVT_CAMERA_ID_CHANGED, EVT_BRIGHTNESS_CHANGED, EVT_RF_CHANGED"
+               ", EVT_TALLY_STATE_CHANGED, EVT_CAMERA_ID_CHANGED, EVT_BRIGHTNESS_CHANGED, EVT_RF_CHANGED, EVT_STOP_CHANGED"
 #elif defined(DEVICE_MODE_TX)
                ", EVT_SWITCHER_STATUS_CHANGED, EVT_NETWORK_STATUS_CHANGED, EVT_RF_CHANGED"
 #endif

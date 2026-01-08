@@ -57,6 +57,7 @@ public:
     static esp_err_t getDevice(config_device_t* config);
     static esp_err_t setDevice(const config_device_t* config);
     static esp_err_t setBrightness(uint8_t brightness);
+    static esp_err_t setBrightnessInternal(uint8_t brightness);  // 이벤트 핸들러용 (이벤트 미발행)
     static esp_err_t setCameraId(uint8_t camera_id);
     static esp_err_t setCameraIdInternal(uint8_t camera_id);  // 이벤트 핸들러용 (이벤트 미발행)
     static uint8_t getCameraId(void);
@@ -554,6 +555,37 @@ static esp_err_t on_camera_id_changed(const event_data_t* event) {
     return ret;
 }
 
+/**
+ * @brief 밝기 변경 이벤트 핸들러 (LoRa 수신 시 NVS 저장)
+ */
+static esp_err_t on_brightness_changed(const event_data_t* event) {
+    if (event->type != EVT_BRIGHTNESS_CHANGED) {
+        return ESP_OK;
+    }
+
+    if (event->data_size < sizeof(uint8_t)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* brightness = reinterpret_cast<const uint8_t*>(event->data);
+
+    // 내부 함수 호출 (이벤트 미발행으로 무한 루프 방지)
+    esp_err_t ret = ConfigServiceClass::setBrightnessInternal(*brightness);
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "밝기 저장 (LoRa 수신): %d (NVS)", *brightness);
+
+        // 설정 변경 후 전체 데이터 이벤트 발행
+        config_data_event_t data_event = {};
+        memset(&data_event, 0, sizeof(data_event));
+        data_event.device_brightness = *brightness;
+        event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
+    } else {
+        T_LOGE(TAG, "밝기 NVS 저장 실패: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
+}
+
 // ============================================================================
 // 초기화
 // ============================================================================
@@ -580,6 +612,8 @@ esp_err_t ConfigServiceClass::init(void)
     event_bus_subscribe(EVT_RF_SAVED, on_rf_saved);
     // 카메라 ID 변경 이벤트 구독 (LoRa 수신 시 NVS 저장)
     event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
+    // 밝기 변경 이벤트 구독 (LoRa 수신 시 NVS 저장)
+    event_bus_subscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
     T_LOGD(TAG, "Event bus 구독 완료");
 
     s_initialized = true;
@@ -1150,15 +1184,7 @@ esp_err_t ConfigServiceClass::setDevice(const config_device_t* config)
 
 esp_err_t ConfigServiceClass::setBrightness(uint8_t brightness)
 {
-    config_device_t dev;
-    esp_err_t ret = getDevice(&dev);
-    // NVS에 값이 없어도 기본값으로 계속 진행
-    if (ret != ESP_OK && ret != 0x105) {  // 0x105 = ESP_ERR_NVS_NOT_FOUND
-        return ret;
-    }
-
-    dev.brightness = brightness;
-    ret = setDevice(&dev);
+    esp_err_t ret = setBrightnessInternal(brightness);
     if (ret != ESP_OK) {
         return ret;
     }
@@ -1168,6 +1194,19 @@ esp_err_t ConfigServiceClass::setBrightness(uint8_t brightness)
     T_LOGI(TAG, "밝기 변경: %d, 이벤트 발행", brightness);
 
     return ESP_OK;
+}
+
+// 내부용 (이벤트 발행 안 함)
+esp_err_t ConfigServiceClass::setBrightnessInternal(uint8_t brightness)
+{
+    config_device_t dev;
+    esp_err_t ret = getDevice(&dev);
+    if (ret != ESP_OK && ret != 0x105) {
+        return ret;
+    }
+
+    dev.brightness = brightness;
+    return setDevice(&dev);
 }
 
 // 내부용 (이벤트 발행 안 함)

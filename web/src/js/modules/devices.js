@@ -29,6 +29,21 @@ export function devicesModule() {
             sending: null  // 전송 중인 디바이스 ID
         },
 
+        // 상태 요청 제어 상태
+        statusControl: {
+            sending: false  // 전송 중 여부
+        },
+
+        // 기능 정지 제어 상태
+        stopControl: {
+            sending: null  // 전송 중인 디바이스 ID
+        },
+
+        // 재부팅 제어 상태
+        rebootControl: {
+            sending: null  // 전송 중인 디바이스 ID
+        },
+
         /**
          * 초기화
          */
@@ -269,6 +284,134 @@ export function devicesModule() {
             } finally {
                 // 전송 중 표시 해제
                 this.pingControl.sending = null;
+            }
+        },
+
+        /**
+         * 상태 요청 전송 (Broadcast)
+         * 모든 RX 디바이스에 상태 요청 전송
+         */
+        async requestStatus() {
+            try {
+                // 전송 중 표시
+                this.statusControl.sending = true;
+
+                const res = await fetch('/api/device/status-request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (!res.ok) {
+                    throw new Error('Failed to send status request');
+                }
+
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    console.log('Status request sent');
+                    // 상태 응답은 디바이스 목록 폴링으로 업데이트됨
+                } else {
+                    throw new Error(data.message || 'Failed to send status request');
+                }
+            } catch (e) {
+                console.error('Status request error:', e);
+                alert(`상태 요청 실패: ${e.message}`);
+            } finally {
+                // 전송 중 표시 해제
+                this.statusControl.sending = false;
+            }
+        },
+
+        /**
+         * 디바이스 기능 정지/재개
+         * @param {string} deviceId - 디바이스 ID (예: "A1B2")
+         */
+        async stopDevice(deviceId) {
+            try {
+                // 전송 중 표시
+                this.stopControl.sending = deviceId;
+
+                // 디바이스 ID 파싱 (hex 문자열 → 바이트 배열)
+                const deviceIdBytes = [
+                    parseInt(deviceId.substring(0, 2), 16),
+                    parseInt(deviceId.substring(2, 4), 16)
+                ];
+
+                const res = await fetch('/api/device/stop', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        deviceId: deviceIdBytes
+                    })
+                });
+
+                if (!res.ok) {
+                    throw new Error('Failed to send stop command');
+                }
+
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    console.log(`Stop command sent to ${deviceId}`);
+                    // 상태 업데이트를 위해 디바이스 목록 새로고침
+                    setTimeout(() => this.fetchDevices(), 500);
+                } else {
+                    throw new Error(data.message || 'Failed to send stop command');
+                }
+            } catch (e) {
+                console.error('Stop command error:', e);
+                alert(`기능 정지 실패: ${e.message}`);
+            } finally {
+                // 전송 중 표시 해제
+                this.stopControl.sending = null;
+            }
+        },
+
+        /**
+         * 디바이스 재부팅
+         * @param {string} deviceId - 디바이스 ID (예: "A1B2")
+         */
+        async rebootDevice(deviceId) {
+            try {
+                // 확인 대화상자
+                if (!confirm(`${deviceId} 디바이스를 재부팅하시겠습니까?`)) {
+                    return;
+                }
+
+                // 전송 중 표시
+                this.rebootControl.sending = deviceId;
+
+                // 디바이스 ID 파싱 (hex 문자열 → 바이트 배열)
+                const deviceIdBytes = [
+                    parseInt(deviceId.substring(0, 2), 16),
+                    parseInt(deviceId.substring(2, 4), 16)
+                ];
+
+                const res = await fetch('/api/device/reboot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        deviceId: deviceIdBytes
+                    })
+                });
+
+                if (!res.ok) {
+                    throw new Error('Failed to send reboot command');
+                }
+
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    console.log(`Reboot command sent to ${deviceId}`);
+                    alert(`${deviceId} 디바이스에 재부팅 명령을 전송했습니다.`);
+                } else {
+                    throw new Error(data.message || 'Failed to send reboot command');
+                }
+            } catch (e) {
+                console.error('Reboot command error:', e);
+                if (e.message !== 'User canceled') {
+                    alert(`재부팅 실패: ${e.message}`);
+                }
+            } finally {
+                // 전송 중 표시 해제
+                this.rebootControl.sending = null;
             }
         },
 

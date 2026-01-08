@@ -195,6 +195,20 @@ bool rx_page_is_camera_id_changing(void);
  */
 uint8_t rx_page_cycle_camera_id(uint8_t max_camera_num);
 
+// ========== 기능 정지 상태 제어 ==========
+
+/**
+ * @brief 기능 정지 상태 설정
+ * @param stopped true: 정지 상태, false: 정상 상태
+ */
+void rx_page_set_stopped(bool stopped);
+
+/**
+ * @brief 기능 정지 상태 확인
+ * @return true: 정지 상태, false: 정상 상태
+ */
+bool rx_page_is_stopped(void);
+
 #ifdef __cplusplus
 }
 #endif

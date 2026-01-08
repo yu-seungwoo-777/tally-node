@@ -67,6 +67,9 @@ static rx_page_state_t s_page_state = RX_PAGE_STATE_NORMAL;
 static uint8_t s_display_camera_id = 1;    // 팝업에 표시될 ID
 static bool s_camera_id_changing = false;  // ID 자동 변경 중
 
+// 기능 정지 상태
+static bool s_stopped = false;  // 기능 정지 상태 플래그
+
 // ============================================================================
 // 내부 함수 선언
 // ============================================================================
@@ -75,6 +78,7 @@ static void draw_rx_header(u8g2_t* u8g2);
 static void draw_tally_page(u8g2_t* u8g2);
 static void draw_system_page(u8g2_t* u8g2);
 static void draw_camera_id_popup(u8g2_t* u8g2);
+static void draw_stopped_popup(u8g2_t* u8g2);
 
 // ============================================================================
 // 페이지 인터페이스 구현
@@ -93,6 +97,12 @@ static void page_init(void)
  */
 static void page_render(u8g2_t* u8g2)
 {
+    // 기능 정지 상태: 정지 팝업 우선 표시
+    if (s_stopped) {
+        draw_stopped_popup(u8g2);
+        return;
+    }
+
     // 페이지 상태에 따라 다르게 렌더링
     if (s_page_state == RX_PAGE_STATE_CAMERA_ID) {
         draw_camera_id_popup(u8g2);
@@ -147,7 +157,6 @@ static void draw_rx_header(u8g2_t* u8g2)
 {
     uint8_t battery_level = getBatteryLevel(s_system_data.battery_percent);
     drawTallyBatteryIcon(u8g2, 105, 2, battery_level);
-    T_LOGD(TAG, "draw_rx_header: RSSI=%d SNR=%.1f", s_system_data.rssi, s_system_data.snr);
     drawTallySignalIcon(u8g2, 85, 2, s_system_data.rssi, s_system_data.snr);
 }
 
@@ -360,7 +369,6 @@ extern "C" void rx_page_set_battery(uint8_t percent)
 extern "C" void rx_page_set_rssi(int16_t rssi)
 {
     s_system_data.rssi = rssi;
-    T_LOGD(TAG, "RSSI 설정: %d", rssi);
 }
 
 extern "C" void rx_page_set_snr(float snr)
@@ -529,4 +537,58 @@ static void draw_camera_id_popup(u8g2_t* u8g2)
     u8g2_SetFont(u8g2, u8g2_font_profont29_mn);
     int id_width = u8g2_GetStrWidth(u8g2, id_str);
     u8g2_DrawStr(u8g2, (128 - id_width) / 2, popup_y + 50, id_str);
+}
+
+/**
+ * @brief 기능 정지 상태 팝업 그리기
+ * 중앙에 "STOPPED" 메시지 표시
+ */
+static void draw_stopped_popup(u8g2_t* u8g2)
+{
+    // 팝업 박스 좌표
+    int popup_x = 10;
+    int popup_y = 20;
+    int popup_w = 108;
+    int popup_h = 30;
+
+    // 팝업 배경 (검은색)
+    u8g2_SetDrawColor(u8g2, 1);
+    u8g2_DrawBox(u8g2, popup_x, popup_y, popup_w, popup_h);
+
+    // 팝업 테두리 (흰색)
+    u8g2_SetDrawColor(u8g2, 0);
+    u8g2_DrawFrame(u8g2, popup_x, popup_y, popup_w, popup_h);
+
+    // "STOPPED" 텍스트 (흰색)
+    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+    const char* msg = "STOPPED";
+    int msg_width = u8g2_GetStrWidth(u8g2, msg);
+    u8g2_DrawStr(u8g2, (128 - msg_width) / 2, popup_y + 19, msg);
+}
+
+// ============================================================================
+// 기능 정지 상태 제어 API
+// ============================================================================
+
+/**
+ * @brief 기능 정지 상태 설정
+ * @param stopped true: 정지 상태, false: 정상 상태
+ */
+extern "C" void rx_page_set_stopped(bool stopped)
+{
+    s_stopped = stopped;
+    if (stopped) {
+        T_LOGW(TAG, "RxPage: 기능 정지 상태로 설정");
+    } else {
+        T_LOGI(TAG, "RxPage: 기능 정지 상태 해제");
+    }
+}
+
+/**
+ * @brief 기능 정지 상태 확인
+ * @return true: 정지 상태, false: 정상 상태
+ */
+extern "C" bool rx_page_is_stopped(void)
+{
+    return s_stopped;
 }

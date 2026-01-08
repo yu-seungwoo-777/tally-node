@@ -16,6 +16,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_random.h"
+#include "esp_system.h"
 #include <string.h>
 
 static const char* TAG = "DeviceMgr";
@@ -727,6 +728,44 @@ static esp_err_t on_lora_tx_command(const event_data_t* event)
             }
         } else {
             T_LOGW(TAG, "기능 정지 명령 길이 부족: %d < %zu", len, sizeof(lora_cmd_stop_t));
+        }
+    }
+    // 재부팅 (0xE5)
+    else if (header == LORA_HDR_REBOOT) {
+        if (len >= sizeof(lora_cmd_reboot_t)) {
+            const lora_cmd_reboot_t* cmd = (const lora_cmd_reboot_t*)data;
+
+            // 자신의 Device ID 확인 (Broadcast는 재부팅 제외)
+            bool is_target = false;
+
+            if (strlen(s_rx.system.device_id) == 4) {
+                // 자신의 ID와 비교
+                uint8_t my_id[2];
+                char hex_str[3];
+                hex_str[0] = s_rx.system.device_id[0];
+                hex_str[1] = s_rx.system.device_id[1];
+                hex_str[2] = '\0';
+                my_id[0] = (uint8_t)strtol(hex_str, NULL, 16);
+                hex_str[0] = s_rx.system.device_id[2];
+                hex_str[1] = s_rx.system.device_id[3];
+                my_id[1] = (uint8_t)strtol(hex_str, NULL, 16);
+                is_target = lora_device_id_equals(my_id, cmd->device_id);
+            }
+
+            if (is_target) {
+                char device_id_str[5];
+                lora_device_id_to_str(cmd->device_id, device_id_str);
+                T_LOGW(TAG, "재부팅 명령 수신: ID=%s, 1초 후 재부팅...", device_id_str);
+
+                // 응답 ACK 전송
+                // TODO: ACK 전송 (나중에 구현)
+
+                // 1초 대기 후 재부팅
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                esp_restart();
+            }
+        } else {
+            T_LOGW(TAG, "재부팅 명령 길이 부족: %d < %zu", len, sizeof(lora_cmd_reboot_t));
         }
     }
     // PING (0xE6)

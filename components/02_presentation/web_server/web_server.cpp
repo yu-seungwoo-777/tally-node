@@ -1507,6 +1507,125 @@ static esp_err_t api_device_ping_handler(httpd_req_t* req)
 
     return ESP_OK;
 }
+
+/**
+ * @brief 디바이스 기능 정지 핸들러
+ * POST /api/device/stop
+ * Body: {"deviceId": [0x2D, 0x20]}
+ */
+static esp_err_t api_device_stop_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 요청 바디 읽기
+    char* buf = new char[256];
+    int ret = httpd_req_recv(req, buf, 255);
+    if (ret <= 0) {
+        delete[] buf;
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    // JSON 파싱
+    cJSON* root = cJSON_Parse(buf);
+    delete[] buf;
+    if (!root) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        return ESP_OK;
+    }
+
+    // 필드 추출
+    cJSON* deviceId_json = cJSON_GetObjectItem(root, "deviceId");
+
+    // deviceId 배열 파싱
+    uint8_t device_id[2] = {0xFF, 0xFF};  // 기본 broadcast
+    if (deviceId_json && cJSON_IsArray(deviceId_json) && cJSON_GetArraySize(deviceId_json) >= 2) {
+        device_id[0] = (uint8_t)cJSON_GetArrayItem(deviceId_json, 0)->valueint;
+        device_id[1] = (uint8_t)cJSON_GetArrayItem(deviceId_json, 1)->valueint;
+    }
+
+    cJSON_Delete(root);
+
+    // STOP 요청 이벤트 발행
+    event_bus_publish(EVT_DEVICE_STOP_REQUEST, device_id, sizeof(device_id));
+
+    ESP_LOGW(TAG, "디바이스 기능 정지 요청: ID[%02X%02X]", device_id[0], device_id[1]);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+
+    return ESP_OK;
+}
+
+/**
+ * @brief 디바이스 재부팅 핸들러
+ * POST /api/device/reboot
+ * Body: {"deviceId": [0x2D, 0x20]}
+ */
+static esp_err_t api_device_reboot_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 요청 바디 읽기
+    char* buf = new char[256];
+    int ret = httpd_req_recv(req, buf, 255);
+    if (ret <= 0) {
+        delete[] buf;
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    // JSON 파싱
+    cJSON* root = cJSON_Parse(buf);
+    delete[] buf;
+    if (!root) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        return ESP_OK;
+    }
+
+    // 필드 추출
+    cJSON* deviceId_json = cJSON_GetObjectItem(root, "deviceId");
+
+    // deviceId 배열 파싱
+    uint8_t device_id[2] = {0xFF, 0xFF};  // 기본 broadcast
+    if (deviceId_json && cJSON_IsArray(deviceId_json) && cJSON_GetArraySize(deviceId_json) >= 2) {
+        device_id[0] = (uint8_t)cJSON_GetArrayItem(deviceId_json, 0)->valueint;
+        device_id[1] = (uint8_t)cJSON_GetArrayItem(deviceId_json, 1)->valueint;
+    }
+
+    cJSON_Delete(root);
+
+    // REBOOT 요청 이벤트 발행
+    event_bus_publish(EVT_DEVICE_REBOOT_REQUEST, device_id, sizeof(device_id));
+
+    ESP_LOGW(TAG, "디바이스 재부팅 요청: ID[%02X%02X]", device_id[0], device_id[1]);
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+
+    return ESP_OK;
+}
+
+/**
+ * @brief 상태 요청 핸들러
+ * POST /api/device/status-request
+ * 모든 RX 디바이스에 상태 요청 전송
+ */
+static esp_err_t api_status_request_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 상태 요청 이벤트 발행
+    event_bus_publish(EVT_STATUS_REQUEST, nullptr, 0);
+
+    ESP_LOGI(TAG, "상태 요청 전송 (Broadcast)");
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+
+    return ESP_OK;
+}
 #endif // DEVICE_MODE_TX
 
 /**
@@ -1724,6 +1843,27 @@ static const httpd_uri_t uri_api_device_ping = {
     .handler = api_device_ping_handler,
     .user_ctx = nullptr
 };
+
+static const httpd_uri_t uri_api_device_stop = {
+    .uri = "/api/device/stop",
+    .method = HTTP_POST,
+    .handler = api_device_stop_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_device_reboot = {
+    .uri = "/api/device/reboot",
+    .method = HTTP_POST,
+    .handler = api_device_reboot_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_status_request = {
+    .uri = "/api/device/status-request",
+    .method = HTTP_POST,
+    .handler = api_status_request_handler,
+    .user_ctx = nullptr
+};
 #endif
 
 // 정적 파일 URI
@@ -1847,6 +1987,27 @@ static const httpd_uri_t uri_options_api_device_ping = {
     .handler = options_handler,
     .user_ctx = nullptr
 };
+
+static const httpd_uri_t uri_options_api_device_stop = {
+    .uri = "/api/device/stop",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_device_reboot = {
+    .uri = "/api/device/reboot",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_status_request = {
+    .uri = "/api/device/status-request",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
 #endif
 
 // ============================================================================
@@ -1949,6 +2110,12 @@ esp_err_t web_server_start(void)
 #ifdef DEVICE_MODE_TX
     // Device PING API
     httpd_register_uri_handler(s_server, &uri_api_device_ping);
+    // Device STOP API
+    httpd_register_uri_handler(s_server, &uri_api_device_stop);
+    // Device REBOOT API
+    httpd_register_uri_handler(s_server, &uri_api_device_reboot);
+    // Status Request API
+    httpd_register_uri_handler(s_server, &uri_api_status_request);
 #endif
     // CORS Preflight (OPTIONS)
     httpd_register_uri_handler(s_server, &uri_options_api_status);
@@ -1965,6 +2132,9 @@ esp_err_t web_server_start(void)
     httpd_register_uri_handler(s_server, &uri_options_api_device_camera_id);
 #ifdef DEVICE_MODE_TX
     httpd_register_uri_handler(s_server, &uri_options_api_device_ping);
+    httpd_register_uri_handler(s_server, &uri_options_api_device_stop);
+    httpd_register_uri_handler(s_server, &uri_options_api_device_reboot);
+    httpd_register_uri_handler(s_server, &uri_options_api_status_request);
 #endif
 
     // 설정 데이터 요청 (초기 캐시 populate)

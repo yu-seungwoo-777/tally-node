@@ -880,6 +880,21 @@
         sending: null
         // 전송 중인 디바이스 ID
       },
+      // 상태 요청 제어 상태
+      statusControl: {
+        sending: false
+        // 전송 중 여부
+      },
+      // 기능 정지 제어 상태
+      stopControl: {
+        sending: null
+        // 전송 중인 디바이스 ID
+      },
+      // 재부팅 제어 상태
+      rebootControl: {
+        sending: null
+        // 전송 중인 디바이스 ID
+      },
       /**
        * 초기화
        */
@@ -1072,6 +1087,108 @@
           alert(`PING \uC2E4\uD328: ${e.message}`);
         } finally {
           this.pingControl.sending = null;
+        }
+      },
+      /**
+       * 상태 요청 전송 (Broadcast)
+       * 모든 RX 디바이스에 상태 요청 전송
+       */
+      async requestStatus() {
+        try {
+          this.statusControl.sending = true;
+          const res = await fetch("/api/device/status-request", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+          });
+          if (!res.ok) {
+            throw new Error("Failed to send status request");
+          }
+          const data = await res.json();
+          if (data.status === "ok") {
+            console.log("Status request sent");
+          } else {
+            throw new Error(data.message || "Failed to send status request");
+          }
+        } catch (e) {
+          console.error("Status request error:", e);
+          alert(`\uC0C1\uD0DC \uC694\uCCAD \uC2E4\uD328: ${e.message}`);
+        } finally {
+          this.statusControl.sending = false;
+        }
+      },
+      /**
+       * 디바이스 기능 정지/재개
+       * @param {string} deviceId - 디바이스 ID (예: "A1B2")
+       */
+      async stopDevice(deviceId) {
+        try {
+          this.stopControl.sending = deviceId;
+          const deviceIdBytes = [
+            parseInt(deviceId.substring(0, 2), 16),
+            parseInt(deviceId.substring(2, 4), 16)
+          ];
+          const res = await fetch("/api/device/stop", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              deviceId: deviceIdBytes
+            })
+          });
+          if (!res.ok) {
+            throw new Error("Failed to send stop command");
+          }
+          const data = await res.json();
+          if (data.status === "ok") {
+            console.log(`Stop command sent to ${deviceId}`);
+            setTimeout(() => this.fetchDevices(), 500);
+          } else {
+            throw new Error(data.message || "Failed to send stop command");
+          }
+        } catch (e) {
+          console.error("Stop command error:", e);
+          alert(`\uAE30\uB2A5 \uC815\uC9C0 \uC2E4\uD328: ${e.message}`);
+        } finally {
+          this.stopControl.sending = null;
+        }
+      },
+      /**
+       * 디바이스 재부팅
+       * @param {string} deviceId - 디바이스 ID (예: "A1B2")
+       */
+      async rebootDevice(deviceId) {
+        try {
+          if (!confirm(`${deviceId} \uB514\uBC14\uC774\uC2A4\uB97C \uC7AC\uBD80\uD305\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?`)) {
+            return;
+          }
+          this.rebootControl.sending = deviceId;
+          const deviceIdBytes = [
+            parseInt(deviceId.substring(0, 2), 16),
+            parseInt(deviceId.substring(2, 4), 16)
+          ];
+          const res = await fetch("/api/device/reboot", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              deviceId: deviceIdBytes
+            })
+          });
+          if (!res.ok) {
+            throw new Error("Failed to send reboot command");
+          }
+          const data = await res.json();
+          if (data.status === "ok") {
+            console.log(`Reboot command sent to ${deviceId}`);
+            alert(`${deviceId} \uB514\uBC14\uC774\uC2A4\uC5D0 \uC7AC\uBD80\uD305 \uBA85\uB839\uC744 \uC804\uC1A1\uD588\uC2B5\uB2C8\uB2E4.`);
+          } else {
+            throw new Error(data.message || "Failed to send reboot command");
+          }
+        } catch (e) {
+          console.error("Reboot command error:", e);
+          if (e.message !== "User canceled") {
+            alert(`\uC7AC\uBD80\uD305 \uC2E4\uD328: ${e.message}`);
+          }
+        } finally {
+          this.rebootControl.sending = null;
         }
       },
       /**
