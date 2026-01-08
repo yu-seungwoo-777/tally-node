@@ -269,14 +269,31 @@ static void on_status_response(const lora_msg_status_t* status, int16_t rssi, fl
     // 새 디바이스 추가 또는 기존 디바이스 업데이트
     bool is_new_device = (found_idx < 0);
     if (is_new_device) {
-        // 새 디바이스 추가
-        if (s_tx.device_count < MAX_DEVICES) {
-            found_idx = s_tx.device_count++;
-            memcpy(s_tx.devices[found_idx].device_id, status->device_id, LORA_DEVICE_ID_LEN);
-        } else {
+        // 라이선스 제한 먼저 체크 (디바이스 추가 전)
+        uint8_t device_limit = s_tx.device_limit;
+
+        // device_limit == 0: 라이센스 미등록 상태 (유예 기간 포함)
+        // device_limit > 0: 등록된 상태
+        if (device_limit > 0 && s_tx.device_count >= device_limit) {
+            // 라이센스 초과: 디바이스 추가하지 않고 기능정지 송신
+            char id_str[5];
+            lora_device_id_to_str(status->device_id, id_str);
+            T_LOGW(TAG, "라이센스 device_limit 초과 (%d/%d), 기능정지 송신: ID=%s",
+                     s_tx.device_count, device_limit, id_str);
+
+            send_stop_command(status->device_id);
+            return;
+        }
+
+        // MAX_DEVICES 체크
+        if (s_tx.device_count >= MAX_DEVICES) {
             T_LOGW(TAG, "디바이스 리스트 꽉참 (%d)", MAX_DEVICES);
             return;
         }
+
+        // 안전한 경우만 디바이스 추가
+        found_idx = s_tx.device_count++;
+        memcpy(s_tx.devices[found_idx].device_id, status->device_id, LORA_DEVICE_ID_LEN);
     }
 
     // 디바이스 정보 업데이트
@@ -295,33 +312,6 @@ static void on_status_response(const lora_msg_status_t* status, int16_t rssi, fl
     // 디바이스-카메라 매핑 이벤트 발행 (ConfigService에서 NVS 저장)
     uint8_t cam_map_data[3] = {status->device_id[0], status->device_id[1], status->camera_id};
     event_bus_publish(EVT_DEVICE_CAM_MAP_RECEIVE, cam_map_data, sizeof(cam_map_data));
-
-    // 라이센스 device_limit 체크 (새 디바이스 추가 시만)
-    if (is_new_device) {
-        uint8_t device_limit = s_tx.device_limit;  // 캐시된 값 사용
-
-        // device_limit == 0: 라이센스 미등록 상태 (유예 기간 포함)
-        // device_limit > 0: 등록된 상태
-        if (device_limit == 0) {
-            // 라이센스 미등록: device_limit 체크 건너뜀
-            T_LOGD(TAG, "라이센스 미등록 상태 (device_limit=0)");
-        } else if (s_tx.device_count > device_limit) {
-            // 등록된 디바이스 수가 제한 초과: LIFO (가장 최근 디바이스 제거)
-            uint8_t remove_idx = s_tx.device_count - 1;  // 마지막 디바이스
-            const uint8_t* remove_device_id = s_tx.devices[remove_idx].device_id;
-
-            char remove_id_str[5];
-            lora_device_id_to_str(remove_device_id, remove_id_str);
-            T_LOGW(TAG, "device_limit 초과 (%d/%d), 디바이스 제거: ID=%s",
-                     s_tx.device_count, device_limit, remove_id_str);
-
-            // 기능정지 명령 송신
-            send_stop_command(remove_device_id);
-
-            // 리스트에서 제거
-            s_tx.device_count--;
-        }
-    }
 
     // 디바이스 리스트 변경 이벤트 발행
     device_list_event_t list_event;
@@ -1170,6 +1160,13 @@ esp_err_t device_manager_start(void)
 
     // TX 명령 이벤트 구독 (0xE0~0xEF)
     event_bus_subscribe(EVT_LORA_TX_COMMAND, on_lora_tx_command);
+
+    // 부팅 직후 상태 응답 송신 (시스템 정보 준비 대기 후)
+    // 충돌 방지를 위해 랜덤 지연 (0-2000ms) 후 송신
+    uint32_t boot_delay_ms = esp_random() % 2000;
+    T_LOGI(TAG, "부팅 후 %u ms 지연 후 상태 응답 송신 예정", boot_delay_ms);
+    vTaskDelay(pdMS_TO_TICKS(boot_delay_ms));
+    send_status_response();
 #endif
 
     T_LOGI(TAG, "Device Manager 시작");
