@@ -1097,6 +1097,69 @@ static esp_err_t api_devices_handler(httpd_req_t* req)
 }
 
 /**
+ * @brief DELETE /api/devices - 디바이스 삭제 (TX 전용)
+ */
+static esp_err_t api_delete_device_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 요청 바디 읽기
+    char* buf = new char[256];
+    int ret = httpd_req_recv(req, buf, 255);
+    if (ret <= 0) {
+        delete[] buf;
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    // JSON 파싱
+    cJSON* root = cJSON_Parse(buf);
+    delete[] buf;
+    if (!root) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+        return ESP_OK;
+    }
+
+    // deviceId 추출 (배열 형태: [0x2D, 0x78])
+    cJSON* device_id_json = cJSON_GetObjectItem(root, "deviceId");
+    if (!device_id_json || !cJSON_IsArray(device_id_json)) {
+        cJSON_Delete(root);
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Missing or invalid 'deviceId' field\"}");
+        return ESP_OK;
+    }
+
+    // 디바이스 ID 파싱
+    uint8_t device_id[2] = {0};
+    cJSON* item0 = cJSON_GetArrayItem(device_id_json, 0);
+    cJSON* item1 = cJSON_GetArrayItem(device_id_json, 1);
+    if (item0 && cJSON_IsNumber(item0)) {
+        device_id[0] = (uint8_t)item0->valueint;
+    }
+    if (item1 && cJSON_IsNumber(item1)) {
+        device_id[1] = (uint8_t)item1->valueint;
+    }
+
+    cJSON_Delete(root);
+
+    // 디바이스 등록 해제 이벤트 발행
+    device_register_event_t unregister_event;
+    memcpy(unregister_event.device_id, device_id, 2);
+    event_bus_publish(EVT_DEVICE_UNREGISTER, &unregister_event, sizeof(unregister_event));
+
+    char id_str[5];
+    snprintf(id_str, sizeof(id_str), "%02X%02X", device_id[0], device_id[1]);
+    ESP_LOGI(TAG, "디바이스 삭제 요청: %s", id_str);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+
+    return ESP_OK;
+}
+
+/**
  * @brief POST /api/license/validate - 라이센스 키 검증 (이벤트 기반)
  */
 static esp_err_t api_license_validate_handler(httpd_req_t* req)
@@ -1870,6 +1933,13 @@ static const httpd_uri_t uri_api_devices = {
     .user_ctx = nullptr
 };
 
+static const httpd_uri_t uri_api_delete_device = {
+    .uri = "/api/devices",
+    .method = HTTP_DELETE,
+    .handler = api_delete_device_handler,
+    .user_ctx = nullptr
+};
+
 static const httpd_uri_t uri_api_license_validate = {
     .uri = "/api/validate-license",
     .method = HTTP_POST,
@@ -2185,6 +2255,7 @@ esp_err_t web_server_start(void)
     httpd_register_uri_handler(s_server, &uri_api_lora_scan_stop);
     // Device API (TX only)
     httpd_register_uri_handler(s_server, &uri_api_devices);
+    httpd_register_uri_handler(s_server, &uri_api_delete_device);
     // License API
     httpd_register_uri_handler(s_server, &uri_api_license_validate);
     // Test API

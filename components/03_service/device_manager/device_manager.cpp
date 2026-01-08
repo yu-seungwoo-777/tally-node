@@ -575,6 +575,50 @@ static esp_err_t on_device_cam_map_receive(const event_data_t* event)
 }
 
 /**
+ * @brief 디바이스 등록 해제 이벤트 핸들러
+ * @note 디바이스 리스트에서 제거
+ */
+static esp_err_t on_device_unregister(const event_data_t* event)
+{
+    if (event->type != EVT_DEVICE_UNREGISTER) {
+        return ESP_OK;
+    }
+
+    const device_register_event_t* req = (const device_register_event_t*)event->data;
+    if (!req) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // 디바이스 리스트에서 찾기
+    for (uint8_t i = 0; i < s_tx.device_count; i++) {
+        if (s_tx.devices[i].device_id[0] == req->device_id[0] &&
+            s_tx.devices[i].device_id[1] == req->device_id[1]) {
+
+            // 찾은 디바이스를 삭제 (마지막 디바이스를 가져옴)
+            s_tx.device_count--;
+            if (i < s_tx.device_count) {
+                memcpy(&s_tx.devices[i], &s_tx.devices[s_tx.device_count], sizeof(device_info_t));
+            }
+
+            T_LOGI(TAG, "디바이스 리스트에서 제거: [%02X%02X]",
+                    req->device_id[0], req->device_id[1]);
+
+            // 웹 서버에 디바이스 리스트 변경 알림
+            device_list_event_t list_event;
+            memset(&list_event, 0, sizeof(list_event));
+            memcpy(list_event.devices, s_tx.devices, sizeof(device_info_t) * s_tx.device_count);
+            list_event.count = s_tx.device_count;
+            list_event.registered_count = s_tx.device_count;
+            event_bus_publish(EVT_DEVICE_LIST_CHANGED, &list_event, sizeof(list_event));
+
+            return ESP_OK;
+        }
+    }
+
+    return ESP_ERR_NOT_FOUND;
+}
+
+/**
  * @brief 오프라인 디바이스 체크 및 상태 업데이트
  */
 static void check_offline_devices(void)
@@ -1091,6 +1135,7 @@ esp_err_t device_manager_start(void)
     event_bus_subscribe(EVT_DEVICE_STOP_REQUEST, on_device_stop_request);
     event_bus_subscribe(EVT_DEVICE_REBOOT_REQUEST, on_device_reboot_request);
     event_bus_subscribe(EVT_STATUS_REQUEST, on_status_request);
+    event_bus_subscribe(EVT_DEVICE_UNREGISTER, on_device_unregister);
 
     // 디바이스 카메라 매핑 이벤트 구독 (NVS 로드된 매핑 수신)
     event_bus_subscribe(EVT_DEVICE_CAM_MAP_RECEIVE, on_device_cam_map_receive);

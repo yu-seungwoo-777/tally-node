@@ -1821,6 +1821,9 @@ esp_err_t ConfigServiceClass::unregisterDevice(const uint8_t* device_id)
         char id_str[5];
         device_id_to_str(device_id, id_str);
         T_LOGI(TAG, "디바이스 등록 해제: %s", id_str);
+
+        // 카메라 매핑도 삭제
+        removeDeviceCamMap(device_id);
     }
 
     return ret;
