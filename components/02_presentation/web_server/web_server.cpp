@@ -7,6 +7,7 @@
 #include "license_service.h"
 #include "license_client.h"
 #include "event_bus.h"
+#include "lora_protocol.h"
 #include "cJSON.h"
 #include "esp_http_server.h"
 #include "esp_http_client.h"
@@ -1588,10 +1589,17 @@ static esp_err_t api_brightness_broadcast_handler(httpd_req_t* req)
 
     ESP_LOGI(TAG, "일괄 밝기 제어 요청 (Broadcast): brightness=%d", brightness);
 
-    // Broadcast 밝기 명령 송신 (device_id = 0xFF, 0xFF)
-    uint8_t broadcast_id[2] = {0xFF, 0xFF};
-    uint8_t event_data[3] = {broadcast_id[0], broadcast_id[1], (uint8_t)brightness};
-    event_bus_publish(EVT_DEVICE_BRIGHTNESS_REQUEST, event_data, sizeof(event_data));
+    // 전역 밝기 Broadcast 명령 패킷 생성 (0xE7, device_id 없음)
+    static lora_cmd_brightness_broadcast_t cmd;
+    cmd.header = LORA_HDR_BRIGHTNESS_BROADCAST;
+    cmd.brightness = (uint8_t)brightness;
+
+    // LoRa 송신 요청 이벤트 발행
+    lora_send_request_t send_req = {
+        .data = (const uint8_t*)&cmd,
+        .length = sizeof(cmd)
+    };
+    event_bus_publish(EVT_LORA_SEND_REQUEST, &send_req, sizeof(send_req));
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");

@@ -1004,6 +1004,18 @@ static esp_err_t on_lora_tx_command(const event_data_t* event)
             T_LOGW(TAG, "RF 명령 길이 오류: %d (예상: 6)", len);
         }
     }
+    // 전역 밝기 Broadcast (0xE7) - device_id 없음, 모든 RX가 처리
+    else if (header == LORA_HDR_BRIGHTNESS_BROADCAST) {
+        if (len >= sizeof(lora_cmd_brightness_broadcast_t)) {
+            const lora_cmd_brightness_broadcast_t* cmd = (const lora_cmd_brightness_broadcast_t*)data;
+            T_LOGI(TAG, "전역 밝기 설정 수신 (Broadcast): %d", cmd->brightness);
+
+            // 밝기 변경 이벤트 발행 (led_service가 구독)
+            event_bus_publish(EVT_BRIGHTNESS_CHANGED, &cmd->brightness, sizeof(cmd->brightness));
+        } else {
+            T_LOGW(TAG, "전역 밝기 명령 길이 부족: %d < %zu", len, sizeof(lora_cmd_brightness_broadcast_t));
+        }
+    }
     // 기능 정지 (0xE4)
     else if (header == LORA_HDR_STOP) {
         if (len >= sizeof(lora_cmd_stop_t)) {
