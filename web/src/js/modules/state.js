@@ -344,6 +344,108 @@ export function stateModule() {
                 clearInterval(this._statusPollingTimer);
                 this._statusPollingTimer = null;
             }
+        },
+
+        // ========================================================================
+        // System Settings
+        // ========================================================================
+
+        /**
+         * 디스플레이 밝기 저장
+         */
+        async saveBrightness() {
+            try {
+                const res = await fetch('/api/display/brightness', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ brightness: this.form.display.brightness })
+                });
+                if (!res.ok) throw new Error('Failed to save brightness');
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    this.toast('Brightness saved', 'alert-success');
+                } else {
+                    throw new Error(data.message || 'Save failed');
+                }
+            } catch (e) {
+                console.error('Save brightness error:', e);
+                this.toast(e.message, 'alert-error');
+            }
+        },
+
+        /**
+         * 시스템 재부팅
+         */
+        async reboot() {
+            if (!confirm('Are you sure you want to reboot the device?')) {
+                return;
+            }
+            try {
+                const res = await fetch('/api/reboot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                if (!res.ok) throw new Error('Failed to reboot');
+                this.toast('Device is rebooting...', 'alert-info');
+            } catch (e) {
+                console.error('Reboot error:', e);
+                this.toast(e.message, 'alert-error');
+            }
+        },
+
+        // ========================================================================
+        // Global Brightness Control (TX → all RX)
+        // ========================================================================
+
+        // 일괄 밝기 제어 상태
+        globalBrightness: {
+            sending: false,
+            value: 50  // 0-100%
+        },
+
+        /**
+         * 전체 RX 디바이스 밝기 일괄 설정 (Broadcast)
+         * @param {number} brightness - 밝기 값 (0-100)
+         */
+        async setGlobalBrightness(brightness) {
+            const brightnessValue = parseInt(brightness, 10);
+            if (isNaN(brightnessValue) || brightnessValue < 0 || brightnessValue > 100) {
+                console.error('Invalid brightness value:', brightness);
+                return;
+            }
+
+            // 0-100 → 0-255 변환
+            const brightness255 = Math.round((brightnessValue * 255) / 100);
+
+            try {
+                this.globalBrightness.sending = true;
+
+                const res = await fetch('/api/brightness/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        brightness: brightness255
+                    })
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.message || 'Failed to set brightness');
+                }
+
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    this.globalBrightness.value = brightnessValue;
+                    this.toast(`Broadcast brightness: ${brightnessValue}%`, 'alert-success');
+                } else {
+                    throw new Error(data.message || 'Failed to set brightness');
+                }
+            } catch (e) {
+                console.error('Set global brightness error:', e);
+                this.toast(e.message, 'alert-error');
+            } finally {
+                this.globalBrightness.sending = false;
+            }
         }
     };
 }

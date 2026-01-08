@@ -77,7 +77,27 @@ export function devicesModule() {
 
                 const data = await res.json();
 
-                this.devices.list = data.devices || [];
+                // 로컬 변경 중인 값 보존 (cameraIdControl, brightnessControl)
+                const newDevices = data.devices || [];
+                const oldDevices = this.devices.list || [];
+
+                // 로컬 변경 값을 보존하면서 디바이스 목록 갱신
+                this.devices.list = newDevices.map(newDevice => {
+                    const oldDevice = oldDevices.find(d => d.id === newDevice.id);
+
+                    // 로컬에서 변경 중인 cameraId가 있으면 보존
+                    if (oldDevice && this.cameraIdControl[newDevice.id] !== undefined) {
+                        newDevice.cameraId = this.cameraIdControl[newDevice.id];
+                    }
+
+                    // 로컬에서 변경 중인 brightness가 있으면 보존
+                    if (oldDevice && this.brightnessControl[newDevice.id] !== undefined) {
+                        newDevice.brightness = this.brightnessControl[newDevice.id];
+                    }
+
+                    return newDevice;
+                });
+
                 this.devices.onlineCount = data.count || 0;
                 this.devices.registeredCount = data.registeredCount || 0;
             } catch (e) {
@@ -156,10 +176,13 @@ export function devicesModule() {
                 const data = await res.json();
                 if (data.status === 'ok') {
                     console.log(`Brightness set for ${deviceId}: ${brightnessValue}% (${brightness255})`);
-                    // 임시 입력값 삭제 (실제 디바이스 값 표시)
+                    // 로컬 devices.list에도 즉시 반영 (폴링과 충돌 방지)
+                    const device = this.devices.list.find(d => d.id === deviceId);
+                    if (device) {
+                        device.brightness = brightnessValue;
+                    }
+                    // 임시 입력값 삭제 (이제 devices.list 값 사용)
                     delete this.brightnessControl[deviceId];
-                    // 디바이스 목록 새로고침 (지연된 업데이트 반영)
-                    setTimeout(() => this.fetchDevices(), 500);
                 } else {
                     throw new Error(data.message || 'Failed to set brightness');
                 }
@@ -212,10 +235,13 @@ export function devicesModule() {
                 const data = await res.json();
                 if (data.status === 'ok') {
                     console.log(`Camera ID set for ${deviceId}: ${cameraIdValue}`);
-                    // 임시 입력값 삭제 (실제 디바이스 값 표시)
+                    // 로컬 devices.list에도 즉시 반영 (폴링과 충돌 방지)
+                    const device = this.devices.list.find(d => d.id === deviceId);
+                    if (device) {
+                        device.cameraId = cameraIdValue;
+                    }
+                    // 임시 입력값 삭제 (이제 devices.list 값 사용)
                     delete this.cameraIdControl[deviceId];
-                    // 디바이스 목록 새로고침
-                    setTimeout(() => this.fetchDevices(), 500);
                 } else {
                     throw new Error(data.message || 'Failed to set camera ID');
                 }

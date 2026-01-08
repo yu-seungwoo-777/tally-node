@@ -23,7 +23,7 @@
                 <span class="text-xs text-slate-500">Total: <span class="font-medium" x-text="devices.list.length"></span> / <span class="font-medium" x-text="license.deviceLimit"></span> Limit</span>
             </div>
             <div class="flex items-center gap-2">
-                <!-- Status request button -->
+                <!-- 상태 요청 버튼 -->
                 <button @click="requestStatus()"
                         :disabled="statusControl.sending"
                         class="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg disabled:bg-blue-50 disabled:text-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
@@ -33,7 +33,7 @@
                     </svg>
                     <span x-text="statusControl.sending ? 'Sending...' : 'Status'"></span>
                 </button>
-                <!-- Refresh button -->
+                <!-- Refresh 버튼 -->
                 <button @click="fetchDevices()"
                         :disabled="devices.loading"
                         class="px-3 py-1.5 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed flex items-center gap-2">
@@ -46,7 +46,7 @@
         </div>
     </div>
 
-    <!-- Device grid -->
+    <!-- 디바이스 그리드 -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="device-grid">
         <template x-for="device in devices.list" :key="device.id">
             <div class="bg-white rounded-2xl border overflow-hidden hover:shadow-lg hover:border-slate-300 transition-all duration-200"
@@ -54,7 +54,7 @@
                      'border-slate-200': device.is_online,
                      'border-slate-200 opacity-60': !device.is_online
                  }">
-                <!-- Device card header - status indicator -->
+                <!-- 디바이스 카드 헤더 - 상태 인디케이터 -->
                 <div class="relative px-4 py-3"
                      :class="{
                          'bg-gradient-to-r from-slate-50 to-white': device.is_online,
@@ -265,23 +265,23 @@
                                         'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100': !device.is_stopped,
                                         'bg-green-50 text-green-700 border-green-200 hover:bg-green-100': device.is_stopped
                                     }"
-                                    :title="device.is_stopped ? '기능 재개' : '기능 정지'">
+                                    :title="device.is_stopped ? 'Resume' : 'Stop'">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                     <path x-show="!device.is_stopped" stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                     <path x-show="device.is_stopped" stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
                                     <path x-show="device.is_stopped" stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                 </svg>
-                                <span x-text="device.is_stopped ? '재개' : '정지'"></span>
+                                <span x-text="device.is_stopped ? 'Resume' : 'Stop'"></span>
                             </button>
                             <!-- 재부팅 버튼 -->
                             <button @click="rebootDevice(device.id)"
                                     :disabled="rebootControl.sending === device.id"
                                     class="flex-1 px-3 py-2 text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-                                    title="재부팅">
+                                    title="Reboot">
                                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                                 </svg>
-                                <span>재부팅</span>
+                                <span>Reboot</span>
                             </button>
                         </div>
                     </div>

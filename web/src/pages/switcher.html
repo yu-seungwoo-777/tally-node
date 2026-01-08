@@ -54,6 +54,10 @@
                                     <span class="font-medium">Port:</span>
                                     <span x-text="status.switcher.primary.port || '--'"></span>
                                 </div>
+                                <div class="text-sm text-slate-600">
+                                    <span class="font-medium">Interface:</span>
+                                    <span x-text="getInterfaceName(status.switcher.primary.interface)"></span>
+                                </div>
 
                                 <!-- Tally Status -->
                                 <div class="flex gap-2">
@@ -124,6 +128,10 @@
                                 <div class="text-sm text-slate-600">
                                     <span class="font-medium">Port:</span>
                                     <span x-text="status.switcher.secondary.port || '--'"></span>
+                                </div>
+                                <div class="text-sm text-slate-600">
+                                    <span class="font-medium">Interface:</span>
+                                    <span x-text="getInterfaceName(status.switcher.secondary.interface)"></span>
                                 </div>
 
                                 <!-- Tally Status -->

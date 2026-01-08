@@ -81,10 +81,15 @@ CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 # lwIP 네트워크 설정
 # ============================================================
 CONFIG_LWIP_MAX_SOCKETS=16
-CONFIG_LWIP_UDP_RECVMBOX_SIZE=64
-CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=64
+CONFIG_LWIP_SO_REUSE=y  # 소켓 즉시 재사용 (많은 새로고침 대응)
 CONFIG_LWIP_SO_RCVBUF=y
 CONFIG_LWIP_RECV_BUFSIZE_DEFAULT=32768
+# TCP 연결 설정 (많은 요청 대응)
+CONFIG_LWIP_TCP_LISTEN_BACKLOG=16  # 연결 대기열 증가
+CONFIG_LWIP_TCP_MAX_KEEPALIVE=10  # Keepalive 검사
+# lwIP 태스크 스택 증가
+CONFIG_LWIP_TCPIP_TASK_STACK_SIZE=6144  # 4KB → 6KB
+CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=64
 # lwIP 태스크 우선순위 (중간 우선순위)
 CONFIG_LWIP_TCPIP_TASK_PRIO=5
 CONFIG_LWIP_IRAM_OPTIMIZATION=y
@@ -94,6 +99,12 @@ CONFIG_LWIP_TCP_SND_BUF_DEFAULT=32768
 CONFIG_LWIP_TCP_MSS=1440
 
 # ============================================================
+# HTTP 서버 설정
+# ============================================================
+CONFIG_HTTPD_TX_PKT_SIZE=8192  # 전송 패킷 크기 증가 (4KB → 8KB)
+CONFIG_HTTPD_TASK_STACK_SIZE=16384  # 태스크 스택 증가 (기본 8KB → 16KB)
+
+# ============================================================
 # FreeRTOS 설정
 # ============================================================
 CONFIG_FREERTOS_HZ=1000
@@ -101,6 +112,9 @@ CONFIG_FREERTOS_HZ=1000
 # CONFIG_FREERTOS_USE_TRACE_FACILITY is not set
 # CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS is not set
 # CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER is not set
+
+# Timer Service Task 스택 크기 증가 (카메라 ID 롱프레스 타이머용)
+CONFIG_FREERTOS_TIMER_TASK_STACK_DEPTH=4096
 
 # ============================================================
 # Ethernet 설정 (W5500 SPI)
