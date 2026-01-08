@@ -116,7 +116,7 @@ static esp_err_t on_lora_send_request(const event_data_t* event) {
 
 /**
  * @brief RF 변경 이벤트 핸들러 (TX/RX 공용)
- * RF 설정 변경 시 드라이버에 적용하고, TX는 broadcast 후 저장 요청
+ * RF 설정 변경 시 TX는 broadcast 후 드라이버 적용, RX는 바로 적용
  */
 static esp_err_t on_rf_changed(const event_data_t* event) {
     if (event->type != EVT_RF_CHANGED) {
@@ -130,18 +130,10 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
     }
 
 #ifdef DEVICE_MODE_TX
-    T_LOGI(TAG_RF, "드라이버 적용: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
-#else
-    T_LOGI(TAG, "드라이버 적용: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
-#endif
+    // TX: 1. 먼저 broadcast (이전 sync word로 RX에 전송)
+    T_LOGI(TAG_RF, "RF broadcast 시작 (10회): %.1f MHz, Sync 0x%02X",
+             rf->frequency, rf->sync_word);
 
-    // 1. 드라이버에 RF 설정 적용
-    lora_driver_set_frequency(rf->frequency);
-    lora_driver_set_sync_word(rf->sync_word);
-
-#ifdef DEVICE_MODE_TX
-    // 2. TX: RF 변경 broadcast 10회 (RX들에게 알림, 5초간)
-    // 패킷 구조: [0xE3][frequency(4바이트 float)][sync_word(1바이트)]
     uint8_t broadcast_pkt[6];
     broadcast_pkt[0] = 0xE3;  // RF 설정 broadcast 헤더
     memcpy(&broadcast_pkt[1], &rf->frequency, sizeof(float));
@@ -154,8 +146,19 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
 
     T_LOGI(TAG_RF, "RF broadcast 완료: %.1f MHz, Sync 0x%02X (10회)", rf->frequency, rf->sync_word);
 
-    // 3. NVS 저장 요청 (broadcast 완료 후)
+    // 2. 드라이버에 RF 설정 적용 (broadcast 완료 후)
+    lora_driver_set_frequency(rf->frequency);
+    lora_driver_set_sync_word(rf->sync_word);
+
+    T_LOGI(TAG_RF, "드라이버 적용 완료: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
+
+    // 3. NVS 저장 요청
     event_bus_publish(EVT_RF_SAVED, rf, sizeof(*rf));
+#else
+    // RX: 드라이버에 바로 적용
+    T_LOGI(TAG, "드라이버 적용: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
+    lora_driver_set_frequency(rf->frequency);
+    lora_driver_set_sync_word(rf->sync_word);
 #endif
 
     return ESP_OK;
