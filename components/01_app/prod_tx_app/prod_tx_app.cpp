@@ -5,6 +5,7 @@
 
 #include "prod_tx_app.h"
 #include "t_log.h"
+#include "NVSConfig.h"
 #include "nvs_flash.h"
 #include "event_bus.h"
 #include "config_service.h"
@@ -467,14 +468,36 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     }
     T_LOGI(TAG, "SwitcherService 태스크 시작 (이벤트 기반 설정)");
 
-    // LoRa 초기화 (기본값으로, EVT_RF_CHANGED에서 설정 업데이트)
+    // LoRa 초기화 (NVS에 저장된 RF 설정 사용)
+    config_device_t device_config;
+    // 기본값 (NVSConfig.h)
+    float saved_freq = NVS_LORA_DEFAULT_FREQ;
+    uint8_t saved_sync = NVS_LORA_DEFAULT_SYNC_WORD;
+    uint8_t saved_sf = NVS_LORA_DEFAULT_SF;
+    uint8_t saved_cr = NVS_LORA_DEFAULT_CR;
+    float saved_bw = NVS_LORA_DEFAULT_BW;
+    int8_t saved_txp = NVS_LORA_DEFAULT_TX_POWER;
+
+    if (config_service_get_device(&device_config) == ESP_OK) {
+        saved_freq = device_config.rf.frequency;
+        saved_sync = device_config.rf.sync_word;
+        saved_sf = device_config.rf.sf;
+        saved_cr = device_config.rf.cr;
+        saved_bw = device_config.rf.bw;
+        saved_txp = device_config.rf.tx_power;
+        T_LOGI(TAG, "RF 설정 로드: %.1f MHz, Sync 0x%02X, SF%d, CR%d, BW%.0f, TXP%ddBm",
+                 saved_freq, saved_sync, saved_sf, saved_cr, saved_bw, saved_txp);
+    } else {
+        T_LOGW(TAG, "RF 설정 로드 실패, 기본값 사용");
+    }
+
     lora_service_config_t lora_config = {
-        .frequency = 868.0f,  // 기본값
-        .spreading_factor = 7,
-        .coding_rate = 5,
-        .bandwidth = 250.0f,
-        .tx_power = 22,
-        .sync_word = 0x12
+        .frequency = saved_freq,
+        .spreading_factor = saved_sf,
+        .coding_rate = saved_cr,
+        .bandwidth = saved_bw,
+        .tx_power = saved_txp,
+        .sync_word = saved_sync
     };
     esp_err_t lora_ret = lora_service_init(&lora_config);
     if (lora_ret != ESP_OK) {
@@ -548,17 +571,17 @@ void prod_tx_app_start(void)
     display_manager_start();
     display_manager_set_page(PAGE_BOOT);
 
-    // 저장된 RF 설정 로드 및 이벤트 발행 (lora_service, DisplayManager 구독 완료 후)
+    // 저장된 RF 설정 로드 및 이벤트 발행 (DisplayManager 구독 완료 후)
     config_all_t saved_config;
     esp_err_t ret = config_service_load_all(&saved_config);
     if (ret == ESP_OK) {
-        // RF 설정 이벤트 발행 (frequency, sync_word)
+        // RF 설정 이벤트 발행 (DisplayManager용, 드라이버는 init에서 이미 설정됨)
         lora_rf_event_t rf_event = {
             .frequency = saved_config.device.rf.frequency,
             .sync_word = saved_config.device.rf.sync_word
         };
         event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
-        T_LOGI(TAG, "RF 설정 이벤트 발행: %.1f MHz, Sync 0x%02X",
+        T_LOGI(TAG, "RF 설정 이벤트 발행 (디스플레이용): %.1f MHz, Sync 0x%02X",
                  rf_event.frequency, rf_event.sync_word);
     } else {
         T_LOGW(TAG, "RF 설정 로드 실패: %s", esp_err_to_name(ret));
