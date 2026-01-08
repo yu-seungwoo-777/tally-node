@@ -37,6 +37,7 @@ class ConfigServiceClass {
 public:
     // 초기화
     static esp_err_t init(void);
+    static esp_err_t applyDeviceLimit(void);  // device_limit 적용 (초과분 삭제)
 
     // 전체 설정 로드/저장
     static esp_err_t loadAll(config_all_t* config);
@@ -758,6 +759,25 @@ esp_err_t ConfigServiceClass::init(void)
 
         event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
         T_LOGI(TAG, "초기 설정 데이터 이벤트 발행");
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t ConfigServiceClass::applyDeviceLimit(void)
+{
+    // getRegisteredDevices 호출 시 device_limit 체크 및 초과분 삭제 수행
+    config_registered_devices_t devices;
+    esp_err_t ret = getRegisteredDevices(&devices);
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "등록된 디바이스 device_limit 적용 완료: %d개", devices.count);
+    }
+
+    // getDeviceCamMap 호출 시 device_limit 체크 및 초과분 삭제 수행
+    config_device_cam_map_t cam_map;
+    ret = getDeviceCamMap(&cam_map);
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "디바이스-카메라 매핑 device_limit 적용 완료: %d개", cam_map.count);
     }
 
     return ESP_OK;
@@ -2218,6 +2238,11 @@ extern "C" {
 esp_err_t config_service_init(void)
 {
     return ConfigServiceClass::init();
+}
+
+esp_err_t config_service_apply_device_limit(void)
+{
+    return ConfigServiceClass::applyDeviceLimit();
 }
 
 esp_err_t config_service_load_all(config_all_t* config)

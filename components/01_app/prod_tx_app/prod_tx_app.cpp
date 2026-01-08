@@ -297,6 +297,9 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     }
     T_LOGI(TAG, "LicenseService 초기화 완료");
 
+    // device_limit 적용 (초과분 삭제)
+    config_service_apply_device_limit();
+
     // 네트워크 설정 확인 (비어있으면 기본값 저장)
     config_all_t current_config;
     ret = config_service_load_all(&current_config);

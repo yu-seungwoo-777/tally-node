@@ -127,6 +127,12 @@ typedef struct {
 esp_err_t config_service_init(void);
 
 /**
+ * @brief device_limit 적용 (초과분 삭제)
+ * @note 라이선스 서비스 초기화 후 호출해야 함
+ */
+esp_err_t config_service_apply_device_limit(void);
+
+/**
  * @brief 전체 설정 로드
  */
 esp_err_t config_service_load_all(config_all_t* config);
