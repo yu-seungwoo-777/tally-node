@@ -988,6 +988,11 @@
         sending: null
         // 전송 중인 디바이스 ID
       },
+      // 삭제 제어 상태
+      deleteControl: {
+        sending: null
+        // 전송 중인 디바이스 ID
+      },
       /**
        * 초기화
        */
@@ -1299,6 +1304,49 @@
           }
         } finally {
           this.rebootControl.sending = null;
+        }
+      },
+      /**
+       * 디바이스 삭제
+       * @param {string} deviceId - 디바이스 ID (예: "A1B2")
+       */
+      async deleteDevice(deviceId) {
+        try {
+          if (!confirm(`Delete device ${deviceId}?
+
+This will remove the device from the list and clear its camera ID mapping.`)) {
+            return;
+          }
+          this.deleteControl.sending = deviceId;
+          const deviceIdBytes = [
+            parseInt(deviceId.substring(0, 2), 16),
+            parseInt(deviceId.substring(2, 4), 16)
+          ];
+          const res = await fetch("/api/devices", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              deviceId: deviceIdBytes
+            })
+          });
+          if (!res.ok) {
+            throw new Error("Failed to delete device");
+          }
+          const data = await res.json();
+          if (data.status === "ok") {
+            console.log(`Device deleted: ${deviceId}`);
+            this.devices.list = this.devices.list.filter((d) => d.id !== deviceId);
+            alert(`Device ${deviceId} deleted successfully.`);
+          } else {
+            throw new Error(data.message || "Failed to delete device");
+          }
+        } catch (e) {
+          console.error("Delete device error:", e);
+          if (e.message !== "User canceled") {
+            alert(`Failed to delete device: ${e.message}`);
+          }
+        } finally {
+          this.deleteControl.sending = null;
         }
       },
       /**
