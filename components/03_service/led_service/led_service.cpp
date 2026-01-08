@@ -51,6 +51,7 @@ static led_colors_t s_colors = {
 
 /**
  * @brief 카메라 ID 변경 이벤트 핸들러 (EVT_CAMERA_ID_CHANGED)
+ * @note WS2812Driver에 카메라 ID 전달 (드라이버가 Tally 데이터로 LED 갱신)
  */
 static esp_err_t on_camera_id_changed(const event_data_t* event)
 {
@@ -61,23 +62,8 @@ static esp_err_t on_camera_id_changed(const event_data_t* event)
     uint8_t camera_id = *(uint8_t*)event->data;
     T_LOGI(TAG, "카메라 ID 변경 이벤트 수신: %d", camera_id);
 
-    // WS2812Driver에 카메라 ID 업데이트
+    // WS2812Driver에 카메라 ID 설정 (내부에서 Tally 데이터로 LED 갱신)
     ws2812_set_camera_id(camera_id);
-
-    // 현재 Tally 상태에 따라 LED 즉시 업데이트
-    // (새 패킷을 기다리지 않고 현재 상태 적용)
-    if (!s_service.stopped) {
-        if (s_service.program_active) {
-            ws2812_set_state(WS2812_PROGRAM);
-            T_LOGI(TAG, "LED 즉시 업데이트: PROGRAM");
-        } else if (s_service.preview_active) {
-            ws2812_set_state(WS2812_PREVIEW);
-            T_LOGI(TAG, "LED 즉시 업데이트: PREVIEW");
-        } else {
-            ws2812_set_state(WS2812_OFF);
-            T_LOGI(TAG, "LED 즉시 업데이트: OFF");
-        }
-    }
 
     return ESP_OK;
 }
@@ -183,11 +169,11 @@ esp_err_t led_service_init_with_colors(int gpio_num, uint32_t num_leds, uint8_t 
     }
 
     // 이벤트 버스 구독
-    // CAMERA_ID_CHANGED는 WS2812Driver에서 처리 (Tally 데이터 기반 LED 갱신)
+    event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
     event_bus_subscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
     event_bus_subscribe(EVT_STOP_CHANGED, on_stop_changed);
     s_service.event_subscribed = true;
-    T_LOGI(TAG, "이벤트 버스 구독: TALLY_STATE, STOP_CHANGED");
+    T_LOGI(TAG, "이벤트 버스 구독: CAMERA_ID, TALLY_STATE, STOP_CHANGED");
 
     s_service.initialized = true;
     T_LOGI(TAG, "LED 서비스 초기화 완료");
@@ -285,6 +271,7 @@ void led_service_deinit(void)
 
     // 이벤트 버스 구독 해제
     if (s_service.event_subscribed) {
+        event_bus_unsubscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
         event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
         event_bus_unsubscribe(EVT_STOP_CHANGED, on_stop_changed);
         s_service.event_subscribed = false;
