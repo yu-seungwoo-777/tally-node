@@ -136,6 +136,10 @@ static esp_err_t send_ping_command(const uint8_t* device_id)
     // 송신 시간 하위 2바이트 (ms)
     s_ping.timestamp_low = (uint16_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
 
+    // 구조체 크기 확인 (디버그)
+    T_LOGI(TAG, "PING struct size: %zu (header=%d, id[2], ts=%u)",
+             sizeof(s_ping), s_ping.header, s_ping.timestamp_low);
+
     lora_send_request_t req = {
         .data = (const uint8_t*)&s_ping,
         .length = sizeof(s_ping)
@@ -145,9 +149,10 @@ static esp_err_t send_ping_command(const uint8_t* device_id)
     if (ret == ESP_OK) {
         char device_id_str[5];
         lora_device_id_to_str(device_id, device_id_str);
-        T_LOGI(TAG, "PING 송신: ID=%s, TS=%u", device_id_str, s_ping.timestamp_low);
+        T_LOGI(TAG, "PING 송신: ID=%s, TS=%u, len=%zu",
+                 device_id_str, s_ping.timestamp_low, req.length);
     } else {
-        T_LOGE(TAG, "PING 송신 실패: %d", ret);
+        T_LOGE(TAG, "PING 송신 실패");
     }
 
     return ret;
@@ -726,6 +731,12 @@ static esp_err_t on_lora_tx_command(const event_data_t* event)
     }
     // PING (0xE6)
     else if (header == LORA_HDR_PING) {
+        // 디버그: 수신된 데이터 출력
+        T_LOGI(TAG, "PING 수신: len=%d, expected=%zu", len, sizeof(lora_cmd_ping_t));
+        for (int i = 0; i < len && i < 8; i++) {
+            T_LOGI(TAG, "  data[%d]: 0x%02X", i, data[i]);
+        }
+
         if (len >= sizeof(lora_cmd_ping_t)) {
             const lora_cmd_ping_t* cmd = (const lora_cmd_ping_t*)data;
 
