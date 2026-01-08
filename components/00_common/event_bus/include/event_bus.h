@@ -458,6 +458,7 @@ typedef enum {
     EVT_DEVICE_REBOOT_REQUEST,   ///< 디바이스 재부팅 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
     EVT_STATUS_REQUEST,          ///< 상태 요청 (Broadcast, data: none)
     EVT_DEVICE_CAM_MAP_RECEIVE,  ///< 디바이스 카메라 ID 수신 (data: uint8_t[3] = {device_id[0], device_id[1], camera_id})
+    EVT_DEVICE_CAM_MAP_LOAD,     ///< 디바이스 카메라 매핑 로드 요청 (data: none, ConfigService가 저장된 매핑 발행)
 
     // 라이센스 이벤트 (03_service → 03_service)
     EVT_LICENSE_STATE_CHANGED,   ///< 라이센스 상태 변경 (data: license_state_event_t)

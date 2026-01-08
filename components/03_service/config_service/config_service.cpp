@@ -622,6 +622,35 @@ static esp_err_t on_device_cam_map_receive(const event_data_t* event)
     return ret;
 }
 
+/**
+ * @brief 디바이스 카메라 매핑 로드 요청 이벤트 핸들러
+ * @note 저장된 모든 매핑을 개별 이벤트로 발행
+ */
+static esp_err_t on_device_cam_map_load(const event_data_t* event)
+{
+    if (event->type != EVT_DEVICE_CAM_MAP_LOAD) {
+        return ESP_OK;
+    }
+
+    // NVS에서 모든 매핑 로드
+    config_device_cam_map_t map;
+    esp_err_t ret = ConfigServiceClass::getDeviceCamMap(&map);
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "디바이스-카메라 매핑 로드 실패: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    T_LOGI(TAG, "디바이스-카메라 매핑 로드: %d개", map.count);
+
+    // 각 매핑을 개별 이벤트로 발행
+    for (uint8_t i = 0; i < map.count; i++) {
+        uint8_t data[3] = {map.device_ids[i][0], map.device_ids[i][1], map.camera_ids[i]};
+        event_bus_publish(EVT_DEVICE_CAM_MAP_RECEIVE, data, sizeof(data));
+    }
+
+    return ESP_OK;
+}
+
 // ============================================================================
 // 초기화
 // ============================================================================
@@ -652,6 +681,8 @@ esp_err_t ConfigServiceClass::init(void)
     event_bus_subscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
     // 디바이스 카메라 매핑 수신 이벤트 구독 (상태 응답 수신 시 NVS 저장)
     event_bus_subscribe(EVT_DEVICE_CAM_MAP_RECEIVE, on_device_cam_map_receive);
+    // 디바이스 카메라 매핑 로드 요청 이벤트 구독 (TX 시작 시 NVS 매핑 로드)
+    event_bus_subscribe(EVT_DEVICE_CAM_MAP_LOAD, on_device_cam_map_load);
     T_LOGD(TAG, "Event bus 구독 완료");
 
     s_initialized = true;

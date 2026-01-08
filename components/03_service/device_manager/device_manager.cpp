@@ -522,6 +522,59 @@ static esp_err_t on_status_request(const event_data_t* event)
 }
 
 /**
+ * @brief 디바이스 카메라 매핑 수신 이벤트 핸들러
+ * @note NVS에서 로드된 매핑 또는 상태 응답에서 수신
+ */
+static esp_err_t on_device_cam_map_receive(const event_data_t* event)
+{
+    if (event->type != EVT_DEVICE_CAM_MAP_RECEIVE) {
+        return ESP_OK;
+    }
+
+    if (event->data_size < 3) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* data = (const uint8_t*)event->data;
+    uint8_t device_id[2] = {data[0], data[1]};
+    uint8_t camera_id = data[2];
+
+    // 디바이스 리스트에서 찾기
+    for (uint8_t i = 0; i < s_tx.device_count; i++) {
+        if (s_tx.devices[i].device_id[0] == device_id[0] &&
+            s_tx.devices[i].device_id[1] == device_id[1]) {
+            // 기존 디바이스 카메라 ID 업데이트
+            s_tx.devices[i].camera_id = camera_id;
+            T_LOGI(TAG, "디바이스 카메라 ID 로드: [%02X%02X] → Cam%d",
+                    device_id[0], device_id[1], camera_id);
+            return ESP_OK;
+        }
+    }
+
+    // 디바이스가 리스트에 없으면 추가 (오프라인 상태로)
+    if (s_tx.device_count < MAX_DEVICES) {
+        uint8_t idx = s_tx.device_count++;
+        s_tx.devices[idx].device_id[0] = device_id[0];
+        s_tx.devices[idx].device_id[1] = device_id[1];
+        s_tx.devices[idx].camera_id = camera_id;
+        s_tx.devices[idx].is_online = false;  // 아직 온라인 아님
+        s_tx.devices[idx].last_seen = 0;
+        T_LOGI(TAG, "디바이스 카메라 ID 로드 (오프라인): [%02X%02X] → Cam%d",
+                device_id[0], device_id[1], camera_id);
+
+        // 웹 서버에 디바이스 리스트 변경 알림
+        device_list_event_t list_event;
+        memset(&list_event, 0, sizeof(list_event));
+        memcpy(list_event.devices, s_tx.devices, sizeof(device_info_t) * s_tx.device_count);
+        list_event.count = s_tx.device_count;
+        list_event.registered_count = s_tx.device_count;
+        event_bus_publish(EVT_DEVICE_LIST_CHANGED, &list_event, sizeof(list_event));
+    }
+
+    return ESP_OK;
+}
+
+/**
  * @brief 오프라인 디바이스 체크 및 상태 업데이트
  */
 static void check_offline_devices(void)
@@ -1038,6 +1091,12 @@ esp_err_t device_manager_start(void)
     event_bus_subscribe(EVT_DEVICE_STOP_REQUEST, on_device_stop_request);
     event_bus_subscribe(EVT_DEVICE_REBOOT_REQUEST, on_device_reboot_request);
     event_bus_subscribe(EVT_STATUS_REQUEST, on_status_request);
+
+    // 디바이스 카메라 매핑 이벤트 구독 (NVS 로드된 매핑 수신)
+    event_bus_subscribe(EVT_DEVICE_CAM_MAP_RECEIVE, on_device_cam_map_receive);
+
+    // NVS에 저장된 디바이스-카메라 매핑 로드 요청
+    event_bus_publish(EVT_DEVICE_CAM_MAP_LOAD, nullptr, 0);
 
     // 상태 요청 태스크 시작
     BaseType_t ret = xTaskCreatePinnedToCore(
