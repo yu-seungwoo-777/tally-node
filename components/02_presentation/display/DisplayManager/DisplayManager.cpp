@@ -428,9 +428,10 @@ static esp_err_t on_network_status_changed(const event_data_t* event)
 
     return ESP_OK;
 }
+#endif // DEVICE_MODE_TX
 
 /**
- * @brief EVT_RF_CHANGED 핸들러 (TX 전용)
+ * @brief EVT_RF_CHANGED 핸들러 (TX/RX 공용)
  *
  * RF 설정 변경 시 저장
  */
@@ -447,12 +448,16 @@ static esp_err_t on_rf_changed(const event_data_t* event)
     s_mgr.data.rf.sync_word = rf->sync_word;
     s_mgr.data.rf_valid = true;
 
+#ifdef DEVICE_MODE_TX
     tx_page_set_frequency(rf->frequency);
     tx_page_set_sync_word(rf->sync_word);
+#elif defined(DEVICE_MODE_RX)
+    rx_page_set_frequency(rf->frequency);
+    rx_page_set_sync_word(rf->sync_word);
+#endif
 
     return ESP_OK;
 }
-#endif // DEVICE_MODE_TX
 
 // ============================================================================
 // 공개 API 구현
@@ -509,6 +514,7 @@ extern "C" void display_manager_start(void)
         // RX 전용 이벤트
         event_bus_subscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
         event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
+        event_bus_subscribe(EVT_RF_CHANGED, on_rf_changed);
 #elif defined(DEVICE_MODE_TX)
         // TX 전용 이벤트
         event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, on_switcher_status_changed);
@@ -519,7 +525,7 @@ extern "C" void display_manager_start(void)
         s_mgr.events_subscribed = true;
         T_LOGI(TAG, "이벤트 구독 완료: EVT_INFO_UPDATED, EVT_LORA_RSSI_CHANGED"
 #ifdef DEVICE_MODE_RX
-               ", EVT_TALLY_STATE_CHANGED, EVT_CAMERA_ID_CHANGED"
+               ", EVT_TALLY_STATE_CHANGED, EVT_CAMERA_ID_CHANGED, EVT_RF_CHANGED"
 #elif defined(DEVICE_MODE_TX)
                ", EVT_SWITCHER_STATUS_CHANGED, EVT_NETWORK_STATUS_CHANGED, EVT_RF_CHANGED"
 #endif
