@@ -669,6 +669,25 @@ static esp_err_t on_lora_tx_command(const event_data_t* event)
             T_LOGW(TAG, "카메라 ID 명령 길이 부족: %d < %zu", len, sizeof(lora_cmd_camera_id_t));
         }
     }
+    // RF 설정 (0xE3) - Broadcast format: [0xE3][frequency(4)][sync_word(1)]
+    else if (header == LORA_HDR_SET_RF) {
+        if (len == 6) {
+            float frequency;
+            memcpy(&frequency, &data[1], sizeof(float));
+            uint8_t sync_word = data[5];
+
+            T_LOGI(TAG, "RF 설정 수신: %.1f MHz, Sync 0x%02X", frequency, sync_word);
+
+            // 이벤트 발행 (lora_service가 드라이버 적용)
+            lora_rf_event_t rf_event = {
+                .frequency = frequency,
+                .sync_word = sync_word
+            };
+            event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
+        } else {
+            T_LOGW(TAG, "RF 명령 길이 오류: %d (예상: 6)", len);
+        }
+    }
     // 기능 정지 (0xE4)
     else if (header == LORA_HDR_STOP) {
         if (len >= sizeof(lora_cmd_stop_t)) {
