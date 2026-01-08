@@ -5,7 +5,6 @@
 
 #include "wifi_driver.h"
 #include "wifi_hal.h"
-#include "event_bus.h"
 #include "t_log.h"
 #include "esp_wifi.h"
 #include "esp_netif.h"
@@ -33,8 +32,8 @@ public:
         uint8_t ap_clients = 0;
     };
 
-    // 콜백 타입
-    using StatusCallback = void (*)();
+    // 네트워크 상태 변경 콜백 타입
+    using NetworkCallback = void (*)(bool connected, const char* ip);
 
     // 초기화 (AP+STA)
     static esp_err_t init(const char* ap_ssid, const char* ap_password,
@@ -57,8 +56,8 @@ public:
     static bool isAPStarted(void) { return s_ap_started; }
     static uint8_t getAPClients(void) { return s_ap_clients; }
 
-    // 콜백 설정
-    static void setStatusCallback(StatusCallback callback) { s_status_callback = callback; }
+    // 네트워크 상태 변경 콜백 설정
+    static void setNetworkCallback(NetworkCallback callback) { s_network_callback = callback; }
 
 private:
     WiFiDriver() = delete;
@@ -86,7 +85,7 @@ private:
     static char s_ap_ip[16];
     static char s_sta_ip[16];
 
-    static StatusCallback s_status_callback;
+    static NetworkCallback s_network_callback;
     static uint8_t s_sta_retry_count;
     static constexpr uint8_t MAX_STA_RETRY = 5;
 };
@@ -113,7 +112,7 @@ uint8_t WiFiDriver::s_ap_clients = 0;
 char WiFiDriver::s_ap_ip[16] = {0};
 char WiFiDriver::s_sta_ip[16] = {0};
 
-WiFiDriver::StatusCallback WiFiDriver::s_status_callback = nullptr;
+WiFiDriver::NetworkCallback WiFiDriver::s_network_callback = nullptr;
 uint8_t WiFiDriver::s_sta_retry_count = 0;
 
 // ============================================================================
@@ -130,9 +129,6 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
                 s_ap_started = true;
                 // AP IP는 실제로는 192.168.4.1이지만 이벤트 시점에 아직 할당되지 않을 수 있음
                 // getStatus()에서 실시간 조회로 처리
-                if (s_status_callback) {
-                    s_status_callback();
-                }
                 break;
 
             case WIFI_EVENT_AP_STOP:
@@ -140,18 +136,12 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
                 s_ap_started = false;
                 s_ap_clients = 0;
                 memset(s_ap_ip, 0, sizeof(s_ap_ip));
-                if (s_status_callback) {
-                    s_status_callback();
-                }
                 break;
 
             case WIFI_EVENT_AP_STACONNECTED: {
                 auto* event = (wifi_event_ap_staconnected_t*) event_data;
                 T_LOGI(TAG, "STA 연결됨: " MACSTR, MAC2STR(event->mac));
                 s_ap_clients++;
-                if (s_status_callback) {
-                    s_status_callback();
-                }
                 break;
             }
 
@@ -160,9 +150,6 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
                 T_LOGI(TAG, "STA 연결 해제됨: " MACSTR, MAC2STR(event->mac));
                 if (s_ap_clients > 0) {
                     s_ap_clients--;
-                }
-                if (s_status_callback) {
-                    s_status_callback();
                 }
                 break;
             }
@@ -180,8 +167,10 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
                 s_sta_rssi = 0;
                 memset(s_sta_ip, 0, sizeof(s_sta_ip));
 
-                // 이벤트 버스로 네트워크 해제 발행
-                event_bus_publish(EVT_NETWORK_DISCONNECTED, nullptr, 0);
+                // 네트워크 상태 변경 콜백 호출 (연결 해제)
+                if (s_network_callback) {
+                    s_network_callback(false, nullptr);
+                }
 
                 if (s_sta_retry_count < MAX_STA_RETRY) {
                     s_sta_retry_count++;
@@ -190,10 +179,6 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
                     esp_wifi_connect();
                 } else {
                     T_LOGE(TAG, "STA 재연결 실패 (최대 재시도 도달)");
-                }
-
-                if (s_status_callback) {
-                    s_status_callback();
                 }
                 break;
             }
@@ -234,11 +219,9 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
             const ip_addr_t* dns_check = dns_getserver(0);
             T_LOGI(TAG, "DNS Main 확인 (LwIP): " IPSTR, IP2STR(&dns_check->u_addr.ip4));
 
-            // 이벤트 버스로 네트워크 연결 발행
-            event_bus_publish(EVT_NETWORK_CONNECTED, s_sta_ip, sizeof(s_sta_ip));
-
-            if (s_status_callback) {
-                s_status_callback();
+            // 네트워크 상태 변경 콜백 호출 (연결 성공)
+            if (s_network_callback) {
+                s_network_callback(true, s_sta_ip);
             }
         }
     }
@@ -566,7 +549,7 @@ uint8_t wifi_driver_get_ap_clients(void)
 
 void wifi_driver_set_status_callback(wifi_driver_status_callback_t callback)
 {
-    WiFiDriver::setStatusCallback(callback);
+    WiFiDriver::setNetworkCallback(callback);
 }
 
 } // extern "C"

@@ -33,8 +33,11 @@ typedef struct {
     char mac[18];
 } ethernet_driver_status_t;
 
-// 상태 변경 콜백
-typedef void (*ethernet_driver_status_callback_t)(void);
+// 네트워크 상태 변경 콜백
+typedef void (*ethernet_driver_status_callback_t)(bool connected, const char* ip);
+
+// 상태 변경 콜백 (단순 알림용, IP 없음)
+typedef void (*ethernet_driver_simple_callback_t)(void);
 
 // ============================================================================
 // 초기화/정리

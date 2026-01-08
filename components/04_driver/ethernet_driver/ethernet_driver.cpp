@@ -5,7 +5,6 @@
 
 #include "ethernet_driver.h"
 #include "ethernet_hal.h"
-#include "event_bus.h"
 #include "t_log.h"
 #include "esp_event.h"
 #include "esp_eth.h"
@@ -34,8 +33,8 @@ public:
         char mac[18] = {0};
     };
 
-    // 콜백 타입
-    using StatusCallback = void (*)();
+    // 네트워크 상태 변경 콜백 타입
+    using NetworkCallback = void (*)(bool connected, const char* ip);
 
     // 초기화
     static esp_err_t init(bool dhcp_enabled,
@@ -59,8 +58,8 @@ public:
     // 제어
     static esp_err_t restart(void);
 
-    // 콜백 설정
-    static void setStatusCallback(StatusCallback callback) { s_status_callback = callback; }
+    // 네트워크 상태 변경 콜백 설정
+    static void setNetworkCallback(NetworkCallback callback) { s_network_callback = callback; }
 
 private:
     EthernetDriver() = delete;
@@ -76,7 +75,7 @@ private:
     static char s_static_netmask[16];
     static char s_static_gateway[16];
 
-    static StatusCallback s_status_callback;
+    static NetworkCallback s_network_callback;
 };
 
 // ============================================================================
@@ -89,7 +88,7 @@ char EthernetDriver::s_static_ip[16] = {0};
 char EthernetDriver::s_static_netmask[16] = {0};
 char EthernetDriver::s_static_gateway[16] = {0};
 
-EthernetDriver::StatusCallback EthernetDriver::s_status_callback = nullptr;
+EthernetDriver::NetworkCallback EthernetDriver::s_network_callback = nullptr;
 
 // ============================================================================
 // 이벤트 핸들러
@@ -101,26 +100,16 @@ void EthernetDriver::eventHandler(void* arg, esp_event_base_t event_base,
     if (event_base == ETH_EVENT) {
         if (event_id == ETHERNET_EVENT_CONNECTED) {
             T_LOGI(TAG, "Ethernet 링크 업");
-            if (s_status_callback) {
-                s_status_callback();
-            }
         } else if (event_id == ETHERNET_EVENT_DISCONNECTED) {
             T_LOGW(TAG, "Ethernet 링크 다운");
-            // 이벤트 버스로 네트워크 해제 발행
-            event_bus_publish(EVT_NETWORK_DISCONNECTED, nullptr, 0);
-            if (s_status_callback) {
-                s_status_callback();
+            // 네트워크 상태 변경 콜백 호출 (연결 해제)
+            if (s_network_callback) {
+                s_network_callback(false, nullptr);
             }
         } else if (event_id == ETHERNET_EVENT_START) {
             T_LOGI(TAG, "Ethernet 시작됨");
-            if (s_status_callback) {
-                s_status_callback();
-            }
         } else if (event_id == ETHERNET_EVENT_STOP) {
             T_LOGI(TAG, "Ethernet 정지됨");
-            if (s_status_callback) {
-                s_status_callback();
-            }
         }
     } else if (event_base == IP_EVENT) {
         if (event_id == IP_EVENT_ETH_GOT_IP) {
@@ -142,10 +131,9 @@ void EthernetDriver::eventHandler(void* arg, esp_event_base_t event_base,
 
             T_LOGI(TAG, "Ethernet DNS 서버 설정 (LwIP): 8.8.8.8 (Primary), 1.1.1.1 (Backup)");
 
-            // 이벤트 버스로 네트워크 연결 발행
-            event_bus_publish(EVT_NETWORK_CONNECTED, ip_str, sizeof(ip_str));
-            if (s_status_callback) {
-                s_status_callback();
+            // 네트워크 상태 변경 콜백 호출 (연결 성공)
+            if (s_network_callback) {
+                s_network_callback(true, ip_str);
             }
         }
     }
@@ -396,7 +384,7 @@ esp_err_t ethernet_driver_restart(void)
 
 void ethernet_driver_set_status_callback(ethernet_driver_status_callback_t callback)
 {
-    EthernetDriver::setStatusCallback(callback);
+    EthernetDriver::setNetworkCallback(callback);
 }
 
 } // extern "C"

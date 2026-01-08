@@ -5,8 +5,6 @@
 
 #include "ws2812_driver.h"
 #include "ws2812_hal.h"
-#include "event_bus.h"
-#include "TallyTypes.h"
 #include "t_log.h"
 #include "PinConfig.h"
 
@@ -23,6 +21,9 @@ public:
     static void deinit(void);
     static bool isInitialized(void) { return s_initialized; }
 
+    // Tally 상태 처리 (service에서 호출)
+    static void processTallyData(const uint8_t* tally_data, uint8_t channel_count);
+
 private:
     WS2812Driver() = delete;
     ~WS2812Driver() = delete;
@@ -30,20 +31,11 @@ private:
     // 상태를 RGB로 변환
     static void stateToRgb(ws2812_state_t state, uint8_t* r, uint8_t* g, uint8_t* b);
 
-    // 이벤트 콜백
-    static esp_err_t brightnessEventCallback(const event_data_t* event);
-    static esp_err_t tallyEventCallback(const event_data_t* event);
-    static esp_err_t cameraIdEventCallback(const event_data_t* event);
-
     static bool s_initialized;
     static uint32_t s_num_leds;
     static uint8_t s_brightness;
     static uint8_t s_camera_id;
     static ws2812_state_t s_led_states[8];
-
-    // 마지막 Tally 데이터 (카메라 ID 변경 시 재사용)
-    static tally_event_data_t s_last_tally;
-    static bool s_last_tally_valid;
 };
 
 bool WS2812Driver::s_initialized = false;
@@ -51,8 +43,6 @@ uint32_t WS2812Driver::s_num_leds = 1;
 uint8_t WS2812Driver::s_brightness = 255;
 uint8_t WS2812Driver::s_camera_id = 1;
 ws2812_state_t WS2812Driver::s_led_states[8] = {WS2812_OFF};
-tally_event_data_t WS2812Driver::s_last_tally = {};
-bool WS2812Driver::s_last_tally_valid = false;
 
 esp_err_t WS2812Driver::init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
 {
@@ -88,40 +78,11 @@ esp_err_t WS2812Driver::init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
         s_led_states[i] = WS2812_OFF;
     }
 
-    // 밝기 변경 이벤트 구독
-    event_bus_subscribe(EVT_BRIGHTNESS_CHANGED, brightnessEventCallback);
-    T_LOGI("WS2812Drv", "밝기 변경 이벤트 구독 완료");
-
-    // Tally 상태 변경 이벤트 구독
-    event_bus_subscribe(EVT_TALLY_STATE_CHANGED, tallyEventCallback);
-    T_LOGI("WS2812Drv", "Tally 상태 변경 이벤트 구독 완료");
-
     s_initialized = true;
     off();  // 실제 LED OFF 상태로 전송 (초기화 완료 후)
 
     T_LOGI("WS2812Drv", "WS2812 드라이버 초기화 완료 (GPIO %d, %lu LEDs, 카메라 ID: %d)",
            gpio_num, s_num_leds, s_camera_id);
-    return ESP_OK;
-}
-
-esp_err_t WS2812Driver::brightnessEventCallback(const event_data_t* event)
-{
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    // 이벤트 데이터: uint8_t brightness (0-255)
-    uint8_t new_brightness = *(const uint8_t*)event->data;
-
-    if (s_brightness != new_brightness) {
-        s_brightness = new_brightness;
-        // 현재 상태 다시 적용
-        for (uint32_t i = 0; i < s_num_leds; i++) {
-            setLedState(i, s_led_states[i]);
-        }
-        T_LOGI("WS2812Drv", "이벤트 수신: 밝기 %d", new_brightness);
-    }
-
     return ESP_OK;
 }
 
@@ -300,82 +261,42 @@ void WS2812Driver::setCameraId(uint8_t camera_id)
     }
     s_camera_id = camera_id;
     T_LOGI("WS2812Drv", "카메라 ID 설정: %d", s_camera_id);
-
-    // 마지막 Tally 데이터로 LED 즉시 갱신
-    if (s_last_tally_valid) {
-        // 이벤트 데이터를 packed_data_t로 변환
-        uint8_t data_size = (s_last_tally.channel_count + 3) / 4;
-        packed_data_t tally = {
-            .data = const_cast<uint8_t*>(s_last_tally.tally_data),
-            .data_size = data_size,
-            .channel_count = s_last_tally.channel_count
-        };
-        uint8_t my_status = packed_data_get_channel(&tally, s_camera_id);
-
-        // Tally 상태 → LED 상태 매핑
-        ws2812_state_t led_state;
-        const char* state_str;
-
-        switch (my_status) {
-        case TALLY_STATUS_PROGRAM:
-            led_state = WS2812_PROGRAM;
-            state_str = "PROGRAM";
-            break;
-        case TALLY_STATUS_PREVIEW:
-            led_state = WS2812_PREVIEW;
-            state_str = "PREVIEW";
-            break;
-        case TALLY_STATUS_BOTH:
-            led_state = WS2812_PROGRAM;
-            state_str = "BOTH (PGM+PVW)";
-            break;
-        default:
-            led_state = WS2812_OFF;
-            state_str = "OFF";
-            break;
-        }
-
-        setState(led_state);
-        T_LOGI("WS2812Drv", "카메라 ID 변경 후 LED 갱신: %d → %s", s_camera_id, state_str);
-    }
 }
 
-esp_err_t WS2812Driver::tallyEventCallback(const event_data_t* event)
+void WS2812Driver::processTallyData(const uint8_t* tally_data, uint8_t channel_count)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
+    if (!s_initialized) {
+        return;
     }
 
-    const tally_event_data_t* tally_data = (const tally_event_data_t*)event->data;
-
-    // Tally 데이터 저장 (카메라 ID 변경 시 재사용)
-    s_last_tally = *tally_data;
-    s_last_tally_valid = true;
+    // TallyTypes.h의 packed_data_t 구조체 사용 (로컬 정의)
+    struct packed_data_t {
+        uint8_t* data;
+        uint8_t data_size;
+        uint8_t channel_count;
+    };
 
     // 내 카메라 ID의 Tally 상태 확인
-    // 이벤트 데이터를 packed_data_t로 변환
-    uint8_t data_size = (tally_data->channel_count + 3) / 4;  // 20채널 = 5바이트
-    packed_data_t tally = {
-        .data = const_cast<uint8_t*>(tally_data->tally_data),
-        .data_size = data_size,
-        .channel_count = tally_data->channel_count
-    };
-    uint8_t my_status = packed_data_get_channel(&tally, s_camera_id);
+    // packed_data_get_channel 함수 로직 (인라인)
+    // 채널 상태는 2비트로 저장: 0=OFF, 1=PGM, 2=PVW
+    uint8_t byte_idx = (s_camera_id - 1) / 4;
+    uint8_t bit_shift = ((s_camera_id - 1) % 4) * 2;
+    uint8_t my_status = (tally_data[byte_idx] >> bit_shift) & 0x03;
 
     // Tally 상태 → LED 상태 매핑
     ws2812_state_t led_state;
     const char* state_str;
 
     switch (my_status) {
-    case TALLY_STATUS_PROGRAM:
+    case 1:  // TALLY_STATUS_PROGRAM
         led_state = WS2812_PROGRAM;  // 빨강
         state_str = "PROGRAM";
         break;
-    case TALLY_STATUS_PREVIEW:
+    case 2:  // TALLY_STATUS_PREVIEW
         led_state = WS2812_PREVIEW;  // 초록
         state_str = "PREVIEW";
         break;
-    case TALLY_STATUS_BOTH:
+    case 3:  // TALLY_STATUS_BOTH
         led_state = WS2812_PROGRAM;  // Program 우선 (빨강)
         state_str = "BOTH (PGM+PVW)";
         break;
@@ -386,17 +307,11 @@ esp_err_t WS2812Driver::tallyEventCallback(const event_data_t* event)
     }
 
     setState(led_state);
-    T_LOGI("WS2812Drv", "Tally 이벤트: 카메라 %d → %s", s_camera_id, state_str);
-
-    return ESP_OK;
+    T_LOGI("WS2812Drv", "Tally 처리: 카메라 %d → %s", s_camera_id, state_str);
 }
 
 void WS2812Driver::deinit(void)
 {
-    // 이벤트 구독 취소
-    event_bus_unsubscribe(EVT_BRIGHTNESS_CHANGED, brightnessEventCallback);
-    event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, tallyEventCallback);
-
     ws2812_hal_deinit();
     s_initialized = false;
     T_LOGI("WS2812Drv", "WS2812 드라이버 해제");
@@ -441,6 +356,11 @@ void ws2812_set_brightness(uint8_t brightness)
 void ws2812_set_camera_id(uint8_t camera_id)
 {
     WS2812Driver::setCameraId(camera_id);
+}
+
+void ws2812_process_tally_data(const uint8_t* tally_data, uint8_t channel_count)
+{
+    WS2812Driver::processTallyData(tally_data, channel_count);
 }
 
 void ws2812_off(void)

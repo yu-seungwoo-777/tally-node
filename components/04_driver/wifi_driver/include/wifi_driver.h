@@ -30,8 +30,8 @@ typedef struct {
     uint8_t ap_clients;
 } wifi_driver_status_t;
 
-// 상태 변경 콜백
-typedef void (*wifi_driver_status_callback_t)(void);
+// 네트워크 상태 변경 콜백
+typedef void (*wifi_driver_status_callback_t)(bool connected, const char* ip);
 
 // ============================================================================
 // 초기화/정리

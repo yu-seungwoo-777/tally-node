@@ -51,6 +51,10 @@ private:
     static esp_err_t onRestartRequest(const event_data_t* event);
     static esp_err_t onConfigDataEvent(const event_data_t* event);
 
+    // 드라이버 콜백 핸들러
+    static void onEthernetStatusChange(bool connected, const char* ip);
+    static void onWiFiStatusChange(bool connected, const char* ip);
+
     // 정적 멤버
     static bool s_initialized;
     static app_network_config_t s_config;
@@ -118,6 +122,8 @@ esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config
             T_LOGE(TAG, "WiFi Driver 초기화 실패");
             return ret;
         }
+        // 네트워크 상태 변경 콜백 등록
+        wifi_driver_set_status_callback(onWiFiStatusChange);
     }
 
     // Ethernet Driver 초기화
@@ -131,6 +137,9 @@ esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config
         if (ret != ESP_OK) {
             T_LOGW(TAG, "Ethernet Driver 초기화 실패 (하드웨어 미장착 가능성)");
             // Ethernet은 실패해도 계속 진행
+        } else {
+            // 네트워크 상태 변경 콜백 등록
+            ethernet_driver_set_status_callback(onEthernetStatusChange);
         }
     }
 
@@ -502,6 +511,8 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
                 T_LOGE(TAG, "WiFi Driver 초기화 실패 (이벤트 기반)");
                 return ret;
             }
+            // 네트워크 상태 변경 콜백 등록
+            wifi_driver_set_status_callback(onWiFiStatusChange);
         }
 
         // Ethernet Driver 초기화
@@ -515,6 +526,9 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
             if (ret != ESP_OK) {
                 T_LOGW(TAG, "Ethernet Driver 초기화 실패 (이벤트 기반, 하드웨어 미장착 가능성)");
                 // Ethernet은 실패해도 계속 진행
+            } else {
+                // 네트워크 상태 변경 콜백 등록
+                ethernet_driver_set_status_callback(onEthernetStatusChange);
             }
         }
 
@@ -523,6 +537,40 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
     }
 
     return ESP_OK;
+}
+
+// ============================================================================
+// 드라이버 콜백 핸들러
+// ============================================================================
+
+void NetworkServiceClass::onEthernetStatusChange(bool connected, const char* ip)
+{
+    if (connected) {
+        T_LOGI(TAG, "Ethernet 연결됨: %s", ip ? ip : "unknown");
+        // 이벤트 버스로 네트워크 연결 발행
+        if (ip) {
+            event_bus_publish(EVT_NETWORK_CONNECTED, ip, strlen(ip) + 1);
+        }
+    } else {
+        T_LOGW(TAG, "Ethernet 연결 해제됨");
+        // 이벤트 버스로 네트워크 해제 발행
+        event_bus_publish(EVT_NETWORK_DISCONNECTED, nullptr, 0);
+    }
+}
+
+void NetworkServiceClass::onWiFiStatusChange(bool connected, const char* ip)
+{
+    if (connected) {
+        T_LOGI(TAG, "WiFi 연결됨: %s", ip ? ip : "unknown");
+        // 이벤트 버스로 네트워크 연결 발행
+        if (ip) {
+            event_bus_publish(EVT_NETWORK_CONNECTED, ip, strlen(ip) + 1);
+        }
+    } else {
+        T_LOGW(TAG, "WiFi 연결 해제됨");
+        // 이벤트 버스로 네트워크 해제 발행
+        event_bus_publish(EVT_NETWORK_DISCONNECTED, nullptr, 0);
+    }
 }
 
 // ============================================================================

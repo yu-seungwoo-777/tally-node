@@ -77,6 +77,13 @@ void ws2812_set_brightness(uint8_t brightness);
 void ws2812_set_camera_id(uint8_t camera_id);
 
 /**
+ * @brief Tally 데이터 처리 (service에서 호출)
+ * @param tally_data Tally 데이터 배열
+ * @param channel_count 채널 수
+ */
+void ws2812_process_tally_data(const uint8_t* tally_data, uint8_t channel_count);
+
+/**
  * @brief WS2812 모든 LED 끄기
  */
 void ws2812_off(void);

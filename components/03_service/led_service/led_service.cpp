@@ -84,15 +84,18 @@ static esp_err_t on_tally_state_changed(const event_data_t* event)
 
     const tally_event_data_t* tally_evt = (const tally_event_data_t*)event->data;
 
+    // WS2812 드라이버에 Tally 데이터 전달 (드라이버에서 카메라 ID로 상태 확인)
+    ws2812_process_tally_data(tally_evt->tally_data, tally_evt->channel_count);
+
+    // 현재 상태 캐시 업데이트 (정지 해제 시 복구용)
+    uint8_t my_camera_id = config_service_get_camera_id();
+
     // packed_data_t 구조체 생성
     packed_data_t tally = {
         .data = (uint8_t*)tally_evt->tally_data,
         .data_size = static_cast<uint8_t>((tally_evt->channel_count + 3) / 4),
         .channel_count = tally_evt->channel_count
     };
-
-    // 현재 카메라 ID
-    uint8_t my_camera_id = config_service_get_camera_id();
 
     // 내 카메라의 Tally 상태 확인 (채널 번호는 1-based)
     if (my_camera_id > 0 && my_camera_id <= tally.channel_count) {
