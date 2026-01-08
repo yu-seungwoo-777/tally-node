@@ -292,6 +292,10 @@ static void on_status_response(const lora_msg_status_t* status, int16_t rssi, fl
     s_tx.devices[found_idx].is_stopped = (status->stopped == 1);
     s_tx.devices[found_idx].is_online = true;  // 상태 응답 수신 = 온라인
 
+    // 디바이스-카메라 매핑 이벤트 발행 (ConfigService에서 NVS 저장)
+    uint8_t cam_map_data[3] = {status->device_id[0], status->device_id[1], status->camera_id};
+    event_bus_publish(EVT_DEVICE_CAM_MAP_RECEIVE, cam_map_data, sizeof(cam_map_data));
+
     // 라이센스 device_limit 체크 (새 디바이스 추가 시만)
     if (is_new_device) {
         uint8_t device_limit = s_tx.device_limit;  // 캐시된 값 사용

@@ -89,6 +89,13 @@ public:
     static uint8_t getRegisteredDeviceCount(void);
     static void clearRegisteredDevices(void);
 
+    // 디바이스 카메라 ID 매핑 (TX 장치 기억)
+    static esp_err_t setDeviceCameraId(const uint8_t* device_id, uint8_t camera_id);
+    static esp_err_t getDeviceCameraId(const uint8_t* device_id, uint8_t* camera_id);
+    static esp_err_t getDeviceCamMap(config_device_cam_map_t* map);
+    static esp_err_t removeDeviceCamMap(const uint8_t* device_id);
+    static void clearDeviceCamMap(void);
+
     // 기본값
     static esp_err_t loadDefaults(config_all_t* config);
     static esp_err_t factoryReset(void);
@@ -102,6 +109,7 @@ private:
 
     // 정적 멤버
     static bool s_initialized;
+    static config_device_cam_map_t s_device_cam_map;  // 디바이스-카메라 매핑 캐시
 };
 
 // ============================================================================
@@ -109,6 +117,7 @@ private:
 // ============================================================================
 
 bool ConfigServiceClass::s_initialized = false;
+config_device_cam_map_t ConfigServiceClass::s_device_cam_map = {0};
 
 // ============================================================================
 // 이벤트 핸들러 (등록된 디바이스 관리)
@@ -586,6 +595,33 @@ static esp_err_t on_brightness_changed(const event_data_t* event) {
     return ret;
 }
 
+/**
+ * @brief 디바이스 카메라 매핑 수신 이벤트 핸들러
+ * @note 상태 응답 수신 시 device_manager에서 발행
+ */
+static esp_err_t on_device_cam_map_receive(const event_data_t* event)
+{
+    if (event->type != EVT_DEVICE_CAM_MAP_RECEIVE) {
+        return ESP_OK;
+    }
+
+    if (event->data_size < 3) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(event->data);
+    uint8_t device_id[2] = {data[0], data[1]};
+    uint8_t camera_id = data[2];
+
+    // NVS에 저장
+    esp_err_t ret = ConfigServiceClass::setDeviceCameraId(device_id, camera_id);
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "디바이스-카메라 매핑 NVS 저장 실패: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
+}
+
 // ============================================================================
 // 초기화
 // ============================================================================
@@ -614,6 +650,8 @@ esp_err_t ConfigServiceClass::init(void)
     event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
     // 밝기 변경 이벤트 구독 (LoRa 수신 시 NVS 저장)
     event_bus_subscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
+    // 디바이스 카메라 매핑 수신 이벤트 구독 (상태 응답 수신 시 NVS 저장)
+    event_bus_subscribe(EVT_DEVICE_CAM_MAP_RECEIVE, on_device_cam_map_receive);
     T_LOGD(TAG, "Event bus 구독 완료");
 
     s_initialized = true;
@@ -1836,6 +1874,244 @@ void ConfigServiceClass::clearRegisteredDevices(void)
 }
 
 // ============================================================================
+// 디바이스 카메라 ID 매핑 (TX 장치 기억)
+// ============================================================================
+
+// NVS 키: "dev_cam_{index}" - 각 매핑은 3바이트 (device_id[2] + camera_id[1])
+#define NVS_KEY_DEV_CAM_PREFIX "dev_cam_"
+
+esp_err_t ConfigServiceClass::setDeviceCameraId(const uint8_t* device_id, uint8_t camera_id)
+{
+    if (!device_id) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "NVS 열기 실패 (setDeviceCameraId)");
+        return ret;
+    }
+
+    // 기존 매핑 확인
+    int existing_idx = -1;
+    int empty_idx = -1;
+    for (uint8_t i = 0; i < CONFIG_MAX_DEVICE_CAM_MAP; i++) {
+        char key[32];
+        snprintf(key, sizeof(key), "%s%d", NVS_KEY_DEV_CAM_PREFIX, i);
+
+        uint8_t data[3];
+        size_t len = sizeof(data);
+        ret = nvs_get_blob(handle, key, data, &len);
+
+        if (ret == ESP_OK) {
+            // device_id 비교
+            if (data[0] == device_id[0] && data[1] == device_id[1]) {
+                existing_idx = i;
+                break;
+            }
+        } else if (ret == ESP_ERR_NVS_NOT_FOUND && empty_idx < 0) {
+            empty_idx = i;
+        }
+    }
+
+    // 기존 매핑 업데이트 또는 새 매핑 추가
+    int target_idx = (existing_idx >= 0) ? existing_idx : empty_idx;
+    if (target_idx < 0) {
+        nvs_close(handle);
+        T_LOGW(TAG, "디바이스-카메라 매핑 꽉참");
+        return ESP_ERR_NO_MEM;
+    }
+
+    uint8_t data[3] = {device_id[0], device_id[1], camera_id};
+    char key[32];
+    snprintf(key, sizeof(key), "%s%d", NVS_KEY_DEV_CAM_PREFIX, target_idx);
+
+    ret = nvs_set_blob(handle, key, data, sizeof(data));
+    if (ret == ESP_OK) {
+        ret = nvs_commit(handle);
+        if (ret == ESP_OK) {
+            T_LOGI(TAG, "디바이스-카메라 매핑 저장: [%02X%02X] → Cam%d", device_id[0], device_id[1], camera_id);
+
+            // 캐시 업데이트
+            bool found = false;
+            for (uint8_t i = 0; i < s_device_cam_map.count; i++) {
+                if (s_device_cam_map.device_ids[i][0] == device_id[0] &&
+                    s_device_cam_map.device_ids[i][1] == device_id[1]) {
+                    s_device_cam_map.camera_ids[i] = camera_id;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found && s_device_cam_map.count < CONFIG_MAX_DEVICE_CAM_MAP) {
+                s_device_cam_map.device_ids[s_device_cam_map.count][0] = device_id[0];
+                s_device_cam_map.device_ids[s_device_cam_map.count][1] = device_id[1];
+                s_device_cam_map.camera_ids[s_device_cam_map.count] = camera_id;
+                s_device_cam_map.count++;
+            }
+        }
+    }
+
+    nvs_close(handle);
+    return ret;
+}
+
+esp_err_t ConfigServiceClass::getDeviceCameraId(const uint8_t* device_id, uint8_t* camera_id)
+{
+    if (!device_id || !camera_id) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // 캐시 확인
+    for (uint8_t i = 0; i < s_device_cam_map.count; i++) {
+        if (s_device_cam_map.device_ids[i][0] == device_id[0] &&
+            s_device_cam_map.device_ids[i][1] == device_id[1]) {
+            *camera_id = s_device_cam_map.camera_ids[i];
+            return ESP_OK;
+        }
+    }
+
+    // NVS 확인 (캐시 미스 시)
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READONLY, &handle);
+    if (ret != ESP_OK) {
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    for (uint8_t i = 0; i < CONFIG_MAX_DEVICE_CAM_MAP; i++) {
+        char key[32];
+        snprintf(key, sizeof(key), "%s%d", NVS_KEY_DEV_CAM_PREFIX, i);
+
+        uint8_t data[3];
+        size_t len = sizeof(data);
+        ret = nvs_get_blob(handle, key, data, &len);
+
+        if (ret == ESP_OK) {
+            if (data[0] == device_id[0] && data[1] == device_id[1]) {
+                *camera_id = data[2];
+                nvs_close(handle);
+
+                // 캐시에 추가
+                if (s_device_cam_map.count < CONFIG_MAX_DEVICE_CAM_MAP) {
+                    s_device_cam_map.device_ids[s_device_cam_map.count][0] = device_id[0];
+                    s_device_cam_map.device_ids[s_device_cam_map.count][1] = device_id[1];
+                    s_device_cam_map.camera_ids[s_device_cam_map.count] = *camera_id;
+                    s_device_cam_map.count++;
+                }
+
+                return ESP_OK;
+            }
+        }
+    }
+
+    nvs_close(handle);
+    return ESP_ERR_NOT_FOUND;
+}
+
+esp_err_t ConfigServiceClass::getDeviceCamMap(config_device_cam_map_t* map)
+{
+    if (!map) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READONLY, &handle);
+    if (ret != ESP_OK) {
+        // NVS 없으면 캐시 반환
+        *map = s_device_cam_map;
+        return ESP_OK;
+    }
+
+    map->count = 0;
+    for (uint8_t i = 0; i < CONFIG_MAX_DEVICE_CAM_MAP; i++) {
+        char key[32];
+        snprintf(key, sizeof(key), "%s%d", NVS_KEY_DEV_CAM_PREFIX, i);
+
+        uint8_t data[3];
+        size_t len = sizeof(data);
+        ret = nvs_get_blob(handle, key, data, &len);
+
+        if (ret == ESP_OK) {
+            map->device_ids[map->count][0] = data[0];
+            map->device_ids[map->count][1] = data[1];
+            map->camera_ids[map->count] = data[2];
+            map->count++;
+        }
+    }
+
+    nvs_close(handle);
+
+    // 캐시 업데이트
+    s_device_cam_map = *map;
+
+    return ESP_OK;
+}
+
+esp_err_t ConfigServiceClass::removeDeviceCamMap(const uint8_t* device_id)
+{
+    if (!device_id) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    for (uint8_t i = 0; i < CONFIG_MAX_DEVICE_CAM_MAP; i++) {
+        char key[32];
+        snprintf(key, sizeof(key), "%s%d", NVS_KEY_DEV_CAM_PREFIX, i);
+
+        uint8_t data[3];
+        size_t len = sizeof(data);
+        ret = nvs_get_blob(handle, key, data, &len);
+
+        if (ret == ESP_OK) {
+            if (data[0] == device_id[0] && data[1] == device_id[1]) {
+                nvs_erase_key(handle, key);
+                nvs_commit(handle);
+
+                T_LOGI(TAG, "디바이스-카메라 매핑 삭제: [%02X%02X]", device_id[0], device_id[1]);
+
+                // 캐시에서 제거
+                for (uint8_t j = i; j < s_device_cam_map.count - 1; j++) {
+                    s_device_cam_map.device_ids[j][0] = s_device_cam_map.device_ids[j + 1][0];
+                    s_device_cam_map.device_ids[j][1] = s_device_cam_map.device_ids[j + 1][1];
+                    s_device_cam_map.camera_ids[j] = s_device_cam_map.camera_ids[j + 1];
+                }
+                if (s_device_cam_map.count > 0) {
+                    s_device_cam_map.count--;
+                }
+
+                nvs_close(handle);
+                return ESP_OK;
+            }
+        }
+    }
+
+    nvs_close(handle);
+    return ESP_ERR_NOT_FOUND;
+}
+
+void ConfigServiceClass::clearDeviceCamMap(void)
+{
+    nvs_handle_t handle;
+    if (nvs_open(NVS_NAMESPACE_DEVICES, NVS_READWRITE, &handle) == ESP_OK) {
+        for (uint8_t i = 0; i < CONFIG_MAX_DEVICE_CAM_MAP; i++) {
+            char key[32];
+            snprintf(key, sizeof(key), "%s%d", NVS_KEY_DEV_CAM_PREFIX, i);
+            nvs_erase_key(handle, key);
+        }
+        nvs_commit(handle);
+        nvs_close(handle);
+    }
+
+    s_device_cam_map.count = 0;
+    T_LOGI(TAG, "디바이스-카메라 매핑 전체 삭제");
+}
+
+// ============================================================================
 // C 인터페이스 (extern "C")
 // ============================================================================
 
@@ -2055,6 +2331,35 @@ uint8_t config_service_get_registered_device_count(void)
 void config_service_clear_registered_devices(void)
 {
     ConfigServiceClass::clearRegisteredDevices();
+}
+
+// ============================================================================
+// 디바이스 카메라 ID 매핑 (TX 장치 기억)
+// ============================================================================
+
+esp_err_t config_service_set_device_camera_id(const uint8_t* device_id, uint8_t camera_id)
+{
+    return ConfigServiceClass::setDeviceCameraId(device_id, camera_id);
+}
+
+esp_err_t config_service_get_device_camera_id(const uint8_t* device_id, uint8_t* camera_id)
+{
+    return ConfigServiceClass::getDeviceCameraId(device_id, camera_id);
+}
+
+esp_err_t config_service_get_device_cam_map(config_device_cam_map_t* map)
+{
+    return ConfigServiceClass::getDeviceCamMap(map);
+}
+
+esp_err_t config_service_remove_device_cam_map(const uint8_t* device_id)
+{
+    return ConfigServiceClass::removeDeviceCamMap(device_id);
+}
+
+void config_service_clear_device_cam_map(void)
+{
+    ConfigServiceClass::clearDeviceCamMap();
 }
 
 } // extern "C"

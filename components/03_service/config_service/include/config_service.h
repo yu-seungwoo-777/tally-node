@@ -325,6 +325,56 @@ uint8_t config_service_get_registered_device_count(void);
 void config_service_clear_registered_devices(void);
 
 // ============================================================================
+// 디바이스 카메라 ID 매핑 (TX 장치 기억)
+// ============================================================================
+
+#define CONFIG_MAX_DEVICE_CAM_MAP 20  // 최대 디바이스-카메라 매핑 수
+
+/**
+ * @brief 디바이스별 카메라 ID 매핑 정보
+ */
+typedef struct {
+    uint8_t device_ids[CONFIG_MAX_DEVICE_CAM_MAP][2];  // 2바이트 디바이스 ID
+    uint8_t camera_ids[CONFIG_MAX_DEVICE_CAM_MAP];     // 카메라 ID
+    uint8_t count;
+} config_device_cam_map_t;
+
+/**
+ * @brief 디바이스 카메라 ID 매핑 저장/업데이트
+ * @param device_id 2바이트 디바이스 ID
+ * @param camera_id 카메라 ID
+ * @return ESP_OK 성공
+ */
+esp_err_t config_service_set_device_camera_id(const uint8_t* device_id, uint8_t camera_id);
+
+/**
+ * @brief 디바이스 카메라 ID 가져오기
+ * @param device_id 2바이트 디바이스 ID
+ * @param camera_id[out] 카메라 ID (찾지 못하면 0)
+ * @return ESP_OK 성공, ESP_ERR_NOT_FOUND 디바이스 없음
+ */
+esp_err_t config_service_get_device_camera_id(const uint8_t* device_id, uint8_t* camera_id);
+
+/**
+ * @brief 전체 매핑 가져오기
+ * @param map[out] 매핑 정보를 저장할 구조체
+ * @return ESP_OK 성공
+ */
+esp_err_t config_service_get_device_cam_map(config_device_cam_map_t* map);
+
+/**
+ * @brief 매핑 삭제
+ * @param device_id 2바이트 디바이스 ID
+ * @return ESP_OK 성공
+ */
+esp_err_t config_service_remove_device_cam_map(const uint8_t* device_id);
+
+/**
+ * @brief 전체 매핑 삭제
+ */
+void config_service_clear_device_cam_map(void);
+
+// ============================================================================
 // 기존 API
 // ============================================================================
 
