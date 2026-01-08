@@ -194,9 +194,25 @@ static void print_status_log(void)
 #ifdef DEVICE_MODE_RX
     // Tally 정보 (RX)
     if (s_mgr.data.tally.valid) {
-        T_LOGI(TAG, "Tally PGM:%d PVW:%d",
-               s_mgr.data.tally.pgm_count,
-               s_mgr.data.tally.pvw_count);
+        // 채널 목록 문자열 생성
+        char pgm_str[32] = {0};
+        char pvw_str[32] = {0};
+        int offset = 0;
+
+        for (uint8_t i = 0; i < s_mgr.data.tally.pgm_count && i < 20; i++) {
+            offset += snprintf(pgm_str + offset, sizeof(pgm_str) - offset,
+                             "%s%d", (i > 0) ? "," : "", s_mgr.data.tally.pgm_channels[i]);
+        }
+
+        offset = 0;
+        for (uint8_t i = 0; i < s_mgr.data.tally.pvw_count && i < 20; i++) {
+            offset += snprintf(pvw_str + offset, sizeof(pvw_str) - offset,
+                             "%s%d", (i > 0) ? "," : "", s_mgr.data.tally.pvw_channels[i]);
+        }
+
+        T_LOGI(TAG, "Tally PGM:[%s] PVW:[%s]",
+               (s_mgr.data.tally.pgm_count > 0) ? pgm_str : "-",
+               (s_mgr.data.tally.pvw_count > 0) ? pvw_str : "-");
     }
 
     // 디바이스 정보 (RX)
