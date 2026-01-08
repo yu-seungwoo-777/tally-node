@@ -1588,9 +1588,10 @@ static esp_err_t api_brightness_broadcast_handler(httpd_req_t* req)
 
     ESP_LOGI(TAG, "일괄 밝기 제어 요청 (Broadcast): brightness=%d", brightness);
 
-    // TODO: LoRa Broadcast로 밝기 명령 송신
-    // lora_cmd_brightness_t cmd = { ... };
-    // event_bus_publish(EVT_LORA_SEND_REQUEST, ...);
+    // Broadcast 밝기 명령 송신 (device_id = 0xFF, 0xFF)
+    uint8_t broadcast_id[2] = {0xFF, 0xFF};
+    uint8_t event_data[3] = {broadcast_id[0], broadcast_id[1], (uint8_t)brightness};
+    event_bus_publish(EVT_DEVICE_BRIGHTNESS_REQUEST, event_data, sizeof(event_data));
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");

@@ -913,10 +913,36 @@ static esp_err_t on_lora_tx_command(const event_data_t* event)
     else if (header == LORA_HDR_SET_BRIGHTNESS) {
         if (len >= sizeof(lora_cmd_brightness_t)) {
             const lora_cmd_brightness_t* cmd = (const lora_cmd_brightness_t*)data;
-            T_LOGI(TAG, "밝기 설정 수신: %d", cmd->brightness);
 
-            // 밝기 변경 이벤트 발행 (led_service가 구독)
-            event_bus_publish(EVT_BRIGHTNESS_CHANGED, &cmd->brightness, sizeof(cmd->brightness));
+            // Broadcast 또는 자신의 Device ID 확인
+            bool is_target = lora_device_id_is_broadcast(cmd->device_id);
+
+            if (!is_target && strlen(s_rx.system.device_id) == 4) {
+                // 자신의 ID와 비교
+                uint8_t my_id[2];
+                char hex_str[3];
+                hex_str[0] = s_rx.system.device_id[0];
+                hex_str[1] = s_rx.system.device_id[1];
+                hex_str[2] = '\0';
+                my_id[0] = (uint8_t)strtol(hex_str, NULL, 16);
+                hex_str[0] = s_rx.system.device_id[2];
+                hex_str[1] = s_rx.system.device_id[3];
+                my_id[1] = (uint8_t)strtol(hex_str, NULL, 16);
+                is_target = lora_device_id_equals(my_id, cmd->device_id);
+            }
+
+            if (is_target) {
+                char device_id_str[5];
+                lora_device_id_to_str(cmd->device_id, device_id_str);
+                T_LOGI(TAG, "밝기 설정 수신: ID=%s, 밝기=%d", device_id_str, cmd->brightness);
+
+                // 밝기 변경 이벤트 발행 (led_service가 구독)
+                event_bus_publish(EVT_BRIGHTNESS_CHANGED, &cmd->brightness, sizeof(cmd->brightness));
+            } else {
+                char device_id_str[5];
+                lora_device_id_to_str(cmd->device_id, device_id_str);
+                T_LOGD(TAG, "밝기 명령 무시: 타겟 ID=%s (내 ID가 아님)", device_id_str);
+            }
         } else {
             T_LOGW(TAG, "밝기 명령 길이 부족: %d < %zu", len, sizeof(lora_cmd_brightness_t));
         }
@@ -925,10 +951,36 @@ static esp_err_t on_lora_tx_command(const event_data_t* event)
     else if (header == LORA_HDR_SET_CAMERA_ID) {
         if (len >= sizeof(lora_cmd_camera_id_t)) {
             const lora_cmd_camera_id_t* cmd = (const lora_cmd_camera_id_t*)data;
-            T_LOGI(TAG, "카메라 ID 설정 수신: %d", cmd->camera_id);
 
-            // 이벤트 발행 (config_service가 NVS 저장)
-            event_bus_publish(EVT_CAMERA_ID_CHANGED, &cmd->camera_id, sizeof(cmd->camera_id));
+            // Broadcast 또는 자신의 Device ID 확인
+            bool is_target = lora_device_id_is_broadcast(cmd->device_id);
+
+            if (!is_target && strlen(s_rx.system.device_id) == 4) {
+                // 자신의 ID와 비교
+                uint8_t my_id[2];
+                char hex_str[3];
+                hex_str[0] = s_rx.system.device_id[0];
+                hex_str[1] = s_rx.system.device_id[1];
+                hex_str[2] = '\0';
+                my_id[0] = (uint8_t)strtol(hex_str, NULL, 16);
+                hex_str[0] = s_rx.system.device_id[2];
+                hex_str[1] = s_rx.system.device_id[3];
+                my_id[1] = (uint8_t)strtol(hex_str, NULL, 16);
+                is_target = lora_device_id_equals(my_id, cmd->device_id);
+            }
+
+            if (is_target) {
+                char device_id_str[5];
+                lora_device_id_to_str(cmd->device_id, device_id_str);
+                T_LOGI(TAG, "카메라 ID 설정 수신: ID=%s, CameraID=%d", device_id_str, cmd->camera_id);
+
+                // 이벤트 발행 (config_service가 NVS 저장)
+                event_bus_publish(EVT_CAMERA_ID_CHANGED, &cmd->camera_id, sizeof(cmd->camera_id));
+            } else {
+                char device_id_str[5];
+                lora_device_id_to_str(cmd->device_id, device_id_str);
+                T_LOGD(TAG, "카메라 ID 명령 무시: 타겟 ID=%s (내 ID가 아님)", device_id_str);
+            }
         } else {
             T_LOGW(TAG, "카메라 ID 명령 길이 부족: %d < %zu", len, sizeof(lora_cmd_camera_id_t));
         }
