@@ -116,9 +116,9 @@ static esp_err_t handle_button_single_click(const event_data_t* event)
         return ESP_OK;
     }
 
-    // RxPage: 1 ↔ 2 토글
+    // RxPage: 1 → 2 → 3 → 1 순환
     uint8_t current = display_manager_get_page_index();
-    uint8_t next = (current == 1) ? 2 : 1;
+    uint8_t next = (current == 1) ? 2 : (current == 2) ? 3 : 1;
     display_manager_switch_page(next);
     display_manager_force_refresh();
     T_LOGI(TAG, "RxPage: %d -> %d", current, next);
