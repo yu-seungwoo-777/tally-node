@@ -332,6 +332,31 @@ static esp_err_t on_lora_rssi_changed(const event_data_t* event)
     return ESP_OK;
 }
 
+/**
+ * @brief EVT_LORA_RX_STATUS_CHANGED 핸들러 (RX 전용)
+ *
+ * LoRa RX 수신 통계 변경 시 RxPage에 업데이트
+ */
+static esp_err_t on_lora_rx_status_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_OK;
+    }
+
+#ifdef DEVICE_MODE_RX
+    const lora_rx_status_event_t* rx_status = (const lora_rx_status_event_t*)event->data;
+
+    // RxPage에 RX 통계 데이터 설정
+    rx_page_set_rx_stats(rx_status->lastRssi, rx_status->lastSnr,
+                         rx_status->interval, rx_status->totalCount);
+
+    T_LOGD(TAG, "RX stats updated: RSSI=%d, SNR=%d, INTVL=%u, TOTAL=%u",
+             rx_status->lastRssi, rx_status->lastSnr, rx_status->interval, rx_status->totalCount);
+#endif
+
+    return ESP_OK;
+}
+
 #ifdef DEVICE_MODE_RX
 /**
  * @brief EVT_TALLY_STATE_CHANGED 핸들러 (RX 전용)
@@ -600,6 +625,7 @@ extern "C" void display_manager_start(void)
         event_bus_subscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
         event_bus_subscribe(EVT_RF_CHANGED, on_rf_changed);
         event_bus_subscribe(EVT_STOP_CHANGED, on_stop_changed);
+        event_bus_subscribe(EVT_LORA_RX_STATUS_CHANGED, on_lora_rx_status_changed);
 #elif defined(DEVICE_MODE_TX)
         // TX 전용 이벤트
         event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, on_switcher_status_changed);
@@ -610,7 +636,7 @@ extern "C" void display_manager_start(void)
         s_mgr.events_subscribed = true;
         T_LOGI(TAG, "이벤트 구독 완료: EVT_INFO_UPDATED, EVT_LORA_RSSI_CHANGED"
 #ifdef DEVICE_MODE_RX
-               ", EVT_TALLY_STATE_CHANGED, EVT_CAMERA_ID_CHANGED, EVT_BRIGHTNESS_CHANGED, EVT_RF_CHANGED, EVT_STOP_CHANGED"
+               ", EVT_TALLY_STATE_CHANGED, EVT_CAMERA_ID_CHANGED, EVT_BRIGHTNESS_CHANGED, EVT_RF_CHANGED, EVT_STOP_CHANGED, EVT_LORA_RX_STATUS_CHANGED"
 #elif defined(DEVICE_MODE_TX)
                ", EVT_SWITCHER_STATUS_CHANGED, EVT_NETWORK_STATUS_CHANGED, EVT_RF_CHANGED"
 #endif
