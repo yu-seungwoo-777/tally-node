@@ -6,41 +6,70 @@ CONFIG_BOOTLOADER_LOG_LEVEL=0
 CONFIG_LOG_COLORS=n
 
 # ============================================================
+# ESP 시스템 시작 로그 비활성화
+# ============================================================
+CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=16384
+CONFIG_ESP_INT_WDT_TIMEOUT_MS=5000
+
+# CPU 시작 로그 비활성화
+CONFIG_ESP_SYSTEM_MEM_STATS_FORMAT_STR=0
+CONFIG_ESP_SYSTEM_MEM_STATS_FILE=0
+
+# ============================================================
+# 내부 컴포넌트 로그 비활성화
+# ============================================================
+# ESP_EVENT 로그 비활성화
+CONFIG_ESP_EVENT_LOG_LEVEL_NONE=y
+CONFIG_ESP_EVENT_LOG_LEVEL=0
+
+# heap 로그 비활성화
+CONFIG_HEAP_MEM_ALIGNMENT_REGION=1
+CONFIG_HEAP_POISONING_DISABLED=y
+CONFIG_HEAP_TRACING_DISABLED=y
+
+# SPI Flash 로그 비활성화
+CONFIG_ESP_ROM_SPI_FLASH_LOG_LEVEL_NONE=y
+CONFIG_ESP_ROM_SPI_FLASH_LOG_LEVEL=0
+
+# efuse 로그 비활성화
+CONFIG_EFUSE_LOG_LEVEL_NONE=y
+CONFIG_EFUSE_LOG_LEVEL=0
+
+# i2c 로그 비활성화
+CONFIG_I2C_LOG_LEVEL_NONE=y
+CONFIG_I2C_LOG_LEVEL=0
+
+# sleep/gpio 로그 비활성화
+CONFIG_GPIO_LOG_LEVEL_NONE=y
+CONFIG_GPIO_LOG_LEVEL=0
+
+# ============================================================
+# 전역 로그 레벨 최소화 (ERROR만)
+# ============================================================
+CONFIG_LOG_DEFAULT_LEVEL_ERROR=y
+CONFIG_LOG_DEFAULT_LEVEL=1
+CONFIG_LOG_MAXIMUM_LEVEL=5
+CONFIG_LOG_TIMESTAMP_SOURCE_SYS=y
+
+# ============================================================
 # Flash 설정
 # ============================================================
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
 
-# ============================================================
-# Log 설정
-# ============================================================
-CONFIG_LOG_DEFAULT_LEVEL_INFO=y
-CONFIG_LOG_DEFAULT_LEVEL=3
-CONFIG_LOG_MAXIMUM_LEVEL=5
-CONFIG_LOG_TIMESTAMP_SOURCE_SYS=y
+# ESP-IDF 내부 컴포넌트 로그 비활성화
+# lwIP 로그 비활성화
+CONFIG_LWIP_LOG_LEVEL_NONE=y
+CONFIG_LWIP_LOG_LEVEL=0
+CONFIG_LWIP_DEBUG=0
 
-# ESP-ROM, ESP-Image 로그 비활성화
-CONFIG_ESP_ROM_GET_CPU_FREQ=y
-CONFIG_ESP_ROM_HAS_ROM_CRC=y
+# NetIF 로그 비활성화
+CONFIG_ESP_NETIF_LOG_LEVEL_NONE=y
+CONFIG_ESP_NETIF_LOG_LEVEL=0
 
-# Bootloader 출력 없음
-CONFIG_BOOTLOADER_VDDSDIO_BOOST_1_9V=n
-
-# ESP-IDF 내부 컴포넌트 로그 비활성화 (선택 사항)
-# 현재 WiFi 로그는 이미 비활성화됨 (아래 참조)
-# 추가 비활성화가 필요한 경우:
-#
-# # lwIP 로그 비활성화
-# CONFIG_LWIP_LOG_LEVEL_NONE=y
-# CONFIG_LWIP_LOG_LEVEL=0
-#
-# # NetIF 로그 비활성화
-# CONFIG_ESP_NETIF_LOG_LEVEL_NONE=y
-# CONFIG_ESP_NETIF_LOG_LEVEL=0
-#
-# # HTTP 서버 로그 비활성화
-# CONFIG_HTTPD_LOG_LEVEL_NONE=y
-# CONFIG_HTTPD_LOG_LEVEL=0
+# HTTP 서버 로그 비활성화
+CONFIG_HTTPD_LOG_LEVEL_NONE=y
+CONFIG_HTTPD_LOG_LEVEL=0
 
 # ============================================================
 # WiFi 설정
