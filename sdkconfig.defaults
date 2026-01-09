@@ -118,7 +118,7 @@ CONFIG_LWIP_TCP_MSS=1440
 # HTTP 서버 설정
 # ============================================================
 CONFIG_HTTPD_TX_PKT_SIZE=8192  # 전송 패킷 크기 증가 (4KB → 8KB)
-CONFIG_HTTPD_TASK_STACK_SIZE=32768  # 태스크 스택 증가 (16KB → 32KB, HTTPS용)
+CONFIG_HTTPD_TASK_STACK_SIZE=65536  # 태스크 스택 증가 (16KB → 64KB, HTTPS용)
 
 # ============================================================
 # FreeRTOS 설정
