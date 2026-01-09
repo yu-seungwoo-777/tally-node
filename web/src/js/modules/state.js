@@ -425,6 +425,12 @@ export function stateModule() {
             error: null
         },
 
+        // 공지사항 모달 상태
+        noticeModal: {
+            show: false,
+            notice: null
+        },
+
         /**
          * 전체 RX 디바이스 밝기 일괄 설정 (Broadcast)
          * @param {number} brightness - 밝기 값 (0-100)
@@ -508,6 +514,21 @@ export function stateModule() {
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
+        },
+
+        /**
+         * 공지사항 모달 열기
+         */
+        openNoticeModal(notice) {
+            this.noticeModal.notice = notice;
+            this.noticeModal.show = true;
+        },
+
+        /**
+         * 공지사항 모달 닫기
+         */
+        closeNoticeModal() {
+            this.noticeModal.show = false;
         }
     };
 }

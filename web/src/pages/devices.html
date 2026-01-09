@@ -47,7 +47,7 @@
     </div>
 
     <!-- 디바이스 그리드 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="device-grid">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start" id="device-grid">
         <template x-for="device in devices.list" :key="device.id">
             <div class="bg-white rounded-2xl border overflow-hidden hover:shadow-lg hover:border-slate-300 transition-all duration-200"
                  :class="{

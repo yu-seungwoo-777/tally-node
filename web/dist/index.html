@@ -161,7 +161,7 @@
                     </div>
 
                     <!-- 히어로 스탯 -->
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4 items-start">
                         <!-- 배터리 -->
                         <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 hover:shadow-md transition-shadow">
                             <div class="flex items-center justify-between">
@@ -211,7 +211,7 @@
                     </div>
 
                     <!-- Switcher + Network 2열 -->
-                    <div class="grid gap-4 md:grid-cols-2 mb-4">
+                    <div class="grid gap-4 md:grid-cols-2 mb-4 items-start">
                         <!-- Switcher Status -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3.5 border-b border-slate-100">
@@ -389,7 +389,7 @@
                         <p class="text-xs md:text-sm text-slate-500 hidden sm:block">Configure WiFi AP, WiFi STA, and Ethernet settings</p>
                     </div>
 
-                    <div class="grid gap-4 md:grid-cols-2">
+                    <div class="grid gap-4 md:grid-cols-2 items-start">
                         <!-- AP 설정 카드 -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200">
                             <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-transparent">
@@ -681,7 +681,7 @@
                     </div>
 
                     <!-- Switcher Status Cards (2-Column) -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 items-start">
                         <!-- Primary Status Card -->
                         <div class="bg-white rounded-xl shadow-sm border border-blue-200 overflow-hidden">
                             <div class="px-4 py-3 bg-blue-50 border-b border-blue-100">
@@ -884,7 +884,7 @@
                         <p class="text-xs md:text-sm text-slate-500 hidden sm:block">Configure wireless tally channel</p>
                     </div>
 
-                    <div class="grid gap-4 lg:grid-cols-2">
+                    <div class="grid gap-4 lg:grid-cols-2 items-start">
                         <!-- Channel Scan Card -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3.5 md:px-5 md:py-4 border-b border-slate-100 bg-gradient-to-r from-amber-50 to-transparent">
@@ -1169,7 +1169,7 @@
     </div>
 
     <!-- 디바이스 그리드 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="device-grid">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start" id="device-grid">
         <template x-for="device in devices.list" :key="device.id">
             <div class="bg-white rounded-2xl border overflow-hidden hover:shadow-lg hover:border-slate-300 transition-all duration-200"
                  :class="{
@@ -1511,7 +1511,7 @@
                         <p class="text-xs md:text-sm text-slate-500 hidden sm:block">Configure system settings</p>
                     </div>
 
-                    <div class="grid gap-4 lg:grid-cols-2">
+                    <div class="grid gap-4 lg:grid-cols-2 items-start">
                         <!-- Notices -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-transparent flex items-center justify-between">
@@ -1541,7 +1541,7 @@
                                 </div>
                                 <!-- 공지사항 목록 -->
                                 <template x-for="notice in notices.list" :key="notice.id">
-                                    <div class="mb-3 last:mb-0 p-3 rounded-lg border" :class="{
+                                    <div @click="openNoticeModal(notice)" class="mb-3 last:mb-0 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow" :class="{
                                         'border-rose-200 bg-rose-50': notice.priority === 1,
                                         'border-amber-200 bg-amber-50': notice.priority === 2,
                                         'border-slate-200 bg-slate-50': notice.priority === 0
@@ -1550,7 +1550,8 @@
                                             <h4 class="font-semibold text-sm text-slate-900" x-text="notice.title"></h4>
                                             <span class="text-xs text-slate-400 whitespace-nowrap" x-text="formatDate(notice.created_at)"></span>
                                         </div>
-                                        <p class="text-xs text-slate-600 mt-1" x-text="notice.content"></p>
+                                        <p class="text-xs text-slate-600 mt-1 truncate" x-text="notice.content"></p>
+                                        <p class="text-xs text-indigo-500 mt-1">Click to view more</p>
                                     </div>
                                 </template>
                                 <!-- 공지사항 없음 -->
@@ -1648,13 +1649,37 @@
                     </div>
                 </div>
 
+                <!-- Notice Modal -->
+                <div x-show="noticeModal.show" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 flex items-center justify-center p-4" x-cloak>
+                    <div class="absolute inset-0 bg-black/50" @click="closeNoticeModal()"></div>
+                    <div x-show="noticeModal.show" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative bg-white rounded-xl shadow-xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col">
+                        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                            <h3 class="font-semibold text-slate-900" x-text="noticeModal.notice?.title || ''"></h3>
+                            <button @click="closeNoticeModal()" class="p-1 hover:bg-slate-100 rounded-lg">
+                                <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="p-4 overflow-y-auto flex-1">
+                            <div class="text-xs text-slate-500 mb-2" x-text="formatDate(noticeModal.notice?.created_at || '')"></div>
+                            <p class="text-sm text-slate-700 whitespace-pre-wrap" x-text="noticeModal.notice?.content || ''"></p>
+                        </div>
+                        <div class="px-4 py-3 border-t border-slate-100 flex justify-end">
+                            <button @click="closeNoticeModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div x-show="currentView === 'license'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0" x-cloak>
                     <div class="mb-4">
                         <h2 class="text-lg md:text-xl font-semibold text-slate-900">License Management</h2>
                         <p class="text-xs md:text-sm text-slate-500 hidden sm:block">License verification and internet connection test</p>
                     </div>
 
-                    <div class="grid gap-4 lg:grid-cols-2">
+                    <div class="grid gap-4 lg:grid-cols-2 items-start">
                         <!-- 1. Activate License Card -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-transparent">
