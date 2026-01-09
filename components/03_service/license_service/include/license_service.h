@@ -109,6 +109,19 @@ bool license_service_can_send_tally(void);
  */
 esp_err_t license_service_get_key(char* out_key);
 
+/**
+ * @brief 라이센스 검색 (이름/전화번호/이메일로 조회)
+ * @param name 이름
+ * @param phone 전화번호
+ * @param email 이메일
+ * @param out_response[out] JSON 응답 버퍼
+ * @param response_size 응답 버퍼 크기
+ * @return ESP_OK 성공
+ */
+esp_err_t license_service_search_license(const char* name, const char* phone,
+                                          const char* email, char* out_response,
+                                          size_t response_size);
+
 #ifdef __cplusplus
 }
 #endif

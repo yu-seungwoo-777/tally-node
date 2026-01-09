@@ -5,7 +5,6 @@
 
 #include "web_server.h"
 #include "license_service.h"
-#include "license_client.h"
 #include "event_bus.h"
 #include "lora_protocol.h"
 #include "cJSON.h"
@@ -1526,7 +1525,7 @@ static esp_err_t api_search_license_handler(httpd_req_t* req)
     }
     memset(response_buffer, 0, 512);
 
-    esp_err_t err = license_client_search_license(name, phone, email, response_buffer, 512);
+    esp_err_t err = license_service_search_license(name, phone, email, response_buffer, 512);
 
     cJSON_Delete(root);
 
