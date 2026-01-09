@@ -1511,60 +1511,41 @@
                         <p class="text-xs md:text-sm text-slate-500 hidden sm:block">Configure system settings</p>
                     </div>
 
-                    <div class="grid gap-4 lg:grid-cols-2 items-start">
-                        <!-- Notices -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-transparent flex items-center justify-between">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path>
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <h3 class="font-semibold text-slate-900 text-base">Notices</h3>
-                                        <p class="text-xs text-slate-500">Latest updates</p>
-                                    </div>
-                                </div>
-                                <button @click="fetchNotices()" :disabled="notices.loading" class="p-1.5 hover:bg-indigo-100 rounded-lg disabled:opacity-50" title="Refresh">
-                                    <svg class="w-4 h-4 text-indigo-500" :class="{ 'animate-spin': notices.loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                    </svg>
-                                </button>
-                            </div>
-                            <div class="p-4 max-h-64 overflow-auto">
-                                <!-- 로딩 -->
-                                <div x-show="notices.loading" class="flex items-center justify-center py-8">
-                                    <svg class="w-6 h-6 text-indigo-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    <!-- 1행: System Actions (Reboot) -->
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
+                        <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-rose-50 to-transparent">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 bg-rose-100 rounded-lg flex items-center justify-center">
+                                    <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
                                     </svg>
                                 </div>
-                                <!-- 공지사항 목록 -->
-                                <template x-for="notice in notices.list" :key="notice.id">
-                                    <div @click="openNoticeModal(notice)" class="mb-3 last:mb-0 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow" :class="{
-                                        'border-rose-200 bg-rose-50': notice.priority === 1,
-                                        'border-amber-200 bg-amber-50': notice.priority === 2,
-                                        'border-slate-200 bg-slate-50': notice.priority === 0
-                                    }">
-                                        <div class="flex items-start justify-between gap-2">
-                                            <h4 class="font-semibold text-sm text-slate-900" x-text="notice.title"></h4>
-                                            <span class="text-xs text-slate-400 whitespace-nowrap" x-text="formatDate(notice.created_at)"></span>
-                                        </div>
-                                        <p class="text-xs text-slate-600 mt-1 truncate" x-text="notice.content"></p>
-                                        <p class="text-xs text-indigo-500 mt-1">Click to view more</p>
-                                    </div>
-                                </template>
-                                <!-- 공지사항 없음 -->
-                                <div x-show="!notices.loading && notices.list.length === 0" class="text-center py-6 text-slate-400 text-sm">
-                                    No notices
-                                </div>
-                                <!-- 에러 -->
-                                <div x-show="notices.error" class="text-center py-6 text-rose-500 text-sm">
-                                    <span x-text="notices.error"></span>
+                                <div>
+                                    <h3 class="font-semibold text-slate-900 text-base">System Actions</h3>
+                                    <p class="text-xs text-slate-500">Device control</p>
                                 </div>
                             </div>
                         </div>
+                        <div class="p-4 space-y-3">
+                            <!-- TX 재부팅 -->
+                            <button @click="rebootTx()" class="w-full px-5 py-3 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors flex items-center justify-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                                Reboot TX (This Device)
+                            </button>
+                            <!-- 전체 재부팅 -->
+                            <button @click="rebootAll()" class="w-full px-5 py-3 text-sm font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-xl hover:bg-rose-100 transition-colors flex items-center justify-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                Reboot All Devices (Broadcast)
+                            </button>
+                        </div>
+                    </div>
 
+                    <!-- 2행: Tally Test Mode, Notices -->
+                    <div class="grid gap-4 lg:grid-cols-2 items-start">
                         <!-- Tally Test Mode -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-purple-50 to-transparent flex items-center justify-between">
@@ -1635,15 +1616,56 @@
                             </div>
                         </div>
 
-                        <!-- System Info -->
+                        <!-- Notices -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div class="px-4 py-3.5 border-b border-slate-100">
-                                <h3 class="font-semibold text-slate-900 text-base">System Actions</h3>
-                            </div>
-                            <div class="p-4 space-y-3">
-                                <button @click="reboot()" class="w-full px-5 py-2.5 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors">
-                                    Reboot Device
+                            <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-transparent flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-semibold text-slate-900 text-base">Notices</h3>
+                                        <p class="text-xs text-slate-500">Latest updates</p>
+                                    </div>
+                                </div>
+                                <button @click="fetchNotices()" :disabled="notices.loading" class="p-1.5 hover:bg-indigo-100 rounded-lg disabled:opacity-50" title="Refresh">
+                                    <svg class="w-4 h-4 text-indigo-500" :class="{ 'animate-spin': notices.loading }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
                                 </button>
+                            </div>
+                            <div class="p-4 max-h-64 overflow-auto">
+                                <!-- 로딩 -->
+                                <div x-show="notices.loading" class="flex items-center justify-center py-8">
+                                    <svg class="w-6 h-6 text-indigo-400 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
+                                </div>
+                                <!-- 공지사항 목록 -->
+                                <template x-for="notice in notices.list" :key="notice.id">
+                                    <div @click="openNoticeModal(notice)" class="mb-3 last:mb-0 p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-shadow" :class="{
+                                        'border-rose-200 bg-rose-50': notice.priority === 1,
+                                        'border-amber-200 bg-amber-50': notice.priority === 2,
+                                        'border-slate-200 bg-slate-50': notice.priority === 0
+                                    }">
+                                        <div class="flex items-start justify-between gap-2">
+                                            <h4 class="font-semibold text-sm text-slate-900" x-text="notice.title"></h4>
+                                            <span class="text-xs text-slate-400 whitespace-nowrap" x-text="formatDate(notice.created_at)"></span>
+                                        </div>
+                                        <p class="text-xs text-slate-600 mt-1 truncate" x-text="notice.content"></p>
+                                        <p class="text-xs text-indigo-500 mt-1">Click to view more</p>
+                                    </div>
+                                </template>
+                                <!-- 공지사항 없음 -->
+                                <div x-show="!notices.loading && notices.list.length === 0" class="text-center py-6 text-slate-400 text-sm">
+                                    No notices
+                                </div>
+                                <!-- 에러 -->
+                                <div x-show="notices.error" class="text-center py-6 text-rose-500 text-sm">
+                                    <span x-text="notices.error"></span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1680,42 +1702,7 @@
                     </div>
 
                     <div class="grid gap-4 lg:grid-cols-2 items-start">
-                        <!-- 1. Activate License Card -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-transparent">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-7 h-7 bg-indigo-100 rounded-lg flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
-                                        </svg>
-                                    </div>
-                                    <h3 class="font-semibold text-slate-900">Activate License</h3>
-                                </div>
-                            </div>
-                            <div class="p-4 space-y-4">
-                                <p class="text-sm text-slate-600">Enter license key to activate the product.</p>
-
-                                <div class="flex gap-3">
-                                    <input type="text" x-model="licenseForm.key"
-                                           class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm uppercase"
-                                           placeholder="XXXX-XXXX-XXXX-XXXX"
-                                           maxlength="19"
-                                           @input="formatLicenseKey"
-                                           @keyup.enter="validateLicense()">
-                                    <button @click="validateLicense()"
-                                            :disabled="license.loading || !licenseForm.key"
-                                            class="px-6 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center gap-2">
-                                        <svg x-show="license.loading" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                        </svg>
-                                        <span x-text="license.loading ? 'Validating...' : 'Activate'"></span>
-                                    </button>
-                                </div>
-                                <p class="text-xs text-slate-500">Contact administrator for license key.</p>
-                            </div>
-                        </div>
-
-                        <!-- 2. License Status Card -->
+                        <!-- 1. License Status Card -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-transparent">
                                 <div class="flex items-center gap-2">
@@ -1769,7 +1756,77 @@
                             </div>
                         </div>
 
-                        <!-- 3. Internet Connection Test Card -->
+                        <!-- 2. Activate License Card -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-transparent">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-indigo-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                                        </svg>
+                                    </div>
+                                    <h3 class="font-semibold text-slate-900">Activate License</h3>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <p class="text-sm text-slate-600">Enter license key to activate the product.</p>
+
+                                <div class="flex gap-3">
+                                    <input type="text" x-model="licenseForm.key"
+                                           class="flex-1 px-4 py-2.5 border border-slate-300 rounded-xl text-sm uppercase"
+                                           placeholder="XXXX-XXXX-XXXX-XXXX"
+                                           maxlength="19"
+                                           @input="formatLicenseKey"
+                                           @keyup.enter="validateLicense()">
+                                    <button @click="validateLicense()"
+                                            :disabled="license.loading || !licenseForm.key"
+                                            class="px-6 py-2.5 text-sm font-medium text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center gap-2">
+                                        <svg x-show="license.loading" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                        </svg>
+                                        <span x-text="license.loading ? 'Validating...' : 'Activate'"></span>
+                                    </button>
+                                </div>
+                                <p class="text-xs text-slate-500">Contact administrator for license key.</p>
+                            </div>
+                        </div>
+
+                        <!-- 3. Search License Card -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-amber-50 to-transparent">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                        </svg>
+                                    </div>
+                                    <h3 class="font-semibold text-slate-900">Search License</h3>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-3">
+                                <p class="text-sm text-slate-600">Find your registered license by personal information.</p>
+
+                                <input type="text" x-model="licenseSearch.name" placeholder="Name" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                                <input type="tel" x-model="licenseSearch.phone" placeholder="Phone Number" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                                <input type="email" x-model="licenseSearch.email" placeholder="Email" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+
+                                <button @click="searchLicenseServer()" :disabled="licenseSearch.searching"
+                                        class="w-full px-4 py-2.5 text-sm font-medium text-white bg-amber-600 rounded-xl hover:bg-amber-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                                    <svg x-show="licenseSearch.searching" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
+                                    <span x-text="licenseSearch.searching ? 'Searching...' : 'Search License'"></span>
+                                </button>
+
+                                <!-- Search Result -->
+                                <div x-show="licenseSearch.result" class="p-3 rounded-lg text-sm"
+                                     :class="licenseSearch.success ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'">
+                                    <span x-text="licenseSearch.result"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 4. Internet Connection Test Card -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-cyan-50 to-transparent">
                                 <div class="flex items-center gap-2">
@@ -1837,41 +1894,6 @@
                                     </svg>
                                     <span x-text="internetTest.testing ? 'Testing...' : 'Connection Test'"></span>
                                 </button>
-                            </div>
-                        </div>
-
-                        <!-- 4. Search License Card -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-amber-50 to-transparent">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                                        </svg>
-                                    </div>
-                                    <h3 class="font-semibold text-slate-900">Search License</h3>
-                                </div>
-                            </div>
-                            <div class="p-4 space-y-3">
-                                <p class="text-sm text-slate-600">Find your registered license by personal information.</p>
-
-                                <input type="text" x-model="licenseSearch.name" placeholder="Name" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                                <input type="tel" x-model="licenseSearch.phone" placeholder="Phone Number" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                                <input type="email" x-model="licenseSearch.email" placeholder="Email" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
-
-                                <button @click="searchLicenseServer()" :disabled="licenseSearch.searching"
-                                        class="w-full px-4 py-2.5 text-sm font-medium text-white bg-amber-600 rounded-xl hover:bg-amber-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                                    <svg x-show="licenseSearch.searching" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                    </svg>
-                                    <span x-text="licenseSearch.searching ? 'Searching...' : 'Search License'"></span>
-                                </button>
-
-                                <!-- Search Result -->
-                                <div x-show="licenseSearch.result" class="p-3 rounded-lg text-sm"
-                                     :class="licenseSearch.success ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'">
-                                    <span x-text="licenseSearch.result"></span>
-                                </div>
                             </div>
                         </div>
                     </div>

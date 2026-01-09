@@ -321,10 +321,10 @@
         }
       },
       /**
-       * 시스템 재부팅
+       * TX 재부팅 (이 기기만)
        */
-      async reboot() {
-        if (!confirm("Are you sure you want to reboot the device?")) {
+      async rebootTx() {
+        if (!confirm("Are you sure you want to reboot this device?")) {
           return;
         }
         try {
@@ -337,6 +337,26 @@
           this.toast("Device is rebooting...", "alert-info");
         } catch (e) {
           console.error("Reboot error:", e);
+          this.toast(e.message, "alert-error");
+        }
+      },
+      /**
+       * 전체 재부팅 (브로드캐스트)
+       */
+      async rebootAll() {
+        if (!confirm("Are you sure you want to reboot ALL devices?")) {
+          return;
+        }
+        try {
+          const res = await fetch("/api/reboot/broadcast", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" }
+          });
+          if (!res.ok)
+            throw new Error("Failed to broadcast reboot");
+          this.toast("Reboot command sent to all devices", "alert-info");
+        } catch (e) {
+          console.error("Broadcast reboot error:", e);
           this.toast(e.message, "alert-error");
         }
       },

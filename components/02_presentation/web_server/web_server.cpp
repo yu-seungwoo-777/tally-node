@@ -904,6 +904,45 @@ static esp_err_t api_reboot_handler(httpd_req_t* req)
 }
 
 /**
+ * @brief POST /api/reboot/broadcast - 전체 디바이스 재부팅 (브로드캐스트 + TX 재부팅)
+ */
+static esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+    httpd_resp_set_type(req, "application/json");
+
+    // 브로드캐스트 ID (0xFF 0xFF)
+    uint8_t broadcast_id[LORA_DEVICE_ID_LEN] = {0xFF, 0xFF};
+
+    // 이벤트 발행 (3회 송신)
+    esp_err_t ret = ESP_OK;
+    for (int i = 0; i < 3; i++) {
+        ret = event_bus_publish(EVT_DEVICE_REBOOT_REQUEST, broadcast_id, LORA_DEVICE_ID_LEN);
+        if (ret != ESP_OK) {
+            T_LOGE(TAG, "브로드캐스트 재부팅 실패 (회차 %d): %d", i + 1, ret);
+            httpd_resp_set_status(req, HTTPD_500);
+            httpd_resp_sendstr(req, "{\"error\":\"Failed to send broadcast reboot\"}");
+            return ESP_FAIL;
+        }
+        // 간격 두고 송신 (100ms)
+        if (i < 2) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+    }
+
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "브로드캐스트 재부팅 명령 3회 송신 완료");
+        httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Broadcast reboot sent (3x), TX rebooting...\"}");
+
+        // 응답 전송 후 TX 재부팅
+        vTaskDelay(pdMS_TO_TICKS(100));
+        esp_restart();
+    }
+
+    return ESP_OK;
+}
+
+/**
  * @brief POST /api/test/start - 테스트 모드 시작
  */
 static esp_err_t api_test_start_handler(httpd_req_t* req)
@@ -2050,6 +2089,13 @@ static const httpd_uri_t uri_api_reboot = {
     .user_ctx = nullptr
 };
 
+static const httpd_uri_t uri_api_reboot_broadcast = {
+    .uri = "/api/reboot/broadcast",
+    .method = HTTP_POST,
+    .handler = api_reboot_broadcast_handler,
+    .user_ctx = nullptr
+};
+
 static const httpd_uri_t uri_api_test_start = {
     .uri = "/api/test/start",
     .method = HTTP_POST,
@@ -2281,6 +2327,13 @@ static const httpd_uri_t uri_options_api_reboot = {
     .user_ctx = nullptr
 };
 
+static const httpd_uri_t uri_options_api_reboot_broadcast = {
+    .uri = "/api/reboot/broadcast",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
 static const httpd_uri_t uri_options_api_test_start = {
     .uri = "/api/test/start",
     .method = HTTP_OPTIONS,
@@ -2480,6 +2533,7 @@ esp_err_t web_server_start(void)
     httpd_register_uri_handler(s_server, &uri_favicon);
     httpd_register_uri_handler(s_server, &uri_api_status);
     httpd_register_uri_handler(s_server, &uri_api_reboot);
+    httpd_register_uri_handler(s_server, &uri_api_reboot_broadcast);
     httpd_register_uri_handler(s_server, &uri_api_config_network_ap);
     httpd_register_uri_handler(s_server, &uri_api_config_network_wifi);
     httpd_register_uri_handler(s_server, &uri_api_config_network_ethernet);
@@ -2525,6 +2579,7 @@ esp_err_t web_server_start(void)
     // CORS Preflight (OPTIONS)
     httpd_register_uri_handler(s_server, &uri_options_api_status);
     httpd_register_uri_handler(s_server, &uri_options_api_reboot);
+    httpd_register_uri_handler(s_server, &uri_options_api_reboot_broadcast);
     httpd_register_uri_handler(s_server, &uri_options_api_config);
     httpd_register_uri_handler(s_server, &uri_options_api_lora);
     httpd_register_uri_handler(s_server, &uri_options_api_devices);
