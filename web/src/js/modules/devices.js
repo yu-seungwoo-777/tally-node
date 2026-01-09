@@ -86,6 +86,13 @@ export function devicesModule() {
                 const newDevices = data.devices || [];
                 const oldDevices = this.devices.list || [];
 
+                // 카메라 ID 순으로 정렬
+                newDevices.sort((a, b) => {
+                    const aId = a.cameraId || 999;
+                    const bId = b.cameraId || 999;
+                    return aId - bId;
+                });
+
                 // 로컬 변경 값을 보존하면서 디바이스 목록 갱신
                 this.devices.list = newDevices.map(newDevice => {
                     const oldDevice = oldDevices.find(d => d.id === newDevice.id);

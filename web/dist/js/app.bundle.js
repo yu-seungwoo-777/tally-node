@@ -21,6 +21,8 @@
       },
       // WebSocket 연결 상태
       wsConnected: false,
+      // 밝기 조절 모달 상태
+      showBrightnessModal: false,
       // /api/status 응답 데이터 (캐시)
       status: {
         network: { wifi: { connected: false, ssid: "", ip: "--" }, ethernet: { connected: false, ip: "--" } },
@@ -119,6 +121,14 @@
         await this.initDevices();
         await this.initLicense();
         this.startStatusPolling();
+        this.$watch("currentView", (value) => {
+          if (value === "system" && this.notices.list.length === 0) {
+            this.fetchNotices();
+          }
+        });
+        if (this.currentView === "system") {
+          this.fetchNotices();
+        }
       },
       /**
        * 상태 조회
@@ -339,6 +349,12 @@
         value: 50
         // 0-100%
       },
+      // 공지사항 상태
+      notices: {
+        list: [],
+        loading: false,
+        error: null
+      },
       /**
        * 전체 RX 디바이스 밝기 일괄 설정 (Broadcast)
        * @param {number} brightness - 밝기 값 (0-100)
@@ -376,6 +392,43 @@
         } finally {
           this.globalBrightness.sending = false;
         }
+      },
+      /**
+       * 공지사항 조회 (ESP32 프록시 경유)
+       */
+      async fetchNotices() {
+        try {
+          this.notices.loading = true;
+          this.notices.error = null;
+          const res = await fetch("/api/notices");
+          if (!res.ok) {
+            throw new Error("Failed to fetch notices");
+          }
+          const data = await res.json();
+          if (data.success && data.notices) {
+            this.notices.list = data.notices;
+          } else {
+            this.notices.list = [];
+          }
+        } catch (e) {
+          console.error("Fetch notices error:", e);
+          this.notices.error = "Failed to load notices";
+          this.notices.list = [];
+        } finally {
+          this.notices.loading = false;
+        }
+      },
+      /**
+       * 날짜 포맷 (YYYY-MM-DD)
+       */
+      formatDate(dateStr) {
+        if (!dateStr)
+          return "";
+        const date = new Date(dateStr);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
       }
     };
   }
@@ -1021,6 +1074,11 @@
           const data = await res.json();
           const newDevices = data.devices || [];
           const oldDevices = this.devices.list || [];
+          newDevices.sort((a, b) => {
+            const aId = a.cameraId || 999;
+            const bId = b.cameraId || 999;
+            return aId - bId;
+          });
           this.devices.list = newDevices.map((newDevice) => {
             const oldDevice = oldDevices.find((d) => d.id === newDevice.id);
             if (oldDevice && this.cameraIdControl[newDevice.id] !== void 0) {
@@ -1694,8 +1752,8 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
       // 다이얼로그 표시 상태
       showPrimaryConfig: false,
       showSecondaryConfig: false,
-      // 토스트 알림
-      toast: {
+      // 토스트 알림 상태
+      toastState: {
         show: false,
         message: "",
         type: "alert-info"
@@ -1704,11 +1762,22 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
        * 토스트 표시
        */
       showToast(msg, type = "alert-info") {
-        this.toast.message = msg;
-        this.toast.type = type;
-        this.toast.show = true;
+        this.toastState.message = msg;
+        this.toastState.type = type;
+        this.toastState.show = true;
         setTimeout(() => {
-          this.toast.show = false;
+          this.toastState.show = false;
+        }, 3e3);
+      },
+      /**
+       * 토스트 표시 (별칭, state.js 등에서 사용)
+       */
+      toast(msg, type = "alert-info") {
+        this.toastState.message = msg;
+        this.toastState.type = type;
+        this.toastState.show = true;
+        setTimeout(() => {
+          this.toastState.show = false;
         }, 3e3);
       },
       /**

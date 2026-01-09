@@ -9,8 +9,8 @@ export function utilsModule() {
         showPrimaryConfig: false,
         showSecondaryConfig: false,
 
-        // 토스트 알림
-        toast: {
+        // 토스트 알림 상태
+        toastState: {
             show: false,
             message: '',
             type: 'alert-info'
@@ -20,11 +20,23 @@ export function utilsModule() {
          * 토스트 표시
          */
         showToast(msg, type = 'alert-info') {
-            this.toast.message = msg;
-            this.toast.type = type;
-            this.toast.show = true;
+            this.toastState.message = msg;
+            this.toastState.type = type;
+            this.toastState.show = true;
             setTimeout(() => {
-                this.toast.show = false;
+                this.toastState.show = false;
+            }, 3000);
+        },
+
+        /**
+         * 토스트 표시 (별칭, state.js 등에서 사용)
+         */
+        toast(msg, type = 'alert-info') {
+            this.toastState.message = msg;
+            this.toastState.type = type;
+            this.toastState.show = true;
+            setTimeout(() => {
+                this.toastState.show = false;
             }, 3000);
         },
 

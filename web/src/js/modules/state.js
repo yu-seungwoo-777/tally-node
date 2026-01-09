@@ -146,6 +146,18 @@ export function stateModule() {
 
             // 상태 폴링 시작 (모든 페이지)
             this.startStatusPolling();
+
+            // currentView 감시 (system 페이지 진입 시 공지사항 로드)
+            this.$watch('currentView', (value) => {
+                if (value === 'system' && this.notices.list.length === 0) {
+                    this.fetchNotices();
+                }
+            });
+
+            // 초기 로드 시 system 페이지면 공지사항 로드
+            if (this.currentView === 'system') {
+                this.fetchNotices();
+            }
         },
 
         /**
@@ -406,6 +418,13 @@ export function stateModule() {
             value: 50  // 0-100%
         },
 
+        // 공지사항 상태
+        notices: {
+            list: [],
+            loading: false,
+            error: null
+        },
+
         /**
          * 전체 RX 디바이스 밝기 일괄 설정 (Broadcast)
          * @param {number} brightness - 밝기 값 (0-100)
@@ -449,6 +468,46 @@ export function stateModule() {
             } finally {
                 this.globalBrightness.sending = false;
             }
+        },
+
+        /**
+         * 공지사항 조회 (ESP32 프록시 경유)
+         */
+        async fetchNotices() {
+            try {
+                this.notices.loading = true;
+                this.notices.error = null;
+
+                const res = await fetch('/api/notices');
+                if (!res.ok) {
+                    throw new Error('Failed to fetch notices');
+                }
+
+                const data = await res.json();
+                if (data.success && data.notices) {
+                    this.notices.list = data.notices;
+                } else {
+                    this.notices.list = [];
+                }
+            } catch (e) {
+                console.error('Fetch notices error:', e);
+                this.notices.error = 'Failed to load notices';
+                this.notices.list = [];
+            } finally {
+                this.notices.loading = false;
+            }
+        },
+
+        /**
+         * 날짜 포맷 (YYYY-MM-DD)
+         */
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
         }
     };
 }
