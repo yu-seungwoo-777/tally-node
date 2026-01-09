@@ -7,8 +7,8 @@
 
 # 아키텍처
 
-**작성일**: 2026-01-02
-**버전**: 4.2 (App 중계 제거, 완전한 이벤트 기반 아키텍처)
+**작성일**: 2026-01-10
+**버전**: 4.3 (계층 위반 수정: web_server → license_service, prod_rx_app → DisplayManager)
 
 ---
 
@@ -278,8 +278,8 @@ O 올바른 예:
 
 | 컴포넌트 | 역할 | 의존성 | 상태 |
 |---------|------|--------|------|
-| prod_tx_app | 프로덕션 Tally 송신기 앱 | switcher_service, lora_service | 🚧 |
-| prod_rx_app | 프로덕션 Tally 수신기 앱 | lora_service, display_driver | 🚧 |
+| prod_tx_app | 프로덕션 Tally 송신기 앱 | switcher_service, lora_service, web_server | ✅ |
+| prod_rx_app | 프로덕션 Tally 수신기 앱 | lora_service, DisplayManager | ✅ |
 
 ### 02_presentation - 프레젠테이션
 
@@ -290,8 +290,8 @@ O 올바른 예:
 | display/pages/BootPage | 부팅 화면 페이지 | DisplayManager | ✅ |
 | display/pages/RxPage | RX 모드 페이지 | DisplayManager | ✅ |
 | display/pages/TxPage | TX 모드 페이지 | DisplayManager | ✅ |
-| web_server | 웹 설정 서버 | esp_http_server | 🚧 |
-| web_server/static_embed | 웹 정적 리소스 (임베디드) | - | 🚧 |
+| web_server | 웹 설정 서버 (license_service 사용) | esp_http_server, license_service | ✅ |
+| web_server/static_embed | 웹 정적 리소스 (임베디드) | - | ✅ |
 
 ### 03_service - 서비스
 
@@ -302,11 +302,11 @@ O 올바른 예:
 | device_manager | 디바이스 관리 (TX/RX 통합) | lora_service, lora_protocol, event_bus | ✅ |
 | hardware_service | 하드웨어 모니터링 (배터리, 온도, RSSI/SNR) | battery_driver, temperature_driver, event_bus | ✅ |
 | led_service | WS2812 LED 서비스 | ws2812_driver, board_led_driver | ✅ |
-| license_service | 라이선스 인증 서비스 (C++) | license_client, event_bus | 🚧 |
+| license_service | 라이선스 인증 서비스 (C++) | license_client, event_bus | ✅ |
 | lora_service | LoRa 통신 서비스 | lora_driver, event_bus | ✅ |
 | network_service | 네트워크 통합 관리 (C++) | wifi_driver, ethernet_driver, event_bus | ✅ |
 | switcher_service | 스위처 연결 서비스 (C++) | switcher_driver, event_bus, tally_types | ✅ |
-| tally_test_service | Tally 테스트 서비스 | event_bus | 🚧 |
+| tally_test_service | Tally 테스트 서비스 | event_bus | ✅ |
 
 ### 04_driver - 드라이버
 
@@ -322,7 +322,7 @@ O 올바른 예:
 | board_led_driver | 보드 LED 드라이버 (C++) | gpio | ✅ |
 | temperature_driver | 온도 센서 드라이버 (C++) | temperature_hal, adc | ✅ |
 | ws2812_driver | WS2812 RGB LED 드라이버 (C++) | ws2812_hal, rmt | ✅ |
-| license_client | 라이선스 클라이언트 드라이버 (C++) | esp_http_client, event_bus | 🚧 |
+| license_client | 라이선스 클라이언트 드라이버 (C++) | esp_http_client | ✅ |
 
 ### 05_hal - 하드웨어 추상화
 
@@ -411,7 +411,8 @@ prod_rx_app (01_app)
     ├─→ lora_service (03_service)
     │       └─→ lora_driver (04_driver)
     │
-    └─→ display_driver (04_driver)
+    └─→ DisplayManager (02_presentation)
+            └─→ display_driver (04_driver)
 
 # 공통
 include/PinConfig.h → 모든 계층에서 사용
