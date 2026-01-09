@@ -387,10 +387,10 @@ static void lora_txq_task(void* arg)
         // 비블로킹으로 큐 체크 (패킷 있으면 즉시 송신)
         if (xQueueReceive(s_tx_queue, &packet, 0) == pdTRUE) {
             // 디버그: 수신된 패킷 크기
-            T_LOGI(TAG, "TX 큐 수신: length=%zu", packet.length);
+            T_LOGD(TAG, "TX 큐 수신: length=%zu", packet.length);
             if (packet.length <= 8) {
                 for (size_t i = 0; i < packet.length; i++) {
-                    T_LOGI(TAG, "  data[%zu]=0x%02X", i, packet.data[i]);
+                    T_LOGD(TAG, "  data[%zu]=0x%02X", i, packet.data[i]);
                 }
             }
 
@@ -408,7 +408,7 @@ static void lora_txq_task(void* arg)
 
             if (ret == ESP_OK) {
                 s_packets_sent++;
-                T_LOGI(TAG, "송신: %zu bytes", packet.length);
+                T_LOGD(TAG, "송신: %zu bytes", packet.length);
                 event_bus_publish(EVT_LORA_PACKET_SENT, &s_packets_sent, sizeof(s_packets_sent));
             } else {
                 T_LOGI(TAG, "송신 실패: %d", ret);
@@ -624,10 +624,10 @@ esp_err_t lora_service_send(const uint8_t* data, size_t length)
     memcpy(packet.data, data, length);
 
     // 디버그: 전송 데이터 확인
-    T_LOGI(TAG, "lora_service_send: length=%zu", length);
+    T_LOGD(TAG, "lora_service_send: length=%zu", length);
     if (length <= 8) {
         for (size_t i = 0; i < length; i++) {
-            T_LOGI(TAG, "  data[%zu]=0x%02X", i, data[i]);
+            T_LOGD(TAG, "  data[%zu]=0x%02X", i, data[i]);
         }
     }
 

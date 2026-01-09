@@ -305,7 +305,7 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
     if (network_interface == TALLY_NET_WIFI) if_str = "WiFi";
     else if (network_interface == TALLY_NET_ETHERNET) if_str = "Ethernet";
 
-    T_LOGI(TAG, "%s ATEM 스위처 설정됨: %s (%s:%d, if=%s)",
+    T_LOGD(TAG, "%s ATEM 스위처 설정됨: %s (%s:%d, if=%s)",
              switcher_role_to_string(role), config.name.c_str(), config.ip.c_str(), config.port, if_str);
 
     // 설정 변경 후 상태 이벤트 발행
@@ -447,11 +447,11 @@ bool SwitcherService::start() {
 
     // 이벤트 버스 구독 (설정 변경 감지)
     event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
-    T_LOGI(TAG, "이벤트 버스 구독: EVT_CONFIG_DATA_CHANGED");
+    T_LOGD(TAG, "이벤트 버스 구독: EVT_CONFIG_DATA_CHANGED");
 
     // 이벤트 버스 구독 (네트워크 상태 변경 감지 - IP 캐시용)
     event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
-    T_LOGI(TAG, "이벤트 버스 구독: EVT_NETWORK_STATUS_CHANGED");
+    T_LOGD(TAG, "이벤트 버스 구독: EVT_NETWORK_STATUS_CHANGED");
 
     // 플래그 먼저 설정 (태스크가 즉시 시작되도록)
     task_running_ = true;
@@ -474,7 +474,7 @@ bool SwitcherService::start() {
         return false;
     }
 
-    T_LOGI(TAG, "태스크 시작 (우선순위: 8, 10ms 주기)");
+    T_LOGD(TAG, "태스크 시작 (우선순위: 8, 10ms 주기)");
     return true;
 }
 
@@ -504,7 +504,7 @@ void SwitcherService::stop() {
 void SwitcherService::switcher_task(void* param) {
     SwitcherService* service = static_cast<SwitcherService*>(param);
 
-    T_LOGI(TAG, "태스크 루프 시작");
+    T_LOGD(TAG, "태스크 루프 시작");
 
     while (service->task_running_) {
         service->taskLoop();
@@ -1060,7 +1060,7 @@ void SwitcherService::checkSwitcherChange(switcher_role_t role) {
                 strcat(hex_str, buf);
                 if (i < current_packed.data_size - 1) strcat(hex_str, " ");
             }
-            T_LOGD(TAG, "%s packed 변경: [%s] (%d채널, %d바이트)",
+            T_LOGI(TAG, "%s packed 변경: [%s] (%d채널, %d바이트)",
                      switcher_role_to_string(role), hex_str, current_packed.channel_count, current_packed.data_size);
         }
     }
@@ -1090,7 +1090,7 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
         char tally_str[64];
         packed_data_format_tally(&combined, tally_str, sizeof(tally_str));
 
-        T_LOGI(TAG, "Combined Tally: [%s] (%d채널, %d바이트) → %s",
+        T_LOGD(TAG, "Combined Tally: [%s] (%d채널, %d바이트) → %s",
                  hex_str, combined.channel_count, combined.data_size, tally_str);
 
         // stack 변수 사용 (이벤트 버스가 복사)
@@ -1126,9 +1126,9 @@ bool SwitcherService::updateNetworkIPCache(const char* eth_ip, const char* wifi_
     if (eth_ip && eth_ip[0] != '\0') {
         strncpy(s_cached_eth_ip, eth_ip, sizeof(s_cached_eth_ip) - 1);
         s_cached_eth_ip[sizeof(s_cached_eth_ip) - 1] = '\0';
-        T_LOGI(TAG, "Ethernet IP 캐시: %s", s_cached_eth_ip);
+        T_LOGD(TAG, "Ethernet IP 캐시: %s", s_cached_eth_ip);
         if (was_empty_eth) {
-            T_LOGI(TAG, "Ethernet 새 연결 감지, 스위처 재설정 필요");
+            T_LOGD(TAG, "Ethernet 새 연결 감지, 스위처 재설정 필요");
             needs_reconfigure = true;
         }
     }
@@ -1137,9 +1137,9 @@ bool SwitcherService::updateNetworkIPCache(const char* eth_ip, const char* wifi_
     if (wifi_sta_ip && wifi_sta_ip[0] != '\0') {
         strncpy(s_cached_wifi_sta_ip, wifi_sta_ip, sizeof(s_cached_wifi_sta_ip) - 1);
         s_cached_wifi_sta_ip[sizeof(s_cached_wifi_sta_ip) - 1] = '\0';
-        T_LOGI(TAG, "WiFi STA IP 캐시: %s", s_cached_wifi_sta_ip);
+        T_LOGD(TAG, "WiFi STA IP 캐시: %s", s_cached_wifi_sta_ip);
         if (was_empty_wifi) {
-            T_LOGI(TAG, "WiFi STA 새 연결 감지, 스위처 재설정 필요");
+            T_LOGD(TAG, "WiFi STA 새 연결 감지, 스위처 재설정 필요");
             needs_reconfigure = true;
         }
     }
@@ -1152,7 +1152,7 @@ void SwitcherService::reconfigureSwitchersForNetwork() {
     if (primary_.adapter && primary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
         tally_network_if_t iface = static_cast<tally_network_if_t>(primary_.network_interface);
         if (iface != TALLY_NET_AUTO) {
-            T_LOGI(TAG, "Primary 스위처 네트워크 재설정 (if=%d)", iface);
+            T_LOGD(TAG, "Primary 스위처 네트워크 재설정 (if=%d)", iface);
             setAtem(SWITCHER_ROLE_PRIMARY, "Primary",
                     primary_.ip, primary_.port, 0, iface);
             if (primary_.adapter) {
@@ -1165,7 +1165,7 @@ void SwitcherService::reconfigureSwitchersForNetwork() {
     if (secondary_.adapter && secondary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
         tally_network_if_t iface = static_cast<tally_network_if_t>(secondary_.network_interface);
         if (iface != TALLY_NET_AUTO) {
-            T_LOGI(TAG, "Secondary 스위처 네트워크 재설정 (if=%d)", iface);
+            T_LOGD(TAG, "Secondary 스위처 네트워크 재설정 (if=%d)", iface);
             setAtem(SWITCHER_ROLE_SECONDARY, "Secondary",
                     secondary_.ip, secondary_.port, 0, iface);
             if (secondary_.adapter) {

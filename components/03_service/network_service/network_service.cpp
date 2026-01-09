@@ -87,7 +87,7 @@ esp_err_t NetworkServiceClass::init(void)
     event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
 
     // 드라이버 초기화는 EVT_CONFIG_DATA_CHANGED 이벤트 수신 후 수행
-    T_LOGI(TAG, "이벤트 버스 구독 완료, 설정 이벤트 대기 중");
+    T_LOGD(TAG, "이벤트 버스 구독 완료, 설정 이벤트 대기 중");
 
     return ESP_OK;
 }

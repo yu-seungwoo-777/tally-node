@@ -100,10 +100,10 @@ bool AtemDriver::initialize() {
     // 서비스 레이어에서 설정한 로컬 바인딩 IP 사용
     if (!config_.local_bind_ip.empty()) {
         local_addr.sin_addr.s_addr = inet_addr(config_.local_bind_ip.c_str());
-        T_LOGI(TAG, "인터페이스 바인딩: %s", config_.local_bind_ip.c_str());
+        T_LOGD(TAG, "인터페이스 바인딩: %s", config_.local_bind_ip.c_str());
     } else {
         local_addr.sin_addr.s_addr = INADDR_ANY;
-        T_LOGI(TAG, "인터페이스: AUTO (INADDR_ANY)");
+        T_LOGD(TAG, "인터페이스: AUTO (INADDR_ANY)");
     }
 
     if (bind(sock_fd_, (struct sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
@@ -113,7 +113,7 @@ bool AtemDriver::initialize() {
         return false;
     }
 
-    T_LOGI(TAG, "초기화 완료 (sock_fd=%d)", sock_fd_);
+    T_LOGD(TAG, "초기화 완료 (sock_fd=%d)", sock_fd_);
     return true;
 }
 
@@ -145,7 +145,7 @@ void AtemDriver::connect() {
     uint8_t hello[ATEM_HELLO_PACKET_SIZE];
     createHelloPacket(hello);
 
-    T_LOGI(TAG, "Hello 패킷 전송 (20바이트)");
+    T_LOGD(TAG, "Hello 패킷 전송 (20바이트)");
 
     // 전송
     if (sendPacket(hello, ATEM_HELLO_PACKET_SIZE) < 0) {
@@ -530,7 +530,7 @@ int AtemDriver::processPacket(const uint8_t* data, uint16_t length) {
         state_.connected = true;
         state_.last_contact_ms = getMillis();
 
-        T_LOGI(TAG, "Hello ACK 전송 완료 (Session ID는 데이터 패킷 대기)");
+        T_LOGD(TAG, "Hello ACK 전송 완료 (Session ID는 데이터 패킷 대기)");
         setConnectionState(CONNECTION_STATE_CONNECTED);
 
         return 0;
@@ -539,7 +539,7 @@ int AtemDriver::processPacket(const uint8_t* data, uint16_t length) {
     // Session ID 업데이트 (첫 번째 유효한 Session ID 저장)
     if (state_.session_id == 0 && session_id != 0) {
         state_.session_id = session_id;
-        T_LOGI(TAG, "Session ID 설정: 0x%04X", session_id);
+        T_LOGD(TAG, "Session ID 설정: 0x%04X", session_id);
     }
 
     // Session ID 검증 (설정 후)
@@ -663,7 +663,7 @@ void AtemDriver::handleCommand(const char* cmd_name, const uint8_t* cmd_data, ui
             state_.num_cameras = cmd_data[4];
             state_.tally_config_received = true;
 
-            T_LOGI(TAG, "카메라 수: %d", state_.num_cameras);
+            T_LOGD(TAG, "카메라 수: %d", state_.num_cameras);
         }
     }
     // PrgI: Program 입력
@@ -686,7 +686,7 @@ void AtemDriver::handleCommand(const char* cmd_name, const uint8_t* cmd_data, ui
     else if (AtemProtocol::cmdEquals(cmd_name, ATEM_CMD_INIT_COMPLETE)) {
         if (!state_.initialized) {
             state_.initialized = true;
-            T_LOGI(TAG, "[%s] 초기화 완료", config_.name.c_str());
+            T_LOGD(TAG, "[%s] 초기화 완료", config_.name.c_str());
             setConnectionState(CONNECTION_STATE_READY);
         }
     }

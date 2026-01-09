@@ -99,7 +99,7 @@ void EthernetDriver::eventHandler(void* arg, esp_event_base_t event_base,
 {
     if (event_base == ETH_EVENT) {
         if (event_id == ETHERNET_EVENT_CONNECTED) {
-            T_LOGI(TAG, "Ethernet 링크 업");
+            T_LOGD(TAG, "Ethernet 링크 업");
         } else if (event_id == ETHERNET_EVENT_DISCONNECTED) {
             T_LOGW(TAG, "Ethernet 링크 다운");
             // 네트워크 상태 변경 콜백 호출 (연결 해제)

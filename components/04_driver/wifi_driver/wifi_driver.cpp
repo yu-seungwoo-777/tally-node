@@ -212,10 +212,10 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
             snprintf(s_sta_ip, sizeof(s_sta_ip), IPSTR,
                 IP2STR(&event->ip_info.ip));
 
-            T_LOGI(TAG, "STA IP 획득: " IPSTR, IP2STR(&event->ip_info.ip));
-            T_LOGI(TAG, "STA Netmask: " IPSTR,
+            T_LOGD(TAG, "STA IP 획득: " IPSTR, IP2STR(&event->ip_info.ip));
+            T_LOGD(TAG, "STA Netmask: " IPSTR,
                 IP2STR(&event->ip_info.netmask));
-            T_LOGI(TAG, "STA Gateway: " IPSTR, IP2STR(&event->ip_info.gw));
+            T_LOGD(TAG, "STA Gateway: " IPSTR, IP2STR(&event->ip_info.gw));
 
             // DNS 서버 명시적 설정 (Google DNS, Cloudflare) - LwIP 직접 사용
             ip_addr_t dns_primary, dns_backup;
@@ -228,11 +228,11 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
             dns_setserver(0, &dns_primary);   // DNS_INDEX 0 = Primary
             dns_setserver(1, &dns_backup);    // DNS_INDEX 1 = Backup
 
-            T_LOGI(TAG, "DNS 서버 설정 (LwIP): 8.8.8.8 (Primary), 1.1.1.1 (Backup)");
+            T_LOGD(TAG, "DNS 서버 설정 (LwIP): 8.8.8.8 (Primary), 1.1.1.1 (Backup)");
 
             // DNS 설정 확인
             const ip_addr_t* dns_check = dns_getserver(0);
-            T_LOGI(TAG, "DNS Main 확인 (LwIP): " IPSTR,
+            T_LOGD(TAG, "DNS Main 확인 (LwIP): " IPSTR,
                 IP2STR(&dns_check->u_addr.ip4));
 
             // 네트워크 상태 변경 콜백 호출 (연결 성공)

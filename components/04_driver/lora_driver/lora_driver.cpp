@@ -90,7 +90,7 @@ static void IRAM_ATTR rx_isr_handler(void) {
 // =============================================================================
 
 static void lora_isr_task(void* param) {
-    T_LOGI(TAG, "LoRa ISR 처리 태스크 시작");
+    T_LOGD(TAG, "LoRa ISR 처리 태스크 시작");
 
     while (1) {
         // 시마포로 깨어나면 모든 플래그 처리 (놓치는 이벤트 없음)
@@ -167,7 +167,7 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     if (state == RADIOLIB_ERR_NONE) {
         s_radio = radio_1262;
         s_chip_type = LORA_CHIP_SX1262_433M;
-        T_LOGI(TAG, "✓ SX1262 감지됨");
+        T_LOGD(TAG, "✓ SX1262 감지됨");
     } else {
         T_LOGW(TAG, "SX1262 실패: %d, SX1268 시도...", state);
         delete radio_1262;
@@ -179,7 +179,7 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
         if (state == RADIOLIB_ERR_NONE) {
             s_radio = radio_1268;
             s_chip_type = LORA_CHIP_SX1268_868M;
-            T_LOGI(TAG, "✓ SX1268 감지됨");
+            T_LOGD(TAG, "✓ SX1268 감지됨");
         } else {
             T_LOGE(TAG, "LoRa 칩 감지 실패: %d", state);
             delete radio_1268;
@@ -201,7 +201,7 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     // 인터럽트 등록
     s_radio->setPacketSentAction(tx_isr_handler);
     s_radio->setPacketReceivedAction(rx_isr_handler);
-    T_LOGI(TAG, "✓ 인터럽트 등록 완료");
+    T_LOGD(TAG, "✓ 인터럽트 등록 완료");
 
     // 설정 저장
     s_sync_word = sw;

@@ -86,7 +86,7 @@ public:
         }
 
         initialized = true;
-        T_LOGI(TAG, "LoRa HAL 초기화 완료 (spi_device=%p)", (void*)spi_device);
+        T_LOGD(TAG, "LoRa HAL 초기화 완료 (spi_device=%p)", (void*)spi_device);
     }
 
     // 초기화 상태 확인
