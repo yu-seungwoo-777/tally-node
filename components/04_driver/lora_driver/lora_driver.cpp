@@ -112,6 +112,11 @@ static void lora_isr_task(void* param) {
 // 공개 API
 // =============================================================================
 
+/**
+ * @brief LoRa 드라이버를 초기화합니다
+ * @param config LoRa 설정 포인터 (주파수, SF, BW, CR, 송신 전력, Sync Word 등)
+ * @return ESP_OK 성공, ESP_ERR_INVALID_ARG config가 nullptr인 경우, ESP_FAIL 초기화 실패
+ */
 esp_err_t lora_driver_init(const lora_config_t* config) {
     if (s_initialized) {
         T_LOGW(TAG, "이미 초기화됨");
@@ -133,7 +138,7 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
 
     T_LOGI(TAG, "LoRa 드라이버 초기화 중...");
     T_LOGI(TAG, "  Freq=%.1fMHz, SF=%d, BW=%.0fkHz, CR=4/%d, TXP=%ddBm, SW=0x%02X",
-             freq, sf, bw, cr, txp, sw);
+            freq, sf, bw, cr, txp, sw);
 
     // HAL 초기화
     esp_err_t ret = lora_hal_init();
@@ -228,6 +233,15 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
 
     if (task_ret != pdPASS) {
         T_LOGE(TAG, "태스크 생성 실패");
+        // 리소스 정리
+        if (s_spi_mutex) {
+            vSemaphoreDelete(s_spi_mutex);
+            s_spi_mutex = nullptr;
+        }
+        if (s_semaphore) {
+            vSemaphoreDelete(s_semaphore);
+            s_semaphore = nullptr;
+        }
         return ESP_FAIL;
     }
 
@@ -235,6 +249,19 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     state = s_radio->startReceive();
     if (state != RADIOLIB_ERR_NONE) {
         T_LOGE(TAG, "수신 모드 시작 실패: %d", state);
+        // 리소스 정리
+        if (s_task) {
+            vTaskDelete(s_task);
+            s_task = nullptr;
+        }
+        if (s_spi_mutex) {
+            vSemaphoreDelete(s_spi_mutex);
+            s_spi_mutex = nullptr;
+        }
+        if (s_semaphore) {
+            vSemaphoreDelete(s_semaphore);
+            s_semaphore = nullptr;
+        }
         return ESP_FAIL;
     }
 
@@ -246,6 +273,9 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     return ESP_OK;
 }
 
+/**
+ * @brief LoRa 드라이버를 정리하고 리소스를 해제합니다
+ */
 void lora_driver_deinit(void) {
     if (s_task) {
         vTaskDelete(s_task);
@@ -277,6 +307,10 @@ void lora_driver_deinit(void) {
     s_initialized = false;
 }
 
+/**
+ * @brief LoRa 드라이버의 현재 상태를 반환합니다
+ * @return LoRa 상태 구조체 (초기화 여부, 칩 타입, 주파수, RSSI, SNR)
+ */
 lora_status_t lora_driver_get_status(void) {
     lora_status_t status = {
         .is_initialized = s_initialized,
@@ -295,6 +329,10 @@ lora_status_t lora_driver_get_status(void) {
     return status;
 }
 
+/**
+ * @brief LoRa 칩의 모델명을 반환합니다
+ * @return 칩 모델명 문자열 (예: "SX1262 (868MHz)", "SX1268 (433MHz)", "Unknown")
+ */
 const char* lora_driver_get_chip_name(void) {
     switch (s_chip_type) {
         case LORA_CHIP_SX1262_433M:
@@ -306,6 +344,14 @@ const char* lora_driver_get_chip_name(void) {
     }
 }
 
+/**
+ * @brief LoRa 패킷을 비동기로 송신합니다
+ * @param data 송신할 데이터 버퍼
+ * @param length 데이터 길이 (bytes)
+ * @return ESP_OK 성공, ESP_ERR_INVALID_STATE 초기화되지 않음,
+ *         ESP_ERR_NOT_SUPPORTED 이미 송신 중, ESP_ERR_TIMEOUT SPI 뮤텍스 획득 실패,
+ *         ESP_FAIL 송신 시작 실패
+ */
 esp_err_t lora_driver_transmit(const uint8_t* data, size_t length) {
     if (!s_initialized || !s_radio) {
         return ESP_ERR_INVALID_STATE;
@@ -342,10 +388,19 @@ esp_err_t lora_driver_transmit(const uint8_t* data, size_t length) {
     }
 }
 
+/**
+ * @brief 현재 송신 중인지 확인합니다
+ * @return true 송신 중, false 대기 중
+ */
 bool lora_driver_is_transmitting(void) {
     return s_is_transmitting;
 }
 
+/**
+ * @brief LoRa 수신 모드를 시작합니다
+ * @return ESP_OK 성공, ESP_ERR_INVALID_STATE 초기화되지 않음,
+ *         ESP_ERR_TIMEOUT SPI 뮤텍스 획득 실패, ESP_FAIL 수신 시작 실패
+ */
 esp_err_t lora_driver_start_receive(void) {
     if (!s_initialized || !s_radio) {
         return ESP_ERR_INVALID_STATE;
@@ -363,10 +418,18 @@ esp_err_t lora_driver_start_receive(void) {
     return (state == RADIOLIB_ERR_NONE) ? ESP_OK : ESP_FAIL;
 }
 
+/**
+ * @brief 패킷 수신 시 호출될 콜백 함수를 설정합니다
+ * @param callback 수신 콜백 함수 포인터 (데이터, 길이, RSSI, SNR)
+ */
 void lora_driver_set_receive_callback(lora_receive_callback_t callback) {
     s_receive_callback = callback;
 }
 
+/**
+ * @brief 수신된 패킷을 확인하고 처리합니다 (ISR 태스크에서 호출)
+ * 수신된 데이터를 읽고 등록된 콜백 함수를 호출합니다
+ */
 void lora_driver_check_received(void) {
     if (!s_initialized || !s_radio) {
         return;
@@ -404,7 +467,7 @@ void lora_driver_check_received(void) {
             xSemaphoreGive(s_spi_mutex);
 
             T_LOGD(TAG, "← 수신: %d bytes (RSSI: %.1f dBm, SNR: %.1f dB)",
-                     num_bytes, rssi, snr);
+                    num_bytes, rssi, snr);
 
             if (s_receive_callback) {
                 s_receive_callback(buffer, num_bytes, (int16_t)rssi, snr);
@@ -418,6 +481,10 @@ void lora_driver_check_received(void) {
     }
 }
 
+/**
+ * @brief 송신 완료를 확인하고 후처리를 수행합니다 (ISR 태스크에서 호출)
+ * 송신 완료 후 수신 모드로 전환합니다
+ */
 void lora_driver_check_transmitted(void) {
     if (!s_initialized || !s_radio) {
         return;
@@ -448,6 +515,11 @@ void lora_driver_check_transmitted(void) {
     }
 }
 
+/**
+ * @brief LoRa 칩을 절전 모드(Sleep)로 전환합니다
+ * @return ESP_OK 성공, ESP_ERR_INVALID_STATE 초기화되지 않음,
+ *         ESP_ERR_TIMEOUT SPI 뮤텍스 획득 실패, ESP_FAIL 절전 모드 전환 실패
+ */
 esp_err_t lora_driver_sleep(void) {
     if (!s_initialized || !s_radio) {
         return ESP_ERR_INVALID_STATE;
@@ -462,6 +534,13 @@ esp_err_t lora_driver_sleep(void) {
     return (state == RADIOLIB_ERR_NONE) ? ESP_OK : ESP_FAIL;
 }
 
+/**
+ * @brief LoRa 주파수를 설정합니다
+ * @param freq_mhz 주파수 (MHz) - SX1262: 850-930MHz, SX1268: 410-493MHz
+ * @return ESP_OK 성공, ESP_ERR_INVALID_STATE 초기화되지 않음,
+ *         ESP_ERR_INVALID_ARG 주파수 범위 벗어남, ESP_ERR_TIMEOUT SPI 뮤텍스 획득 실패,
+ *         ESP_FAIL 주파수 설정 실패
+ */
 esp_err_t lora_driver_set_frequency(float freq_mhz) {
     if (!s_initialized || !s_radio) {
         return ESP_ERR_INVALID_STATE;
@@ -508,6 +587,12 @@ esp_err_t lora_driver_set_frequency(float freq_mhz) {
     return ESP_FAIL;
 }
 
+/**
+ * @brief LoRa Sync Word를 설정합니다
+ * @param sync_word Sync Word 값 (0x00-0xFF, 일반적으로 0x12 또는 0x27)
+ * @return ESP_OK 성공, ESP_ERR_INVALID_STATE 초기화되지 않음,
+ *         ESP_ERR_TIMEOUT SPI 뮤텍스 획득 실패, ESP_FAIL Sync Word 설정 실패
+ */
 esp_err_t lora_driver_set_sync_word(uint8_t sync_word) {
     if (!s_initialized || !s_radio) {
         return ESP_ERR_INVALID_STATE;
@@ -534,6 +619,17 @@ esp_err_t lora_driver_set_sync_word(uint8_t sync_word) {
     return ESP_FAIL;
 }
 
+/**
+ * @brief 지정된 주파수 범위의 채널들을 스캔하여 RSSI를 측정합니다
+ * @param start_freq 시작 주파수 (MHz)
+ * @param end_freq 종료 주파수 (MHz)
+ * @param step 주파수 간격 (MHz)
+ * @param results 채널 정보 저장 배열 포인터
+ * @param max_results 최대 결과 개수
+ * @param result_count 실제 측정된 채널 수 (출력 파라미터)
+ * @return ESP_OK 성공, ESP_ERR_INVALID_STATE 초기화되지 않음,
+ *         ESP_ERR_INVALID_ARG 파라미터 오류, ESP_ERR_TIMEOUT SPI 뮤텍스 획득 실패
+ */
 esp_err_t lora_driver_scan_channels(float start_freq, float end_freq, float step,
                                      channel_info_t* results, size_t max_results,
                                      size_t* result_count) {
