@@ -1,4 +1,11 @@
 # ============================================================
+# Bootloader 로그 비활성화
+# ============================================================
+CONFIG_BOOTLOADER_LOG_LEVEL_NONE=y
+CONFIG_BOOTLOADER_LOG_LEVEL=0
+CONFIG_LOG_COLORS=n
+
+# ============================================================
 # Flash 설정
 # ============================================================
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
@@ -11,6 +18,13 @@ CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_LOG_DEFAULT_LEVEL=3
 CONFIG_LOG_MAXIMUM_LEVEL=5
 CONFIG_LOG_TIMESTAMP_SOURCE_SYS=y
+
+# ESP-ROM, ESP-Image 로그 비활성화
+CONFIG_ESP_ROM_GET_CPU_FREQ=y
+CONFIG_ESP_ROM_HAS_ROM_CRC=y
+
+# Bootloader 출력 없음
+CONFIG_BOOTLOADER_VDDSDIO_BOOST_1_9V=n
 
 # ESP-IDF 내부 컴포넌트 로그 비활성화 (선택 사항)
 # 현재 WiFi 로그는 이미 비활성화됨 (아래 참조)

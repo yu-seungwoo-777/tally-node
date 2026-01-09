@@ -20,8 +20,6 @@ static const char* TAG = "main";
 extern "C" void app_main(void)
 {
 #ifdef DEVICE_MODE_TX
-    T_LOGI(TAG, "Mode: TX");
-
     if (!prod_tx_app_init(NULL)) {
         T_LOGE(TAG, "TX app init failed");
         return;
@@ -35,8 +33,6 @@ extern "C" void app_main(void)
 
     prod_tx_app_deinit();
 #else
-    T_LOGI(TAG, "Mode: RX");
-
     if (!prod_rx_app_init(NULL)) {
         T_LOGE(TAG, "RX app init failed");
         return;
