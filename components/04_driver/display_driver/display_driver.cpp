@@ -13,7 +13,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-static const char* TAG = "DISP_DRV";
+static const char* TAG = "04_DispDrv";
 
 // U8g2 인스턴스 (전역 변수로 u8g2_fonts.c에서 접근 가능)
 static u8g2_t s_u8g2;

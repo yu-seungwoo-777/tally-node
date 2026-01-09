@@ -21,8 +21,8 @@
 #include <sys/socket.h>
 #include <netdb.h>  // gethostbyname
 
-static const char* TAG = "WebServer";
-static const char* TAG_RF = "RF";
+static const char* TAG = "02_WebSvr";
+static const char* TAG_RF = "02_RF";
 static httpd_handle_t s_server = nullptr;
 
 // ============================================================================

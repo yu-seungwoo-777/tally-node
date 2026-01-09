@@ -23,7 +23,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-variable"
-static const char* TAG = "SwitcherService";
+static const char* TAG = "03_Switcher";
 #pragma GCC diagnostic pop
 
 // 전역 인스턴스 포인터 (이벤트 핸들러에서 사용)

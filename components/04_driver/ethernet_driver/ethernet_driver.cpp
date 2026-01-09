@@ -12,7 +12,7 @@
 #include <cstring>
 #include "lwip/dns.h"  // LwIP DNS (dns_setserver)
 
-static const char* TAG = "EthernetDriver";
+static const char* TAG = "04_Ethernet";
 
 // ============================================================================
 // EthernetDriver 클래스 (싱글톤)

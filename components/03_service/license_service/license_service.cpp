@@ -15,7 +15,7 @@
 #include "freertos/queue.h"
 #include <cstring>
 
-static const char* TAG = "LicenseService";
+static const char* TAG = "03_License";
 
 // ============================================================================
 // 상수 정의

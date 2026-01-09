@@ -16,7 +16,7 @@
 #include "freertos/task.h"
 #include <RadioLib.h>
 
-static const char* TAG = "LoRaHal";
+static const char* TAG = "05_LoRa";
 
 // ============================================================================
 // EspHal 클래스 - RadioLib HAL 구현

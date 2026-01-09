@@ -13,7 +13,7 @@
 #include "freertos/task.h"
 #include <cstring>
 
-static const char* TAG = "NetworkService";
+static const char* TAG = "03_Network";
 
 // ============================================================================
 // NetworkService 클래스 (싱글톤)
@@ -448,7 +448,7 @@ esp_err_t NetworkServiceClass::onRestartRequest(const event_data_t* event)
                 if (ret == ESP_OK) {
                     // 재시작 완료 후 이벤트 발행 (웹서버 재시작용)
                     event_bus_publish(EVT_NETWORK_RESTARTED, nullptr, 0);
-                    T_LOGI(TAG, "네트워크 재시작 완료 이벤트 발행");
+                    T_LOGD(TAG, "네트워크 재시작 완료 이벤트 발행");
                 }
                 return ret;
             }

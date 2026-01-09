@@ -22,7 +22,7 @@
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 
-static const char* TAG = "EthernetHal";
+static const char* TAG = "05_Ethernet";
 
 // ============================================================================
 // 정적 변수

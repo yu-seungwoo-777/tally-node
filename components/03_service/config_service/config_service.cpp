@@ -13,7 +13,7 @@
 #include <cstring>
 #include <cstdio>
 
-static const char* TAG = "ConfigService";
+static const char* TAG = "03_Config";
 
 // ============================================================================
 // 내부 헬퍼 함수
@@ -781,7 +781,7 @@ esp_err_t ConfigServiceClass::init(void)
         data_event.secondary_offset = full_config.secondary_offset;
 
         event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
-        T_LOGI(TAG, "초기 설정 데이터 이벤트 발행");
+        T_LOGD(TAG, "초기 설정 데이터 이벤트 발행");
     }
 
     return ESP_OK;
@@ -1304,7 +1304,7 @@ esp_err_t ConfigServiceClass::setBrightness(uint8_t brightness)
 
     // 밝기 변경 이벤트 발행 (0-255 범위)
     event_bus_publish(EVT_BRIGHTNESS_CHANGED, &brightness, sizeof(brightness));
-    T_LOGI(TAG, "밝기 변경: %d, 이벤트 발행", brightness);
+    T_LOGD(TAG, "밝기 변경: %d, 이벤트 발행", brightness);
 
     return ESP_OK;
 }
@@ -1344,7 +1344,7 @@ esp_err_t ConfigServiceClass::setCameraId(uint8_t camera_id)
 
     // 카메라 ID 변경 이벤트 발행
     event_bus_publish(EVT_CAMERA_ID_CHANGED, &camera_id, sizeof(camera_id));
-    T_LOGI(TAG, "카메라 ID 변경: %d, 이벤트 발행", camera_id);
+    T_LOGD(TAG, "카메라 ID 변경: %d, 이벤트 발행", camera_id);
 
     return ESP_OK;
 }

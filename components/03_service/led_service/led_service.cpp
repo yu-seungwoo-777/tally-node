@@ -11,7 +11,7 @@
 #include "TallyTypes.h"
 #include <cstring>
 
-static const char* TAG = "LedService";
+static const char* TAG = "03_Led";
 
 // ============================================================================
 // 서비스 상태

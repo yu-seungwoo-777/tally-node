@@ -12,7 +12,7 @@
 #include "freertos/event_groups.h"
 #include "lwip/dns.h"  // LwIP DNS
 
-static const char* TAG = "WiFiHal";
+static const char* TAG = "05_WiFi";
 
 // ============================================================================
 // 정적 변수

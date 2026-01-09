@@ -8,7 +8,7 @@
 #include "driver/gpio.h"
 #include "t_log.h"
 
-static const char* TAG = "BoardLedDriver";
+static const char* TAG = "04_BoardLed";
 static bool s_initialized = false;
 
 extern "C" {

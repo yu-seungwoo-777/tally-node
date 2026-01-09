@@ -17,7 +17,7 @@
 // 상수
 // ============================================================================
 
-static const char* TAG = "DisplayMgr";
+static const char* TAG = "02_Display";
 #define DEFAULT_REFRESH_INTERVAL_MS  500  // 2 FPS
 #define MAX_PAGES                     5
 #define STATUS_LOG_INTERVAL_MS       5000  // 상태 로그 출력 주기 (5초)
@@ -166,103 +166,15 @@ static void handle_page_transition(void)
 }
 
 /**
- * @brief 통합 상태 로그 출력
+ * @brief 통합 상태 로그 출력 (비활성화)
  *
  * 저장된 모든 데이터를 한 번에 출력
+ * 5초 간격 로그는 비활성화되었습니다.
  */
 static void print_status_log(void)
 {
-    T_LOGI(TAG, "──────────────────────────────────");
-
-    // 시스템 정보
-    if (s_mgr.data.system_valid) {
-        T_LOGI(TAG, "ID:%s Bat:%d%% %.1fV %.0f°C Up:%us",
-               s_mgr.data.system.device_id,
-               s_mgr.data.system.battery,
-               s_mgr.data.system.voltage,
-               s_mgr.data.system.temperature,
-               s_mgr.data.system.uptime);
-    }
-
-    // LoRa 정보
-    if (s_mgr.data.lora.valid) {
-        T_LOGI(TAG, "LoRa: RSSI:%ddB SNR:%.0fdB",
-               s_mgr.data.lora.rssi,
-               s_mgr.data.lora.snr);
-    }
-
-    // RF 정보 (공통)
-    if (s_mgr.data.rf_valid) {
-        T_LOGI(TAG, "RF: %.1fMHz Sync:0x%02X",
-               s_mgr.data.rf.frequency,
-               s_mgr.data.rf.sync_word);
-    }
-
-#ifdef DEVICE_MODE_RX
-    // Tally 정보 (RX)
-    if (s_mgr.data.tally.valid) {
-        char pgm_str[32] = {0};
-        char pvw_str[32] = {0};
-        int offset = 0;
-
-        for (uint8_t i = 0; i < s_mgr.data.tally.pgm_count && i < 20; i++) {
-            offset += snprintf(pgm_str + offset, sizeof(pgm_str) - offset,
-                             "%s%d", (i > 0) ? "," : "", s_mgr.data.tally.pgm_channels[i]);
-        }
-
-        offset = 0;
-        for (uint8_t i = 0; i < s_mgr.data.tally.pvw_count && i < 20; i++) {
-            offset += snprintf(pvw_str + offset, sizeof(pvw_str) - offset,
-                             "%s%d", (i > 0) ? "," : "", s_mgr.data.tally.pvw_channels[i]);
-        }
-
-        T_LOGI(TAG, "Tally: PGM:[%s] PVW:[%s]",
-               (s_mgr.data.tally.pgm_count > 0) ? pgm_str : "-",
-               (s_mgr.data.tally.pvw_count > 0) ? pvw_str : "-");
-    }
-
-    // 디바이스 설정 (RX)
-    if (s_mgr.data.device.valid) {
-        T_LOGI(TAG, "Cam:%d Bri:%d",
-               s_mgr.data.device.camera_id,
-               s_mgr.data.device.brightness);
-    }
-#elif defined(DEVICE_MODE_TX)
-    // Switcher 정보 (TX)
-    if (s_mgr.data.switcher_valid) {
-        if (s_mgr.data.switcher.dual_mode) {
-            T_LOGI(TAG, "S1:%s@%s:%d %c | S2:%s@%s:%d %c",
-                   s_mgr.data.switcher.s1_type,
-                   s_mgr.data.switcher.s1_ip[0] ? s_mgr.data.switcher.s1_ip : "-",
-                   s_mgr.data.switcher.s1_port,
-                   s_mgr.data.switcher.s1_connected ? 'Y' : 'N',
-                   s_mgr.data.switcher.s2_type,
-                   s_mgr.data.switcher.s2_ip[0] ? s_mgr.data.switcher.s2_ip : "-",
-                   s_mgr.data.switcher.s2_port,
-                   s_mgr.data.switcher.s2_connected ? 'Y' : 'N');
-        } else {
-            T_LOGI(TAG, "S1:%s@%s:%d %c",
-                   s_mgr.data.switcher.s1_type,
-                   s_mgr.data.switcher.s1_ip[0] ? s_mgr.data.switcher.s1_ip : "-",
-                   s_mgr.data.switcher.s1_port,
-                   s_mgr.data.switcher.s1_connected ? 'Y' : 'N');
-        }
-    }
-
-    // Network 정보 (TX)
-    if (s_mgr.data.network_valid) {
-        if (s_mgr.data.network.sta_connected) {
-            T_LOGI(TAG, "WiFi:%s@%s | ETH:%s",
-                   s_mgr.data.network.sta_ssid, s_mgr.data.network.sta_ip,
-                   s_mgr.data.network.eth_connected ? s_mgr.data.network.eth_ip : "N/A");
-        } else {
-            T_LOGI(TAG, "WiFi:- | ETH:%s",
-                   s_mgr.data.network.eth_connected ? s_mgr.data.network.eth_ip : "N/A");
-        }
-    }
-#endif
-
-    T_LOGI(TAG, "──────────────────────────────────");
+    // 5초 간격 상태 로그 비활성화
+    // 필요시 상태 변화 시에만 출력하도록 구현 가능
 }
 
 // ============================================================================
@@ -601,7 +513,6 @@ extern "C" bool display_manager_init(void)
 #endif
 
     s_mgr.initialized = true;
-    T_LOGI(TAG, "DisplayManager 초기화 완료");
     return true;
 }
 

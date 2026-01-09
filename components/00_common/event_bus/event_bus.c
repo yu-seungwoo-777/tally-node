@@ -11,7 +11,7 @@
 #include "freertos/semphr.h"
 #include <string.h>
 
-static const char* TAG = "EventBus";
+static const char* TAG = "00_EventBus";
 
 // 최대 대기열 크기
 #define EVENT_QUEUE_SIZE 32
@@ -101,8 +101,6 @@ const char* event_type_to_string(event_type_t type) {
 static void event_handler_task(void* arg) {
     event_data_t event;
 
-    T_LOGI(TAG, "Event handler task started");
-
     while (1) {
         if (xQueueReceive(g_event_bus.queue, &event, portMAX_DELAY) == pdTRUE) {
             // 구독자들에게 이벤트 전달
@@ -166,7 +164,6 @@ esp_err_t event_bus_init(void) {
     }
 
     g_event_bus.initialized = true;
-    T_LOGI(TAG, "Event bus initialized");
     return ESP_OK;
 }
 
@@ -208,11 +205,9 @@ esp_err_t event_bus_publish(event_type_t type, const void* data, size_t data_siz
 
     // 큐에 전송 (대기 없음)
     if (xQueueSend(g_event_bus.queue, &event, 0) != pdTRUE) {
-        T_LOGW(TAG, "Event queue full: %s", event_type_to_string(type));
         return ESP_ERR_NO_MEM;
     }
 
-    T_LOGV(TAG, "Published: %s", event_type_to_string(type));
     return ESP_OK;
 }
 
@@ -243,11 +238,9 @@ esp_err_t event_bus_subscribe(event_type_t type, event_callback_t callback) {
     xSemaphoreGive(g_event_bus.mutex);
 
     if (!found) {
-        T_LOGE(TAG, "No free subscriber slot for %s", event_type_to_string(type));
         return ESP_ERR_NO_MEM;
     }
 
-    T_LOGI(TAG, "Subscribed to: %s", event_type_to_string(type));
     return ESP_OK;
 }
 

@@ -10,7 +10,7 @@
 #include "cJSON.h"
 #include <cstring>
 
-static const char* TAG = "LicenseClient";
+static const char* TAG = "04_LicenseCli";
 
 // ============================================================================
 // HTTP 응답 데이터 컨텍스트

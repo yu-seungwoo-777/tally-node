@@ -14,7 +14,7 @@
 #include "event_bus.h"
 #include "t_log.h"
 
-static const char* TAG = "ButtonSvc";
+static const char* TAG = "03_Button";
 
 // ============================================================================
 // 설정

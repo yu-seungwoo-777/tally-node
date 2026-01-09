@@ -23,7 +23,7 @@
 // 태그
 // ============================================================================
 
-static const char* TAG = "AtemDriver";
+static const char* TAG = "04_Atem";
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>

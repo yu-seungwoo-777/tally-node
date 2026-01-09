@@ -14,7 +14,7 @@
 #include <cstring>
 #include "lwip/dns.h"  // LwIP DNS (dns_setserver)
 
-static const char* TAG = "WiFiDriver";
+static const char* TAG = "04_WiFi";
 
 // ============================================================================
 // WiFiDriver 클래스 (싱글톤)

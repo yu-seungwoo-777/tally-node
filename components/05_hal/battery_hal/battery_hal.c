@@ -11,7 +11,7 @@
 #include "t_log.h"
 #include <stdbool.h>
 
-static const char* TAG = "BatteryHal";
+static const char* TAG = "05_Battery";
 
 // ============================================================================
 // ADC 설정

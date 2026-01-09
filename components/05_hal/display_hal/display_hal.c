@@ -12,7 +12,7 @@
 #include "esp_log.h"
 #include "t_log.h"
 
-static const char* TAG = "DISP_HAL";
+static const char* TAG = "05_Display";
 
 // I2C 설정
 #define I2C_MASTER_TX_BUF_DISABLE 0

@@ -27,7 +27,7 @@
 #include "freertos/task.h"
 #include <cstring>
 
-static const char* TAG = "prod_tx_app";
+static const char* TAG = "01_TxApp";
 
 // ============================================================================
 // 버튼 이벤트 핸들러 (TX 전용)
@@ -43,7 +43,7 @@ static esp_err_t handle_button_single_click(const event_data_t* event)
     uint8_t next = (current == 5) ? 1 : (current + 1);
     display_manager_switch_page(next);
     display_manager_force_refresh();
-    T_LOGI(TAG, "TxPage: %d -> %d", current, next);
+    T_LOGD(TAG, "TxPage: %d -> %d", current, next);
 
     return ESP_OK;
 }
@@ -154,12 +154,12 @@ static void on_tally_change(void)
 
 static void on_connection_change(connection_state_t state)
 {
-    T_LOGI(TAG, "연결 상태 변경: %s", connection_state_to_string(state));
+    T_LOGD(TAG, "연결 상태 변경: %s", connection_state_to_string(state));
 }
 
 static void on_switcher_change(switcher_role_t role)
 {
-    T_LOGI(TAG, "%s 스위처 변경 감지", switcher_role_to_string(role));
+    T_LOGD(TAG, "%s 스위처 변경 감지", switcher_role_to_string(role));
 }
 
 // ============================================================================
@@ -233,22 +233,21 @@ static esp_err_t handle_tally_state_changed(const event_data_t* event)
 static esp_err_t handle_switcher_connected(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "스위처 연결됨 -> TxPage 갱신");
-    // 주기적 갱신에 의해 처리되므로 즉시 갱신 불필요 (1초 내 반영)
+    T_LOGD(TAG, "스위처 연결됨");
     return ESP_OK;
 }
 
 static esp_err_t handle_switcher_disconnected(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "스위처 연결 해제 -> TxPage 갱신");
+    T_LOGD(TAG, "스위처 연결 해제");
     return ESP_OK;
 }
 
 static esp_err_t handle_network_connected(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "네트워크 연결됨 -> 스위처 재연결, 디스플레이 갱신");
+    T_LOGD(TAG, "네트워크 연결됨");
     if (s_app.service) {
         switcher_service_reconnect_all(s_app.service);
     }
@@ -274,7 +273,7 @@ static esp_err_t handle_network_connected(const event_data_t* event)
 static esp_err_t handle_network_disconnected(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "네트워크 연결 해제 -> 디스플레이 갱신");
+    T_LOGD(TAG, "네트워크 연결 해제");
 
     // 디스플레이에 네트워크 상태 갱신
     tx_page_set_wifi_connected(false);
@@ -340,7 +339,7 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     event_bus_subscribe(EVT_TALLY_TEST_MODE_STOP, handle_test_mode_stop);
     // Tally 상태 변경 이벤트 (테스트 모드 포함)
     event_bus_subscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
-    T_LOGI(TAG, "이벤트 구독 완료");
+    T_LOGD(TAG, "이벤트 구독 완료");
 
     // ConfigService 초기화
     ret = config_service_init();
@@ -533,7 +532,7 @@ void prod_tx_app_start(void)
             .sync_word = saved_config.device.rf.sync_word
         };
         event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
-        T_LOGI(TAG, "RF 설정 이벤트 발행 (디스플레이용): %.1f MHz, Sync 0x%02X",
+        T_LOGD(TAG, "RF 설정 이벤트 발행: %.1f MHz, Sync 0x%02X",
                  rf_event.frequency, rf_event.sync_word);
     } else {
         T_LOGW(TAG, "RF 설정 로드 실패: %s", esp_err_to_name(ret));

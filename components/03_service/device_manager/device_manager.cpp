@@ -19,7 +19,7 @@
 #include "esp_system.h"
 #include <string.h>
 
-static const char* TAG = "DeviceMgr";
+static const char* TAG = "03_Device";
 
 // ============================================================================
 // 전방 선언 (static 함수)

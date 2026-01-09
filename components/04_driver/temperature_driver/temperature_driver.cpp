@@ -7,7 +7,7 @@
 #include "temperature_hal.h"
 #include "t_log.h"
 
-static const char* TAG = "TEMP_DRV";
+static const char* TAG = "04_Temp";
 static bool s_initialized = false;
 
 esp_err_t TemperatureDriver_init(void)

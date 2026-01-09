@@ -44,8 +44,6 @@ uint8_t u8g2_esp32_spi_byte_cb(u8x8_t* u8x8,
                                uint8_t msg,
                                uint8_t arg_int,
                                void* arg_ptr) {
-  T_LOGD(TAG, "spi_byte_cb: Received a msg: %d, arg_int: %d, arg_ptr: %p",
-           msg, arg_int, arg_ptr);
   switch (msg) {
     case U8X8_MSG_BYTE_SET_DC:
       if (u8g2_esp32_hal.dc != U8G2_ESP32_HAL_UNDEFINED) {
@@ -66,7 +64,6 @@ uint8_t u8g2_esp32_spi_byte_cb(u8x8_t* u8x8,
       bus_config.miso_io_num = GPIO_NUM_NC;                  // MISO
       bus_config.quadwp_io_num = GPIO_NUM_NC;                // Not used
       bus_config.quadhd_io_num = GPIO_NUM_NC;                // Not used
-      // ESP_LOGI(TAG, "... Initializing bus.");
       ESP_ERROR_CHECK(spi_bus_initialize(HOST, &bus_config, 1));
 
       spi_device_interface_config_t dev_config = {0};
@@ -83,7 +80,6 @@ uint8_t u8g2_esp32_spi_byte_cb(u8x8_t* u8x8,
       dev_config.queue_size = 200;
       dev_config.pre_cb = NULL;
       dev_config.post_cb = NULL;
-      // ESP_LOGI(TAG, "... Adding device bus.");
       ESP_ERROR_CHECK(spi_bus_add_device(HOST, &dev_config, &handle_spi));
 
       break;
@@ -98,8 +94,6 @@ uint8_t u8g2_esp32_spi_byte_cb(u8x8_t* u8x8,
       trans_desc.rxlength = 0;
       trans_desc.tx_buffer = arg_ptr;
       trans_desc.rx_buffer = NULL;
-      // trans_desc.override_freq_hz = 0; // this param does not exist prior to ESP-IDF 5.5.0
-      // ESP_LOGI(TAG, "... Transmitting %d bytes.", arg_int);
       ESP_ERROR_CHECK(spi_device_transmit(handle_spi, &trans_desc));
       break;
     }
@@ -115,9 +109,6 @@ uint8_t u8g2_esp32_i2c_byte_cb(u8x8_t* u8x8,
                                uint8_t msg,
                                uint8_t arg_int,
                                void* arg_ptr) {
-  T_LOGD(TAG, "i2c_cb: Received a msg: %d, arg_int: %d, arg_ptr: %p", msg,
-           arg_int, arg_ptr);
-
   switch (msg) {
     case U8X8_MSG_BYTE_SET_DC: {
       if (u8g2_esp32_hal.dc != U8G2_ESP32_HAL_UNDEFINED) {
@@ -134,17 +125,12 @@ uint8_t u8g2_esp32_i2c_byte_cb(u8x8_t* u8x8,
 
       i2c_config_t conf = {0};
       conf.mode = I2C_MODE_MASTER;
-      T_LOGI(TAG, "sda_io_num %d", u8g2_esp32_hal.bus.i2c.sda);
       conf.sda_io_num = u8g2_esp32_hal.bus.i2c.sda;
       conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
-      T_LOGI(TAG, "scl_io_num %d", u8g2_esp32_hal.bus.i2c.scl);
       conf.scl_io_num = u8g2_esp32_hal.bus.i2c.scl;
       conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
-      T_LOGI(TAG, "clk_speed %d", I2C_MASTER_FREQ_HZ);
       conf.master.clk_speed = I2C_MASTER_FREQ_HZ;
-      T_LOGI(TAG, "i2c_param_config %d", conf.mode);
       ESP_ERROR_CHECK(i2c_param_config(I2C_MASTER_NUM, &conf));
-      T_LOGI(TAG, "i2c_driver_install %d", I2C_MASTER_NUM);
       ESP_ERROR_CHECK(i2c_driver_install(I2C_MASTER_NUM, conf.mode,
                                          I2C_MASTER_RX_BUF_DISABLE,
                                          I2C_MASTER_TX_BUF_DISABLE, 0));
@@ -167,7 +153,6 @@ uint8_t u8g2_esp32_i2c_byte_cb(u8x8_t* u8x8,
     case U8X8_MSG_BYTE_START_TRANSFER: {
       uint8_t i2c_address = u8x8_GetI2CAddress(u8x8);
       handle_i2c = i2c_cmd_link_create();
-      T_LOGD(TAG, "Start I2C transfer to %02X.", i2c_address >> 1);
       ESP_ERROR_CHECK(i2c_master_start(handle_i2c));
       ESP_ERROR_CHECK(i2c_master_write_byte(
           handle_i2c, i2c_address | I2C_MASTER_WRITE, ACK_CHECK_EN));
@@ -175,7 +160,6 @@ uint8_t u8g2_esp32_i2c_byte_cb(u8x8_t* u8x8,
     }
 
     case U8X8_MSG_BYTE_END_TRANSFER: {
-      T_LOGD(TAG, "End I2C transfer.");
       ESP_ERROR_CHECK(i2c_master_stop(handle_i2c));
       ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, handle_i2c,
                                            pdMS_TO_TICKS(I2C_TIMEOUT_MS)));
@@ -194,10 +178,6 @@ uint8_t u8g2_esp32_gpio_and_delay_cb(u8x8_t* u8x8,
                                      uint8_t msg,
                                      uint8_t arg_int,
                                      void* arg_ptr) {
-  T_LOGD(TAG,
-           "gpio_and_delay_cb: Received a msg: %d, arg_int: %d, arg_ptr: %p",
-           msg, arg_int, arg_ptr);
-
   switch (msg) {
       // Initialize the GPIO and DELAY HAL functions.  If the pins for DC and
       // RESET have been specified then we define those pins as GPIO outputs.

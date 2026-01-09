@@ -14,7 +14,7 @@
 #include <RadioLib.h>
 #include <string.h>
 
-static const char* TAG __attribute__((unused)) = "LoRaDriver";
+static const char* TAG __attribute__((unused)) = "04_LoRa";
 
 // =============================================================================
 // LoRa 기본 상수 (하드코딩)

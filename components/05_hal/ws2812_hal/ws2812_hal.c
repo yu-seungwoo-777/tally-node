@@ -10,7 +10,7 @@
 #include "t_log.h"
 #include "freertos/FreeRTOS.h"
 
-static const char* TAG = "WS2812Hal";
+static const char* TAG = "05_Ws2812";
 
 // RMT 설정
 #define RMT_RESOLUTION_HZ  10000000  // 10MHz (100ns 단위)

@@ -8,7 +8,7 @@
 #include "esp_check.h"
 #include "driver/temperature_sensor.h"
 
-static const char* TAG = "TEMP_HAL";
+static const char* TAG = "05_Temp";
 
 // 온도 센서 핸들
 static temperature_sensor_handle_t s_temp_sensor = NULL;

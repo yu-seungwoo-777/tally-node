@@ -14,7 +14,7 @@
 #include <string.h>
 #include <stdio.h>
 
-static const char* TAG = "RxPage";
+static const char* TAG = "02_RxPage";
 
 // ============================================================================
 // 내부 상태

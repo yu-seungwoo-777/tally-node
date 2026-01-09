@@ -20,7 +20,7 @@
 #include "freertos/timers.h"
 #include <cstring>
 
-static const char* TAG = "prod_rx_app";
+static const char* TAG = "01_RxApp";
 
 // ============================================================================
 // 카메라 ID 변경 타이머 (RX 전용)
@@ -55,7 +55,7 @@ static void start_camera_id_timer(void)
     }
     if (s_camera_id_timer != NULL) {
         xTimerStart(s_camera_id_timer, 0);
-        T_LOGI(TAG, "Camera ID 타이머 시작");
+        T_LOGD(TAG, "Camera ID 타이머 시작");
     }
 }
 
@@ -63,7 +63,7 @@ static void stop_camera_id_timer(void)
 {
     if (s_camera_id_timer != NULL) {
         xTimerStop(s_camera_id_timer, 0);
-        T_LOGI(TAG, "Camera ID 타이머 정지");
+        T_LOGD(TAG, "Camera ID 타이머 정지");
     }
 }
 #endif // DEVICE_MODE_RX
@@ -92,7 +92,7 @@ static esp_err_t handle_button_single_click(const event_data_t* event)
         display_manager_hide_camera_id_popup();
         stop_camera_id_timer();
         display_manager_force_refresh();
-        T_LOGI(TAG, "Camera ID 팝업 닫기 (클릭)");
+        T_LOGD(TAG, "Camera ID 팝업 닫기 (클릭)");
         return ESP_OK;
     }
 
@@ -101,7 +101,7 @@ static esp_err_t handle_button_single_click(const event_data_t* event)
     uint8_t next = (current == 1) ? 2 : (current == 2) ? 3 : 1;
     display_manager_switch_page(next);
     display_manager_force_refresh();
-    T_LOGI(TAG, "RxPage: %d -> %d", current, next);
+    T_LOGD(TAG, "RxPage: %d -> %d", current, next);
 
     return ESP_OK;
 }
@@ -117,7 +117,7 @@ static esp_err_t handle_button_long_press(const event_data_t* event)
         display_manager_set_camera_id_changing(true);
         start_camera_id_timer();
         display_manager_force_refresh();
-        T_LOGI(TAG, "Camera ID 팝업 표시 (롱프레스, max: %d)", max_camera);
+        T_LOGD(TAG, "Camera ID 팝업 표시 (롱프레스, max: %d)", max_camera);
     }
 
     return ESP_OK;
@@ -150,7 +150,7 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
         display_manager_set_camera_id_changing(false);
         display_manager_hide_camera_id_popup();
         display_manager_force_refresh();
-        T_LOGI(TAG, "Camera ID 팝업 닫기 (롱프레스 해제)");
+        T_LOGD(TAG, "Camera ID 팝업 닫기 (롱프레스 해제)");
     }
 
     return ESP_OK;
@@ -304,19 +304,19 @@ void prod_rx_app_start(void)
     config_all_t saved_config;
     esp_err_t ret = config_service_load_all(&saved_config);
     if (ret == ESP_OK) {
-        // 카메라 ID 이벤트 발행 (DisplayManager가 구독 완료된 상태)
+        // 카메라 ID 이벤트 발행
         event_bus_publish(EVT_CAMERA_ID_CHANGED, &saved_config.device.camera_id, sizeof(uint8_t));
-        T_LOGI(TAG, "카메라 ID 이벤트 발행: %d", saved_config.device.camera_id);
+        T_LOGD(TAG, "카메라 ID 이벤트 발행: %d", saved_config.device.camera_id);
         // 밝기 이벤트 발행
         event_bus_publish(EVT_BRIGHTNESS_CHANGED, &saved_config.device.brightness, sizeof(uint8_t));
-        T_LOGI(TAG, "밝기 이벤트 발행: %d", saved_config.device.brightness);
-        // RF 설정 이벤트 발행 (DisplayManager용, 드라이버는 init에서 이미 설정됨)
+        T_LOGD(TAG, "밝기 이벤트 발행: %d", saved_config.device.brightness);
+        // RF 설정 이벤트 발행
         lora_rf_event_t rf_event = {
             .frequency = saved_config.device.rf.frequency,
             .sync_word = saved_config.device.rf.sync_word
         };
         event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
-        T_LOGI(TAG, "RF 설정 이벤트 발행 (디스플레이용): %.1f MHz, Sync 0x%02X",
+        T_LOGD(TAG, "RF 설정 이벤트 발행: %.1f MHz, Sync 0x%02X",
                  rf_event.frequency, rf_event.sync_word);
     } else {
         T_LOGW(TAG, "설정 로드 실패: %s", esp_err_to_name(ret));
@@ -327,7 +327,7 @@ void prod_rx_app_start(void)
     event_bus_subscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
-    T_LOGI(TAG, "버튼 이벤트 구독 시작");
+    T_LOGD(TAG, "버튼 이벤트 구독 완료");
 #endif
 
     // 버튼 서비스 시작

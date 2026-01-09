@@ -15,7 +15,7 @@
 #include "esp_mac.h"
 #include <cstring>
 
-static const char* TAG = "HardwareSvc";
+static const char* TAG = "03_Hardware";
 
 // ============================================================================
 // 태스크 설정

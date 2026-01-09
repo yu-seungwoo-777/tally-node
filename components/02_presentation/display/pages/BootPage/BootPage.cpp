@@ -9,7 +9,7 @@
 #include <string.h>
 #include <stdio.h>
 
-static const char* TAG = "BootPage";
+static const char* TAG = "02_BootPage";
 
 // ============================================================================
 // 내부 상태

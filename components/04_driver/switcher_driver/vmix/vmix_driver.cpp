@@ -13,7 +13,7 @@
 // 태그
 // ============================================================================
 
-static const char* TAG = "VmixDriver";
+static const char* TAG = "04_Vmix";
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
