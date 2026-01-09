@@ -28,6 +28,9 @@ export function stateModule() {
         // WebSocket 연결 상태
         wsConnected: false,
 
+        // 밝기 조절 모달 상태
+        showBrightnessModal: false,
+
         // /api/status 응답 데이터 (캐시)
         status: {
             network: { wifi: { connected: false, ssid: '', ip: '--' }, ethernet: { connected: false, ip: '--' } },

@@ -5,60 +5,7 @@
                     </div>
 
                     <div class="grid gap-4 lg:grid-cols-2">
-                        <!-- Global Brightness Control (TX → all RX) -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-transparent">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"></path>
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <h3 class="font-semibold text-slate-900 text-base">Global Brightness</h3>
-                                        <p class="text-xs text-slate-500">All RX devices</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="p-4 space-y-4">
-                                <div>
-                                    <div class="flex items-center justify-between mb-2">
-                                        <label class="text-sm font-medium text-slate-700">Brightness Level</label>
-                                        <span class="text-sm font-bold text-blue-600" x-text="globalBrightness.value + '%'"></span>
-                                    </div>
-                                    <input type="range"
-                                           x-model="globalBrightness.value"
-                                           @change="setGlobalBrightness(globalBrightness.value)"
-                                           :disabled="globalBrightness.sending"
-                                           min="0" max="100"
-                                           class="w-full h-2 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
-                                </div>
-                                <div class="flex gap-2">
-                                    <button @click="setGlobalBrightness(25)"
-                                            :disabled="globalBrightness.sending"
-                                            class="flex-1 px-3 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                                        25%
-                                    </button>
-                                    <button @click="setGlobalBrightness(50)"
-                                            :disabled="globalBrightness.sending"
-                                            class="flex-1 px-3 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                                        50%
-                                    </button>
-                                    <button @click="setGlobalBrightness(75)"
-                                            :disabled="globalBrightness.sending"
-                                            class="flex-1 px-3 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                                        75%
-                                    </button>
-                                    <button @click="setGlobalBrightness(100)"
-                                            :disabled="globalBrightness.sending"
-                                            class="flex-1 px-3 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                                        100%
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- System Actions -->
+                        <!-- System Info -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3.5 border-b border-slate-100">
                                 <h3 class="font-semibold text-slate-900 text-base">System Actions</h3>
