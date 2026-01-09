@@ -1093,10 +1093,13 @@ static esp_err_t on_lora_tx_command(const event_data_t* event)
         if (len >= sizeof(lora_cmd_reboot_t)) {
             const lora_cmd_reboot_t* cmd = (const lora_cmd_reboot_t*)data;
 
-            // 자신의 Device ID 확인 (Broadcast는 재부팅 제외)
-            bool is_target = false;
+            // Broadcast ID (0xFF 0xFF) 확인
+            bool is_broadcast = (cmd->device_id[0] == 0xFF && cmd->device_id[1] == 0xFF);
 
-            if (strlen(s_rx.system.device_id) == 4) {
+            // 자신의 Device ID 확인
+            bool is_target = is_broadcast;  // Broadcast는 모든 디바이스 대상
+
+            if (!is_broadcast && strlen(s_rx.system.device_id) == 4) {
                 // 자신의 ID와 비교
                 uint8_t my_id[2];
                 char hex_str[3];
@@ -1113,7 +1116,11 @@ static esp_err_t on_lora_tx_command(const event_data_t* event)
             if (is_target) {
                 char device_id_str[5];
                 lora_device_id_to_str(cmd->device_id, device_id_str);
-                T_LOGW(TAG, "재부팅 명령 수신: ID=%s, 1초 후 재부팅...", device_id_str);
+                if (is_broadcast) {
+                    T_LOGW(TAG, "브로드캐스트 재부팅 명령 수신, 1초 후 재부팅...");
+                } else {
+                    T_LOGW(TAG, "재부팅 명령 수신: ID=%s, 1초 후 재부팅...", device_id_str);
+                }
 
                 // 응답 ACK 전송
                 // TODO: ACK 전송 (나중에 구현)
