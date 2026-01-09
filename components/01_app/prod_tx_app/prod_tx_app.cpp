@@ -437,6 +437,10 @@ void prod_tx_app_start(void)
     device_manager_start();
     T_LOGI(TAG, "DeviceManager 시작");
 
+    // LicenseService 재시작 (이벤트 재발행하여 device_manager에서 device_limit 초기화)
+    license_service_start();
+    T_LOGI(TAG, "LicenseService 재시작 (device_limit 이벤트 발행)");
+
     // DisplayManager 시작, BootPage로 전환
     display_manager_start();
     display_manager_set_page(PAGE_BOOT);
