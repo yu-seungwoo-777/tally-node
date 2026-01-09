@@ -1,7 +1,7 @@
 # 로깅 가이드라인
 
 > 작성일: 2026-01-10
-> 버전: 1.0
+> 버전: 1.1
 
 ## 목차
 
@@ -18,77 +18,89 @@
 ### 1.1 표준 규칙
 
 ```
-{ComponentName}{Layer}
+{LayerNumber}_{ComponentName}
 ```
 
-- **PascalCase** 사용 (첫 글자 대문자)
-- **약어 제외** (Manager → Mgr, Service → Svc 금지)
-- **계층 구조를 폴더로 표현하므로 접미사 생략 가능**
+- **레이어 번호 접두사** (01~05, 00)
+- **언더스코어 구분자**
+- **PascalCase** 컴포넌트명
+- **계층 타입 접미사 제외** (Service, Driver, Hal 등)
 
-### 1.2 예시
+### 1.2 레이어 번호
+
+| 번호 | 계층 | 설명 |
+|------|------|------|
+| 00 | common | 공통 (EventBus 등) |
+| 01 | app | 앱 (TxApp, RxApp) |
+| 02 | presentation | 프레젠테이션 (WebSvr, Display) |
+| 03 | service | 서비스 (Device, Config, Led) |
+| 04 | driver | 드라이버 (LoRa, WiFi, Atem) |
+| 05 | hal | HAL (LoRa, WiFi, Battery) |
+
+### 1.3 예시
 
 | 계층 | 현재 | 제안 | 비고 |
 |------|------|------|------|
-| App | `prod_rx_app` | `ProdRxApp` | camelCase → PascalCase |
-| App | `prod_tx_app` | `ProdTxApp` | camelCase → PascalCase |
-| Service | `DisplayMgr` | `DisplayManager` | 약어 해소 |
-| Service | `ButtonSvc` | `ButtonService` | 약어 해소 |
-| Service | `DeviceMgr` | `DeviceManager` | 약어 해소 |
-| HAL | `DISP_HAL` | `DisplayHal` | 대문자 → PascalCase |
-| HAL | `TEMP_HAL` | `TemperatureHal` | 대문자 → PascalCase |
-| Driver | `DISP_DRV` | `DisplayDriver` | 대문자 → PascalCase |
-| Driver | `TEMP_DRV` | `TemperatureDriver` | 대문자 → PascalCase |
-| Test | `TallyTest` | `TallyService` | 운영용 이름 변경 |
+| App | `prod_rx_app` | `01_RxApp` | 레이어 + 간결명 |
+| App | `prod_tx_app` | `01_TxApp` | 레이어 + 간결명 |
+| Service | `ButtonSvc` | `03_Button` | Service 접미사 제외 |
+| Service | `DeviceMgr` | `03_Device` | Mgr 약어 제외 |
+| Service | `ConfigService` | `03_Config` | Service 접미사 제외 |
+| Driver | `LoRaDriver` | `04_LoRa` | Driver 접미사 제외 |
+| Driver | `AtemDriver` | `04_Atem` | Driver 접미사 제외 |
+| HAL | `LoRaHal` | `05_LoRa` | Hal 접미사 제외 |
+| HAL | `DISP_HAL` | `05_Display` | 대문자 → PascalCase |
+| HAL | `TEMP_HAL` | `05_Temp` | 대문자 → PascalCase |
 
-### 1.3 계층별 TAG 예시
+### 1.4 전체 TAG 목록
 
 ```
+# 00_common
+static const char* TAG = "00_EventBus";
+
 # 01_app
-static const char* TAG = "ProdRxApp";
-static const char* TAG = "ProdTxApp";
+static const char* TAG = "01_TxApp";
+static const char* TAG = "01_RxApp";
 
 # 02_presentation
-static const char* TAG = "DisplayManager";
-static const char* TAG = "WebServer";
-static const char* TAG = "BootPage";
-static const char* TAG = "RxPage";
-static const char* TAG = "TxPage";
+static const char* TAG = "02_WebSvr";
+static const char* TAG = "02_Display";
+static const char* TAG = "02_BootPage";
+static const char* TAG = "02_RxPage";
+static const char* TAG = "02_TxPage";
 
 # 03_service
-static const char* TAG = "ButtonService";
-static const char* TAG = "ConfigService";
-static const char* TAG = "DeviceManager";
-static const char* TAG = "HardwareService";
-static const char* TAG = "LedService";
-static const char* TAG = "LicenseService";
-static const char* TAG = "NetworkService";
-static const char* TAG = "SwitcherService";
+static const char* TAG = "03_Device";
+static const char* TAG = "03_Config";
+static const char* TAG = "03_Button";
+static const char* TAG = "03_Led";
+static const char* TAG = "03_Network";
+static const char* TAG = "03_Switcher";
+static const char* TAG = "03_License";
+static const char* TAG = "03_Hardware";
 
 # 04_driver
-static const char* TAG = "AtemDriver";
-static const char* TAG = "BoardLedDriver";
-static const char* TAG = "DisplayDriver";
-static const char* TAG = "EthernetDriver";
-static const char* TAG = "LicenseClient";
-static const char* TAG = "LoRaDriver";
-static const char* TAG = "SwitcherDriver";
-static const char* TAG = "TemperatureDriver";
-static const char* TAG = "VmixDriver";
-static const char* TAG = "WiFiDriver";
-static const char* TAG = "Ws2812Driver";
+static const char* TAG = "04_LoRa";
+static const char* TAG = "04_WiFi";
+static const char* TAG = "04_Ethernet";
+static const char* TAG = "04_DispDrv";
+static const char* TAG = "04_Atem";
+static const char* TAG = "04_Vmix";
+static const char* TAG = "04_Battery";
+static const char* TAG = "04_Temp";
+static const char* TAG = "04_Ws2812";
+static const char* TAG = "04_BoardLed";
+static const char* TAG = "04_LicenseCli";
 
 # 05_hal
-static const char* TAG = "BatteryHal";
-static const char* TAG = "DisplayHal";
-static const char* TAG = "EthernetHal";
-static const char* TAG = "LoRaHal";
-static const char* TAG = "TemperatureHal";
-static const char* TAG = "U8g2Hal";
-static const char* TAG = "WifiHal";
-static const char* TAG = "Ws2812Hal";
-
-# 00_common
-static const char* TAG = "EventBus";
+static const char* TAG = "05_LoRa";
+static const char* TAG = "05_WiFi";
+static const char* TAG = "05_Ethernet";
+static const char* TAG = "05_Display";
+static const char* TAG = "05_Battery";
+static const char* TAG = "05_Temp";
+static const char* TAG = "05_Ws2812";
+static const char* TAG = "05_U8g2";
 ```
 
 ---
@@ -265,6 +277,7 @@ T_LOGI(TAG, "설정 저장 완료: 타입=%d", type);
 - camelCase (`prod_rx_app`)와 PascalCase (`EventBus`) 혼용
 - 약어 사용 (`Mgr`, `Svc`, `HAL`)
 - 대문자 상수형 (`DISP_HAL`, `TEMP_HAL`)
+- **개선**: `01_TxApp`, `03_Device` 형식으로 통일
 
 ### 5.2 로그 레벨 오사용
 
