@@ -44,6 +44,12 @@ static struct {
 };
 
 // ============================================================================
+// 테스트 모드 상태
+// ============================================================================
+
+static bool s_test_mode_running = false;
+
+// ============================================================================
 // TX 전용 (주기적 상태 요청, 디바이스 리스트 관리)
 // ============================================================================
 
@@ -101,6 +107,14 @@ static esp_err_t send_status_request(void)
  */
 static esp_err_t send_stop_command(const uint8_t* device_id)
 {
+    // 테스트 모드 실행 중이면 기능정지 송신 스킵
+    if (s_test_mode_running) {
+        char device_id_str[5];
+        lora_device_id_to_str(device_id, device_id_str);
+        T_LOGW(TAG, "테스트 모드 실행 중: 기능정지 송신 스킵 (ID=%s)", device_id_str);
+        return ESP_OK;
+    }
+
     // 정적 버퍼 (이벤트 버스가 비동기로 처리하므로)
     static lora_cmd_stop_t s_stop;
 
@@ -509,6 +523,28 @@ static esp_err_t on_status_request(const event_data_t* event)
 {
     (void)event;
     return send_status_request();
+}
+
+/**
+ * @brief 테스트 모드 시작 이벤트 핸들러
+ */
+static esp_err_t on_test_mode_start(const event_data_t* event)
+{
+    (void)event;
+    s_test_mode_running = true;
+    T_LOGI(TAG, "테스트 모드 시작: 기능정지 송신 비활성화");
+    return ESP_OK;
+}
+
+/**
+ * @brief 테스트 모드 중지 이벤트 핸들러
+ */
+static esp_err_t on_test_mode_stop(const event_data_t* event)
+{
+    (void)event;
+    s_test_mode_running = false;
+    T_LOGI(TAG, "테스트 모드 중지: 기능정지 송신 활성화");
+    return ESP_OK;
 }
 
 /**
@@ -1191,6 +1227,10 @@ esp_err_t device_manager_start(void)
     event_bus_subscribe(EVT_STATUS_REQUEST, on_status_request);
     event_bus_subscribe(EVT_DEVICE_UNREGISTER, on_device_unregister);
 
+    // 테스트 모드 이벤트 구독
+    event_bus_subscribe(EVT_TALLY_TEST_MODE_START, on_test_mode_start);
+    event_bus_subscribe(EVT_TALLY_TEST_MODE_STOP, on_test_mode_stop);
+
     // 디바이스 카메라 매핑 이벤트 구독 (NVS 로드된 매핑 수신)
     event_bus_subscribe(EVT_DEVICE_CAM_MAP_RECEIVE, on_device_cam_map_receive);
 
@@ -1255,6 +1295,10 @@ void device_manager_stop(void)
     event_bus_unsubscribe(EVT_DEVICE_STOP_REQUEST, on_device_stop_request);
     event_bus_unsubscribe(EVT_DEVICE_REBOOT_REQUEST, on_device_reboot_request);
     event_bus_unsubscribe(EVT_STATUS_REQUEST, on_status_request);
+
+    // 테스트 모드 이벤트 구독 해제
+    event_bus_unsubscribe(EVT_TALLY_TEST_MODE_START, on_test_mode_start);
+    event_bus_unsubscribe(EVT_TALLY_TEST_MODE_STOP, on_test_mode_stop);
 #endif
 
 #ifdef DEVICE_MODE_RX

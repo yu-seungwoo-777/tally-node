@@ -413,6 +413,16 @@ typedef struct {
     char key[17];              ///< 라이센스 키 (16자 + null)
 } license_validate_event_t;
 
+/**
+ * @brief Tally 테스트 모드 설정 (EVT_TALLY_TEST_MODE_START용)
+ *
+ * web_server에서 발행하는 테스트 모드 시작 요청
+ */
+typedef struct {
+    uint8_t max_channels;      ///< 최대 채널 수 (1-20)
+    uint16_t interval_ms;      ///< 송신 간격 (100-3000ms)
+} tally_test_mode_config_t;
+
 // ============================================================================
 // 이벤트 타입 정의
 // ============================================================================
@@ -489,6 +499,10 @@ typedef enum {
     // 라이센스 이벤트 (03_service → 03_service)
     EVT_LICENSE_STATE_CHANGED,   ///< 라이센스 상태 변경 (data: license_state_event_t)
     EVT_LICENSE_VALIDATE,        ///< 라이센스 검증 요청 (data: license_validate_event_t)
+
+    // Tally 테스트 모드 이벤트
+    EVT_TALLY_TEST_MODE_START,   ///< 테스트 모드 시작 (data: tally_test_mode_config_t)
+    EVT_TALLY_TEST_MODE_STOP,    ///< 테스트 모드 중지 (data: none)
 
     // 최대 이벤트 수
    _EVT_MAX

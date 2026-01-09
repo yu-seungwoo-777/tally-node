@@ -57,6 +57,76 @@
                             </div>
                         </div>
 
+                        <!-- Tally Test Mode -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-purple-50 to-transparent flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-semibold text-slate-900 text-base">Tally Test Mode</h3>
+                                        <p class="text-xs text-slate-500">Auto cycle PGM/PVW</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span x-show="testMode.running" class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                                        Running
+                                    </span>
+                                    <span x-show="!testMode.running" class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                                        Stopped
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="p-4 space-y-4">
+                                <!-- Max Channels -->
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Max Channels</label>
+                                    <input type="number" min="1" max="20" x-model="testMode.maxChannels"
+                                           :disabled="testMode.running"
+                                           class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:bg-slate-100 disabled:opacity-50">
+                                    <p class="text-xs text-slate-400 mt-1">Number of channels to cycle (1-20)</p>
+                                </div>
+
+                                <!-- Interval -->
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Interval: <span x-text="testMode.interval"></span>ms</label>
+                                    <input type="range" min="100" max="3000" step="100" x-model="testMode.interval"
+                                           :disabled="testMode.running"
+                                           class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-purple-500 disabled:opacity-50">
+                                    <div class="flex justify-between text-xs text-slate-400 mt-1">
+                                        <span>100ms</span>
+                                        <span>3000ms</span>
+                                    </div>
+                                </div>
+
+                                <!-- Pattern Preview -->
+                                <div class="p-3 bg-slate-50 rounded-lg">
+                                    <p class="text-xs font-medium text-slate-600 mb-2">Pattern (Max Channels = <span x-text="testMode.maxChannels"></span>):</p>
+                                    <div class="space-y-1 text-xs font-mono text-slate-500">
+                                        <template x-for="i in Math.min(4, testMode.maxChannels)" :key="i">
+                                            <div>Step <span x-text="i"></span>: PGM<span x-text="i"></span> PVW<span x-text="i % testMode.maxChannels + 1"></span></div>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <!-- Control Buttons -->
+                                <div class="flex gap-2">
+                                    <button x-show="!testMode.running" @click="startTestMode()"
+                                            class="flex-1 px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors">
+                                        Start Test
+                                    </button>
+                                    <button x-show="testMode.running" @click="stopTestMode()"
+                                            class="flex-1 px-4 py-2 text-sm font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 transition-colors">
+                                        Stop Test
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- System Info -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3.5 border-b border-slate-100">

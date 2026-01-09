@@ -19,6 +19,7 @@
 #include "lora_service.h"
 #include "device_manager.h"
 #include "web_server.h"
+#include "tally_test_service.h"
 #include "TallyTypes.h"
 #include "esp_netif.h"
 #include "esp_event.h"
@@ -92,6 +93,33 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
 #endif // DEVICE_MODE_TX
 
 // ============================================================================
+// 테스트 모드 이벤트 핸들러
+// ============================================================================
+
+static esp_err_t handle_test_mode_start(const event_data_t* event)
+{
+    if (event) {
+        const tally_test_mode_config_t* config = (const tally_test_mode_config_t*)event->data;
+        T_LOGI(TAG, "테스트 모드 시작: 채널=%d, 간격=%dms", config->max_channels, config->interval_ms);
+
+        esp_err_t ret = tally_test_service_start(config->max_channels, config->interval_ms);
+        if (ret != ESP_OK) {
+            T_LOGE(TAG, "테스트 모드 시작 실패: %s", esp_err_to_name(ret));
+            return ESP_FAIL;
+        }
+    }
+    return ESP_OK;
+}
+
+static esp_err_t handle_test_mode_stop(const event_data_t* event)
+{
+    (void)event;
+    T_LOGI(TAG, "테스트 모드 중지");
+    tally_test_service_stop();
+    return ESP_OK;
+}
+
+// ============================================================================
 // 앱 상태
 // ============================================================================
 
@@ -152,6 +180,57 @@ static void on_connection_change(connection_state_t state)
 static void on_switcher_change(switcher_role_t role)
 {
     T_LOGI(TAG, "%s 스위처 변경 감지", switcher_role_to_string(role));
+}
+
+// ============================================================================
+// Tally 상태 변경 핸들러 (테스트 모드용)
+// ============================================================================
+
+static esp_err_t handle_tally_state_changed(const event_data_t* event)
+{
+    if (!event || !s_app.initialized) {
+        return ESP_OK;
+    }
+
+    // 테스트 모드 실행 중인지 확인
+    bool test_mode_running = tally_test_service_is_running();
+
+    // 테스트 모드가 실행 중이 아니면 스킵 (스위처 Tally는 on_tally_change에서 처리)
+    if (!test_mode_running) {
+        return ESP_OK;
+    }
+
+    const tally_event_data_t* tally_event = (const tally_event_data_t*)event->data;
+
+    // 라이센스 확인
+    if (!license_service_can_send_tally()) {
+        return ESP_OK;
+    }
+
+    // packed_data_t 생성
+    packed_data_t tally;
+    tally.channel_count = tally_event->channel_count;
+    tally.data_size = (tally_event->channel_count + 3) / 4;
+    tally.data = (uint8_t*)tally_event->tally_data;
+
+    char hex_str[16];
+    packed_data_to_hex(&tally, hex_str, sizeof(hex_str));
+
+    esp_err_t ret = lora_service_send_tally(&tally);
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "LoRa 송신 (테스트 모드): [F1][%d][%s] (%d채널, %d바이트)",
+                 tally.channel_count, hex_str, tally.channel_count, tally.data_size);
+    } else {
+        T_LOGE(TAG, "LoRa 송신 실패: [%s] -> %s", hex_str, esp_err_to_name(ret));
+    }
+
+    // 마지막 Tally 저장
+    if (s_app.last_tally.data) {
+        packed_data_cleanup(&s_app.last_tally);
+    }
+    packed_data_copy(&s_app.last_tally, &tally);
+
+    return ESP_OK;
 }
 
 // ============================================================================
@@ -268,6 +347,11 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
 #endif
+    // 테스트 모드 이벤트
+    event_bus_subscribe(EVT_TALLY_TEST_MODE_START, handle_test_mode_start);
+    event_bus_subscribe(EVT_TALLY_TEST_MODE_STOP, handle_test_mode_stop);
+    // Tally 상태 변경 이벤트 (테스트 모드 포함)
+    event_bus_subscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
     T_LOGI(TAG, "이벤트 구독 완료");
 
     // ConfigService 초기화
@@ -392,6 +476,12 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     ret = web_server_init();
     if (ret != ESP_OK) {
         T_LOGW(TAG, "WebServer init failed: %s", esp_err_to_name(ret));
+    }
+
+    // TallyTestService 초기화
+    ret = tally_test_service_init();
+    if (ret != ESP_OK) {
+        T_LOGW(TAG, "TallyTestService init failed: %s", esp_err_to_name(ret));
     }
 
     // DeviceManager 초기화 (이벤트 구독)

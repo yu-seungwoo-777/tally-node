@@ -1067,6 +1067,12 @@ void SwitcherService::checkSwitcherChange(switcher_role_t role) {
 }
 
 void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
+    // TODO: 이벤트로 테스트 모드 상태 확인 필요
+    // 테스트 모드가 동작 중이면 스위처 Tally를 무시
+    // if (tally_test_service_is_running()) {
+    //     return;
+    // }
+
     // 어댑터에서 변경 알림 받음
     checkSwitcherChange(role);
 

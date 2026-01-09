@@ -12,6 +12,7 @@ import { broadcastModule } from './modules/broadcast.js';
 import { devicesModule } from './modules/devices.js';
 import { deviceModule } from './modules/device.js';
 import { licenseModule } from './modules/license.js';
+import { testModule } from './modules/test.js';
 import { utilsModule } from './modules/utils.js';
 
 function tallyApp() {
@@ -27,6 +28,7 @@ function tallyApp() {
         ...devicesModule(),
         ...deviceModule(),
         ...licenseModule(),
+        ...testModule(),
         ...utilsModule()
     };
 }

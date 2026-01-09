@@ -12,6 +12,7 @@
 #include "esp_http_server.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
+#include "t_log.h"
 #include "esp_system.h"
 #include "esp_netif.h"
 #include "esp_timer.h"
@@ -899,6 +900,98 @@ static esp_err_t api_reboot_handler(httpd_req_t* req)
 
     vTaskDelay(pdMS_TO_TICKS(100));
     esp_restart();
+    return ESP_OK;
+}
+
+/**
+ * @brief POST /api/test/start - 테스트 모드 시작
+ */
+static esp_err_t api_test_start_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // JSON 파싱
+    char buf[128];
+    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
+    if (ret <= 0) {
+        T_LOGE(TAG, "httpd_req_recv failed: ret=%d", ret);
+        httpd_resp_set_status(req, HTTPD_400);
+        httpd_resp_sendstr(req, "{\"error\":\"Invalid request\"}");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+    T_LOGI(TAG, "Received JSON: %s", buf);
+
+    cJSON* root = cJSON_Parse(buf);
+    if (!root) {
+        T_LOGE(TAG, "cJSON_Parse failed");
+        httpd_resp_set_status(req, HTTPD_400);
+        httpd_resp_sendstr(req, "{\"error\":\"Invalid JSON\"}");
+        return ESP_FAIL;
+    }
+
+    // 파라미터 추출
+    cJSON* max_channels_item = cJSON_GetObjectItem(root, "max_channels");
+    cJSON* interval_ms_item = cJSON_GetObjectItem(root, "interval_ms");
+
+    if (!max_channels_item || !interval_ms_item) {
+        T_LOGE(TAG, "Missing parameters: max_channels=%p, interval_ms=%p",
+               max_channels_item, interval_ms_item);
+        cJSON_Delete(root);
+        httpd_resp_set_status(req, HTTPD_400);
+        httpd_resp_sendstr(req, "{\"error\":\"Missing parameters\"}");
+        return ESP_FAIL;
+    }
+
+    uint8_t max_channels = (uint8_t)cJSON_GetNumberValue(max_channels_item);
+    uint16_t interval_ms = (uint16_t)cJSON_GetNumberValue(interval_ms_item);
+    cJSON_Delete(root);
+
+    T_LOGI(TAG, "Parsed params: max_channels=%d, interval_ms=%d", max_channels, interval_ms);
+
+    // 파라미터 검증
+    if (max_channels < 1 || max_channels > 20) {
+        T_LOGE(TAG, "Invalid max_channels: %d", max_channels);
+        httpd_resp_set_status(req, HTTPD_400);
+        httpd_resp_sendstr(req, "{\"error\":\"max_channels must be 1-20\"}");
+        return ESP_FAIL;
+    }
+
+    if (interval_ms < 100 || interval_ms > 3000) {
+        T_LOGE(TAG, "Invalid interval_ms: %d", interval_ms);
+        httpd_resp_set_status(req, HTTPD_400);
+        httpd_resp_sendstr(req, "{\"error\":\"interval_ms must be 100-3000\"}");
+        return ESP_FAIL;
+    }
+
+    // 이벤트 발행
+    tally_test_mode_config_t test_config = {
+        .max_channels = max_channels,
+        .interval_ms = interval_ms
+    };
+    event_bus_publish(EVT_TALLY_TEST_MODE_START, &test_config, sizeof(test_config));
+
+    // 응답
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"started\"}");
+
+    return ESP_OK;
+}
+
+/**
+ * @brief POST /api/test/stop - 테스트 모드 중지
+ */
+static esp_err_t api_test_stop_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 이벤트 발행
+    event_bus_publish(EVT_TALLY_TEST_MODE_STOP, nullptr, 0);
+
+    // 응답
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"stopped\"}");
+
     return ESP_OK;
 }
 
@@ -1957,6 +2050,20 @@ static const httpd_uri_t uri_api_reboot = {
     .user_ctx = nullptr
 };
 
+static const httpd_uri_t uri_api_test_start = {
+    .uri = "/api/test/start",
+    .method = HTTP_POST,
+    .handler = api_test_start_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_test_stop = {
+    .uri = "/api/test/stop",
+    .method = HTTP_POST,
+    .handler = api_test_stop_handler,
+    .user_ctx = nullptr
+};
+
 static const httpd_uri_t uri_api_config_network_ap = {
     .uri = "/api/config/network/ap",
     .method = HTTP_POST,
@@ -2174,6 +2281,20 @@ static const httpd_uri_t uri_options_api_reboot = {
     .user_ctx = nullptr
 };
 
+static const httpd_uri_t uri_options_api_test_start = {
+    .uri = "/api/test/start",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_options_api_test_stop = {
+    .uri = "/api/test/stop",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
 static const httpd_uri_t uri_options_api_config = {
     .uri = "/api/config/*",
     .method = HTTP_OPTIONS,
@@ -2378,6 +2499,9 @@ esp_err_t web_server_start(void)
     // Test API
     httpd_register_uri_handler(s_server, &uri_api_test_internet);
     httpd_register_uri_handler(s_server, &uri_api_test_license_server);
+    // Tally Test Mode API
+    httpd_register_uri_handler(s_server, &uri_api_test_start);
+    httpd_register_uri_handler(s_server, &uri_api_test_stop);
     // License Search API
     httpd_register_uri_handler(s_server, &uri_api_search_license);
     // Notices API
@@ -2408,6 +2532,8 @@ esp_err_t web_server_start(void)
     httpd_register_uri_handler(s_server, &uri_options_api_test_internet);
     httpd_register_uri_handler(s_server, &uri_options_api_test_license_server);
     httpd_register_uri_handler(s_server, &uri_options_api_test);
+    httpd_register_uri_handler(s_server, &uri_options_api_test_start);
+    httpd_register_uri_handler(s_server, &uri_options_api_test_stop);
     httpd_register_uri_handler(s_server, &uri_options_api_search_license);
     httpd_register_uri_handler(s_server, &uri_options_api_notices);
     httpd_register_uri_handler(s_server, &uri_options_api_device_brightness);
