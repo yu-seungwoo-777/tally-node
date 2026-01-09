@@ -314,20 +314,20 @@ esp_err_t LicenseService::init(void)
 esp_err_t LicenseService::start(void)
 {
     if (!s_initialized) {
-        return ESP_ERR_INVALID_STATE;
+        return ESP_ERR_INVALID_ARG;
     }
 
-    if (s_started) {
-        return ESP_OK;
+    // 이벤트 구독 (최초 1회)
+    if (!s_started) {
+        event_bus_subscribe(EVT_LICENSE_VALIDATE, onValidateRequest);
+        event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusChanged);
+        s_started = true;
+        T_LOGI(TAG, "LicenseService 시작 (이벤트 구독 완료)");
+    } else {
+        T_LOGI(TAG, "LicenseService 이미 시작됨");
     }
 
-    event_bus_subscribe(EVT_LICENSE_VALIDATE, onValidateRequest);
-    event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusChanged);
-
-    s_started = true;
-    T_LOGI(TAG, "LicenseService 시작 (이벤트 구독 완료)");
-
-    // 초기 상태 이벤트 발행 (device_manager에서 device_limit 초기화용)
+    // 상태 이벤트 발행 (재호출 시에도 발행하여 구독자에게 전달)
     publishStateEvent();
 
     return ESP_OK;
