@@ -118,16 +118,22 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
         return ESP_OK;
     }
 
-    // 기본 설정 (LoRaConfig.h 매크로 사용)
-    uint8_t sf = config ? config->spreading_factor : LORA_DEFAULT_SF;
-    uint8_t cr = config ? config->coding_rate : LORA_DEFAULT_CR;
-    float bw = config ? config->bandwidth : LORA_DEFAULT_BW;
-    int8_t txp = config ? config->tx_power : LORA_DEFAULT_TX_POWER;
-    uint8_t sw = config ? config->sync_word : LORA_DEFAULT_SYNC_WORD;
+    if (!config) {
+        T_LOGE(TAG, "config는 nullptr일 수 없습니다");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // NVS에서 로드된 설정 값 사용 (lora_service에서 전달)
+    uint8_t sf = config->spreading_factor;
+    uint8_t cr = config->coding_rate;
+    float bw = config->bandwidth;
+    int8_t txp = config->tx_power;
+    uint8_t sw = config->sync_word;
+    float freq = config->frequency;
 
     T_LOGI(TAG, "LoRa 드라이버 초기화 중...");
-    T_LOGI(TAG, "  SF=%d, BW=%.0fkHz, CR=4/%d, TXP=%ddBm, SW=0x%02X",
-             sf, bw, cr, txp, sw);
+    T_LOGI(TAG, "  Freq=%.1fMHz, SF=%d, BW=%.0fkHz, CR=4/%d, TXP=%ddBm, SW=0x%02X",
+             freq, sf, bw, cr, txp, sw);
 
     // HAL 초기화
     esp_err_t ret = lora_hal_init();
@@ -147,38 +153,45 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     s_module = new Module(hal, EORA_S3_LORA_CS, EORA_S3_LORA_DIO1,
                          EORA_S3_LORA_RST, EORA_S3_LORA_BUSY);
 
-    // 칩 자동 감지: SX1262 (868MHz) 먼저 시도 (900TB 모듈)
-    T_LOGI(TAG, "SX1262 (868MHz) 감지 시도...");
+    // 칩 자동 감지: SX1262 먼저 시도 (900TB 모듈)
+    T_LOGI(TAG, "SX1262 감지 시도...");
     SX1262* radio_1262 = new SX1262(s_module);
-    int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);  // Preamble=8
+    // begin()은 임시 주파수로 초기화 (나중에 setFrequency()로 NVS 값 적용)
+    int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
 
     if (state == RADIOLIB_ERR_NONE) {
         s_radio = radio_1262;
-        s_chip_type = LORA_CHIP_SX1262_433M;  // 타입명은 유지
-        s_frequency = 868.0f;
-        T_LOGI(TAG, "✓ SX1262 (868MHz) 감지됨");
+        s_chip_type = LORA_CHIP_SX1262_433M;
+        T_LOGI(TAG, "✓ SX1262 감지됨");
     } else {
         T_LOGW(TAG, "SX1262 실패: %d, SX1268 시도...", state);
         delete radio_1262;
 
-        // SX1268 (433MHz) 시도 (400TB 모듈)
-        T_LOGI(TAG, "SX1268 (433MHz) 감지 시도...");
+        T_LOGI(TAG, "SX1268 감지 시도...");
         SX1268* radio_1268 = new SX1268(s_module);
-        state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);  // Preamble=8
+        state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
 
         if (state == RADIOLIB_ERR_NONE) {
             s_radio = radio_1268;
-            s_chip_type = LORA_CHIP_SX1268_868M;  // 타입명은 유지
-            s_frequency = 433.0f;
-            T_LOGI(TAG, "✓ SX1268 (433MHz) 감지됨");
+            s_chip_type = LORA_CHIP_SX1268_868M;
+            T_LOGI(TAG, "✓ SX1268 감지됨");
         } else {
-            T_LOGE(TAG, "LoRa 칩 감지 실패 (모든 칩): %d", state);
+            T_LOGE(TAG, "LoRa 칩 감지 실패: %d", state);
             delete radio_1268;
             delete s_module;
             s_module = nullptr;
             return ESP_FAIL;
         }
     }
+
+    // NVS 주파수로 설정
+    state = s_radio->setFrequency(freq);
+    if (state != RADIOLIB_ERR_NONE) {
+        T_LOGE(TAG, "주파수 설정 실패: %.1f MHz (err:%d)", freq, state);
+        return ESP_FAIL;
+    }
+    s_frequency = freq;
+    T_LOGI(TAG, "  주파수 설정: %.1f MHz", s_frequency);
 
     // 인터럽트 등록
     s_radio->setPacketSentAction(tx_isr_handler);

@@ -186,15 +186,21 @@ static void print_status_log(void)
 
     // LoRa 정보
     if (s_mgr.data.lora.valid) {
-        T_LOGI(TAG, "LoRa RSSI:%ddB SNR:%.0fdB",
+        T_LOGI(TAG, "LoRa: RSSI:%ddB SNR:%.0fdB",
                s_mgr.data.lora.rssi,
                s_mgr.data.lora.snr);
+    }
+
+    // RF 정보 (공통)
+    if (s_mgr.data.rf_valid) {
+        T_LOGI(TAG, "RF: %.1fMHz Sync:0x%02X",
+               s_mgr.data.rf.frequency,
+               s_mgr.data.rf.sync_word);
     }
 
 #ifdef DEVICE_MODE_RX
     // Tally 정보 (RX)
     if (s_mgr.data.tally.valid) {
-        // 채널 목록 문자열 생성
         char pgm_str[32] = {0};
         char pvw_str[32] = {0};
         int offset = 0;
@@ -210,16 +216,16 @@ static void print_status_log(void)
                              "%s%d", (i > 0) ? "," : "", s_mgr.data.tally.pvw_channels[i]);
         }
 
-        T_LOGI(TAG, "Tally PGM:[%s] PVW:[%s]",
+        T_LOGI(TAG, "Tally: PGM:[%s] PVW:[%s]",
                (s_mgr.data.tally.pgm_count > 0) ? pgm_str : "-",
                (s_mgr.data.tally.pvw_count > 0) ? pvw_str : "-");
     }
 
-    // 디바이스 정보 (RX)
+    // 디바이스 설정 (RX)
     if (s_mgr.data.device.valid) {
-        T_LOGI(TAG, "Bri:%d Cam:%d",
-               s_mgr.data.device.brightness,
-               s_mgr.data.device.camera_id);
+        T_LOGI(TAG, "Cam:%d Bri:%d",
+               s_mgr.data.device.camera_id,
+               s_mgr.data.device.brightness);
     }
 #elif defined(DEVICE_MODE_TX)
     // Switcher 정보 (TX)
@@ -254,14 +260,8 @@ static void print_status_log(void)
                    s_mgr.data.network.eth_connected ? s_mgr.data.network.eth_ip : "N/A");
         }
     }
-
-    // RF 정보 (TX)
-    if (s_mgr.data.rf_valid) {
-        T_LOGI(TAG, "RF %.1fMHz Sync:0x%02X",
-               s_mgr.data.rf.frequency,
-               s_mgr.data.rf.sync_word);
-    }
 #endif
+
     T_LOGI(TAG, "──────────────────────────────────");
 }
 
