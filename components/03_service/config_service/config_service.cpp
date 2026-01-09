@@ -119,7 +119,11 @@ private:
 // ============================================================================
 
 bool ConfigServiceClass::s_initialized = false;
-config_device_cam_map_t ConfigServiceClass::s_device_cam_map = {0};
+config_device_cam_map_t ConfigServiceClass::s_device_cam_map = {
+    .device_ids = {0},
+    .camera_ids = {0},
+    .count = 0
+};
 
 // ============================================================================
 // 이벤트 핸들러 (등록된 디바이스 관리)
