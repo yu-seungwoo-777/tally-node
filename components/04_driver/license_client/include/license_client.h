@@ -24,7 +24,7 @@ extern "C" {
 
 #define LICENSE_KEY_LEN        16      // 라이센스 키 길이
 #define LICENSE_API_KEY         "QNbzOIgjVwtUx36mnG1mStrrTOsFGNW7"
-#define LICENSE_SERVER_BASE     "http://tally-node.duckdns.org"
+#define LICENSE_SERVER_BASE     "https://tally-node.duckdns.org"
 #define LICENSE_VALIDATE_PATH   "/api/validate-license"
 #define LICENSE_SEARCH_PATH     "/api/search-license"
 #define LICENSE_TIMEOUT_MS      15000   // 15초 타임아웃
