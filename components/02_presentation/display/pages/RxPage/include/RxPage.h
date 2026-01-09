@@ -2,12 +2,13 @@
  * @file RxPage.h
  * @brief RX 모드 페이지 (LoRa 수신 Tally 상태)
  *
- * 2개 페이지:
+ * 3개 페이지:
  * - Page 1: Tally 정보 (PGM/PVW 채널 목록)
  * - Page 2: 시스템 정보 (3x2 테이블)
+ * - Page 3: RX 수신 통계 (RSSI, SNR, 수신 간격, 총 수신 개수)
  *
  * 페이지 상태:
- * - PAGE_STATE_NORMAL: 일반 페이지 (Tally/System 전환)
+ * - PAGE_STATE_NORMAL: 일반 페이지 (Tally/System/RX Stats 전환)
  * - PAGE_STATE_CAMERA_ID: 카메라 ID 변경 팝업
  */
 
@@ -120,17 +121,28 @@ void rx_page_set_device_id(const char* device_id);
  */
 void rx_page_set_uptime(uint64_t uptime_sec);
 
+// ========== RX 통계 데이터 설정 ==========
+
+/**
+ * @brief RX 수신 통계 설정
+ * @param rssi 마지막 RSSI (dBm)
+ * @param snr 마지막 SNR (dB)
+ * @param interval 마지막 수신 간격 (ms)
+ * @param total_count 총 수신 개수
+ */
+void rx_page_set_rx_stats(int16_t rssi, float snr, uint32_t interval, uint32_t total_count);
+
 // ========== 페이지 제어 ==========
 
 /**
  * @brief 페이지 전환
- * @param page 페이지 번호 (1: Tally, 2: System)
+ * @param page 페이지 번호 (1: Tally, 2: System, 3: RX Stats)
  */
 void rx_page_switch_page(uint8_t page);
 
 /**
  * @brief 현재 페이지 가져오기
- * @return 페이지 번호 (1: Tally, 2: System)
+ * @return 페이지 번호 (1: Tally, 2: System, 3: RX Stats)
  */
 uint8_t rx_page_get_current_page(void);
 

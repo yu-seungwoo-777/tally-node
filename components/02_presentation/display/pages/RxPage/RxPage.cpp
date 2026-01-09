@@ -2,9 +2,10 @@
  * @file RxPage.cpp
  * @brief RX 모드 페이지 구현 (LoRa 수신 Tally 상태)
  *
- * 2개 페이지:
+ * 3개 페이지:
  * - Page 1: Tally 정보 (PGM/PVW 채널 목록)
  * - Page 2: 시스템 정보
+ * - Page 3: RX 수신 통계 (RSSI, SNR, 수신 간격, 총 수신 개수)
  */
 
 #include "RxPage.h"
@@ -57,7 +58,20 @@ static struct {
     .uptime_sec = 0,
 };
 
-// 현재 페이지 (1: Tally, 2: System)
+// RX 통계 데이터
+static struct {
+    int16_t last_rssi;       // 마지막 RSSI (dBm)
+    float last_snr;          // 마지막 SNR (dB)
+    uint32_t interval;       // 마지막 수신 간격 (ms)
+    uint32_t total_count;    // 총 수신 개수
+} s_rx_stats = {
+    .last_rssi = -120,
+    .last_snr = 0.0f,
+    .interval = 0,
+    .total_count = 0,
+};
+
+// 현재 페이지 (1: Tally, 2: System, 3: RX Stats)
 static uint8_t s_current_page = 1;
 
 // 페이지 상태 (NORMAL, CAMERA_ID)
@@ -79,6 +93,7 @@ static void draw_channel_list(u8g2_t* u8g2, const uint8_t* channels, uint8_t cou
                               int y_pos, int max_width);
 static void draw_tally_page(u8g2_t* u8g2);
 static void draw_system_page(u8g2_t* u8g2);
+static void draw_rx_stats_page(u8g2_t* u8g2);
 static void draw_camera_id_popup(u8g2_t* u8g2);
 static void draw_stopped_popup(u8g2_t* u8g2);
 
@@ -114,8 +129,10 @@ static void page_render(u8g2_t* u8g2)
     // 일반 상태: 현재 페이지에 따라 렌더링
     if (s_current_page == 1) {
         draw_tally_page(u8g2);
-    } else {
+    } else if (s_current_page == 2) {
         draw_system_page(u8g2);
+    } else {
+        draw_rx_stats_page(u8g2);
     }
 }
 
@@ -321,6 +338,51 @@ static void draw_system_page(u8g2_t* u8g2)
     u8g2_DrawStr(u8g2, 126 - id_width, 61, s_system_data.device_id);
 }
 
+/**
+ * @brief RX 수신 통계 페이지 그리기 (Page 3)
+ */
+static void draw_rx_stats_page(u8g2_t* u8g2)
+{
+    draw_rx_header(u8g2);
+
+    // 헤더
+    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+    u8g2_DrawStr(u8g2, 2, 10, "RX STATS");
+
+    // 구분선
+    u8g2_DrawHLine(u8g2, 0, 14, 128);
+
+    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+
+    // Last RSSI
+    u8g2_DrawStr(u8g2, 2, 28, "RSSI:");
+    char rssi_str[16];
+    snprintf(rssi_str, sizeof(rssi_str), "%d dBm", s_rx_stats.last_rssi);
+    u8g2_DrawStr(u8g2, 40, 28, rssi_str);
+
+    // Last SNR
+    u8g2_DrawStr(u8g2, 2, 39, "SNR:");
+    char snr_str[16];
+    snprintf(snr_str, sizeof(snr_str), "%.1f dB", s_rx_stats.last_snr);
+    u8g2_DrawStr(u8g2, 40, 39, snr_str);
+
+    // RX Interval (ms 단위)
+    u8g2_DrawStr(u8g2, 2, 50, "INTVL:");
+    char interval_str[16];
+    if (s_rx_stats.interval >= 1000) {
+        snprintf(interval_str, sizeof(interval_str), "%.1f s", s_rx_stats.interval / 1000.0f);
+    } else {
+        snprintf(interval_str, sizeof(interval_str), "%lu ms", (unsigned long)s_rx_stats.interval);
+    }
+    u8g2_DrawStr(u8g2, 40, 50, interval_str);
+
+    // Total RX Count
+    u8g2_DrawStr(u8g2, 2, 61, "TOTAL:");
+    char count_str[16];
+    snprintf(count_str, sizeof(count_str), "%lu pkts", (unsigned long)s_rx_stats.total_count);
+    u8g2_DrawStr(u8g2, 40, 61, count_str);
+}
+
 // ============================================================================
 // 공개 API 구현
 // ============================================================================
@@ -405,11 +467,21 @@ extern "C" void rx_page_set_uptime(uint64_t uptime_sec)
     s_system_data.uptime_sec = uptime_sec;
 }
 
+// ========== RX 통계 데이터 설정 ==========
+
+extern "C" void rx_page_set_rx_stats(int16_t rssi, float snr, uint32_t interval, uint32_t total_count)
+{
+    s_rx_stats.last_rssi = rssi;
+    s_rx_stats.last_snr = snr;
+    s_rx_stats.interval = interval;
+    s_rx_stats.total_count = total_count;
+}
+
 // ========== 페이지 제어 ==========
 
 extern "C" void rx_page_switch_page(uint8_t page)
 {
-    if (page >= 1 && page <= 2) {
+    if (page >= 1 && page <= 3) {
         s_current_page = page;
     }
 }
