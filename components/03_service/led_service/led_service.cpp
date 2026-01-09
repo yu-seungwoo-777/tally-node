@@ -25,12 +25,18 @@ static struct {
     // 현재 Tally 상태 (카메라 ID 변경 시 LED 즉시 업데이트용)
     bool program_active;    // 현재 카메라가 PGM인지
     bool preview_active;    // 현재 카메라가 PVW인지
+    // Tally 데이터 캐시 (카메라 ID/밝기 변경 시 재처리용)
+    uint8_t tally_data[8];  // 최대 20채널 = 5바이트
+    uint8_t tally_channel_count;
+    bool tally_valid;       // 유효한 Tally 데이터 수신 여부
 } s_service = {
     .initialized = false,
     .event_subscribed = false,
     .stopped = false,
     .program_active = false,
-    .preview_active = false
+    .preview_active = false,
+    .tally_channel_count = 0,
+    .tally_valid = false
 };
 
 // ============================================================================
@@ -51,7 +57,7 @@ static led_colors_t s_colors = {
 
 /**
  * @brief 카메라 ID 변경 이벤트 핸들러 (EVT_CAMERA_ID_CHANGED)
- * @note WS2812Driver에 카메라 ID 전달 후 캐시된 Tally 상태로 LED 즉시 업데이트
+ * @note WS2812Driver에 카메라 ID 설정 후 캐시된 Tally 데이터로 LED 즉시 업데이트
  */
 static esp_err_t on_camera_id_changed(const event_data_t* event)
 {
@@ -60,19 +66,16 @@ static esp_err_t on_camera_id_changed(const event_data_t* event)
     }
 
     uint8_t camera_id = *(uint8_t*)event->data;
-    T_LOGI(TAG, "카메라 ID 변경 이벤트 수신: %d (PGM:%d PVW:%d)",
-           camera_id, s_service.program_active, s_service.preview_active);
+    T_LOGI(TAG, "카메라 ID 변경 이벤트 수신: %d (tally_valid:%d)",
+           camera_id, s_service.tally_valid);
 
     // WS2812Driver에 카메라 ID 설정
     ws2812_set_camera_id(camera_id);
 
-    // 캐시된 Tally 상태로 LED 즉시 업데이트
-    if (s_service.program_active) {
-        ws2812_set_state(WS2812_PROGRAM);
-    } else if (s_service.preview_active) {
-        ws2812_set_state(WS2812_PREVIEW);
-    } else {
-        ws2812_set_state(WS2812_OFF);
+    // 캐시된 Tally 데이터로 LED 즉시 업데이트
+    if (s_service.tally_valid) {
+        ws2812_process_tally_data(s_service.tally_data, s_service.tally_channel_count);
+        T_LOGI(TAG, "카메라 ID 변경 후 Tally 재처리");
     }
 
     return ESP_OK;
@@ -93,6 +96,12 @@ static esp_err_t on_brightness_changed(const event_data_t* event)
     // WS2812Driver에 밝기 설정 (내부에서 LED 즉시 업데이트)
     ws2812_set_brightness(*brightness);
 
+    // 캐시된 Tally 데이터로 LED 재처리 (밝기 적용 후)
+    if (s_service.tally_valid) {
+        ws2812_process_tally_data(s_service.tally_data, s_service.tally_channel_count);
+        T_LOGI(TAG, "밝기 변경 후 Tally 재처리");
+    }
+
     return ESP_OK;
 }
 
@@ -111,6 +120,11 @@ static esp_err_t on_tally_state_changed(const event_data_t* event)
     }
 
     const tally_event_data_t* tally_evt = (const tally_event_data_t*)event->data;
+
+    // Tally 데이터 캐시 (카메라 ID/밝기 변경 시 재처리용)
+    s_service.tally_channel_count = tally_evt->channel_count;
+    memcpy(s_service.tally_data, tally_evt->tally_data, 8);
+    s_service.tally_valid = true;
 
     // WS2812 드라이버에 Tally 데이터 전달 (드라이버에서 카메라 ID로 상태 확인)
     ws2812_process_tally_data(tally_evt->tally_data, tally_evt->channel_count);
