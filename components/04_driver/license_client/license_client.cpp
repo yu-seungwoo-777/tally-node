@@ -10,14 +10,6 @@
 #include "cJSON.h"
 #include <cstring>
 
-// CA 번들 attach 함수 (esp_crt_bundle 컴포넌트)
-extern "C" esp_err_t esp_crt_bundle_attach(void *conf, const struct esp_tls_spki_info_t *spki_info);
-
-// esp_http_client용 래퍼 (시그니처 불일치 해결)
-static esp_err_t crt_bundle_attach_wrapper(void *conf) {
-    return esp_crt_bundle_attach(conf, nullptr);
-}
-
 static const char* TAG = "LicenseClient";
 
 // ============================================================================
@@ -81,7 +73,9 @@ static esp_err_t http_post(const char* url, const char* request_body,
     config.buffer_size_tx = 4096;
     config.user_agent = "ESP32-Tally-Node/1.0";
     // TLS 인증서 번들 사용 (Let's Encrypt 등 공용 CA)
-    config.crt_bundle_attach = crt_bundle_attach_wrapper;
+    // mbedTLS CA 번들 사용 (CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y)
+    config.use_global_ca_store = true;
+    config.skip_cert_common_name_check = true;
     config.keep_alive_enable = true;
     config.is_async = false;
     config.event_handler = http_event_handler;
@@ -199,7 +193,6 @@ esp_err_t license_client_validate(const char* key, const char* mac_address,
             cJSON* limit_json = cJSON_GetObjectItem(license_json, "device_limit");
             if (limit_json && cJSON_IsNumber(limit_json)) {
                 out_response->device_limit = (uint8_t)limit_json->valuedouble;
-                T_LOGI(TAG, "라이센스 검증 성공: device_limit = %d", out_response->device_limit);
             }
         }
     } else {
