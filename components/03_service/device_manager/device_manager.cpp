@@ -286,9 +286,9 @@ static void on_status_response(const lora_msg_status_t* status, int16_t rssi, fl
         // 라이선스 제한 먼저 체크 (디바이스 추가 전)
         uint8_t device_limit = s_tx.device_limit;
 
-        // device_limit == 0: 라이센스 미등록 상태 (유예 기간 포함)
-        // device_limit > 0: 등록된 상태
-        if (device_limit > 0 && s_tx.device_count >= device_limit) {
+        // device_limit == 0: 라이센스 미등록 상태로 모든 디바이스 거부
+        // device_limit > 0: 등록된 limit까지만 허용
+        if (s_tx.device_count >= device_limit) {
             // 라이센스 초과: 디바이스 추가하지 않고 기능정지 송신
             char id_str[5];
             lora_device_id_to_str(status->device_id, id_str);

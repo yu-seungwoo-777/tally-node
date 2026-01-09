@@ -2007,7 +2007,7 @@ esp_err_t ConfigServiceClass::setDeviceCameraId(const uint8_t* device_id, uint8_
     // 신규 매핑인 경우 device_limit 체크
     if (existing_idx < 0) {
         uint8_t device_limit = license_service_get_device_limit();
-        if (device_limit > 0 && current_count >= device_limit) {
+        if (current_count >= device_limit) {
             nvs_close(handle);
             T_LOGW(TAG, "device_limit 초과 (%d/%d), 매핑 거부: [%02X%02X]",
                      current_count, device_limit, device_id[0], device_id[1]);
@@ -2140,7 +2140,7 @@ esp_err_t ConfigServiceClass::getDeviceCamMap(config_device_cam_map_t* map)
 
     // device_limit 초과분 삭제 (라이선스 다운그레이드 대응)
     uint8_t device_limit = license_service_get_device_limit();
-    if (device_limit > 0 && map->count > device_limit) {
+    if (map->count > device_limit) {
         T_LOGW(TAG, "디바이스-카메라 매핑(%d)가 device_limit(%d) 초과, 초과분 삭제",
                  map->count, device_limit);
 

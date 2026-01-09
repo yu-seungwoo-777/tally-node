@@ -200,14 +200,27 @@ static esp_err_t handle_tally_state_changed(const event_data_t* event)
         return ESP_OK;
     }
 
-    const tally_event_data_t* tally_event = (const tally_event_data_t*)event->data;
-
-    // 라이센스 확인
-    if (!license_service_can_send_tally()) {
+    // 데이터 크기 확인
+    if (event->data_size < sizeof(tally_event_data_t)) {
         return ESP_OK;
     }
 
-    // packed_data_t 생성
+    const tally_event_data_t* tally_event = (const tally_event_data_t*)event->data;
+    if (!tally_event) {
+        return ESP_OK;
+    }
+
+    // 테스트 모드에서는 라이센스 확인 패스
+    if (!test_mode_running && !license_service_can_send_tally()) {
+        return ESP_OK;
+    }
+
+    // 채널 수 유효성 확인
+    if (tally_event->channel_count == 0 || tally_event->channel_count > TALLY_MAX_CHANNELS) {
+        return ESP_OK;
+    }
+
+    // packed_data_t 생성 (tally_data는 내부 배열이므로 복사 필요 없음)
     packed_data_t tally;
     tally.channel_count = tally_event->channel_count;
     tally.data_size = (tally_event->channel_count + 3) / 4;
