@@ -8,8 +8,9 @@
 1. [TAG 명명 규칙](#1-tag-명명-규칙)
 2. [로그 레벨 가이드라인](#2-로그-레벨-가이드라인)
 3. [로그 메시지 형식](#3-로그-메시지-형식)
-4. [개선 우선순위](#4-개선-우선순위)
-5. [현재 문제점](#5-현재-문제점)
+4. [함수 단위 로그 리팩토링](#4-함수-단위-로그-리팩토링)
+5. [개선 우선순위](#5-개선-우선순위)
+6. [현재 문제점](#6-현재-문제점)
 
 ---
 
@@ -258,7 +259,131 @@ T_LOGI(TAG, "설정 저장 완료: 타입=%d", type);
 
 ---
 
-## 4. 개선 우선순위
+## 4. 함수 단위 로그 리팩토링
+
+### 4.1 리팩토링 원칙
+
+함수별로 로그를 검토하고, **필요한 로그는 일관성 있게 추가**, **불필요한 로그는 제거**, **적절한 레벨 할당**
+
+### 4.2 함수 유형별 로그 가이드
+
+#### 초기화 함수
+
+```cpp
+esp_err_t my_component_init(void) {
+    T_LOGI(TAG, "초기화 시작");  // INFO: 진입 로그
+
+    ret = step1();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "step1 실패: %s", esp_err_to_name(ret));  // ERROR
+        return ret;
+    }
+
+    ret = step2();
+    if (ret != ESP_OK) {
+        T_LOGW(TAG, "step2 실패, 기본값 사용");  // WARN: 복구 가능
+        // 기본값 적용...
+    }
+
+    T_LOGI(TAG, "초기화 완료");  // INFO: 성공
+    return ESP_OK;
+}
+```
+
+#### 상태 변경 함수
+
+```cpp
+void set_brightness(int brightness) {
+    if (brightness < 0 || brightness > 100) {
+        T_LOGW(TAG, "밝기 범위 초과: %d, 0~100으로 제한", brightness);
+        brightness = 50;  // 기본값
+    }
+
+    if (s_brightness == brightness) {
+        T_LOGD(TAG, "밝기 변화 없음: %d", brightness);  // DEBUG: 무시
+        return;
+    }
+
+    int old = s_brightness;
+    s_brightness = brightness;
+
+    T_LOGI(TAG, "밝기 변경: %d -> %d", old, brightness);  // INFO: 상태 변화
+}
+```
+
+#### 반복 호출 함수 (루프)
+
+```cpp
+// ❌ 나쁨: 매번 로그 출력
+void process_packet(packet_t* pkt) {
+    T_LOGI(TAG, "패킷 처리: len=%d", pkt->len);  // 매번!
+    // ...
+}
+
+// ✅ 좋음: 오류/경고만, 상세는 DEBUG
+void process_packet(packet_t* pkt) {
+    if (pkt->len > MAX_LEN) {
+        T_LOGW(TAG, "패킷 길이 초과: %d > %d", pkt->len, MAX_LEN);
+        return;
+    }
+
+    T_LOGD(TAG, "패킷 처리: header=0x%02X, len=%d", pkt->header, pkt->len);
+    // ...
+}
+```
+
+#### 이벤트 발행 함수
+
+```cpp
+void publish_brightness_event(int brightness) {
+    brightness_event_t evt = { .brightness = brightness };
+
+    // ❌ 이벤트 발행 로그는 DEBUG로
+    // T_LOGI(TAG, "밝기 이벤트 발행: %d", brightness);
+
+    T_LOGD(TAG, "이벤트 발행: EVT_BRIGHTNESS, value=%d", brightness);  // DEBUG
+    event_bus_publish(EVT_BRIGHTNESS, &evt, sizeof(evt));
+}
+```
+
+### 4.3 로그 배치 검토 체크리스트
+
+함수별로 다음 항목을 확인:
+
+| 항목 | 확인 내용 |
+|------|-----------|
+| 진입/퇴출 | 초기화/종료 함수만 INFO, 나머지는 DEBUG |
+| 성공 | 중요 상태 변화만 INFO |
+| 실패 | 모두 ERROR, 복구 가능하면 WARN |
+| 반복 호출 | 루프 내는 DEBUG, 루프 외는 INFO |
+| 이벤트 발행 | 모두 DEBUG |
+| 디버깅용 | 모두 DEBUG 또는 VERBOSE |
+| 조건부 로그 | 상태 변화 시에만 출력 |
+
+### 4.4 주석 처리된 로그 처리
+
+```cpp
+// ❌ 나쁨: 주석 처리된 로그 방치
+// ESP_LOGI(TAG, "debug info: %d", value);
+
+// ✅ 좋음 1: T_LOGD로 활성화
+T_LOGD(TAG, "debug info: %d", value);
+
+// ✅ 좋음 2: 완전 제거 (필요 없는 경우)
+// 삭제
+```
+
+### 4.5 리팩토링 순서
+
+1. **TAG 변경** → `{LayerNumber}_{ComponentName}`
+2. **불필요한 로그 제거** → 주석 처리된 것, 반복 출력
+3. **로그 레벨 조정** → 이벤트 발행 → DEBUG
+4. **누락된 로그 추가** → 에러 처리, 상태 변화
+5. **메시지 형식 통일** → 한글, 100자 이내
+
+---
+
+## 5. 개선 우선순위
 
 | 순위 | 작업 | 파일 | 영향 | 예상 시간 |
 |------|------|------|------|----------|
@@ -270,22 +395,22 @@ T_LOGI(TAG, "설정 저장 완료: 타입=%d", type);
 
 ---
 
-## 5. 현재 문제점
+## 6. 현재 문제점
 
-### 5.1 TAG 명명 불일치
+### 6.1 TAG 명명 불일치
 
 - camelCase (`prod_rx_app`)와 PascalCase (`EventBus`) 혼용
 - 약어 사용 (`Mgr`, `Svc`, `HAL`)
 - 대문자 상수형 (`DISP_HAL`, `TEMP_HAL`)
 - **개선**: `01_TxApp`, `03_Device` 형식으로 통일
 
-### 5.2 로그 레벨 오사용
+### 6.2 로그 레벨 오사용
 
 - 이벤트 발행 로그가 INFO로 출력 (DEBUG로 변경 필요)
 - 5초마다 반복 출력되는 상태 로그
 - 시작 로그 과다 출력
 
-### 5.3 메시지 형식 불일치
+### 6.3 메시지 형식 불일치
 
 - 한글/영어 혼용
 - 100자 이상 긴 로그
