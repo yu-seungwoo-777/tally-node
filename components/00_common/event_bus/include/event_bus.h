@@ -61,6 +61,31 @@ typedef struct __attribute__((packed)) {
     int8_t snr;              // dB
 } lora_rssi_event_t;
 
+/**
+ * @brief RX 수신 이력 (최대 20개)
+ */
+#define RX_HISTORY_MAX 20
+
+typedef struct __attribute__((packed)) {
+    uint64_t timestamp;      // 수신 시간 (esp_timer_get_time() us)
+    int16_t rssi;            // dBm
+    int8_t snr;              // dB
+    uint8_t size;            // 패킷 크기
+    uint8_t device_id[2];    // 디바이스 ID (2 bytes)
+} lora_rx_history_entry_t;
+
+/**
+ * @brief LoRa RX 상태 이벤트 데이터 (EVT_LORA_RX_STATUS_CHANGED용)
+ */
+typedef struct __attribute__((packed)) {
+    int16_t lastRssi;            // 마지막 RSSI
+    int8_t lastSnr;              // 마지막 SNR
+    uint32_t interval;           // 마지막 수신 간격 (ms)
+    uint32_t totalCount;         // 총 수신 개수
+    uint8_t historyCount;        // 이력 개수
+    lora_rx_history_entry_t history[RX_HISTORY_MAX];  // 수신 이력
+} lora_rx_status_event_t;
+
 #define LORA_MAX_PACKET_SIZE 256
 
 /**
@@ -418,6 +443,7 @@ typedef enum {
     // LoRa 이벤트 (03_service)
     EVT_LORA_STATUS_CHANGED,
     EVT_LORA_RSSI_CHANGED,         ///< RSSI/SNR 변경 (data: lora_rssi_event_t)
+    EVT_LORA_RX_STATUS_CHANGED,    ///< RX 상태 변경 (이력 포함) (data: lora_rx_status_event_t)
     EVT_LORA_TX_COMMAND,           ///< TX→RX 명령 수신 (0xE0~0xEF) (data: lora_packet_event_t)
     EVT_LORA_RX_RESPONSE,          ///< RX→TX 응답 수신 (0xD0~0xDF) (data: lora_packet_event_t)
     EVT_LORA_PACKET_RECEIVED,      ///< Packet received (data: lora_packet_event_t)

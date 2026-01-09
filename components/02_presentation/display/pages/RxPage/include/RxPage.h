@@ -5,7 +5,7 @@
  * 3개 페이지:
  * - Page 1: Tally 정보 (PGM/PVW 채널 목록)
  * - Page 2: 시스템 정보 (3x2 테이블)
- * - Page 3: RX 수신 통계 (RSSI, SNR, 수신 간격, 총 수신 개수)
+ * - Page 3: RX 수신 통계 (RSSI, SNR, Tally 수신 간격)
  *
  * 페이지 상태:
  * - PAGE_STATE_NORMAL: 일반 페이지 (Tally/System/RX Stats 전환)
@@ -127,10 +127,9 @@ void rx_page_set_uptime(uint64_t uptime_sec);
  * @brief RX 수신 통계 설정
  * @param rssi 마지막 RSSI (dBm)
  * @param snr 마지막 SNR (dB)
- * @param interval 마지막 수신 간격 (ms)
- * @param total_count 총 수신 개수
+ * @param interval 마지막 Tally 패킷 수신 간격 (ms)
  */
-void rx_page_set_rx_stats(int16_t rssi, float snr, uint32_t interval, uint32_t total_count);
+void rx_page_set_rx_stats(int16_t rssi, float snr, uint32_t interval);
 
 // ========== 페이지 제어 ==========
 

@@ -348,10 +348,10 @@ static esp_err_t on_lora_rx_status_changed(const event_data_t* event)
 
     // RxPage에 RX 통계 데이터 설정
     rx_page_set_rx_stats(rx_status->lastRssi, rx_status->lastSnr,
-                         rx_status->interval, rx_status->totalCount);
+                         rx_status->interval);
 
-    T_LOGD(TAG, "RX stats updated: RSSI=%d, SNR=%d, INTVL=%u, TOTAL=%u",
-             rx_status->lastRssi, rx_status->lastSnr, rx_status->interval, rx_status->totalCount);
+    T_LOGD(TAG, "RX stats updated: RSSI=%d, SNR=%d, INTVL=%u",
+             rx_status->lastRssi, rx_status->lastSnr, rx_status->interval);
 
     return ESP_OK;
 }

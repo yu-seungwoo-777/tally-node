@@ -15,6 +15,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+#include "esp_timer.h"
 #include <string.h>
 #include <stdio.h>
 
@@ -58,6 +59,12 @@ static uint8_t s_last_sync_word = 0;   // 마지막 sync word
 static uint32_t s_packets_sent = 0;
 static uint32_t s_packets_received = 0;
 static uint32_t s_tx_dropped = 0;          // 큐 오버플로우로 폐기된 패킷
+
+// Tally 패킷 수신 간격 추적
+static int16_t s_last_rssi = -120;         // 마지막 RSSI
+static int8_t s_last_snr = 0;              // 마지막 SNR
+static int64_t s_last_rx_time = 0;         // 마지막 Tally 수신 시간 (us)
+static uint32_t s_last_rx_interval = 0;    // 마지막 Tally 수신 간격 (ms)
 
 // 큐 및 태스크
 static QueueHandle_t s_tx_queue = nullptr;
@@ -203,6 +210,7 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
  * @brief Tally 패킷 처리 (0xF1~0xF4)
  *
  * TX/RX 공통으로 수신된 Tally 패킷을 파싱하고 이벤트를 발행합니다.
+ * Tally 패킷 수신 간격을 추적하여 RX 상태 이벤트를 발행합니다.
  */
 static void process_tally_packet(const uint8_t* data, size_t length, int16_t rssi, float snr)
 {
@@ -259,6 +267,28 @@ static void process_tally_packet(const uint8_t* data, size_t length, int16_t rss
 
     T_LOGI(TAG, "Tally: [F1][%d][%s] → %s (RSSI:%d SNR:%.1f)",
              ch_count, hex_str, tally_str, rssi, snr);
+
+    // Tally 패킷 수신 간격 추적 및 RX 상태 이벤트 발행
+    int64_t current_rx_time = esp_timer_get_time();
+
+    // 수신 간격 계산 (ms) - Tally 패킷만
+    if (s_last_rx_time > 0) {
+        s_last_rx_interval = (uint32_t)((current_rx_time - s_last_rx_time) / 1000);
+    }
+
+    s_last_rssi = rssi;
+    s_last_snr = (int8_t)snr;
+    s_last_rx_time = current_rx_time;
+
+    // RX 상태 이벤트 발행 (Tally 패킷 기준)
+    static lora_rx_status_event_t s_rx_status_event;
+    s_rx_status_event.lastRssi = s_last_rssi;
+    s_rx_status_event.lastSnr = s_last_snr;
+    s_rx_status_event.interval = s_last_rx_interval;
+    s_rx_status_event.totalCount = 0;  // 미사용 (향후 제거 예정)
+    s_rx_status_event.historyCount = 0;  // 미사용
+
+    event_bus_publish(EVT_LORA_RX_STATUS_CHANGED, &s_rx_status_event, sizeof(s_rx_status_event));
 }
 
 /**
@@ -283,36 +313,47 @@ static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, 
     // 헤더 기반 분류
     uint8_t header = data[0];
 
-    // Tally 데이터 (0xF1~0xF4)
+    // 패킷 헤더 출력 (중복 검사용)
+    T_LOGI(TAG, "RX pkt: 0x%02X (%d bytes) RSSI:%d SNR:%.1f",
+             header, (int)length, rssi, snr);
+
+    // Tally 데이터 (0xF1~0xF4) - 모든 모드에서 처리
     if (LORA_IS_TALLY_HEADER(header)) {
         process_tally_packet(data, length, rssi, snr);
+        return;  // Tally 처리 후 종료
     }
-    // TX→RX 명령 (0xE0~0xEF) - device_manager로 발행
-    else if (LORA_IS_TX_COMMAND_HEADER(header)) {
-        // 패킷 이벤트 발행 (device_manager에서 구독)
+
+    // TX→RX 명령 (0xE0~0xEF) - 모든 모드에서 처리 (TX가 RX에게 명령)
+    if (LORA_IS_TX_COMMAND_HEADER(header)) {
         lora_packet_event_t packet_event;
         memcpy(packet_event.data, data, length);
         packet_event.length = length;
         packet_event.rssi = rssi;
         packet_event.snr = snr;
         event_bus_publish(EVT_LORA_TX_COMMAND, &packet_event, sizeof(packet_event));
+        return;
     }
-    // RX→TX 응답 (0xD0~0xDF) - device_manager로 발행
-    else if (LORA_IS_RX_RESPONSE_HEADER(header)) {
-        // 패킷 이벤트 발행 (device_manager에서 구독)
+
+#ifdef DEVICE_MODE_TX
+    // TX 모드에서만 처리: RX→TX 응답 (0xD0~0xDF)
+    if (LORA_IS_RX_RESPONSE_HEADER(header)) {
         lora_packet_event_t packet_event;
         memcpy(packet_event.data, data, length);
         packet_event.length = length;
         packet_event.rssi = rssi;
         packet_event.snr = snr;
         event_bus_publish(EVT_LORA_RX_RESPONSE, &packet_event, sizeof(packet_event));
+        return;
     }
-    // 알 수 없는 헤더
-    else {
-        T_LOGD(TAG, "알 수 없는 패킷: 0x%02X (%d bytes)", header, (int)length);
-    }
+#endif
 
-    // RSSI/SNR 이벤트 발행
+    // RX 모드: RX→TX 응답(0xD0~)은 다른 RX가 보낸 것이므로 무시
+#ifdef DEVICE_MODE_RX
+    T_LOGD(TAG, "RX 모드: 다른 RX 패킷 무시 0x%02X", header);
+    return;
+#endif
+
+    // RSSI/SNR 이벤트 발행 (모든 패킷에 대해)
     lora_status_t driver_status = lora_driver_get_status();
     lora_rssi_event_t rssi_event;
     rssi_event.is_running = s_running;

@@ -62,13 +62,11 @@ static struct {
 static struct {
     int16_t last_rssi;       // 마지막 RSSI (dBm)
     float last_snr;          // 마지막 SNR (dB)
-    uint32_t interval;       // 마지막 수신 간격 (ms)
-    uint32_t total_count;    // 총 수신 개수
+    uint32_t interval;       // 마지막 Tally 수신 간격 (ms)
 } s_rx_stats = {
     .last_rssi = -120,
     .last_snr = 0.0f,
     .interval = 0,
-    .total_count = 0,
 };
 
 // 현재 페이지 (1: Tally, 2: System, 3: RX Stats)
@@ -366,7 +364,7 @@ static void draw_rx_stats_page(u8g2_t* u8g2)
     snprintf(snr_str, sizeof(snr_str), "%.1f dB", s_rx_stats.last_snr);
     u8g2_DrawStr(u8g2, 40, 39, snr_str);
 
-    // RX Interval (ms 단위)
+    // RX Interval (Tally 패킷 수신 간격, ms 단위)
     u8g2_DrawStr(u8g2, 2, 50, "INTVL:");
     char interval_str[16];
     if (s_rx_stats.interval >= 1000) {
@@ -375,12 +373,6 @@ static void draw_rx_stats_page(u8g2_t* u8g2)
         snprintf(interval_str, sizeof(interval_str), "%lu ms", (unsigned long)s_rx_stats.interval);
     }
     u8g2_DrawStr(u8g2, 40, 50, interval_str);
-
-    // Total RX Count
-    u8g2_DrawStr(u8g2, 2, 61, "TOTAL:");
-    char count_str[16];
-    snprintf(count_str, sizeof(count_str), "%lu pkts", (unsigned long)s_rx_stats.total_count);
-    u8g2_DrawStr(u8g2, 40, 61, count_str);
 }
 
 // ============================================================================
@@ -469,12 +461,11 @@ extern "C" void rx_page_set_uptime(uint64_t uptime_sec)
 
 // ========== RX 통계 데이터 설정 ==========
 
-extern "C" void rx_page_set_rx_stats(int16_t rssi, float snr, uint32_t interval, uint32_t total_count)
+extern "C" void rx_page_set_rx_stats(int16_t rssi, float snr, uint32_t interval)
 {
     s_rx_stats.last_rssi = rssi;
     s_rx_stats.last_snr = snr;
     s_rx_stats.interval = interval;
-    s_rx_stats.total_count = total_count;
 }
 
 // ========== 페이지 제어 ==========
@@ -609,29 +600,32 @@ static void draw_camera_id_popup(u8g2_t* u8g2)
 
 /**
  * @brief 기능 정지 상태 팝업 그리기
- * 중앙에 "STOPPED" 메시지 표시
+ * 중앙에 "STOPPED" + "LICENSE REQUIRED" 메시지 표시
  */
 static void draw_stopped_popup(u8g2_t* u8g2)
 {
-    // 팝업 박스 좌표
-    int popup_x = 10;
-    int popup_y = 20;
-    int popup_w = 108;
-    int popup_h = 30;
+    // 팝업 박스 좌표 (더 큰 박스)
+    int popup_x = 4;
+    int popup_y = 12;
+    int popup_w = 120;
+    int popup_h = 44;
 
-    // 팝업 배경 (검은색)
+    // 이중 테두리 (흰색)
     u8g2_SetDrawColor(u8g2, 1);
-    u8g2_DrawBox(u8g2, popup_x, popup_y, popup_w, popup_h);
-
-    // 팝업 테두리 (흰색)
-    u8g2_SetDrawColor(u8g2, 0);
     u8g2_DrawFrame(u8g2, popup_x, popup_y, popup_w, popup_h);
+    u8g2_DrawFrame(u8g2, popup_x + 2, popup_y + 2, popup_w - 4, popup_h - 4);
 
-    // "STOPPED" 텍스트 (흰색)
+    // "STOPPED" 텍스트 (흰색, 중간 폰트)
+    u8g2_SetFont(u8g2, u8g2_font_profont15_mf);
+    const char* msg1 = "STOPPED";
+    int msg1_width = u8g2_GetStrWidth(u8g2, msg1);
+    u8g2_DrawStr(u8g2, (128 - msg1_width) / 2, popup_y + 18, msg1);
+
+    // "LICENSE REQUIRED" 텍스트 (흰색, 작음)
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-    const char* msg = "STOPPED";
-    int msg_width = u8g2_GetStrWidth(u8g2, msg);
-    u8g2_DrawStr(u8g2, (128 - msg_width) / 2, popup_y + 19, msg);
+    const char* msg2 = "LICENSE REQUIRED";
+    int msg2_width = u8g2_GetStrWidth(u8g2, msg2);
+    u8g2_DrawStr(u8g2, (128 - msg2_width) / 2, popup_y + 32, msg2);
 }
 
 // ============================================================================
