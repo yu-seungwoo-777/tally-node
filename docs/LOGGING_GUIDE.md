@@ -1,0 +1,286 @@
+# 로깅 가이드라인
+
+> 작성일: 2026-01-10
+> 버전: 1.0
+
+## 목차
+
+1. [TAG 명명 규칙](#1-tag-명명-규칙)
+2. [로그 레벨 가이드라인](#2-로그-레벨-가이드라인)
+3. [로그 메시지 형식](#3-로그-메시지-형식)
+4. [개선 우선순위](#4-개선-우선순위)
+5. [현재 문제점](#5-현재-문제점)
+
+---
+
+## 1. TAG 명명 규칙
+
+### 1.1 표준 규칙
+
+```
+{ComponentName}{Layer}
+```
+
+- **PascalCase** 사용 (첫 글자 대문자)
+- **약어 제외** (Manager → Mgr, Service → Svc 금지)
+- **계층 구조를 폴더로 표현하므로 접미사 생략 가능**
+
+### 1.2 예시
+
+| 계층 | 현재 | 제안 | 비고 |
+|------|------|------|------|
+| App | `prod_rx_app` | `ProdRxApp` | camelCase → PascalCase |
+| App | `prod_tx_app` | `ProdTxApp` | camelCase → PascalCase |
+| Service | `DisplayMgr` | `DisplayManager` | 약어 해소 |
+| Service | `ButtonSvc` | `ButtonService` | 약어 해소 |
+| Service | `DeviceMgr` | `DeviceManager` | 약어 해소 |
+| HAL | `DISP_HAL` | `DisplayHal` | 대문자 → PascalCase |
+| HAL | `TEMP_HAL` | `TemperatureHal` | 대문자 → PascalCase |
+| Driver | `DISP_DRV` | `DisplayDriver` | 대문자 → PascalCase |
+| Driver | `TEMP_DRV` | `TemperatureDriver` | 대문자 → PascalCase |
+| Test | `TallyTest` | `TallyService` | 운영용 이름 변경 |
+
+### 1.3 계층별 TAG 예시
+
+```
+# 01_app
+static const char* TAG = "ProdRxApp";
+static const char* TAG = "ProdTxApp";
+
+# 02_presentation
+static const char* TAG = "DisplayManager";
+static const char* TAG = "WebServer";
+static const char* TAG = "BootPage";
+static const char* TAG = "RxPage";
+static const char* TAG = "TxPage";
+
+# 03_service
+static const char* TAG = "ButtonService";
+static const char* TAG = "ConfigService";
+static const char* TAG = "DeviceManager";
+static const char* TAG = "HardwareService";
+static const char* TAG = "LedService";
+static const char* TAG = "LicenseService";
+static const char* TAG = "NetworkService";
+static const char* TAG = "SwitcherService";
+
+# 04_driver
+static const char* TAG = "AtemDriver";
+static const char* TAG = "BoardLedDriver";
+static const char* TAG = "DisplayDriver";
+static const char* TAG = "EthernetDriver";
+static const char* TAG = "LicenseClient";
+static const char* TAG = "LoRaDriver";
+static const char* TAG = "SwitcherDriver";
+static const char* TAG = "TemperatureDriver";
+static const char* TAG = "VmixDriver";
+static const char* TAG = "WiFiDriver";
+static const char* TAG = "Ws2812Driver";
+
+# 05_hal
+static const char* TAG = "BatteryHal";
+static const char* TAG = "DisplayHal";
+static const char* TAG = "EthernetHal";
+static const char* TAG = "LoRaHal";
+static const char* TAG = "TemperatureHal";
+static const char* TAG = "U8g2Hal";
+static const char* TAG = "WifiHal";
+static const char* TAG = "Ws2812Hal";
+
+# 00_common
+static const char* TAG = "EventBus";
+```
+
+---
+
+## 2. 로그 레벨 가이드라인
+
+### 2.1 레벨 정의
+
+| 레벨 | 용도 | 출력 여부 |
+|------|------|-----------|
+| ERROR | 심각한 오류, 복구 필요 | 항상 |
+| WARN | 잠재적 문제, 대체 값 사용 | 항상 |
+| INFO | 주요 상태 변화, 사용자 알림 | 기본 |
+| DEBUG | 개발용 디버깅 정보 | 선택 |
+| VERBOSE | 상세 추적 정보 | 선택 |
+
+### 2.2 사용 기준
+
+#### ERROR - 항상 출력
+
+```cpp
+// 초기화 실패
+T_LOGE(TAG, "초기화 실패: %s", esp_err_to_name(ret));
+
+// 칩 통신 오류
+T_LOGE(TAG, "I2C 통신 실패: addr=0x%02X", i2c_addr);
+
+// 리소스 부족
+T_LOGE(TAG, "메모리 할당 실패: %zu bytes", size);
+```
+
+#### WARN - 항상 출력
+
+```cpp
+// 설정 없음, 기본값 사용
+T_LOGW(TAG, "NVS에 설정 없음, 기본값 사용");
+
+// 디바이스 없음
+T_LOGW(TAG, "연결된 디바이스 없음");
+
+// 재시도
+T_LOGW(TAG, "연결 실패, 재시도 (%d/%d)", retry, MAX_RETRY);
+```
+
+#### INFO - 기본 출력 (상태 변화)
+
+```cpp
+// 시스템 시작
+T_LOGI(TAG, "부팅 완료");
+T_LOGI(TAG, "서비스 시작");
+
+// 연결 상태 변화
+T_LOGI(TAG, "WiFi 연결됨: %s", ssid);
+T_LOGI(TAG, "스위처 연결됨: %s", switcher_name);
+
+// 사용자 동작
+T_LOGI(TAG, "디바이스 등록: %s", device_id);
+T_LOGI(TAG, "설정 저장 완료");
+```
+
+#### DEBUG - 선택 출력
+
+```cpp
+// 이벤트 발행 (❌ INFO에서 DEBUG로 변경 필요)
+T_LOGD(TAG, "이벤트 발행: %s", event_name);
+
+// 상태 변경 디테일
+T_LOGD(TAG, "상태 변경: %d -> %d", old_value, new_value);
+
+// 함수 진입/퇴출
+T_LOGD(TAG, "진입: %s", __FUNCTION__);
+```
+
+### 2.3 레벨 변경 필요 사항
+
+| 파일 | 현재 | 제안 | 개수 |
+|------|------|------|------|
+| `prod_rx_app.cpp` | INFO | DEBUG | 4개 |
+| `prod_tx_app.cpp` | INFO | DEBUG | 8개 |
+| `config_service.cpp` | INFO | DEBUG | 3개 |
+| `DisplayManager.cpp` | **INFO (5초 간격)** | **제거 또는 DEBUG** | 10+ |
+
+---
+
+## 3. 로그 메시지 형식
+
+### 3.1 표준 템플릿
+
+```cpp
+// 에러: 실패 원인 포함
+T_LOGE(TAG, "{작업} 실패: {원인}");
+T_LOGE(TAG, "I2C 읽기 실패: 0x%02X", ret);
+
+// 경고: 대체 값 사용 시
+T_LOGW(TAG, "{설정} 없음, 기본값 사용");
+T_LOGW(TAG, "NVS에 brightness 없음, 기본값 50 사용");
+
+// 정보: 상태 변화
+T_LOGI(TAG, "{상태} 완료: {결과}");
+T_LOGI(TAG, "WiFi 연결 완료: %s", ip_address);
+
+// 디버그: 상세 추적
+T_LOGD(TAG, "{함수}: {값}");
+T_LOGD(TAG, "process_packet: header=0x%02X, len=%d", header, len);
+```
+
+### 3.2 메시지 작성 원칙
+
+1. **한글 사용** (일관성)
+2. **100자 이내** (가독성)
+3. **민감 정보 노출 금지** (비밀번호, 토큰 등)
+4. **불필요한 로그 제거** (루프 내 반복)
+
+### 3.3 나쁜 예시
+
+```cpp
+// ❌ 너무 김
+T_LOGI(TAG, "RF 설정 저장: %.1f MHz, Sync 0x%02X, SF%d, CR%d, BW%.0f, TXP%ddBm (NVS)",
+       frequency, sync_word, sf, cr, bw, tx_power);
+
+// ❌ 민감 정보 노출 가능성
+T_LOGI(TAG, "WiFi 연결: ssid=%s, password=%s", ssid, password);
+
+// ❌ 루프 내 반복
+while (1) {
+    T_LOGI(TAG, "처리 중...");  // 매번 출력
+}
+
+// ❌ 영어/한글 혼용
+T_LOGI(TAG, "Config saved: 타입=%d", type);
+```
+
+### 3.4 좋은 예시
+
+```cpp
+// ✅ 적절한 길이
+T_LOGI(TAG, "RF 설정 저장: %.1f MHz, SF%d", frequency, sf);
+T_LOGD(TAG, "RF 상세: Sync=0x%02X, CR=4/%d, BW=%.0fkHz",
+       sync_word, cr, bw);
+
+// ✅ 민감 정보 보호
+T_LOGI(TAG, "WiFi 연결: ssid=%s, password_set=%d",
+       ssid, (password != NULL && strlen(password) > 0));
+
+// ✅ 상태 변화 시에만 출력
+static uint32_t last_log_time = 0;
+if (now - last_log_time > 30000) {  // 30초 간격
+    T_LOGI(TAG, "처리 중: count=%d", count);
+    last_log_time = now;
+}
+
+// ✅ 일관된 한글 사용
+T_LOGI(TAG, "설정 저장 완료: 타입=%d", type);
+```
+
+---
+
+## 4. 개선 우선순위
+
+| 순위 | 작업 | 파일 | 영향 | 예상 시간 |
+|------|------|------|------|----------|
+| 1 | 5초 간격 상태 로그 제거 | `DisplayManager.cpp` | 로그 50% 감소 | 10분 |
+| 2 | 이벤트 발행 로그 → DEBUG | 전체 | 로그 20% 감소 | 20분 |
+| 3 | 시작 로그 정리 | App, Service | 부팅 로그 간소화 | 15분 |
+| 4 | TAG 명명 통일 | 전체 | 일관성 향상 | 30분 |
+| 5 | 메시지 형식 표준화 | 전체 | 가독성 향상 | 40분 |
+
+---
+
+## 5. 현재 문제점
+
+### 5.1 TAG 명명 불일치
+
+- camelCase (`prod_rx_app`)와 PascalCase (`EventBus`) 혼용
+- 약어 사용 (`Mgr`, `Svc`, `HAL`)
+- 대문자 상수형 (`DISP_HAL`, `TEMP_HAL`)
+
+### 5.2 로그 레벨 오사용
+
+- 이벤트 발행 로그가 INFO로 출력 (DEBUG로 변경 필요)
+- 5초마다 반복 출력되는 상태 로그
+- 시작 로그 과다 출력
+
+### 5.3 메시지 형식 불일치
+
+- 한글/영어 혼용
+- 100자 이상 긴 로그
+- 민감 정보 노출 가능성
+
+---
+
+## 참고 자료
+
+- `include/LogConfig.h` - T_LOG 설정
+- `sdkconfig.defaults` - ESP-IDF 로그 설정
