@@ -38,6 +38,7 @@ static struct {
     .camera_id_valid = false,
     .program_active = false,
     .preview_active = false,
+    .tally_data = {0},
     .tally_channel_count = 0,
     .tally_valid = false
 };
