@@ -327,8 +327,8 @@ esp_err_t LicenseService::start(void)
     s_started = true;
     T_LOGI(TAG, "LicenseService 시작 (이벤트 구독 완료)");
 
-    // 초기화 시점에는 이벤트 발행 스킵 (웹 연결 시 상태 조회로 대체)
-    // 네트워크 연결 시 onNetworkStatusChanged에서 필요시 발행
+    // 초기 상태 이벤트 발행 (device_manager에서 device_limit 초기화용)
+    publishStateEvent();
 
     return ESP_OK;
 }
