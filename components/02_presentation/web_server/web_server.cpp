@@ -12,14 +12,6 @@
 #include "esp_http_server.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
-
-// CA 번들.attach 함수 (esp_crt_bundle 컴포넌트)
-extern "C" esp_err_t esp_crt_bundle_attach(void *conf, const struct esp_tls_spki_info_t *spki_info);
-
-// esp_http_client용 래퍼 (시그니처 불일치 해결)
-static esp_err_t crt_bundle_attach_wrapper(void *conf) {
-    return esp_crt_bundle_attach(conf, nullptr);
-}
 #include "esp_system.h"
 #include "esp_netif.h"
 #include "esp_timer.h"
@@ -1475,15 +1467,13 @@ static esp_err_t api_notices_handler(httpd_req_t* req)
 
     // esp_http_client로 외부 API 호출
     esp_http_client_config_t config = {};
-    config.url = "https://tally-node.duckdns.org/api/notices";
+    config.url = "http://tally-node.duckdns.org/api/notices";
     config.method = HTTP_METHOD_GET;
     config.timeout_ms = 5000;
     config.buffer_size = 2048;
     config.buffer_size_tx = 512;
     config.user_agent = "ESP32-Tally-Node";
     config.keep_alive_enable = true;
-    // TLS 인증서 번들 사용 (Let's Encrypt 등 공용 CA)
-    config.crt_bundle_attach = crt_bundle_attach_wrapper;
     config.event_handler = http_notices_event_handler;
     config.user_data = &context;
 
