@@ -623,14 +623,6 @@ esp_err_t lora_service_send(const uint8_t* data, size_t length)
     };
     memcpy(packet.data, data, length);
 
-    // 디버그: 전송 데이터 확인
-    T_LOGD(TAG, "lora_service_send: length=%zu", length);
-    if (length <= 8) {
-        for (size_t i = 0; i < length; i++) {
-            T_LOGD(TAG, "  data[%zu]=0x%02X", i, data[i]);
-        }
-    }
-
     // 비블로킹 모드로 큐에 추가
     if (xQueueSend(s_tx_queue, &packet, 0) == pdTRUE) {
         return ESP_OK;

@@ -136,10 +136,6 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     uint8_t sw = config->sync_word;
     float freq = config->frequency;
 
-    T_LOGI(TAG, "LoRa 드라이버 초기화 중...");
-    T_LOGI(TAG, "  Freq=%.1fMHz, SF=%d, BW=%.0fkHz, CR=4/%d, TXP=%ddBm, SW=0x%02X",
-            freq, sf, bw, cr, txp, sw);
-
     // HAL 초기화
     esp_err_t ret = lora_hal_init();
     if (ret != ESP_OK) {
@@ -266,9 +262,6 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     }
 
     s_initialized = true;
-    T_LOGI(TAG, "✓ LoRa 드라이버 초기화 완료");
-    T_LOGI(TAG, "  칩: %s", lora_driver_get_chip_name());
-    T_LOGI(TAG, "  주파수: %.1f MHz", s_frequency);
 
     return ESP_OK;
 }
@@ -498,8 +491,6 @@ void lora_driver_check_transmitted(void) {
             T_LOGW(TAG, "송신 완료 처리 중 뮤텍스 획득 실패");
             return;
         }
-
-        T_LOGD(TAG, "✓ 송신 완료");
 
         s_radio->finishTransmit();
 

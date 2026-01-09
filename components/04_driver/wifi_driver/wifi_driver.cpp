@@ -228,13 +228,6 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
             dns_setserver(0, &dns_primary);   // DNS_INDEX 0 = Primary
             dns_setserver(1, &dns_backup);    // DNS_INDEX 1 = Backup
 
-            T_LOGD(TAG, "DNS 서버 설정 (LwIP): 8.8.8.8 (Primary), 1.1.1.1 (Backup)");
-
-            // DNS 설정 확인
-            const ip_addr_t* dns_check = dns_getserver(0);
-            T_LOGD(TAG, "DNS Main 확인 (LwIP): " IPSTR,
-                IP2STR(&dns_check->u_addr.ip4));
-
             // 네트워크 상태 변경 콜백 호출 (연결 성공)
             if (s_network_callback) {
                 s_network_callback(true, s_sta_ip);
@@ -263,7 +256,7 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "WiFi Driver 초기화 중...");
+    T_LOGD(TAG, "WiFi Driver 초기화 중...");
 
     // 설정 저장
     if (ap_ssid) {
@@ -367,7 +360,7 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
 
     s_initialized = true;
 
-    T_LOGI(TAG, "WiFi Driver 초기화 완료");
+    T_LOGD(TAG, "WiFi Driver 초기화 완료");
     T_LOGI(TAG, "  AP: %s (%s)", s_ap_enabled ? s_ap_ssid : "비활성화",
         s_ap_password[0] != '\0' ? "보호됨" : "열림");
     T_LOGI(TAG, "  STA: %s (%s)", s_sta_enabled ? s_sta_ssid : "비활성화",

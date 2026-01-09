@@ -178,7 +178,6 @@ bool SwitcherService::initialize() {
             T_LOGE(TAG, "Primary 초기화 실패");
             return false;
         }
-        T_LOGI(TAG, "Primary 연결 시작");
         primary_.adapter->connect();
     }
 
@@ -188,7 +187,6 @@ bool SwitcherService::initialize() {
             T_LOGE(TAG, "Secondary 초기화 실패");
             return false;
         }
-        T_LOGI(TAG, "Secondary 연결 시작");
         secondary_.adapter->connect();
     }
 
@@ -261,11 +259,8 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
         onSwitcherTallyChange(role);
     });
 
-    // 연결 상태 콜백 설정 (내부 로그는 DEBUG 레벨)
+    // 연결 상태 콜백 설정
     driver->setConnectionCallback([this, role](connection_state_t state) {
-        T_LOGD(TAG, "%s 연결 상태: %s", switcher_role_to_string(role),
-                 connection_state_to_string(state));
-
         // 연결 상태 저장
         SwitcherInfo* info = getSwitcherInfo(role);
         if (info) {
@@ -341,9 +336,6 @@ bool SwitcherService::setVmix(switcher_role_t role, const char* name, const char
 
     // 연결 상태 콜백 설정
     driver->setConnectionCallback([this, role](connection_state_t state) {
-        T_LOGD(TAG, "%s 연결 상태: %s", switcher_role_to_string(role),
-                 connection_state_to_string(state));
-
         SwitcherInfo* info = getSwitcherInfo(role);
         if (info) {
             bool was_connected = info->is_connected;

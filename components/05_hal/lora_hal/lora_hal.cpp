@@ -65,7 +65,7 @@ public:
 
         esp_err_t ret = spi_bus_initialize(spi_host, &buscfg, SPI_DMA_DISABLED);
         if (ret == ESP_ERR_INVALID_STATE) {
-            T_LOGI(TAG, "SPI 버스 이미 초기화됨");
+            T_LOGD(TAG, "SPI 버스 이미 초기화됨");
         } else if (ret != ESP_OK) {
             T_LOGE(TAG, "SPI 버스 초기화 실패: %d", ret);
             return;
