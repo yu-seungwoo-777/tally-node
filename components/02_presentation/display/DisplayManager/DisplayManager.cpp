@@ -332,6 +332,7 @@ static esp_err_t on_lora_rssi_changed(const event_data_t* event)
     return ESP_OK;
 }
 
+#ifdef DEVICE_MODE_RX
 /**
  * @brief EVT_LORA_RX_STATUS_CHANGED 핸들러 (RX 전용)
  *
@@ -343,7 +344,6 @@ static esp_err_t on_lora_rx_status_changed(const event_data_t* event)
         return ESP_OK;
     }
 
-#ifdef DEVICE_MODE_RX
     const lora_rx_status_event_t* rx_status = (const lora_rx_status_event_t*)event->data;
 
     // RxPage에 RX 통계 데이터 설정
@@ -352,10 +352,10 @@ static esp_err_t on_lora_rx_status_changed(const event_data_t* event)
 
     T_LOGD(TAG, "RX stats updated: RSSI=%d, SNR=%d, INTVL=%u, TOTAL=%u",
              rx_status->lastRssi, rx_status->lastSnr, rx_status->interval, rx_status->totalCount);
-#endif
 
     return ESP_OK;
 }
+#endif // DEVICE_MODE_RX
 
 #ifdef DEVICE_MODE_RX
 /**
