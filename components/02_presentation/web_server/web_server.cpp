@@ -924,18 +924,14 @@ static esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
             httpd_resp_sendstr(req, "{\"error\":\"Failed to send broadcast reboot\"}");
             return ESP_FAIL;
         }
-        // 간격 두고 송신 (100ms)
-        if (i < 2) {
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
     }
 
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "브로드캐스트 재부팅 명령 3회 송신 완료");
+        T_LOGI(TAG, "브로드캐스트 재부팅 명령 3회 송신 완료, 500ms 후 TX 재부팅");
         httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Broadcast reboot sent (3x), TX rebooting...\"}");
 
-        // 응답 전송 후 TX 재부팅
-        vTaskDelay(pdMS_TO_TICKS(100));
+        // 3회 송신 후 500ms 대기 후 TX 재부팅
+        vTaskDelay(pdMS_TO_TICKS(500));
         esp_restart();
     }
 
