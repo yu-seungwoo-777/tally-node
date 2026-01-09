@@ -440,7 +440,7 @@ static esp_err_t on_config_data_request(const event_data_t* event)
 // ============================================================================
 
 static esp_err_t on_rf_saved(const event_data_t* event) {
-    if (event->type != EVT_RF_SAVED) {
+    if (event->type != EVT_RF_SAVED && event->type != EVT_RF_CHANGED) {
         return ESP_OK;
     }
 
@@ -696,6 +696,8 @@ esp_err_t ConfigServiceClass::init(void)
     // 설정 저장 요청 이벤트 구독 (web_server에서 발행)
     event_bus_subscribe(EVT_CONFIG_CHANGED, on_config_save_request);
     event_bus_subscribe(EVT_CONFIG_DATA_REQUEST, on_config_data_request);
+    // RF 변경 이벤트 구독 (RX에서 RF 수신 시 NVS 저장)
+    event_bus_subscribe(EVT_RF_CHANGED, on_rf_saved);
     // RF 저장 이벤트 구독 (TX broadcast 완료 후 NVS 저장)
     event_bus_subscribe(EVT_RF_SAVED, on_rf_saved);
     // 카메라 ID 변경 이벤트 구독 (LoRa 수신 시 NVS 저장)
