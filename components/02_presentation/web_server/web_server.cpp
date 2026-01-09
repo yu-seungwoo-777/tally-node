@@ -12,6 +12,14 @@
 #include "esp_http_server.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
+
+// CA 번들.attach 함수 (esp_crt_bundle 컴포넌트)
+extern "C" esp_err_t esp_crt_bundle_attach(void *conf, const struct esp_tls_spki_info_t *spki_info);
+
+// esp_http_client용 래퍼 (시그니처 불일치 해결)
+static esp_err_t crt_bundle_attach_wrapper(void *conf) {
+    return esp_crt_bundle_attach(conf, nullptr);
+}
 #include "esp_system.h"
 #include "esp_netif.h"
 #include "esp_timer.h"
@@ -1415,6 +1423,102 @@ static esp_err_t api_search_license_handler(httpd_req_t* req)
     return ESP_OK;
 }
 
+// ============================================================================
+// 공지사항 API용 HTTP 이벤트 핸들러
+// ============================================================================
+
+typedef struct {
+    char* buffer;
+    size_t buffer_size;
+    size_t bytes_written;
+} http_response_context_t;
+
+static esp_err_t http_notices_event_handler(esp_http_client_event_t *evt)
+{
+    http_response_context_t* ctx = (http_response_context_t*)evt->user_data;
+
+    switch (evt->event_id) {
+        case HTTP_EVENT_ON_DATA:
+            if (ctx->bytes_written < ctx->buffer_size) {
+                size_t copy_len = evt->data_len;
+                if (copy_len > ctx->buffer_size - ctx->bytes_written) {
+                    copy_len = ctx->buffer_size - ctx->bytes_written;
+                }
+                memcpy(ctx->buffer + ctx->bytes_written, evt->data, copy_len);
+                ctx->bytes_written += copy_len;
+            }
+            break;
+        default:
+            break;
+    }
+    return ESP_OK;
+}
+
+/**
+ * @brief GET /api/notices - 공지사항 조회 (duckdns 프록시)
+ */
+static esp_err_t api_notices_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // HTTP 응답 버퍼 (스택 오버플로우 방지: 힙 할당)
+    char* response_buffer = (char*)malloc(2048);
+    if (!response_buffer) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"success\":false,\"notices\":[]}");
+        return ESP_OK;
+    }
+    memset(response_buffer, 0, 2048);
+
+    // 이벤트 핸들러용 컨텍스트
+    http_response_context_t context = { response_buffer, 2047, 0 };
+
+    // esp_http_client로 외부 API 호출
+    esp_http_client_config_t config = {};
+    config.url = "https://tally-node.duckdns.org/api/notices";
+    config.method = HTTP_METHOD_GET;
+    config.timeout_ms = 5000;
+    config.buffer_size = 2048;
+    config.buffer_size_tx = 512;
+    config.user_agent = "ESP32-Tally-Node";
+    config.keep_alive_enable = true;
+    // TLS 인증서 번들 사용 (Let's Encrypt 등 공용 CA)
+    config.crt_bundle_attach = crt_bundle_attach_wrapper;
+    config.event_handler = http_notices_event_handler;
+    config.user_data = &context;
+
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (!client) {
+        free(response_buffer);
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, "{\"success\":false,\"notices\":[]}");
+        return ESP_OK;
+    }
+
+    esp_err_t err = esp_http_client_perform(client);
+
+    if (err == ESP_OK && context.bytes_written > 0) {
+        response_buffer[context.bytes_written] = '\0';
+        ESP_LOGI(TAG, "공지사항 조회 성공: %d bytes", context.bytes_written);
+    } else {
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "공지사항 조회 실패: %s", esp_err_to_name(err));
+        } else {
+            ESP_LOGW(TAG, "응답 데이터 없음");
+        }
+        snprintf(response_buffer, 2048, "{\"success\":false,\"notices\":[]}");
+    }
+
+    esp_http_client_cleanup(client);
+
+    // 클라이언트에게 전달
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, response_buffer);
+
+    free(response_buffer);
+    return ESP_OK;
+}
+
 /**
  * @brief POST /api/device/brightness - 디바이스 밝기 설정 (LoRa 전송)
  */
@@ -1978,6 +2082,13 @@ static const httpd_uri_t uri_api_search_license = {
     .user_ctx = nullptr
 };
 
+static const httpd_uri_t uri_api_notices = {
+    .uri = "/api/notices",
+    .method = HTTP_GET,
+    .handler = api_notices_handler,
+    .user_ctx = nullptr
+};
+
 static const httpd_uri_t uri_api_device_brightness = {
     .uri = "/api/device/brightness",
     .method = HTTP_POST,
@@ -2129,6 +2240,13 @@ static const httpd_uri_t uri_options_api_search_license = {
     .user_ctx = nullptr
 };
 
+static const httpd_uri_t uri_options_api_notices = {
+    .uri = "/api/notices",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
 static const httpd_uri_t uri_options_api_device_brightness = {
     .uri = "/api/device/brightness",
     .method = HTTP_OPTIONS,
@@ -2234,7 +2352,7 @@ esp_err_t web_server_start(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     config.max_open_sockets = 10;  // 5 → 10 (동시 연결 증가)
-    config.max_uri_handlers = 40;  // API + OPTIONS + 정적 파일 + LoRa + Device + License
+    config.max_uri_handlers = 45;  // API + OPTIONS + 정적 파일 + LoRa + Device + License + Notices
     config.lru_purge_enable = true;
 
     esp_err_t ret = httpd_start(&s_server, &config);
@@ -2272,6 +2390,8 @@ esp_err_t web_server_start(void)
     httpd_register_uri_handler(s_server, &uri_api_test_license_server);
     // License Search API
     httpd_register_uri_handler(s_server, &uri_api_search_license);
+    // Notices API
+    httpd_register_uri_handler(s_server, &uri_api_notices);
     // Device Brightness API
     httpd_register_uri_handler(s_server, &uri_api_device_brightness);
     // Device Camera ID API
@@ -2299,6 +2419,7 @@ esp_err_t web_server_start(void)
     httpd_register_uri_handler(s_server, &uri_options_api_test_license_server);
     httpd_register_uri_handler(s_server, &uri_options_api_test);
     httpd_register_uri_handler(s_server, &uri_options_api_search_license);
+    httpd_register_uri_handler(s_server, &uri_options_api_notices);
     httpd_register_uri_handler(s_server, &uri_options_api_device_brightness);
     httpd_register_uri_handler(s_server, &uri_options_api_device_camera_id);
 #ifdef DEVICE_MODE_TX
