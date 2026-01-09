@@ -7,6 +7,7 @@
 #include "driver/rmt_tx.h"
 #include "esp_rom_sys.h"
 #include "esp_log.h"
+#include "t_log.h"
 #include "freertos/FreeRTOS.h"
 
 static const char* TAG = "WS2812Hal";
@@ -23,7 +24,7 @@ static bool s_initialized = false;
 esp_err_t ws2812_hal_init(int gpio_num, uint32_t num_leds)
 {
     if (s_initialized) {
-        ESP_LOGW(TAG, "WS2812 HAL 이미 초기화됨");
+        T_LOGW(TAG, "WS2812 HAL 이미 초기화됨");
         return ESP_OK;
     }
 
@@ -41,7 +42,7 @@ esp_err_t ws2812_hal_init(int gpio_num, uint32_t num_leds)
 
     esp_err_t ret = rmt_new_tx_channel(&tx_channel_config, &s_tx_channel);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "RMT 채널 생성 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "RMT 채널 생성 실패: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -64,7 +65,7 @@ esp_err_t ws2812_hal_init(int gpio_num, uint32_t num_leds)
 
     ret = rmt_new_bytes_encoder(&bytes_encoder_config, &s_bytes_encoder);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "바이트 인코더 생성 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "바이트 인코더 생성 실패: %s", esp_err_to_name(ret));
         rmt_del_channel(s_tx_channel);
         s_tx_channel = NULL;
         return ret;
@@ -73,7 +74,7 @@ esp_err_t ws2812_hal_init(int gpio_num, uint32_t num_leds)
     // RMT 채널 활성화
     ret = rmt_enable(s_tx_channel);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "RMT 채널 활성화 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "RMT 채널 활성화 실패: %s", esp_err_to_name(ret));
         rmt_del_encoder(s_bytes_encoder);
         rmt_del_channel(s_tx_channel);
         s_bytes_encoder = NULL;
@@ -82,7 +83,7 @@ esp_err_t ws2812_hal_init(int gpio_num, uint32_t num_leds)
     }
 
     s_initialized = true;
-    ESP_LOGI(TAG, "WS2812 HAL 초기화 완료 (GPIO %d, %lu LEDs)", gpio_num, num_leds);
+    T_LOGI(TAG, "WS2812 HAL 초기화 완료 (GPIO %d, %lu LEDs)", gpio_num, num_leds);
     return ESP_OK;
 }
 
@@ -97,7 +98,7 @@ esp_err_t ws2812_hal_transmit(const uint8_t* data, size_t length)
     }
 
     if (length != s_num_leds * 3) {
-        ESP_LOGW(TAG, "데이터 길이 불일치: %zu != %lu", length, s_num_leds * 3);
+        T_LOGW(TAG, "데이터 길이 불일치: %zu != %lu", length, s_num_leds * 3);
     }
 
     rmt_transmit_config_t tx_config = {
@@ -106,7 +107,7 @@ esp_err_t ws2812_hal_transmit(const uint8_t* data, size_t length)
 
     esp_err_t ret = rmt_transmit(s_tx_channel, s_bytes_encoder, data, length, &tx_config);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "RMT 전송 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "RMT 전송 실패: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -133,7 +134,7 @@ void ws2812_hal_deinit(void)
     }
 
     s_initialized = false;
-    ESP_LOGI(TAG, "WS2812 HAL 해제 완료");
+    T_LOGI(TAG, "WS2812 HAL 해제 완료");
 }
 
 bool ws2812_hal_is_initialized(void)

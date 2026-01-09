@@ -8,6 +8,7 @@
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
 #include "esp_log.h"
+#include "t_log.h"
 #include <stdbool.h>
 
 static const char* TAG = "BatteryHal";
@@ -45,7 +46,7 @@ static esp_err_t init_adc(void)
 
     esp_err_t ret = adc_oneshot_new_unit(&init_config, &s_adc_handle);
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "ADC 유닛 초기화 실패: %s", esp_err_to_name(ret));
+        T_LOGW(TAG, "ADC 유닛 초기화 실패: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -56,7 +57,7 @@ static esp_err_t init_adc(void)
 
     ret = adc_oneshot_config_channel(s_adc_handle, BATTERY_ADC_CHANNEL, &config);
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "ADC 채널 설정 실패: %s", esp_err_to_name(ret));
+        T_LOGW(TAG, "ADC 채널 설정 실패: %s", esp_err_to_name(ret));
         adc_oneshot_del_unit(s_adc_handle);
         s_adc_handle = NULL;
         return ret;
@@ -70,13 +71,13 @@ static esp_err_t init_adc(void)
     ret = adc_cali_create_scheme_curve_fitting(&cali_config, &s_adc_cali_handle);
     if (ret == ESP_OK) {
         s_adc_calibrated = true;
-        ESP_LOGI(TAG, "ADC 캘리브레이션 성공");
+        T_LOGI(TAG, "ADC 캘리브레이션 성공");
     } else {
         s_adc_calibrated = false;
-        ESP_LOGW(TAG, "ADC 캘리브레이션 실패, Raw 값 사용");
+        T_LOGW(TAG, "ADC 캘리브레이션 실패, Raw 값 사용");
     }
 
-    ESP_LOGI(TAG, "배터리 ADC 초기화 완료");
+    T_LOGI(TAG, "배터리 ADC 초기화 완료");
     return ESP_OK;
 }
 

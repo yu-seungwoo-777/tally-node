@@ -103,7 +103,7 @@ static esp_err_t onSystemInfoEvent(const event_data_t* event)
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(system_info_event_t)) {
-        ESP_LOGE(TAG, "System info: invalid data size %d (expected %zu)",
+        T_LOGE(TAG, "System info: invalid data size %d (expected %zu)",
                  event->data_size, sizeof(system_info_event_t));
         return ESP_ERR_INVALID_ARG;
     }
@@ -131,7 +131,7 @@ static esp_err_t onSwitcherStatusEvent(const event_data_t* event)
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(switcher_status_event_t)) {
-        ESP_LOGE(TAG, "Switcher status: invalid data size %d (expected %zu)",
+        T_LOGE(TAG, "Switcher status: invalid data size %d (expected %zu)",
                  event->data_size, sizeof(switcher_status_event_t));
         return ESP_ERR_INVALID_ARG;
     }
@@ -159,7 +159,7 @@ static esp_err_t onNetworkStatusEvent(const event_data_t* event)
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(network_status_event_t)) {
-        ESP_LOGE(TAG, "Network status: invalid data size %d (expected %zu)",
+        T_LOGE(TAG, "Network status: invalid data size %d (expected %zu)",
                  event->data_size, sizeof(network_status_event_t));
         return ESP_ERR_INVALID_ARG;
     }
@@ -187,7 +187,7 @@ static esp_err_t onConfigDataEvent(const event_data_t* event)
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(config_data_event_t)) {
-        ESP_LOGE(TAG, "Config data: invalid data size %d (expected %zu)",
+        T_LOGE(TAG, "Config data: invalid data size %d (expected %zu)",
                  event->data_size, sizeof(config_data_event_t));
         return ESP_ERR_INVALID_ARG;
     }
@@ -233,7 +233,7 @@ static esp_err_t onLoraScanProgressEvent(const event_data_t* event)
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(lora_scan_progress_t)) {
-        ESP_LOGE(TAG, "LoRa scan progress: invalid data size %d (expected %zu)",
+        T_LOGE(TAG, "LoRa scan progress: invalid data size %d (expected %zu)",
                  event->data_size, sizeof(lora_scan_progress_t));
         return ESP_ERR_INVALID_ARG;
     }
@@ -250,7 +250,7 @@ static esp_err_t onLoraScanProgressEvent(const event_data_t* event)
             s_cache.lora_scan.count++;
             s_cache.lora_scan_valid = true;
         } else {
-            ESP_LOGW(TAG, "LoRa scan progress: channel buffer full (100), ignoring");
+            T_LOGW(TAG, "LoRa scan progress: channel buffer full (100), ignoring");
         }
         xSemaphoreGive(s_cache_mutex);
     }
@@ -269,7 +269,7 @@ static esp_err_t onLoraScanCompleteEvent(const event_data_t* event)
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(lora_scan_complete_t)) {
-        ESP_LOGE(TAG, "LoRa scan complete: invalid data size %d (expected %zu)",
+        T_LOGE(TAG, "LoRa scan complete: invalid data size %d (expected %zu)",
                  event->data_size, sizeof(lora_scan_complete_t));
         return ESP_ERR_INVALID_ARG;
     }
@@ -280,7 +280,7 @@ static esp_err_t onLoraScanCompleteEvent(const event_data_t* event)
     if (s_cache_mutex && xSemaphoreTake(s_cache_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         // count 유효성 검증 (최대 100 채널)
         if (result->count > 100) {
-            ESP_LOGW(TAG, "LoRa scan: count=%d exceeds limit, clamping to 100", result->count);
+            T_LOGW(TAG, "LoRa scan: count=%d exceeds limit, clamping to 100", result->count);
             memcpy(&s_cache.lora_scan, result, sizeof(lora_scan_complete_t));
             s_cache.lora_scan.count = 100;
         } else {
@@ -307,7 +307,7 @@ static esp_err_t onDeviceListEvent(const event_data_t* event)
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(device_list_event_t)) {
-        ESP_LOGE(TAG, "Device list: invalid data size %d (expected %zu)",
+        T_LOGE(TAG, "Device list: invalid data size %d (expected %zu)",
                  event->data_size, sizeof(device_list_event_t));
         return ESP_ERR_INVALID_ARG;
     }
@@ -318,7 +318,7 @@ static esp_err_t onDeviceListEvent(const event_data_t* event)
     if (s_cache_mutex && xSemaphoreTake(s_cache_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         // count 유효성 검증 (최대 20 디바이스)
         if (devices->count > 20) {
-            ESP_LOGW(TAG, "Device list: count=%d exceeds limit, clamping to 20", devices->count);
+            T_LOGW(TAG, "Device list: count=%d exceeds limit, clamping to 20", devices->count);
             memcpy(&s_cache.devices, devices, sizeof(device_list_event_t));
             s_cache.devices.count = 20;
         } else {
@@ -328,7 +328,7 @@ static esp_err_t onDeviceListEvent(const event_data_t* event)
         xSemaphoreGive(s_cache_mutex);
     }
 
-    ESP_LOGD(TAG, "Device list updated: %d devices (registered: %d)",
+    T_LOGD(TAG, "Device list updated: %d devices (registered: %d)",
              devices->count, devices->registered_count);
 
     return ESP_OK;
@@ -345,7 +345,7 @@ static esp_err_t onLicenseStateEvent(const event_data_t* event)
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(license_state_event_t)) {
-        ESP_LOGE(TAG, "License state: invalid data size %d (expected %zu)",
+        T_LOGE(TAG, "License state: invalid data size %d (expected %zu)",
                  event->data_size, sizeof(license_state_event_t));
         return ESP_ERR_INVALID_ARG;
     }
@@ -359,7 +359,7 @@ static esp_err_t onLicenseStateEvent(const event_data_t* event)
         xSemaphoreGive(s_cache_mutex);
     }
 
-    ESP_LOGD(TAG, "License state updated: limit=%d, state=%d, grace=%u",
+    T_LOGD(TAG, "License state updated: limit=%d, state=%d, grace=%u",
              license->device_limit, license->state, license->grace_remaining);
 
     return ESP_OK;
@@ -370,7 +370,7 @@ static esp_err_t onLicenseStateEvent(const event_data_t* event)
  */
 static esp_err_t onNetworkRestartedEvent(const event_data_t* event)
 {
-    ESP_LOGI(TAG, "네트워크 재시작 완료 - 웹서버 재시작");
+    T_LOGI(TAG, "네트워크 재시작 완료 - 웹서버 재시작");
 
     // 웹서버가 실행 중이면 재시작
     if (s_server != nullptr) {
@@ -945,7 +945,7 @@ static esp_err_t parse_switcher_dual_config(cJSON* root, config_save_request_t* 
         save_req->switcher_secondary_offset = (uint8_t)offset->valueint;
     }
 
-    ESP_LOGI(TAG, "Publishing Dual Mode save event: enabled=%d, offset=%d",
+    T_LOGI(TAG, "Publishing Dual Mode save event: enabled=%d, offset=%d",
              save_req->switcher_dual_enabled, save_req->switcher_secondary_offset);
 
     return ESP_OK;
@@ -980,7 +980,7 @@ static esp_err_t parse_network_ap_config(cJSON* root, config_save_request_t* sav
         save_req->wifi_ap_enabled = cJSON_IsTrue(enabled);
     }
 
-    ESP_LOGI(TAG, "Publishing AP save event: ssid=%s, pass_len=%d, ch=%d, en=%d",
+    T_LOGI(TAG, "Publishing AP save event: ssid=%s, pass_len=%d, ch=%d, en=%d",
              save_req->wifi_ap_ssid, strlen(save_req->wifi_ap_password),
              save_req->wifi_ap_channel, save_req->wifi_ap_enabled);
 
@@ -1012,7 +1012,7 @@ static esp_err_t parse_network_wifi_config(cJSON* root, config_save_request_t* s
         save_req->wifi_sta_enabled = cJSON_IsTrue(enabled);
     }
 
-    ESP_LOGI(TAG, "Publishing STA save event: ssid=%s, pass_len=%d, en=%d",
+    T_LOGI(TAG, "Publishing STA save event: ssid=%s, pass_len=%d, en=%d",
              save_req->wifi_sta_ssid, strlen(save_req->wifi_sta_password),
              save_req->wifi_sta_enabled);
 
@@ -1051,7 +1051,7 @@ static esp_err_t parse_network_ethernet_config(cJSON* root, config_save_request_
         save_req->eth_enabled = cJSON_IsTrue(enabled);
     }
 
-    ESP_LOGI(TAG, "Publishing Ethernet save event: dhcp=%d, en=%d",
+    T_LOGI(TAG, "Publishing Ethernet save event: dhcp=%d, en=%d",
              save_req->eth_dhcp, save_req->eth_enabled);
 
     return ESP_OK;
@@ -1184,7 +1184,7 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
     // JSON 파싱
     cJSON* root = cJSON_Parse(buf);
     if (root == nullptr) {
-        ESP_LOGE(TAG, "POST /api/config/%s JSON 파싱 실패", path);
+        T_LOGE(TAG, "POST /api/config/%s JSON 파싱 실패", path);
         delete[] buf;
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
         return ESP_FAIL;
@@ -1207,7 +1207,7 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
             rf_event.sync_word = (uint8_t)sync->valueint;
             event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
 
-            ESP_LOGI(TAG_RF, "RF 설정 요청: %.1f MHz, Sync 0x%02X",
+            T_LOGI(TAG_RF, "RF 설정 요청: %.1f MHz, Sync 0x%02X",
                      rf_event.frequency, rf_event.sync_word);
 
             cJSON_Delete(root);
@@ -1217,7 +1217,7 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
             httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
             return ESP_OK;
         } else {
-            ESP_LOGE(TAG, "Missing 'frequency' or 'syncWord'");
+            T_LOGE(TAG, "Missing 'frequency' or 'syncWord'");
             cJSON_Delete(root);
             httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
                                "Missing 'frequency' or 'syncWord'");
@@ -1663,7 +1663,7 @@ static esp_err_t api_delete_device_handler(httpd_req_t* req)
 
     char id_str[5];
     snprintf(id_str, sizeof(id_str), "%02X%02X", device_id[0], device_id[1]);
-    ESP_LOGI(TAG, "디바이스 삭제 요청: %s", id_str);
+    T_LOGI(TAG, "디바이스 삭제 요청: %s", id_str);
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
@@ -1825,17 +1825,17 @@ static esp_err_t api_test_license_server_handler(httpd_req_t* req)
                 int64_t end = esp_timer_get_time();
                 ping_ms = (end - start) / 1000;
                 success = true;
-                ESP_LOGI(TAG, "License server test success: %d ms", ping_ms);
+                T_LOGI(TAG, "License server test success: %d ms", ping_ms);
             } else {
-                ESP_LOGW(TAG, "License server test: connect failed");
+                T_LOGW(TAG, "License server test: connect failed");
             }
         } else {
-            ESP_LOGW(TAG, "License server test: DNS resolution failed");
+            T_LOGW(TAG, "License server test: DNS resolution failed");
         }
 
         close(sock);
     } else {
-        ESP_LOGE(TAG, "License server test: socket creation failed");
+        T_LOGE(TAG, "License server test: socket creation failed");
     }
 
     cJSON_AddBoolToObject(root, "success", success);
@@ -1916,7 +1916,7 @@ static esp_err_t api_search_license_handler(httpd_req_t* req)
     // 미들웨어 응답을 그대로 클라이언트에게 전달
     httpd_resp_set_type(req, "application/json");
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "라이선스 검색 응답: %s", response_buffer);
+        T_LOGI(TAG, "라이선스 검색 응답: %s", response_buffer);
         httpd_resp_sendstr(req, response_buffer);
     } else {
         httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Failed to connect to license server\"}");
@@ -2006,12 +2006,12 @@ static esp_err_t api_notices_handler(httpd_req_t* req)
 
     if (err == ESP_OK && context.bytes_written > 0) {
         response_buffer[context.bytes_written] = '\0';
-        ESP_LOGI(TAG, "공지사항 조회 성공: %d bytes", context.bytes_written);
+        T_LOGI(TAG, "공지사항 조회 성공: %d bytes", context.bytes_written);
     } else {
         if (err != ESP_OK) {
-            ESP_LOGW(TAG, "공지사항 조회 실패: %s", esp_err_to_name(err));
+            T_LOGW(TAG, "공지사항 조회 실패: %s", esp_err_to_name(err));
         } else {
-            ESP_LOGW(TAG, "응답 데이터 없음");
+            T_LOGW(TAG, "응답 데이터 없음");
         }
         snprintf(response_buffer, 2048, "{\"success\":false,\"notices\":[]}");
     }
@@ -2079,7 +2079,7 @@ static esp_err_t api_device_brightness_handler(httpd_req_t* req)
     uint8_t event_data[3] = {device_id[0], device_id[1], brightness};
     event_bus_publish(EVT_DEVICE_BRIGHTNESS_REQUEST, event_data, sizeof(event_data));
 
-    ESP_LOGI(TAG, "디바이스 밝기 설정 요청: ID[%02X%02X], 밝기=%d",
+    T_LOGI(TAG, "디바이스 밝기 설정 요청: ID[%02X%02X], 밝기=%d",
              device_id[0], device_id[1], brightness);
 
     httpd_resp_set_type(req, "application/json");
@@ -2141,7 +2141,7 @@ static esp_err_t api_device_camera_id_handler(httpd_req_t* req)
     uint8_t event_data[3] = {device_id[0], device_id[1], camera_id};
     event_bus_publish(EVT_DEVICE_CAMERA_ID_REQUEST, event_data, sizeof(event_data));
 
-    ESP_LOGI(TAG, "디바이스 카메라 ID 설정 요청: ID[%02X%02X], CameraID=%d",
+    T_LOGI(TAG, "디바이스 카메라 ID 설정 요청: ID[%02X%02X], CameraID=%d",
              device_id[0], device_id[1], camera_id);
 
     httpd_resp_set_type(req, "application/json");
@@ -2198,7 +2198,7 @@ static esp_err_t api_brightness_broadcast_handler(httpd_req_t* req)
 
     cJSON_Delete(root);
 
-    ESP_LOGI(TAG, "일괄 밝기 제어 요청 (Broadcast): brightness=%d", brightness);
+    T_LOGI(TAG, "일괄 밝기 제어 요청 (Broadcast): brightness=%d", brightness);
 
     // 전역 밝기 Broadcast 명령 패킷 생성 (0xE7, device_id 없음)
     static lora_cmd_brightness_broadcast_t cmd;
@@ -2261,7 +2261,7 @@ static esp_err_t api_device_ping_handler(httpd_req_t* req)
     // PING 요청 이벤트 발행 (device_manager가 구독하여 LoRa 전송)
     event_bus_publish(EVT_DEVICE_PING_REQUEST, device_id, sizeof(device_id));
 
-    ESP_LOGI(TAG, "디바이스 PING 요청: ID[%02X%02X]", device_id[0], device_id[1]);
+    T_LOGI(TAG, "디바이스 PING 요청: ID[%02X%02X]", device_id[0], device_id[1]);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
 
@@ -2311,7 +2311,7 @@ static esp_err_t api_device_stop_handler(httpd_req_t* req)
     // STOP 요청 이벤트 발행
     event_bus_publish(EVT_DEVICE_STOP_REQUEST, device_id, sizeof(device_id));
 
-    ESP_LOGW(TAG, "디바이스 기능 정지 요청: ID[%02X%02X]", device_id[0], device_id[1]);
+    T_LOGW(TAG, "디바이스 기능 정지 요청: ID[%02X%02X]", device_id[0], device_id[1]);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
 
@@ -2361,7 +2361,7 @@ static esp_err_t api_device_reboot_handler(httpd_req_t* req)
     // REBOOT 요청 이벤트 발행
     event_bus_publish(EVT_DEVICE_REBOOT_REQUEST, device_id, sizeof(device_id));
 
-    ESP_LOGW(TAG, "디바이스 재부팅 요청: ID[%02X%02X]", device_id[0], device_id[1]);
+    T_LOGW(TAG, "디바이스 재부팅 요청: ID[%02X%02X]", device_id[0], device_id[1]);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
 
@@ -2380,7 +2380,7 @@ static esp_err_t api_status_request_handler(httpd_req_t* req)
     // 상태 요청 이벤트 발행
     event_bus_publish(EVT_STATUS_REQUEST, nullptr, 0);
 
-    ESP_LOGI(TAG, "상태 요청 전송 (Broadcast)");
+    T_LOGI(TAG, "상태 요청 전송 (Broadcast)");
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
 
@@ -2881,7 +2881,7 @@ static bool s_initialized = false;
 esp_err_t web_server_init(void)
 {
     if (s_initialized) {
-        ESP_LOGW(TAG, "Web server already initialized");
+        T_LOGW(TAG, "Web server already initialized");
         return ESP_OK;
     }
 
@@ -2905,7 +2905,7 @@ esp_err_t web_server_init(void)
     event_bus_subscribe(EVT_NETWORK_RESTARTED, onNetworkRestartedEvent);
 
     s_initialized = true;
-    ESP_LOGI(TAG, "Web server initialized (event subscriptions ready)");
+    T_LOGI(TAG, "Web server initialized (event subscriptions ready)");
     return ESP_OK;
 }
 
@@ -2917,12 +2917,12 @@ esp_err_t web_server_init(void)
 esp_err_t web_server_start(void)
 {
     if (!s_initialized) {
-        ESP_LOGE(TAG, "Web server not initialized");
+        T_LOGE(TAG, "Web server not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (s_server != nullptr) {
-        ESP_LOGW(TAG, "Web server already running");
+        T_LOGW(TAG, "Web server already running");
         return ESP_OK;
     }
 
@@ -2934,7 +2934,7 @@ esp_err_t web_server_start(void)
 
     esp_err_t ret = httpd_start(&s_server, &config);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start web server: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "Failed to start web server: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -3017,7 +3017,7 @@ esp_err_t web_server_start(void)
     // 설정 데이터 요청 (초기 캐시 populate)
     event_bus_publish(EVT_CONFIG_DATA_REQUEST, nullptr, 0);
 
-    ESP_LOGI(TAG, "Web server started on port 80");
+    T_LOGI(TAG, "Web server started on port 80");
     return ESP_OK;
 }
 
@@ -3032,7 +3032,7 @@ esp_err_t web_server_stop(void)
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "Stopping web server");
+    T_LOGI(TAG, "Stopping web server");
 
     esp_err_t ret = httpd_stop(s_server);
     s_server = nullptr;
