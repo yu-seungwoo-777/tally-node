@@ -6,7 +6,6 @@
 #include "prod_tx_app.h"
 #include "t_log.h"
 #include "NVSConfig.h"
-#include "nvs_flash.h"
 #include "event_bus.h"
 #include "config_service.h"
 #include "hardware_service.h"
@@ -27,25 +26,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cstring>
-
-// ============================================================================
-// NVS 초기화 헬퍼
-// ============================================================================
-
-static esp_err_t init_nvs(void)
-{
-    esp_err_t ret = nvs_flash_init();
-
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ret = nvs_flash_erase();
-        if (ret != ESP_OK) {
-            return ret;
-        }
-        ret = nvs_flash_init();
-    }
-
-    return ret;
-}
 
 static const char* TAG = "prod_tx_app";
 
@@ -321,12 +301,7 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
 
     T_LOGI(TAG, "TX app init...");
 
-    // NVS 초기화
-    esp_err_t ret = init_nvs();
-    if (ret != ESP_OK) {
-        T_LOGE(TAG, "NVS init failed: %s", esp_err_to_name(ret));
-        return false;
-    }
+    esp_err_t ret;
 
     // 네트워크 스택 초기화
     ret = esp_netif_init();

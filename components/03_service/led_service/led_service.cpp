@@ -8,7 +8,6 @@
 #include "board_led_driver.h"
 #include "t_log.h"
 #include "event_bus.h"
-#include "config_service.h"
 #include "TallyTypes.h"
 #include <cstring>
 
@@ -22,6 +21,8 @@ static struct {
     bool initialized;
     bool event_subscribed;  // 이벤트 구독 여부
     bool stopped;           // 기능 정지 상태
+    uint8_t my_camera_id;   // 자신의 카메라 ID (이벤트로 업데이트)
+    bool camera_id_valid;   // 카메라 ID 유효성
     // 현재 Tally 상태 (카메라 ID 변경 시 LED 즉시 업데이트용)
     bool program_active;    // 현재 카메라가 PGM인지
     bool preview_active;    // 현재 카메라가 PVW인지
@@ -33,6 +34,8 @@ static struct {
     .initialized = false,
     .event_subscribed = false,
     .stopped = false,
+    .my_camera_id = 0,
+    .camera_id_valid = false,
     .program_active = false,
     .preview_active = false,
     .tally_channel_count = 0,
@@ -68,6 +71,10 @@ static esp_err_t on_camera_id_changed(const event_data_t* event)
     uint8_t camera_id = *(uint8_t*)event->data;
     T_LOGI(TAG, "카메라 ID 변경 이벤트 수신: %d (tally_valid:%d)",
            camera_id, s_service.tally_valid);
+
+    // 카메라 ID 캐시 업데이트
+    s_service.my_camera_id = camera_id;
+    s_service.camera_id_valid = true;
 
     // WS2812Driver에 카메라 ID 설정
     ws2812_set_camera_id(camera_id);
@@ -130,7 +137,7 @@ static esp_err_t on_tally_state_changed(const event_data_t* event)
     ws2812_process_tally_data(tally_evt->tally_data, tally_evt->channel_count);
 
     // 현재 상태 캐시 업데이트 (정지 해제 시 복구용)
-    uint8_t my_camera_id = config_service_get_camera_id();
+    // 캐시된 카메라 ID 사용 (이벤트로 업데이트됨)
 
     // packed_data_t 구조체 생성
     packed_data_t tally = {
@@ -140,8 +147,8 @@ static esp_err_t on_tally_state_changed(const event_data_t* event)
     };
 
     // 내 카메라의 Tally 상태 확인 (채널 번호는 1-based)
-    if (my_camera_id > 0 && my_camera_id <= tally.channel_count) {
-        uint8_t status = packed_data_get_channel(&tally, my_camera_id);
+    if (s_service.camera_id_valid && s_service.my_camera_id > 0 && s_service.my_camera_id <= tally.channel_count) {
+        uint8_t status = packed_data_get_channel(&tally, s_service.my_camera_id);
         s_service.program_active = (status == TALLY_STATUS_PROGRAM || status == TALLY_STATUS_BOTH);
         s_service.preview_active = (status == TALLY_STATUS_PREVIEW || status == TALLY_STATUS_BOTH);
     } else {
