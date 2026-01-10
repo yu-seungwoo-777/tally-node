@@ -584,16 +584,6 @@ esp_err_t event_bus_unsubscribe(event_type_t type, event_callback_t callback);
  */
 const char* event_type_to_string(event_type_t type);
 
-/**
- * @brief 이벤트 버스 통계 가져오기 (디버깅용)
- *
- * @param publish_count 발행 총 횟수 (출력 파라미터)
- * @param dispatch_count 디스패치 총 횟수 (출력 파라미터)
- * @param queue_full_count 큐 가득참 횟수 (출력 파라미터)
- */
-void event_bus_get_stats(uint32_t* publish_count, uint32_t* dispatch_count,
-                         uint32_t* queue_full_count);
-
 #ifdef __cplusplus
 }
 #endif
