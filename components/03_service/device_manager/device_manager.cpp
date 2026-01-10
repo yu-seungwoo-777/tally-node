@@ -759,7 +759,7 @@ static struct {
  */
 static esp_err_t on_info_updated(const event_data_t* event)
 {
-    if (!event) {
+    if (!event || !s_mgr.initialized) {
         return ESP_ERR_INVALID_ARG;
     }
 

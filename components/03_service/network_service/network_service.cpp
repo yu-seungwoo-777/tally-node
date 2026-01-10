@@ -288,12 +288,17 @@ void NetworkServiceClass::publishStatus(void)
 
     network_status_t status = getStatus();
 
-    // 상태 변경 확인 (연결 상태 또는 IP 변경)
+    // 디버그: 상태 변경 원인 추적
     bool sta_changed = (s_last_status.wifi_sta.connected != status.wifi_sta.connected ||
                        strncmp(s_last_status.wifi_sta.ip, status.wifi_sta.ip, sizeof(s_last_status.wifi_sta.ip)) != 0);
     bool eth_changed = (s_last_status.ethernet.connected != status.ethernet.connected ||
                        strncmp(s_last_status.ethernet.ip, status.ethernet.ip, sizeof(s_last_status.ethernet.ip)) != 0);
     bool ap_changed = (strncmp(s_last_status.wifi_ap.ip, status.wifi_ap.ip, sizeof(s_last_status.wifi_ap.ip)) != 0);
+
+    T_LOGD(TAG, "publishStatus: sta_changed=%d eth_changed=%d ap_changed=%d", sta_changed, eth_changed, ap_changed);
+    T_LOGD(TAG, "  eth: conn=%d (was %d), ip=%s (was %s)",
+            status.ethernet.connected, s_last_status.ethernet.connected,
+            status.ethernet.ip, s_last_status.ethernet.ip);
 
     if (sta_changed || eth_changed || ap_changed) {
         // stack 변수 사용 (이벤트 버스가 복사)
@@ -556,6 +561,8 @@ void NetworkServiceClass::onEthernetStatusChange(bool connected, const char* ip)
         // 이벤트 버스로 네트워크 해제 발행
         event_bus_publish(EVT_NETWORK_DISCONNECTED, nullptr, 0);
     }
+    // 네트워크 상태 변경 이벤트 발행 (DisplayManager 갱신용)
+    publishStatus();
 }
 
 void NetworkServiceClass::onWiFiStatusChange(bool connected, const char* ip)
@@ -571,6 +578,8 @@ void NetworkServiceClass::onWiFiStatusChange(bool connected, const char* ip)
         // 이벤트 버스로 네트워크 해제 발행
         event_bus_publish(EVT_NETWORK_DISCONNECTED, nullptr, 0);
     }
+    // 네트워크 상태 변경 이벤트 발행 (DisplayManager 갱신용)
+    publishStatus();
 }
 
 // ============================================================================

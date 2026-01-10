@@ -269,7 +269,7 @@ static esp_err_t on_config_save_request(const event_data_t* event) {
     }
 
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "Config saved via event: type=%d", req->type);
+        T_LOGD(TAG, "Config saved via event: type=%d", req->type);
 
         // 저장 완료 후 전체 설정 데이터를 로드하여 stack 변수에 저장
         config_all_t full_config;
@@ -464,7 +464,7 @@ static esp_err_t on_rf_saved(const event_data_t* event) {
     // NVS에 저장
     ret = ConfigServiceClass::saveAll(&config);
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "RF 설정 저장: %.1f MHz, Sync 0x%02X (NVS)",
+        T_LOGD(TAG, "RF 설정 저장: %.1f MHz, Sync 0x%02X (NVS)",
                rf->frequency, rf->sync_word);
     } else {
         T_LOGE(TAG, "RF 설정 NVS 저장 실패: %s", esp_err_to_name(ret));
@@ -793,14 +793,14 @@ esp_err_t ConfigServiceClass::applyDeviceLimit(void)
     config_registered_devices_t devices;
     esp_err_t ret = getRegisteredDevices(&devices);
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "등록된 디바이스 device_limit 적용 완료: %d개", devices.count);
+        T_LOGD(TAG, "등록된 디바이스 device_limit 적용 완료: %d개", devices.count);
     }
 
     // getDeviceCamMap 호출 시 device_limit 체크 및 초과분 삭제 수행
     config_device_cam_map_t cam_map;
     ret = getDeviceCamMap(&cam_map);
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "디바이스-카메라 매핑 device_limit 적용 완료: %d개", cam_map.count);
+        T_LOGD(TAG, "디바이스-카메라 매핑 device_limit 적용 완료: %d개", cam_map.count);
     }
 
     return ESP_OK;
@@ -986,10 +986,10 @@ esp_err_t ConfigServiceClass::setWiFiSTA(const config_wifi_sta_t* config)
     // password: 빈 문자열이면 NVS 키 삭제, otherwise 저장
     if (config->password[0] != '\0') {
         nvs_set_str(handle, "wifi_sta_pass", config->password);
-        T_LOGI(TAG, "WiFi STA password 저장: 길이=%d", strlen(config->password));
+        T_LOGD(TAG, "WiFi STA password 저장: 길이=%d", strlen(config->password));
     } else {
         nvs_erase_key(handle, "wifi_sta_pass");  // 빈 password = 삭제
-        T_LOGI(TAG, "WiFi STA password 삭제 (빈 값)");
+        T_LOGD(TAG, "WiFi STA password 삭제 (빈 값)");
     }
     nvs_set_u8(handle, "wifi_sta_enbl", config->enabled ? 1 : 0);
 
@@ -1952,7 +1952,7 @@ esp_err_t ConfigServiceClass::getRegisteredDevices(config_registered_devices_t* 
         nvs_set_u8(handle, NVS_KEY_DEVICE_COUNT, devices->count);
         nvs_commit(handle);
 
-        T_LOGI(TAG, "초과분 삭제 완료, 유지된 디바이스: %d개", devices->count);
+        T_LOGD(TAG, "초과분 삭제 완료, 유지된 디바이스: %d개", devices->count);
     }
 
     nvs_close(handle);
@@ -2053,7 +2053,7 @@ esp_err_t ConfigServiceClass::setDeviceCameraId(const uint8_t* device_id, uint8_
     if (ret == ESP_OK) {
         ret = nvs_commit(handle);
         if (ret == ESP_OK) {
-            T_LOGI(TAG, "디바이스-카메라 매핑 저장: [%02X%02X] → Cam%d (idx=%d)", device_id[0], device_id[1], camera_id, target_idx);
+            T_LOGD(TAG, "디바이스-카메라 매핑 저장: [%02X%02X] → Cam%d (idx=%d)", device_id[0], device_id[1], camera_id, target_idx);
 
             // 캐시 업데이트
             bool found = false;

@@ -154,7 +154,7 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
         s_rf_initialized = true;
         s_last_frequency = rf->frequency;
         s_last_sync_word = rf->sync_word;
-        T_LOGI(TAG_RF, "RF 초기화 완료: %.1f MHz, Sync 0x%02X (부팅 시 broadcast 스킵)",
+        T_LOGD(TAG_RF, "RF 초기화 완료: %.1f MHz, Sync 0x%02X (부팅 시 broadcast 스킵)",
                  rf->frequency, rf->sync_word);
         return ESP_OK;
     }
@@ -165,7 +165,7 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
     }
 
     // TX: 값이 변경된 경우에만 broadcast
-    T_LOGI(TAG_RF, "RF broadcast 시작 (10회): %.1f MHz, Sync 0x%02X",
+    T_LOGD(TAG_RF, "RF broadcast 시작 (10회): %.1f MHz, Sync 0x%02X",
              rf->frequency, rf->sync_word);
 
     uint8_t broadcast_pkt[6];
@@ -178,13 +178,13 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
         vTaskDelay(pdMS_TO_TICKS(500));  // 500ms 간격
     }
 
-    T_LOGI(TAG_RF, "RF broadcast 완료: %.1f MHz, Sync 0x%02X (10회)", rf->frequency, rf->sync_word);
+    T_LOGD(TAG_RF, "RF broadcast 완료: %.1f MHz, Sync 0x%02X (10회)", rf->frequency, rf->sync_word);
 
     // 드라이버에 RF 설정 적용 (broadcast 완료 후)
     lora_driver_set_frequency(rf->frequency);
     lora_driver_set_sync_word(rf->sync_word);
 
-    T_LOGI(TAG_RF, "드라이버 적용 완료: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
+    T_LOGD(TAG_RF, "드라이버 적용 완료: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
 
     // 현재 값 저장
     s_last_frequency = rf->frequency;
@@ -265,7 +265,7 @@ static void process_tally_packet(const uint8_t* data, size_t length, int16_t rss
     char tally_str[64];
     packed_data_format_tally(&tally, tally_str, sizeof(tally_str));
 
-    T_LOGI(TAG, "Tally: [F1][%d][%s] → %s (RSSI:%d SNR:%.1f)",
+    T_LOGD(TAG, "Tally: [F1][%d][%s] → %s (RSSI:%d SNR:%.1f)",
              ch_count, hex_str, tally_str, rssi, snr);
 
     // Tally 패킷 수신 간격 추적 및 RX 상태 이벤트 발행
@@ -314,7 +314,7 @@ static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, 
     uint8_t header = data[0];
 
     // 패킷 헤더 출력 (중복 검사용)
-    T_LOGI(TAG, "RX pkt: 0x%02X (%d bytes) RSSI:%d SNR:%.1f",
+    T_LOGD(TAG, "RX pkt: 0x%02X (%d bytes) RSSI:%d SNR:%.1f",
              header, (int)length, rssi, snr);
 
     // Tally 데이터 (0xF1~0xF4) - 모든 모드에서 처리
@@ -411,7 +411,7 @@ static void lora_txq_task(void* arg)
                 T_LOGD(TAG, "송신: %zu bytes", packet.length);
                 event_bus_publish(EVT_LORA_PACKET_SENT, &s_packets_sent, sizeof(s_packets_sent));
             } else {
-                T_LOGI(TAG, "송신 실패: %d", ret);
+                T_LOGE(TAG, "송신 실패: %d", ret);
             }
         }
 

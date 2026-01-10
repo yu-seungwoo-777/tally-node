@@ -166,15 +166,86 @@ static void handle_page_transition(void)
 }
 
 /**
- * @brief 통합 상태 로그 출력 (비활성화)
+ * @brief 통합 상태 로그 출력
  *
- * 저장된 모든 데이터를 한 번에 출력
- * 5초 간격 로그는 비활성화되었습니다.
+ * 저장된 모든 데이터를 한 번에 출력 (5초 간격)
  */
 static void print_status_log(void)
 {
-    // 5초 간격 상태 로그 비활성화
-    // 필요시 상태 변화 시에만 출력하도록 구현 가능
+    T_LOGI(TAG, "==================== Status ====================");
+#ifdef DEVICE_MODE_TX
+    // TX 모드 상태 로그
+    // System
+    if (s_mgr.data.system_valid) {
+        T_LOGI(TAG, "[System] ID=%s Bat=%d%% V=%.2fV T=%.1f°C Up=%us",
+                s_mgr.data.system.device_id,
+                s_mgr.data.system.battery,
+                s_mgr.data.system.voltage,
+                s_mgr.data.system.temperature,
+                s_mgr.data.system.uptime);
+    }
+
+    // LoRa
+    if (s_mgr.data.lora.valid) {
+        T_LOGI(TAG, "[LoRa] RSSI=%d SNR=%.1f", s_mgr.data.lora.rssi, s_mgr.data.lora.snr);
+    }
+
+    // RF
+    if (s_mgr.data.rf_valid) {
+        T_LOGI(TAG, "[RF] %.1f MHz Sync=0x%02X", s_mgr.data.rf.frequency, s_mgr.data.rf.sync_word);
+    }
+
+    // Network
+    if (s_mgr.data.network_valid) {
+        T_LOGI(TAG, "[Network] WiFi STA=%s(%s) ETH=%s(%s)",
+                s_mgr.data.network.sta_connected ? "CONN" : "DIS", s_mgr.data.network.sta_ip,
+                s_mgr.data.network.eth_connected ? "CONN" : "DIS", s_mgr.data.network.eth_ip);
+    }
+
+    // Switcher
+    if (s_mgr.data.switcher_valid) {
+        T_LOGI(TAG, "[Switcher] Dual=%d S1=%s:%d(%s) S2=%s:%d(%s)",
+                s_mgr.data.switcher.dual_mode,
+                s_mgr.data.switcher.s1_type, s_mgr.data.switcher.s1_port,
+                s_mgr.data.switcher.s1_connected ? "OK" : "FAIL",
+                s_mgr.data.switcher.s2_type, s_mgr.data.switcher.s2_port,
+                s_mgr.data.switcher.s2_connected ? "OK" : "FAIL");
+    }
+
+#elif defined(DEVICE_MODE_RX)
+    // RX 모드 상태 로그
+    // System
+    if (s_mgr.data.system_valid) {
+        T_LOGI(TAG, "[System] ID=%s Bat=%d%% V=%.2fV T=%.1f°C Up=%us Stop=%d",
+                s_mgr.data.system.device_id,
+                s_mgr.data.system.battery,
+                s_mgr.data.system.voltage,
+                s_mgr.data.system.temperature,
+                s_mgr.data.system.uptime,
+                s_mgr.data.stopped);
+    }
+
+    // LoRa
+    if (s_mgr.data.lora.valid) {
+        T_LOGI(TAG, "[LoRa] RSSI=%d SNR=%.1f", s_mgr.data.lora.rssi, s_mgr.data.lora.snr);
+    }
+
+    // RF
+    if (s_mgr.data.rf_valid) {
+        T_LOGI(TAG, "[RF] %.1f MHz Sync=0x%02X", s_mgr.data.rf.frequency, s_mgr.data.rf.sync_word);
+    }
+
+    // Device
+    if (s_mgr.data.device.valid) {
+        T_LOGI(TAG, "[Device] CamID=%d Bright=%d", s_mgr.data.device.camera_id, s_mgr.data.device.brightness);
+    }
+
+    // Tally
+    if (s_mgr.data.tally.valid) {
+        T_LOGI(TAG, "[Tally] PGM=%d PVW=%d", s_mgr.data.tally.pgm_count, s_mgr.data.tally.pvw_count);
+    }
+#endif
+    T_LOGI(TAG, "================================================");
 }
 
 // ============================================================================
@@ -188,7 +259,7 @@ static void print_status_log(void)
  */
 static esp_err_t on_info_updated(const event_data_t* event)
 {
-    if (!event) {
+    if (!event || !s_mgr.initialized) {
         return ESP_OK;
     }
 
@@ -549,7 +620,7 @@ extern "C" void display_manager_start(void)
 #ifdef DEVICE_MODE_RX
                ", EVT_TALLY_STATE_CHANGED, EVT_CAMERA_ID_CHANGED, EVT_BRIGHTNESS_CHANGED, EVT_RF_CHANGED, EVT_STOP_CHANGED, EVT_LORA_RX_STATUS_CHANGED"
 #elif defined(DEVICE_MODE_TX)
-               ", EVT_SWITCHER_STATUS_CHANGED, EVT_NETWORK_STATUS_CHANGED, EVT_RF_CHANGED"
+               ", EVT_SWITCHER_STATUS_CHANGED, EVT_NETWORK_STATUS_CHANGED, EVT_NETWORK_CONNECTED/DISCONNECTED, EVT_RF_CHANGED"
 #endif
         );
     }

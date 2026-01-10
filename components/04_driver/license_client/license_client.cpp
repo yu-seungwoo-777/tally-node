@@ -63,7 +63,7 @@ static esp_err_t http_post(const char* url, const char* request_body,
         .bytes_written = 0
     };
     out_response[0] = '\0';
-    T_LOGI(TAG, "요청 바디: %s", request_body);
+    T_LOGD(TAG, "요청 바디: %s", request_body);
 
     esp_http_client_config_t config = {};
     config.url = url;
@@ -86,7 +86,7 @@ static esp_err_t http_post(const char* url, const char* request_body,
     // 헤더 설정
     esp_http_client_set_header(client, "Content-Type", "application/json");
     esp_http_client_set_header(client, "X-API-Key", LICENSE_API_KEY);
-    T_LOGI(TAG, "헤더 설정: X-API-Key: %s", LICENSE_API_KEY);
+    T_LOGD(TAG, "헤더 설정: X-API-Key: %s", LICENSE_API_KEY);
 
     // 바디 설정
     esp_http_client_set_post_field(client, request_body, strlen(request_body));
@@ -166,7 +166,7 @@ esp_err_t license_client_validate(const char* key, const char* mac_address,
         return err;
     }
 
-    T_LOGI(TAG, "서버 응답: %s", response_buffer);
+    T_LOGD(TAG, "서버 응답: %s", response_buffer);
 
     // JSON 응답 파싱
     cJSON* res_json = cJSON_Parse(response_buffer);
@@ -254,7 +254,7 @@ esp_err_t license_client_search_license(const char* name, const char* phone,
     char* request_body = cJSON_PrintUnformatted(req_json);
     cJSON_Delete(req_json);
 
-    T_LOGI(TAG, "라이센스 검색 요청: name=%s, phone=%s, email=%s", name, phone, email);
+    T_LOGI(TAG, "라이센스 검색 요청: name=%s, phone=%s, email=***", name, phone);
 
     // HTTP POST 전송
     esp_err_t err = http_post(url, request_body, out_response, response_size);
@@ -262,7 +262,7 @@ esp_err_t license_client_search_license(const char* name, const char* phone,
     free(request_body);
 
     if (err == ESP_OK) {
-        T_LOGI(TAG, "라이센스 검색 응답: %s", out_response);
+        T_LOGD(TAG, "라이센스 검색 응답: %s", out_response);
     } else {
         T_LOGE(TAG, "라이센스 검색 실패");
     }

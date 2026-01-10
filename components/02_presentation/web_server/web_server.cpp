@@ -97,7 +97,8 @@ static void init_cache(void)
  */
 static esp_err_t onSystemInfoEvent(const event_data_t* event)
 {
-    if (!event) {
+    // 뮤텍스가 생성되지 않았으면 아직 초기화 안된 상태
+    if (!event || !s_cache_mutex) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -945,7 +946,7 @@ static esp_err_t parse_switcher_dual_config(cJSON* root, config_save_request_t* 
         save_req->switcher_secondary_offset = (uint8_t)offset->valueint;
     }
 
-    T_LOGI(TAG, "Publishing Dual Mode save event: enabled=%d, offset=%d",
+    T_LOGD(TAG, "Publishing Dual Mode save event: enabled=%d, offset=%d",
              save_req->switcher_dual_enabled, save_req->switcher_secondary_offset);
 
     return ESP_OK;
@@ -980,7 +981,7 @@ static esp_err_t parse_network_ap_config(cJSON* root, config_save_request_t* sav
         save_req->wifi_ap_enabled = cJSON_IsTrue(enabled);
     }
 
-    T_LOGI(TAG, "Publishing AP save event: ssid=%s, pass_len=%d, ch=%d, en=%d",
+    T_LOGD(TAG, "Publishing AP save event: ssid=%s, pass_len=%d, ch=%d, en=%d",
              save_req->wifi_ap_ssid, strlen(save_req->wifi_ap_password),
              save_req->wifi_ap_channel, save_req->wifi_ap_enabled);
 
@@ -1012,7 +1013,7 @@ static esp_err_t parse_network_wifi_config(cJSON* root, config_save_request_t* s
         save_req->wifi_sta_enabled = cJSON_IsTrue(enabled);
     }
 
-    T_LOGI(TAG, "Publishing STA save event: ssid=%s, pass_len=%d, en=%d",
+    T_LOGD(TAG, "Publishing STA save event: ssid=%s, pass_len=%d, en=%d",
              save_req->wifi_sta_ssid, strlen(save_req->wifi_sta_password),
              save_req->wifi_sta_enabled);
 
@@ -1051,7 +1052,7 @@ static esp_err_t parse_network_ethernet_config(cJSON* root, config_save_request_
         save_req->eth_enabled = cJSON_IsTrue(enabled);
     }
 
-    T_LOGI(TAG, "Publishing Ethernet save event: dhcp=%d, en=%d",
+    T_LOGD(TAG, "Publishing Ethernet save event: dhcp=%d, en=%d",
              save_req->eth_dhcp, save_req->eth_enabled);
 
     return ESP_OK;
@@ -1207,7 +1208,7 @@ static esp_err_t api_config_post_handler(httpd_req_t* req)
             rf_event.sync_word = (uint8_t)sync->valueint;
             event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
 
-            T_LOGI(TAG_RF, "RF 설정 요청: %.1f MHz, Sync 0x%02X",
+            T_LOGD(TAG_RF, "RF 설정 요청: %.1f MHz, Sync 0x%02X",
                      rf_event.frequency, rf_event.sync_word);
 
             cJSON_Delete(root);
@@ -1338,7 +1339,7 @@ static esp_err_t api_test_start_handler(httpd_req_t* req)
         return ESP_FAIL;
     }
     buf[ret] = '\0';
-    T_LOGI(TAG, "Received JSON: %s", buf);
+    T_LOGD(TAG, "Received JSON: %s", buf);
 
     cJSON* root = cJSON_Parse(buf);
     if (!root) {
@@ -1365,7 +1366,7 @@ static esp_err_t api_test_start_handler(httpd_req_t* req)
     uint16_t interval_ms = (uint16_t)cJSON_GetNumberValue(interval_ms_item);
     cJSON_Delete(root);
 
-    T_LOGI(TAG, "Parsed params: max_channels=%d, interval_ms=%d", max_channels, interval_ms);
+    T_LOGD(TAG, "Parsed params: max_channels=%d, interval_ms=%d", max_channels, interval_ms);
 
     // 파라미터 검증
     if (max_channels < 1 || max_channels > 20) {
@@ -1916,7 +1917,7 @@ static esp_err_t api_search_license_handler(httpd_req_t* req)
     // 미들웨어 응답을 그대로 클라이언트에게 전달
     httpd_resp_set_type(req, "application/json");
     if (err == ESP_OK) {
-        T_LOGI(TAG, "라이선스 검색 응답: %s", response_buffer);
+        T_LOGD(TAG, "라이선스 검색 응답: %s", response_buffer);
         httpd_resp_sendstr(req, response_buffer);
     } else {
         httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Failed to connect to license server\"}");
@@ -2079,7 +2080,7 @@ static esp_err_t api_device_brightness_handler(httpd_req_t* req)
     uint8_t event_data[3] = {device_id[0], device_id[1], brightness};
     event_bus_publish(EVT_DEVICE_BRIGHTNESS_REQUEST, event_data, sizeof(event_data));
 
-    T_LOGI(TAG, "디바이스 밝기 설정 요청: ID[%02X%02X], 밝기=%d",
+    T_LOGD(TAG, "디바이스 밝기 설정 요청: ID[%02X%02X], 밝기=%d",
              device_id[0], device_id[1], brightness);
 
     httpd_resp_set_type(req, "application/json");
@@ -2141,7 +2142,7 @@ static esp_err_t api_device_camera_id_handler(httpd_req_t* req)
     uint8_t event_data[3] = {device_id[0], device_id[1], camera_id};
     event_bus_publish(EVT_DEVICE_CAMERA_ID_REQUEST, event_data, sizeof(event_data));
 
-    T_LOGI(TAG, "디바이스 카메라 ID 설정 요청: ID[%02X%02X], CameraID=%d",
+    T_LOGD(TAG, "디바이스 카메라 ID 설정 요청: ID[%02X%02X], CameraID=%d",
              device_id[0], device_id[1], camera_id);
 
     httpd_resp_set_type(req, "application/json");
@@ -2198,7 +2199,7 @@ static esp_err_t api_brightness_broadcast_handler(httpd_req_t* req)
 
     cJSON_Delete(root);
 
-    T_LOGI(TAG, "일괄 밝기 제어 요청 (Broadcast): brightness=%d", brightness);
+    T_LOGD(TAG, "일괄 밝기 제어 요청 (Broadcast): brightness=%d", brightness);
 
     // 전역 밝기 Broadcast 명령 패킷 생성 (0xE7, device_id 없음)
     static lora_cmd_brightness_broadcast_t cmd;
@@ -2261,7 +2262,7 @@ static esp_err_t api_device_ping_handler(httpd_req_t* req)
     // PING 요청 이벤트 발행 (device_manager가 구독하여 LoRa 전송)
     event_bus_publish(EVT_DEVICE_PING_REQUEST, device_id, sizeof(device_id));
 
-    T_LOGI(TAG, "디바이스 PING 요청: ID[%02X%02X]", device_id[0], device_id[1]);
+    T_LOGD(TAG, "디바이스 PING 요청: ID[%02X%02X]", device_id[0], device_id[1]);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
 
@@ -2311,7 +2312,7 @@ static esp_err_t api_device_stop_handler(httpd_req_t* req)
     // STOP 요청 이벤트 발행
     event_bus_publish(EVT_DEVICE_STOP_REQUEST, device_id, sizeof(device_id));
 
-    T_LOGW(TAG, "디바이스 기능 정지 요청: ID[%02X%02X]", device_id[0], device_id[1]);
+    T_LOGD(TAG, "디바이스 기능 정지 요청: ID[%02X%02X]", device_id[0], device_id[1]);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
 
@@ -2361,7 +2362,7 @@ static esp_err_t api_device_reboot_handler(httpd_req_t* req)
     // REBOOT 요청 이벤트 발행
     event_bus_publish(EVT_DEVICE_REBOOT_REQUEST, device_id, sizeof(device_id));
 
-    T_LOGW(TAG, "디바이스 재부팅 요청: ID[%02X%02X]", device_id[0], device_id[1]);
+    T_LOGD(TAG, "디바이스 재부팅 요청: ID[%02X%02X]", device_id[0], device_id[1]);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
 
@@ -2380,7 +2381,7 @@ static esp_err_t api_status_request_handler(httpd_req_t* req)
     // 상태 요청 이벤트 발행
     event_bus_publish(EVT_STATUS_REQUEST, nullptr, 0);
 
-    T_LOGI(TAG, "상태 요청 전송 (Broadcast)");
+    T_LOGD(TAG, "상태 요청 전송 (Broadcast)");
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
 

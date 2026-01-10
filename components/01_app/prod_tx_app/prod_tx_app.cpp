@@ -275,9 +275,10 @@ static esp_err_t handle_network_disconnected(const event_data_t* event)
     (void)event;
     T_LOGD(TAG, "네트워크 연결 해제");
 
-    // 디스플레이에 네트워크 상태 갱신
-    tx_page_set_wifi_connected(false);
-    tx_page_set_eth_connected(false);
+    // WiFi 연결 상태만 갱신 (Ethernet은 EVT_NETWORK_STATUS_CHANGED로 처리)
+    // network_service에서 WiFi/Ethernet 각각의 연결 해제 시 이 이벤트를 발행하지만,
+    // 실제 연결 상태는 EVT_NETWORK_STATUS_CHANGED 이벤트에서 정확히 업데이트됨
+    // 여기서는 스위처 재연결만 트리거하고, 디스플레이 상태는 DisplayManager에서 처리
 
     // 스위처 재연결 시도
     if (s_app.service) {
@@ -596,6 +597,12 @@ void prod_tx_app_stop(void)
     event_bus_unsubscribe(EVT_SWITCHER_DISCONNECTED, handle_switcher_disconnected);
     event_bus_unsubscribe(EVT_NETWORK_CONNECTED, handle_network_connected);
     event_bus_unsubscribe(EVT_NETWORK_DISCONNECTED, handle_network_disconnected);
+
+    // 테스트 모드 이벤트 구독 취소
+    event_bus_unsubscribe(EVT_TALLY_TEST_MODE_START, handle_test_mode_start);
+    event_bus_unsubscribe(EVT_TALLY_TEST_MODE_STOP, handle_test_mode_stop);
+    // Tally 상태 변경 이벤트 구독 취소
+    event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
 
     button_service_stop();
 

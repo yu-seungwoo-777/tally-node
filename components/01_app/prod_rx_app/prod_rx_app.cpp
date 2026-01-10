@@ -208,7 +208,7 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
         saved_cr = device_config.rf.cr;
         saved_bw = device_config.rf.bw;
         saved_txp = device_config.rf.tx_power;
-        T_LOGI(TAG, "RF 설정 로드: %.1f MHz, Sync 0x%02X, SF%d, CR%d, BW%.0f, TXP%ddBm",
+        T_LOGD(TAG, "RF 설정 로드: %.1f MHz, Sync 0x%02X, SF%d, CR%d, BW%.0f, TXP%ddBm",
                  saved_freq, saved_sync, saved_sf, saved_cr, saved_bw, saved_txp);
     } else {
         T_LOGW(TAG, "RF 설정 로드 실패, 기본값 사용");
@@ -260,12 +260,12 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
     T_LOGI(TAG, "RX app init complete");
 
     // LoRa 설정 로그
-    T_LOGI(TAG, "  주파수: %.1f MHz", lora_config.frequency);
-    T_LOGI(TAG, "  SF: %d, CR: 4/%d, BW: %.0f kHz",
+    T_LOGD(TAG, "  주파수: %.1f MHz", lora_config.frequency);
+    T_LOGD(TAG, "  SF: %d, CR: 4/%d, BW: %.0f kHz",
              lora_config.spreading_factor,
              lora_config.coding_rate,
              lora_config.bandwidth);
-    T_LOGI(TAG, "  전력: %d dBm, SyncWord: 0x%02X",
+    T_LOGD(TAG, "  전력: %d dBm, SyncWord: 0x%02X",
              lora_config.tx_power,
              lora_config.sync_word);
 
@@ -421,6 +421,13 @@ void prod_rx_app_print_status(void)
 {
     T_LOGI(TAG, "===== RX App Status =====");
     T_LOGI(TAG, "Running: %s", s_app.running ? "Yes" : "No");
+
+    // 이벤트 버스 통계
+    uint32_t publish_count = 0, dispatch_count = 0, queue_full_count = 0;
+    event_bus_get_stats(&publish_count, &dispatch_count, &queue_full_count);
+    T_LOGI(TAG, "EventBus: 발행=%u, 디스패치=%u, 큐부족=%u",
+            publish_count, dispatch_count, queue_full_count);
+
     T_LOGI(TAG, "=========================");
 }
 

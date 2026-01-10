@@ -483,6 +483,10 @@ esp_err_t ethernet_hal_get_status(ethernet_hal_status_t* status)
     status->link_up = ethernet_hal_is_link_up();
     status->got_ip = ethernet_hal_has_ip();
 
+    // 디버그: 상태 조회 시 로그 출력
+    T_LOGD(TAG, "get_status: link_up=%d got_ip=%d s_netif=%p",
+            status->link_up, status->got_ip, (void*)s_netif);
+
     if (s_netif) {
         esp_netif_ip_info_t ip_info;
         if (esp_netif_get_ip_info(s_netif, &ip_info) == ESP_OK) {

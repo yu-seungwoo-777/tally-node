@@ -17,6 +17,23 @@ static const char* TAG = "00_EventBus";
 #define EVENT_QUEUE_SIZE 32
 #define MAX_SUBSCRIBERS_PER_EVENT 8
 
+// ============================================================================
+// 디버그 로그 설정
+// ============================================================================
+#define EVENT_BUS_DEBUG_PUBLISH 0     // 이벤트 발행 로그 (성능 영향 있음)
+#define EVENT_BUS_DEBUG_SUBSCRIBE 0   // 구독 로그
+#define EVENT_BUS_DEBUG_DISPATCH 0    // 디스패치 로그 (성능 영향 있음)
+#define EVENT_BUS_WARN_FULL_QUEUE 1   // 큐 가득참 경고
+
+// 통계 카운터
+static struct {
+    uint32_t publish_count;
+    uint32_t publish_full_count;
+    uint32_t dispatch_count;
+    uint32_t subscribe_count;
+    uint32_t unsubscribe_count;
+} g_stats = {0};
+
 // 구독자 정보
 typedef struct {
     event_callback_t callback;
