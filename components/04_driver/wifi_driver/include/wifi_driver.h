@@ -54,6 +54,21 @@ esp_err_t wifi_driver_init(const char* ap_ssid, const char* ap_password,
  */
 esp_err_t wifi_driver_deinit(void);
 
+/**
+ * @brief WiFi Driver 재설정 (deinit+init 없이 stop+start만으로 재설정)
+ *
+ * esp_wifi_deinit()은 driver 구조체를 파괴하여 netif 참조 무효화 문제를 일으킴.
+ * 이 함수는 driver를 유지하면서 설정만 변경하여 재시작한다.
+ *
+ * @param ap_ssid AP SSID (NULL: 비활성화)
+ * @param ap_password AP 비밀번호 (NULL: 열린 네트워크)
+ * @param sta_ssid STA SSID (NULL: 비활성화)
+ * @param sta_password STA 비밀번호 (NULL: 열린 네트워크)
+ * @return ESP_OK 성공, ESP_ERR_* 실패
+ */
+esp_err_t wifi_driver_reconfigure(const char* ap_ssid, const char* ap_password,
+                                  const char* sta_ssid, const char* sta_password);
+
 // ============================================================================
 // 상태 조회
 // ============================================================================

@@ -149,11 +149,11 @@ void AtemDriver::connect() {
 
     // 전송
     if (sendPacket(hello, ATEM_HELLO_PACKET_SIZE) < 0) {
-        T_LOGE(TAG, "Hello 패킷 전송 실패");
-        setConnectionState(CONNECTION_STATE_DISCONNECTED);
-    } else {
-        last_hello_time_ = getMillis();
+        T_LOGE(TAG, "Hello 패킷 전송 실패, 소켓 닫기");
+        disconnect();  // 소켓 닫기 (메모리 누수 방지)
+        return;
     }
+    last_hello_time_ = getMillis();
 }
 
 void AtemDriver::disconnect() {
@@ -204,8 +204,13 @@ int AtemDriver::loop() {
 
             T_LOGI(TAG, "Hello 재전송 (경과: %dms)", (int)(now - connect_attempt_time_));
 
-            sendPacket(hello, ATEM_HELLO_PACKET_SIZE);
-            // 성공/실패 관계없이 타임스탬프 갱신 (무한 재시도 방지)
+            int send_ret = sendPacket(hello, ATEM_HELLO_PACKET_SIZE);
+            if (send_ret < 0) {
+                // 전송 실패 시 소켓 닫고 연결 해제 (메모리 누수 방지)
+                T_LOGE(TAG, "Hello 전송 실패, 소켓 닫기");
+                disconnect();
+                return -1;
+            }
             last_hello_time_ = now;
         }
     }

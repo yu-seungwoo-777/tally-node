@@ -422,12 +422,6 @@ void prod_rx_app_print_status(void)
     T_LOGI(TAG, "===== RX App Status =====");
     T_LOGI(TAG, "Running: %s", s_app.running ? "Yes" : "No");
 
-    // 이벤트 버스 통계
-    uint32_t publish_count = 0, dispatch_count = 0, queue_full_count = 0;
-    event_bus_get_stats(&publish_count, &dispatch_count, &queue_full_count);
-    T_LOGI(TAG, "EventBus: 발행=%u, 디스패치=%u, 큐부족=%u",
-            publish_count, dispatch_count, queue_full_count);
-
     T_LOGI(TAG, "=========================");
 }
 

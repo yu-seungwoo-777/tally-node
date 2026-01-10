@@ -85,18 +85,15 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 
 esp_err_t wifi_hal_init(void)
 {
-    if (s_initialized) {
-        T_LOGW(TAG, "이미 초기화됨");
-        return ESP_OK;
-    }
-
     T_LOGD(TAG, "WiFi HAL 초기화 중...");
 
     // 이벤트 그룹 생성
-    s_event_group = xEventGroupCreate();
-    if (!s_event_group) {
-        T_LOGE(TAG, "이벤트 그룹 생성 실패");
-        return ESP_ERR_NO_MEM;
+    if (s_event_group == NULL) {
+        s_event_group = xEventGroupCreate();
+        if (!s_event_group) {
+            T_LOGE(TAG, "이벤트 그룹 생성 실패");
+            return ESP_ERR_NO_MEM;
+        }
     }
 
     // 기본 WiFi 초기화
@@ -116,12 +113,6 @@ esp_err_t wifi_hal_init(void)
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID,
                                                      &wifi_event_handler, NULL));
 
-    // WiFi 슬립 모드 비활성화 (최고 성능)
-    esp_wifi_set_ps(WIFI_PS_NONE);
-
-    // 802.11bgn 프로토콜 설정 (최고 속도)
-    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
-
     s_initialized = true;
     s_state = WIFI_HAL_STATE_IDLE;
 
@@ -139,6 +130,10 @@ esp_err_t wifi_hal_deinit(void)
 
     esp_wifi_stop();
     esp_wifi_deinit();
+
+    // netif는 해제하지 않음 (LwIP 스택이 계속 참조할 수 있음)
+    // 재초기화 시 기존 netif를 재사용하여 문제 방지
+
     vEventGroupDelete(s_event_group);
     s_event_group = NULL;
 

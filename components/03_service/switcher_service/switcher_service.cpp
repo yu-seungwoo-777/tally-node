@@ -1112,16 +1112,25 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
 bool SwitcherService::updateNetworkIPCache(const char* eth_ip, const char* wifi_sta_ip) {
     bool was_empty_eth = (s_cached_eth_ip[0] == '\0');
     bool was_empty_wifi = (s_cached_wifi_sta_ip[0] == '\0');
+    bool was_filled_eth = !was_empty_eth;
+    bool was_filled_wifi = !was_empty_wifi;
     bool needs_reconfigure = false;
 
     // Ethernet IP 캐시
     if (eth_ip && eth_ip[0] != '\0') {
         strncpy(s_cached_eth_ip, eth_ip, sizeof(s_cached_eth_ip) - 1);
         s_cached_eth_ip[sizeof(s_cached_eth_ip) - 1] = '\0';
-        T_LOGD(TAG, "Ethernet IP 캐시: %s", s_cached_eth_ip);
+        T_LOGI(TAG, "Ethernet IP 캐시: %s", s_cached_eth_ip);
         if (was_empty_eth) {
-            T_LOGD(TAG, "Ethernet 새 연결 감지, 스위처 재설정 필요");
+            T_LOGI(TAG, "Ethernet 새 연결 감지, 스위처 재설정 필요");
             needs_reconfigure = true;
+        }
+    } else {
+        // Ethernet 연결 해제 - 캐시 비움
+        if (was_filled_eth) {
+            T_LOGI(TAG, "Ethernet 연결 해제, 캐시 비움");
+            s_cached_eth_ip[0] = '\0';
+            needs_reconfigure = true;  // 폴백을 위해 재설정 필요
         }
     }
 
@@ -1129,10 +1138,17 @@ bool SwitcherService::updateNetworkIPCache(const char* eth_ip, const char* wifi_
     if (wifi_sta_ip && wifi_sta_ip[0] != '\0') {
         strncpy(s_cached_wifi_sta_ip, wifi_sta_ip, sizeof(s_cached_wifi_sta_ip) - 1);
         s_cached_wifi_sta_ip[sizeof(s_cached_wifi_sta_ip) - 1] = '\0';
-        T_LOGD(TAG, "WiFi STA IP 캐시: %s", s_cached_wifi_sta_ip);
+        T_LOGI(TAG, "WiFi STA IP 캐시: %s", s_cached_wifi_sta_ip);
         if (was_empty_wifi) {
-            T_LOGD(TAG, "WiFi STA 새 연결 감지, 스위처 재설정 필요");
+            T_LOGI(TAG, "WiFi STA 새 연결 감지, 스위처 재설정 필요");
             needs_reconfigure = true;
+        }
+    } else {
+        // WiFi 연결 해제 - 캐시 비움
+        if (was_filled_wifi) {
+            T_LOGI(TAG, "WiFi STA 연결 해제, 캐시 비움");
+            s_cached_wifi_sta_ip[0] = '\0';
+            needs_reconfigure = true;  // 폴백을 위해 재설정 필요
         }
     }
 

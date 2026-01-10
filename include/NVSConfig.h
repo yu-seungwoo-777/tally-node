@@ -14,7 +14,7 @@
 // ============================================================================
 
 #define NVS_WIFI_AP_SSID              "TallyNode_AP"
-#define NVS_WIFI_AP_PASSWORD          ""
+#define NVS_WIFI_AP_PASSWORD          "12345678"
 #define NVS_WIFI_AP_CHANNEL           1
 
 // ============================================================================

@@ -658,6 +658,338 @@ static esp_err_t on_device_cam_map_load(const event_data_t* event)
 }
 
 // ============================================================================
+// 전체 설정 이벤트 발행 헬퍼
+// ============================================================================
+
+/**
+ * @brief NVS에서 전체 설정을 로드하여 이벤트 발행
+ * @note WiFi/네트워크 설정 변경 후 전체 설정을 재발행하여 다른 서비스 동기화
+ */
+static void publish_full_config_event(void)
+{
+    config_all_t full_config;
+    if (ConfigServiceClass::loadAll(&full_config) != ESP_OK) {
+        T_LOGW(TAG, "전체 설정 로드 실패, 이벤트 발행 스킵");
+        return;
+    }
+
+    config_data_event_t data_event = {};
+    memset(&data_event, 0, sizeof(config_data_event_t));
+
+    // WiFi AP
+    strncpy(data_event.wifi_ap_ssid, full_config.wifi_ap.ssid, sizeof(data_event.wifi_ap_ssid) - 1);
+    data_event.wifi_ap_ssid[sizeof(data_event.wifi_ap_ssid) - 1] = '\0';
+    strncpy(data_event.wifi_ap_password, full_config.wifi_ap.password, sizeof(data_event.wifi_ap_password) - 1);
+    data_event.wifi_ap_password[sizeof(data_event.wifi_ap_password) - 1] = '\0';
+    data_event.wifi_ap_channel = full_config.wifi_ap.channel;
+    data_event.wifi_ap_enabled = full_config.wifi_ap.enabled;
+
+    // WiFi STA
+    strncpy(data_event.wifi_sta_ssid, full_config.wifi_sta.ssid, sizeof(data_event.wifi_sta_ssid) - 1);
+    data_event.wifi_sta_ssid[sizeof(data_event.wifi_sta_ssid) - 1] = '\0';
+    strncpy(data_event.wifi_sta_password, full_config.wifi_sta.password, sizeof(data_event.wifi_sta_password) - 1);
+    data_event.wifi_sta_password[sizeof(data_event.wifi_sta_password) - 1] = '\0';
+    data_event.wifi_sta_enabled = full_config.wifi_sta.enabled;
+
+    // Ethernet
+    data_event.eth_dhcp_enabled = full_config.ethernet.dhcp_enabled;
+    strncpy(data_event.eth_static_ip, full_config.ethernet.static_ip, sizeof(data_event.eth_static_ip) - 1);
+    data_event.eth_static_ip[sizeof(data_event.eth_static_ip) - 1] = '\0';
+    strncpy(data_event.eth_static_netmask, full_config.ethernet.static_netmask, sizeof(data_event.eth_static_netmask) - 1);
+    data_event.eth_static_netmask[sizeof(data_event.eth_static_netmask) - 1] = '\0';
+    strncpy(data_event.eth_static_gateway, full_config.ethernet.static_gateway, sizeof(data_event.eth_static_gateway) - 1);
+    data_event.eth_static_gateway[sizeof(data_event.eth_static_gateway) - 1] = '\0';
+    data_event.eth_enabled = full_config.ethernet.enabled;
+
+    // Device
+    data_event.device_brightness = full_config.device.brightness;
+    data_event.device_camera_id = full_config.device.camera_id;
+    data_event.device_rf_frequency = full_config.device.rf.frequency;
+    data_event.device_rf_sync_word = full_config.device.rf.sync_word;
+    data_event.device_rf_sf = full_config.device.rf.sf;
+    data_event.device_rf_cr = full_config.device.rf.cr;
+    data_event.device_rf_bw = full_config.device.rf.bw;
+    data_event.device_rf_tx_power = full_config.device.rf.tx_power;
+
+    // Switcher Primary
+    data_event.primary_type = full_config.primary.type;
+    strncpy(data_event.primary_ip, full_config.primary.ip, sizeof(data_event.primary_ip) - 1);
+    data_event.primary_ip[sizeof(data_event.primary_ip) - 1] = '\0';
+    data_event.primary_port = full_config.primary.port;
+    data_event.primary_interface = full_config.primary.interface;
+    data_event.primary_camera_limit = full_config.primary.camera_limit;
+    strncpy(data_event.primary_password, full_config.primary.password, sizeof(data_event.primary_password) - 1);
+    data_event.primary_password[sizeof(data_event.primary_password) - 1] = '\0';
+
+    // Switcher Secondary
+    data_event.secondary_type = full_config.secondary.type;
+    strncpy(data_event.secondary_ip, full_config.secondary.ip, sizeof(data_event.secondary_ip) - 1);
+    data_event.secondary_ip[sizeof(data_event.secondary_ip) - 1] = '\0';
+    data_event.secondary_port = full_config.secondary.port;
+    data_event.secondary_interface = full_config.secondary.interface;
+    data_event.secondary_camera_limit = full_config.secondary.camera_limit;
+    strncpy(data_event.secondary_password, full_config.secondary.password, sizeof(data_event.secondary_password) - 1);
+    data_event.secondary_password[sizeof(data_event.secondary_password) - 1] = '\0';
+
+    // Switcher Dual
+    data_event.dual_enabled = full_config.dual_enabled;
+    data_event.secondary_offset = full_config.secondary_offset;
+
+    event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
+    T_LOGD(TAG, "전체 설정 데이터 이벤트 발행");
+}
+
+/**
+ * @brief WiFi STA 설정을 파라미터로 받아 전체 설정 이벤트 발행
+ * @param sta_config 변경된 WiFi STA 설정 (NULL이면 NVS에서 로드)
+ * @note NVS 커밋 타이밍 문제 회피 위해 파라미터 값을 직접 사용
+ */
+static void publish_config_event_with_sta(const config_wifi_sta_t* sta_config)
+{
+    config_all_t full_config;
+    if (ConfigServiceClass::loadAll(&full_config) != ESP_OK) {
+        T_LOGW(TAG, "전체 설정 로드 실패, 이벤트 발행 스킵");
+        return;
+    }
+
+    // 파라미터로 받은 STA 설정 사용 (NVS 커밋 타이밍 문제 회피)
+    if (sta_config) {
+        full_config.wifi_sta = *sta_config;
+    }
+
+    config_data_event_t data_event = {};
+    memset(&data_event, 0, sizeof(config_data_event_t));
+
+    // WiFi AP
+    strncpy(data_event.wifi_ap_ssid, full_config.wifi_ap.ssid, sizeof(data_event.wifi_ap_ssid) - 1);
+    data_event.wifi_ap_ssid[sizeof(data_event.wifi_ap_ssid) - 1] = '\0';
+    strncpy(data_event.wifi_ap_password, full_config.wifi_ap.password, sizeof(data_event.wifi_ap_password) - 1);
+    data_event.wifi_ap_password[sizeof(data_event.wifi_ap_password) - 1] = '\0';
+    data_event.wifi_ap_channel = full_config.wifi_ap.channel;
+    data_event.wifi_ap_enabled = full_config.wifi_ap.enabled;
+
+    // WiFi STA (파라미터 값 사용)
+    strncpy(data_event.wifi_sta_ssid, full_config.wifi_sta.ssid, sizeof(data_event.wifi_sta_ssid) - 1);
+    data_event.wifi_sta_ssid[sizeof(data_event.wifi_sta_ssid) - 1] = '\0';
+    strncpy(data_event.wifi_sta_password, full_config.wifi_sta.password, sizeof(data_event.wifi_sta_password) - 1);
+    data_event.wifi_sta_password[sizeof(data_event.wifi_sta_password) - 1] = '\0';
+    data_event.wifi_sta_enabled = full_config.wifi_sta.enabled;
+
+    // Ethernet
+    data_event.eth_dhcp_enabled = full_config.ethernet.dhcp_enabled;
+    strncpy(data_event.eth_static_ip, full_config.ethernet.static_ip, sizeof(data_event.eth_static_ip) - 1);
+    data_event.eth_static_ip[sizeof(data_event.eth_static_ip) - 1] = '\0';
+    strncpy(data_event.eth_static_netmask, full_config.ethernet.static_netmask, sizeof(data_event.eth_static_netmask) - 1);
+    data_event.eth_static_netmask[sizeof(data_event.eth_static_netmask) - 1] = '\0';
+    strncpy(data_event.eth_static_gateway, full_config.ethernet.static_gateway, sizeof(data_event.eth_static_gateway) - 1);
+    data_event.eth_static_gateway[sizeof(data_event.eth_static_gateway) - 1] = '\0';
+    data_event.eth_enabled = full_config.ethernet.enabled;
+
+    // Device
+    data_event.device_brightness = full_config.device.brightness;
+    data_event.device_camera_id = full_config.device.camera_id;
+    data_event.device_rf_frequency = full_config.device.rf.frequency;
+    data_event.device_rf_sync_word = full_config.device.rf.sync_word;
+    data_event.device_rf_sf = full_config.device.rf.sf;
+    data_event.device_rf_cr = full_config.device.rf.cr;
+    data_event.device_rf_bw = full_config.device.rf.bw;
+    data_event.device_rf_tx_power = full_config.device.rf.tx_power;
+
+    // Switcher Primary
+    data_event.primary_type = full_config.primary.type;
+    strncpy(data_event.primary_ip, full_config.primary.ip, sizeof(data_event.primary_ip) - 1);
+    data_event.primary_ip[sizeof(data_event.primary_ip) - 1] = '\0';
+    data_event.primary_port = full_config.primary.port;
+    data_event.primary_interface = full_config.primary.interface;
+    data_event.primary_camera_limit = full_config.primary.camera_limit;
+    strncpy(data_event.primary_password, full_config.primary.password, sizeof(data_event.primary_password) - 1);
+    data_event.primary_password[sizeof(data_event.primary_password) - 1] = '\0';
+
+    // Switcher Secondary
+    data_event.secondary_type = full_config.secondary.type;
+    strncpy(data_event.secondary_ip, full_config.secondary.ip, sizeof(data_event.secondary_ip) - 1);
+    data_event.secondary_ip[sizeof(data_event.secondary_ip) - 1] = '\0';
+    data_event.secondary_port = full_config.secondary.port;
+    data_event.secondary_interface = full_config.secondary.interface;
+    data_event.secondary_camera_limit = full_config.secondary.camera_limit;
+    strncpy(data_event.secondary_password, full_config.secondary.password, sizeof(data_event.secondary_password) - 1);
+    data_event.secondary_password[sizeof(data_event.secondary_password) - 1] = '\0';
+
+    // Switcher Dual
+    data_event.dual_enabled = full_config.dual_enabled;
+    data_event.secondary_offset = full_config.secondary_offset;
+
+    event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
+    T_LOGD(TAG, "전체 설정 데이터 이벤트 발행 (STA: enabled=%d)", full_config.wifi_sta.enabled);
+}
+
+/**
+ * @brief WiFi AP 설정을 파라미터로 받아 전체 설정 이벤트 발행
+ * @param ap_config 변경된 WiFi AP 설정 (NULL이면 NVS에서 로드)
+ */
+static void publish_config_event_with_ap(const config_wifi_ap_t* ap_config)
+{
+    config_all_t full_config;
+    if (ConfigServiceClass::loadAll(&full_config) != ESP_OK) {
+        T_LOGW(TAG, "전체 설정 로드 실패, 이벤트 발행 스킵");
+        return;
+    }
+
+    // 파라미터로 받은 AP 설정 사용
+    if (ap_config) {
+        full_config.wifi_ap = *ap_config;
+    }
+
+    config_data_event_t data_event = {};
+    memset(&data_event, 0, sizeof(config_data_event_t));
+
+    // WiFi AP (파라미터 값 사용)
+    strncpy(data_event.wifi_ap_ssid, full_config.wifi_ap.ssid, sizeof(data_event.wifi_ap_ssid) - 1);
+    data_event.wifi_ap_ssid[sizeof(data_event.wifi_ap_ssid) - 1] = '\0';
+    strncpy(data_event.wifi_ap_password, full_config.wifi_ap.password, sizeof(data_event.wifi_ap_password) - 1);
+    data_event.wifi_ap_password[sizeof(data_event.wifi_ap_password) - 1] = '\0';
+    data_event.wifi_ap_channel = full_config.wifi_ap.channel;
+    data_event.wifi_ap_enabled = full_config.wifi_ap.enabled;
+
+    // WiFi STA
+    strncpy(data_event.wifi_sta_ssid, full_config.wifi_sta.ssid, sizeof(data_event.wifi_sta_ssid) - 1);
+    data_event.wifi_sta_ssid[sizeof(data_event.wifi_sta_ssid) - 1] = '\0';
+    strncpy(data_event.wifi_sta_password, full_config.wifi_sta.password, sizeof(data_event.wifi_sta_password) - 1);
+    data_event.wifi_sta_password[sizeof(data_event.wifi_sta_password) - 1] = '\0';
+    data_event.wifi_sta_enabled = full_config.wifi_sta.enabled;
+
+    // Ethernet
+    data_event.eth_dhcp_enabled = full_config.ethernet.dhcp_enabled;
+    strncpy(data_event.eth_static_ip, full_config.ethernet.static_ip, sizeof(data_event.eth_static_ip) - 1);
+    data_event.eth_static_ip[sizeof(data_event.eth_static_ip) - 1] = '\0';
+    strncpy(data_event.eth_static_netmask, full_config.ethernet.static_netmask, sizeof(data_event.eth_static_netmask) - 1);
+    data_event.eth_static_netmask[sizeof(data_event.eth_static_netmask) - 1] = '\0';
+    strncpy(data_event.eth_static_gateway, full_config.ethernet.static_gateway, sizeof(data_event.eth_static_gateway) - 1);
+    data_event.eth_static_gateway[sizeof(data_event.eth_static_gateway) - 1] = '\0';
+    data_event.eth_enabled = full_config.ethernet.enabled;
+
+    // Device
+    data_event.device_brightness = full_config.device.brightness;
+    data_event.device_camera_id = full_config.device.camera_id;
+    data_event.device_rf_frequency = full_config.device.rf.frequency;
+    data_event.device_rf_sync_word = full_config.device.rf.sync_word;
+    data_event.device_rf_sf = full_config.device.rf.sf;
+    data_event.device_rf_cr = full_config.device.rf.cr;
+    data_event.device_rf_bw = full_config.device.rf.bw;
+    data_event.device_rf_tx_power = full_config.device.rf.tx_power;
+
+    // Switcher Primary
+    data_event.primary_type = full_config.primary.type;
+    strncpy(data_event.primary_ip, full_config.primary.ip, sizeof(data_event.primary_ip) - 1);
+    data_event.primary_ip[sizeof(data_event.primary_ip) - 1] = '\0';
+    data_event.primary_port = full_config.primary.port;
+    data_event.primary_interface = full_config.primary.interface;
+    data_event.primary_camera_limit = full_config.primary.camera_limit;
+    strncpy(data_event.primary_password, full_config.primary.password, sizeof(data_event.primary_password) - 1);
+    data_event.primary_password[sizeof(data_event.primary_password) - 1] = '\0';
+
+    // Switcher Secondary
+    data_event.secondary_type = full_config.secondary.type;
+    strncpy(data_event.secondary_ip, full_config.secondary.ip, sizeof(data_event.secondary_ip) - 1);
+    data_event.secondary_ip[sizeof(data_event.secondary_ip) - 1] = '\0';
+    data_event.secondary_port = full_config.secondary.port;
+    data_event.secondary_interface = full_config.secondary.interface;
+    data_event.secondary_camera_limit = full_config.secondary.camera_limit;
+    strncpy(data_event.secondary_password, full_config.secondary.password, sizeof(data_event.secondary_password) - 1);
+    data_event.secondary_password[sizeof(data_event.secondary_password) - 1] = '\0';
+
+    // Switcher Dual
+    data_event.dual_enabled = full_config.dual_enabled;
+    data_event.secondary_offset = full_config.secondary_offset;
+
+    event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
+    T_LOGD(TAG, "전체 설정 데이터 이벤트 발행 (AP: enabled=%d)", full_config.wifi_ap.enabled);
+}
+
+/**
+ * @brief Ethernet 설정을 파라미터로 받아 전체 설정 이벤트 발행
+ * @param eth_config 변경된 Ethernet 설정 (NULL이면 NVS에서 로드)
+ */
+static void publish_config_event_with_eth(const config_ethernet_t* eth_config)
+{
+    config_all_t full_config;
+    if (ConfigServiceClass::loadAll(&full_config) != ESP_OK) {
+        T_LOGW(TAG, "전체 설정 로드 실패, 이벤트 발행 스킵");
+        return;
+    }
+
+    // 파라미터로 받은 Ethernet 설정 사용
+    if (eth_config) {
+        full_config.ethernet = *eth_config;
+    }
+
+    config_data_event_t data_event = {};
+    memset(&data_event, 0, sizeof(config_data_event_t));
+
+    // WiFi AP
+    strncpy(data_event.wifi_ap_ssid, full_config.wifi_ap.ssid, sizeof(data_event.wifi_ap_ssid) - 1);
+    data_event.wifi_ap_ssid[sizeof(data_event.wifi_ap_ssid) - 1] = '\0';
+    strncpy(data_event.wifi_ap_password, full_config.wifi_ap.password, sizeof(data_event.wifi_ap_password) - 1);
+    data_event.wifi_ap_password[sizeof(data_event.wifi_ap_password) - 1] = '\0';
+    data_event.wifi_ap_channel = full_config.wifi_ap.channel;
+    data_event.wifi_ap_enabled = full_config.wifi_ap.enabled;
+
+    // WiFi STA
+    strncpy(data_event.wifi_sta_ssid, full_config.wifi_sta.ssid, sizeof(data_event.wifi_sta_ssid) - 1);
+    data_event.wifi_sta_ssid[sizeof(data_event.wifi_sta_ssid) - 1] = '\0';
+    strncpy(data_event.wifi_sta_password, full_config.wifi_sta.password, sizeof(data_event.wifi_sta_password) - 1);
+    data_event.wifi_sta_password[sizeof(data_event.wifi_sta_password) - 1] = '\0';
+    data_event.wifi_sta_enabled = full_config.wifi_sta.enabled;
+
+    // Ethernet (파라미터 값 사용)
+    data_event.eth_dhcp_enabled = full_config.ethernet.dhcp_enabled;
+    strncpy(data_event.eth_static_ip, full_config.ethernet.static_ip, sizeof(data_event.eth_static_ip) - 1);
+    data_event.eth_static_ip[sizeof(data_event.eth_static_ip) - 1] = '\0';
+    strncpy(data_event.eth_static_netmask, full_config.ethernet.static_netmask, sizeof(data_event.eth_static_netmask) - 1);
+    data_event.eth_static_netmask[sizeof(data_event.eth_static_netmask) - 1] = '\0';
+    strncpy(data_event.eth_static_gateway, full_config.ethernet.static_gateway, sizeof(data_event.eth_static_gateway) - 1);
+    data_event.eth_static_gateway[sizeof(data_event.eth_static_gateway) - 1] = '\0';
+    data_event.eth_enabled = full_config.ethernet.enabled;
+
+    // Device
+    data_event.device_brightness = full_config.device.brightness;
+    data_event.device_camera_id = full_config.device.camera_id;
+    data_event.device_rf_frequency = full_config.device.rf.frequency;
+    data_event.device_rf_sync_word = full_config.device.rf.sync_word;
+    data_event.device_rf_sf = full_config.device.rf.sf;
+    data_event.device_rf_cr = full_config.device.rf.cr;
+    data_event.device_rf_bw = full_config.device.rf.bw;
+    data_event.device_rf_tx_power = full_config.device.rf.tx_power;
+
+    // Switcher Primary
+    data_event.primary_type = full_config.primary.type;
+    strncpy(data_event.primary_ip, full_config.primary.ip, sizeof(data_event.primary_ip) - 1);
+    data_event.primary_ip[sizeof(data_event.primary_ip) - 1] = '\0';
+    data_event.primary_port = full_config.primary.port;
+    data_event.primary_interface = full_config.primary.interface;
+    data_event.primary_camera_limit = full_config.primary.camera_limit;
+    strncpy(data_event.primary_password, full_config.primary.password, sizeof(data_event.primary_password) - 1);
+    data_event.primary_password[sizeof(data_event.primary_password) - 1] = '\0';
+
+    // Switcher Secondary
+    data_event.secondary_type = full_config.secondary.type;
+    strncpy(data_event.secondary_ip, full_config.secondary.ip, sizeof(data_event.secondary_ip) - 1);
+    data_event.secondary_ip[sizeof(data_event.secondary_ip) - 1] = '\0';
+    data_event.secondary_port = full_config.secondary.port;
+    data_event.secondary_interface = full_config.secondary.interface;
+    data_event.secondary_camera_limit = full_config.secondary.camera_limit;
+    strncpy(data_event.secondary_password, full_config.secondary.password, sizeof(data_event.secondary_password) - 1);
+    data_event.secondary_password[sizeof(data_event.secondary_password) - 1] = '\0';
+
+    // Switcher Dual
+    data_event.dual_enabled = full_config.dual_enabled;
+    data_event.secondary_offset = full_config.secondary_offset;
+
+    event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
+    T_LOGD(TAG, "전체 설정 데이터 이벤트 발행 (ETH: enabled=%d)", full_config.ethernet.enabled);
+}
+
+// ============================================================================
 // 초기화
 // ============================================================================
 
@@ -716,76 +1048,14 @@ esp_err_t ConfigServiceClass::init(void)
 
     // 초기화 완료 후 전체 설정 데이터 이벤트 발행
     // 다른 서비스들이 설정을 로드할 수 있도록 함
-    config_all_t full_config;
-    if (ConfigServiceClass::loadAll(&full_config) == ESP_OK) {
-        config_data_event_t data_event = {};
-        memset(&data_event, 0, sizeof(config_data_event_t));
-
-        // WiFi AP
-        strncpy(data_event.wifi_ap_ssid, full_config.wifi_ap.ssid, sizeof(data_event.wifi_ap_ssid) - 1);
-        data_event.wifi_ap_ssid[sizeof(data_event.wifi_ap_ssid) - 1] = '\0';
-        strncpy(data_event.wifi_ap_password, full_config.wifi_ap.password, sizeof(data_event.wifi_ap_password) - 1);
-        data_event.wifi_ap_password[sizeof(data_event.wifi_ap_password) - 1] = '\0';
-        data_event.wifi_ap_channel = full_config.wifi_ap.channel;
-        data_event.wifi_ap_enabled = full_config.wifi_ap.enabled;
-
-        // WiFi STA
-        strncpy(data_event.wifi_sta_ssid, full_config.wifi_sta.ssid, sizeof(data_event.wifi_sta_ssid) - 1);
-        data_event.wifi_sta_ssid[sizeof(data_event.wifi_sta_ssid) - 1] = '\0';
-        strncpy(data_event.wifi_sta_password, full_config.wifi_sta.password, sizeof(data_event.wifi_sta_password) - 1);
-        data_event.wifi_sta_password[sizeof(data_event.wifi_sta_password) - 1] = '\0';
-        data_event.wifi_sta_enabled = full_config.wifi_sta.enabled;
-
-        // Ethernet
-        data_event.eth_dhcp_enabled = full_config.ethernet.dhcp_enabled;
-        strncpy(data_event.eth_static_ip, full_config.ethernet.static_ip, sizeof(data_event.eth_static_ip) - 1);
-        data_event.eth_static_ip[sizeof(data_event.eth_static_ip) - 1] = '\0';
-        strncpy(data_event.eth_static_netmask, full_config.ethernet.static_netmask, sizeof(data_event.eth_static_netmask) - 1);
-        data_event.eth_static_netmask[sizeof(data_event.eth_static_netmask) - 1] = '\0';
-        strncpy(data_event.eth_static_gateway, full_config.ethernet.static_gateway, sizeof(data_event.eth_static_gateway) - 1);
-        data_event.eth_static_gateway[sizeof(data_event.eth_static_gateway) - 1] = '\0';
-        data_event.eth_enabled = full_config.ethernet.enabled;
-
-        // Device
-        data_event.device_brightness = full_config.device.brightness;
-        data_event.device_camera_id = full_config.device.camera_id;
-        data_event.device_rf_frequency = full_config.device.rf.frequency;
-        data_event.device_rf_sync_word = full_config.device.rf.sync_word;
-        data_event.device_rf_sf = full_config.device.rf.sf;
-        data_event.device_rf_cr = full_config.device.rf.cr;
-        data_event.device_rf_bw = full_config.device.rf.bw;
-        data_event.device_rf_tx_power = full_config.device.rf.tx_power;
-
-        // Switcher Primary
-        data_event.primary_type = full_config.primary.type;
-        strncpy(data_event.primary_ip, full_config.primary.ip, sizeof(data_event.primary_ip) - 1);
-        data_event.primary_ip[sizeof(data_event.primary_ip) - 1] = '\0';
-        data_event.primary_port = full_config.primary.port;
-        data_event.primary_interface = full_config.primary.interface;
-        data_event.primary_camera_limit = full_config.primary.camera_limit;
-        strncpy(data_event.primary_password, full_config.primary.password, sizeof(data_event.primary_password) - 1);
-        data_event.primary_password[sizeof(data_event.primary_password) - 1] = '\0';
-
-        // Switcher Secondary
-        data_event.secondary_type = full_config.secondary.type;
-        strncpy(data_event.secondary_ip, full_config.secondary.ip, sizeof(data_event.secondary_ip) - 1);
-        data_event.secondary_ip[sizeof(data_event.secondary_ip) - 1] = '\0';
-        data_event.secondary_port = full_config.secondary.port;
-        data_event.secondary_interface = full_config.secondary.interface;
-        data_event.secondary_camera_limit = full_config.secondary.camera_limit;
-        strncpy(data_event.secondary_password, full_config.secondary.password, sizeof(data_event.secondary_password) - 1);
-        data_event.secondary_password[sizeof(data_event.secondary_password) - 1] = '\0';
-
-        // Switcher Dual
-        data_event.dual_enabled = full_config.dual_enabled;
-        data_event.secondary_offset = full_config.secondary_offset;
-
-        event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
-        T_LOGD(TAG, "초기 설정 데이터 이벤트 발행");
-    }
+    publish_full_config_event();
 
     return ESP_OK;
 }
+
+// ============================================================================
+// Device 설정 (TX 전용)
+// ============================================================================
 
 esp_err_t ConfigServiceClass::applyDeviceLimit(void)
 {
@@ -933,6 +1203,10 @@ esp_err_t ConfigServiceClass::setWiFiAP(const config_wifi_ap_t* config)
 
     nvs_commit(handle);
     nvs_close(handle);
+
+    // 설정 변경 후 전체 데이터 이벤트 발행 (파라미터 값 직접 사용)
+    publish_config_event_with_ap(config);
+
     return ESP_OK;
 }
 
@@ -995,6 +1269,10 @@ esp_err_t ConfigServiceClass::setWiFiSTA(const config_wifi_sta_t* config)
 
     nvs_commit(handle);
     nvs_close(handle);
+
+    // 설정 변경 후 전체 데이터 이벤트 발행 (파라미터 값 직접 사용)
+    publish_config_event_with_sta(config);
+
     return ESP_OK;
 }
 
@@ -1118,6 +1396,10 @@ esp_err_t ConfigServiceClass::setEthernet(const config_ethernet_t* config)
 
     nvs_commit(handle);
     nvs_close(handle);
+
+    // 설정 변경 후 전체 데이터 이벤트 발행 (파라미터 값 직접 사용)
+    publish_config_event_with_eth(config);
+
     return ESP_OK;
 }
 

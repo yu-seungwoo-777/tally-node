@@ -48,6 +48,7 @@ export function stateModule() {
             wifiConnected: false,
             wifiSsid: '',
             wifiIp: '--',
+            ethEnabled: false,
             ethConnected: false,
             ethDetected: false,
             ethIp: '--',
@@ -186,7 +187,7 @@ export function stateModule() {
                                 enabled: data.network.ap.enabled,
                                 ssid: data.network.ap.ssid || '',
                                 channel: data.network.ap.channel || 1,
-                                password: this.form.ap.password
+                                password: data.network.ap.password || ''
                             };
                         }
                     }
@@ -199,10 +200,12 @@ export function stateModule() {
                         if (!this._initialized) {
                             this.form.wifi.enabled = data.network.wifi.enabled;
                             this.form.wifi.ssid = data.network.wifi.ssid || '';
+                            this.form.wifi.password = data.network.wifi.password || '';
                         }
                     }
                     // Ethernet
                     if (data.network.ethernet) {
+                        this.network.ethEnabled = data.network.ethernet.enabled || false;
                         this.network.ethConnected = data.network.ethernet.connected;
                         this.network.ethDetected = data.network.ethernet.detected || false;
                         this.network.ethIp = data.network.ethernet.ip || '--';
