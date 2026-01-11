@@ -56,19 +56,17 @@ static bool s_initialized = false;
  */
 esp_err_t display_hal_init(void)
 {
+    T_LOGD(TAG, "init");
+
     if (s_initialized) {
-        T_LOGD(TAG, "Already initialized");
+        T_LOGD(TAG, "ok:already");
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "Initializing Display HAL");
-    T_LOGI(TAG, "I2C pins: SDA=%d, SCL=%d, Port=%d",
-            EORA_S3_I2C_SDA, EORA_S3_I2C_SCL, EORA_S3_I2C_PORT);
-
     s_initialized = true;
-    s_power_on = true;  // 기본적으로 켜짐 상태
+    s_power_on = true;
 
-    T_LOGI(TAG, "Display HAL initialized");
+    T_LOGD(TAG, "ok");
     return ESP_OK;
 }
 
@@ -81,10 +79,9 @@ void display_hal_deinit(void)
         return;
     }
 
-    T_LOGI(TAG, "Deinitializing Display HAL");
+    T_LOGD(TAG, "deinit");
 
     s_initialized = false;
-    T_LOGI(TAG, "Display HAL deinitialized");
 }
 
 /**
@@ -127,7 +124,7 @@ void display_hal_set_power(bool on)
 {
     if (s_power_on != on) {
         s_power_on = on;
-        T_LOGI(TAG, "Power state: %s", on ? "ON" : "OFF");
+        T_LOGD(TAG, "pwr:%s", on ? "on" : "off");
     }
 }
 

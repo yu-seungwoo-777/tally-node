@@ -87,39 +87,39 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
             case WIFI_EVENT_STA_START:
-                T_LOGD(TAG, "WIFI_EVENT: STA started");
+                T_LOGD(TAG, "evt:sta_start");
                 break;
 
             case WIFI_EVENT_STA_STOP:
-                T_LOGD(TAG, "WIFI_EVENT: STA stopped");
+                T_LOGD(TAG, "evt:sta_stop");
                 if (s_event_group) {
                     xEventGroupClearBits(s_event_group, WIFI_HAL_CONNECTED_BIT);
                 }
                 break;
 
             case WIFI_EVENT_STA_DISCONNECTED:
-                T_LOGW(TAG, "WIFI_EVENT: STA disconnected");
+                T_LOGE(TAG, "evt:sta_disconn");
                 if (s_event_group) {
                     xEventGroupClearBits(s_event_group, WIFI_HAL_CONNECTED_BIT);
                 }
                 break;
 
             case WIFI_EVENT_AP_START:
-                T_LOGD(TAG, "WIFI_EVENT: AP started");
+                T_LOGD(TAG, "evt:ap_start");
                 if (s_event_group) {
                     xEventGroupSetBits(s_event_group, WIFI_HAL_STARTED_BIT);
                 }
                 break;
 
             case WIFI_EVENT_AP_STOP:
-                T_LOGD(TAG, "WIFI_EVENT: AP stopped");
+                T_LOGD(TAG, "evt:ap_stop");
                 if (s_event_group) {
                     xEventGroupClearBits(s_event_group, WIFI_HAL_STARTED_BIT);
                 }
                 break;
 
             case WIFI_EVENT_SCAN_DONE:
-                T_LOGD(TAG, "WIFI_EVENT: Scan done");
+                T_LOGD(TAG, "evt:scan_done");
                 if (s_event_group) {
                     xEventGroupSetBits(s_event_group, WIFI_HAL_SCAN_DONE_BIT);
                 }
@@ -132,7 +132,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     } else if (event_base == IP_EVENT) {
         if (event_id == IP_EVENT_STA_GOT_IP) {
             ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-            T_LOGI(TAG, "IP_EVENT: STA got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+            T_LOGD(TAG, "evt:got_ip:" IPSTR, IP2STR(&event->ip_info.ip));
             if (s_event_group) {
                 xEventGroupSetBits(s_event_group, WIFI_HAL_CONNECTED_BIT);
             }
@@ -159,21 +159,20 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
  */
 esp_err_t wifi_hal_init(void)
 {
+    T_LOGD(TAG, "init");
+
     if (s_initialized) {
-        T_LOGD(TAG, "Already initialized");
+        T_LOGD(TAG, "ok:already");
         return ESP_OK;
     }
-
-    T_LOGI(TAG, "Initializing WiFi HAL");
 
     // 이벤트 그룹 생성 (비동기 이벤트 처리용)
     if (s_event_group == NULL) {
         s_event_group = xEventGroupCreate();
         if (!s_event_group) {
-            T_LOGE(TAG, "Failed to create event group");
+            T_LOGE(TAG, "fail:evtgrp");
             return ESP_ERR_NO_MEM;
         }
-        T_LOGD(TAG, "Event group created");
     }
 
     // WiFi 기본 설정 (NVS 비활성화)
@@ -182,15 +181,14 @@ esp_err_t wifi_hal_init(void)
 
     esp_err_t ret = esp_wifi_init(&cfg);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Failed to init WiFi: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:init:0x%x", ret);
         return ret;
     }
-    T_LOGD(TAG, "WiFi initialized (NVS disabled)");
 
     // 기본 이벤트 루프 생성 (이미 생성된 경우 무시)
     ret = esp_event_loop_create_default();
     if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
-        T_LOGE(TAG, "Failed to create event loop: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:evtloop:0x%x", ret);
         return ret;
     }
 
@@ -198,7 +196,7 @@ esp_err_t wifi_hal_init(void)
     ret = esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
                                      &wifi_event_handler, NULL);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Failed to register WiFi event handler: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:evt_hdlr:0x%x", ret);
         return ret;
     }
 
@@ -206,15 +204,14 @@ esp_err_t wifi_hal_init(void)
     ret = esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID,
                                      &wifi_event_handler, NULL);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Failed to register IP event handler: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:ip_hdlr:0x%x", ret);
         return ret;
     }
-    T_LOGD(TAG, "Event handlers registered");
 
     s_initialized = true;
     s_state = WIFI_HAL_STATE_IDLE;
 
-    T_LOGI(TAG, "WiFi HAL initialized successfully");
+    T_LOGD(TAG, "ok");
     return ESP_OK;
 }
 
@@ -228,22 +225,18 @@ esp_err_t wifi_hal_init(void)
  */
 esp_err_t wifi_hal_deinit(void)
 {
+    T_LOGD(TAG, "deinit");
+
     if (!s_initialized) {
-        T_LOGE(TAG, "Not initialized");
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
-
-    T_LOGI(TAG, "Deinitializing WiFi HAL");
 
     // WiFi 정지
     esp_wifi_stop();
 
     // WiFi 해제
     esp_wifi_deinit();
-
-    // netif는 해제하지 않음 (LwIP 스택이 계속 참조할 수 있음)
-    // 재초기화 시 기존 netif를 재사용하여 문제 방지
-    T_LOGD(TAG, "Netifs preserved (AP=%p, STA=%p)", (void*)s_netif_ap, (void*)s_netif_sta);
 
     // 이벤트 그룹 해제
     if (s_event_group) {
@@ -254,7 +247,7 @@ esp_err_t wifi_hal_deinit(void)
     s_initialized = false;
     s_state = WIFI_HAL_STATE_STOPPED;
 
-    T_LOGI(TAG, "WiFi HAL deinitialized");
+    T_LOGD(TAG, "ok");
     return ESP_OK;
 }
 
@@ -272,20 +265,20 @@ esp_err_t wifi_hal_deinit(void)
  */
 void* wifi_hal_create_ap_netif(void)
 {
+    T_LOGD(TAG, "create_ap_netif");
+
     if (s_netif_ap) {
-        T_LOGW(TAG, "AP netif already created (%p)", (void*)s_netif_ap);
+        T_LOGD(TAG, "ok:already:%p", (void*)s_netif_ap);
         return s_netif_ap;
     }
-
-    T_LOGI(TAG, "Creating AP netif");
 
     // ESP-IDF 5.5.0: 기본 AP netif 생성
     s_netif_ap = esp_netif_create_default_wifi_ap();
 
     if (s_netif_ap) {
-        T_LOGI(TAG, "AP netif created (%p)", (void*)s_netif_ap);
+        T_LOGD(TAG, "ok:%p", (void*)s_netif_ap);
     } else {
-        T_LOGE(TAG, "Failed to create AP netif");
+        T_LOGE(TAG, "fail:netif");
     }
 
     return s_netif_ap;
@@ -302,18 +295,18 @@ void* wifi_hal_create_ap_netif(void)
  */
 void* wifi_hal_create_sta_netif(void)
 {
+    T_LOGD(TAG, "create_sta_netif");
+
     if (s_netif_sta) {
-        T_LOGW(TAG, "STA netif already created (%p)", (void*)s_netif_sta);
+        T_LOGD(TAG, "ok:already:%p", (void*)s_netif_sta);
         return s_netif_sta;
     }
-
-    T_LOGI(TAG, "Creating STA netif");
 
     // ESP-IDF 5.5.0: 기본 STA netif 생성
     s_netif_sta = esp_netif_create_default_wifi_sta();
 
     if (!s_netif_sta) {
-        T_LOGE(TAG, "Failed to create STA netif");
+        T_LOGE(TAG, "fail:netif");
         return NULL;
     }
 
@@ -327,8 +320,7 @@ void* wifi_hal_create_sta_netif(void)
     dns_setserver(0, &dns_primary);
     dns_setserver(1, &dns_backup);
 
-    T_LOGI(TAG, "STA netif created (%p, DNS: %s, %s)",
-            (void*)s_netif_sta, DNS_PRIMARY_ADDR, DNS_BACKUP_ADDR);
+    T_LOGD(TAG, "ok:%p", (void*)s_netif_sta);
 
     return s_netif_sta;
 }
@@ -348,7 +340,7 @@ void* wifi_hal_create_sta_netif(void)
 esp_err_t wifi_hal_register_event_handler(wifi_hal_event_callback_t callback)
 {
     s_event_callback = callback;
-    T_LOGD(TAG, "Event callback registered: %s", callback ? "set" : "cleared");
+    T_LOGD(TAG, "cb:%s", callback ? "set" : "clr");
     return ESP_OK;
 }
 
@@ -365,18 +357,19 @@ esp_err_t wifi_hal_register_event_handler(wifi_hal_event_callback_t callback)
  */
 esp_err_t wifi_hal_start(void)
 {
+    T_LOGD(TAG, "start");
+
     if (!s_initialized) {
-        T_LOGE(TAG, "Not initialized");
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "Starting WiFi");
     esp_err_t ret = esp_wifi_start();
     if (ret == ESP_OK) {
         s_state = WIFI_HAL_STATE_STARTED;
-        T_LOGI(TAG, "WiFi started (state=%d)", s_state);
+        T_LOGD(TAG, "ok");
     } else {
-        T_LOGE(TAG, "Failed to start WiFi: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:0x%x", ret);
     }
     return ret;
 }
@@ -390,18 +383,19 @@ esp_err_t wifi_hal_start(void)
  */
 esp_err_t wifi_hal_stop(void)
 {
+    T_LOGD(TAG, "stop");
+
     if (!s_initialized) {
-        T_LOGE(TAG, "Not initialized");
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "Stopping WiFi");
     esp_err_t ret = esp_wifi_stop();
     if (ret == ESP_OK) {
         s_state = WIFI_HAL_STATE_STOPPED;
-        T_LOGI(TAG, "WiFi stopped (state=%d)", s_state);
+        T_LOGD(TAG, "ok");
     } else {
-        T_LOGE(TAG, "Failed to stop WiFi: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:0x%x", ret);
     }
     return ret;
 }
@@ -415,15 +409,16 @@ esp_err_t wifi_hal_stop(void)
  */
 esp_err_t wifi_hal_connect(void)
 {
+    T_LOGD(TAG, "connect");
+
     if (!s_initialized) {
-        T_LOGE(TAG, "Not initialized");
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "Requesting STA connection");
     esp_err_t ret = esp_wifi_connect();
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Failed to request connection: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:0x%x", ret);
     }
     return ret;
 }
@@ -437,15 +432,16 @@ esp_err_t wifi_hal_connect(void)
  */
 esp_err_t wifi_hal_disconnect(void)
 {
+    T_LOGD(TAG, "disconnect");
+
     if (!s_initialized) {
-        T_LOGE(TAG, "Not initialized");
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "Disconnecting STA");
     esp_err_t ret = esp_wifi_disconnect();
     if (ret != ESP_OK) {
-        T_LOGW(TAG, "Disconnect failed: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:0x%x", ret);
     }
     return ret;
 }
@@ -466,20 +462,19 @@ esp_err_t wifi_hal_disconnect(void)
 esp_err_t wifi_hal_set_config(wifi_interface_t iface, const void* config)
 {
     if (!s_initialized) {
-        T_LOGE(TAG, "Not initialized");
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (config == NULL) {
-        T_LOGE(TAG, "Invalid parameter: config is NULL");
+        T_LOGE(TAG, "fail:null");
         return ESP_ERR_INVALID_ARG;
     }
 
-    // ESP-IDF 5.5.0: esp_wifi_set_config는 const가 아닌 포인터를 받음
-    T_LOGD(TAG, "Setting WiFi config (iface=%d)", iface);
+    T_LOGD(TAG, "set_cfg:if=%d", iface);
     esp_err_t ret = esp_wifi_set_config(iface, (wifi_config_t*)config);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Failed to set config: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:0x%x", ret);
     }
     return ret;
 }
@@ -496,16 +491,16 @@ esp_err_t wifi_hal_set_config(wifi_interface_t iface, const void* config)
 esp_err_t wifi_hal_get_config(wifi_interface_t iface, void* config)
 {
     if (!s_initialized) {
-        T_LOGE(TAG, "Not initialized");
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (config == NULL) {
-        T_LOGE(TAG, "Invalid parameter: config is NULL");
+        T_LOGE(TAG, "fail:null");
         return ESP_ERR_INVALID_ARG;
     }
 
-    T_LOGD(TAG, "Getting WiFi config (iface=%d)", iface);
+    T_LOGD(TAG, "get_cfg:if=%d", iface);
     return esp_wifi_get_config(iface, (wifi_config_t*)config);
 }
 
@@ -522,12 +517,12 @@ esp_err_t wifi_hal_get_config(wifi_interface_t iface, void* config)
  */
 esp_err_t wifi_hal_scan_start(void)
 {
+    T_LOGD(TAG, "scan_start");
+
     if (!s_initialized) {
-        T_LOGE(TAG, "Not initialized");
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
-
-    T_LOGI(TAG, "Starting WiFi scan");
 
     // 이벤트 그룹 비트 클리어
     if (s_event_group) {
@@ -538,14 +533,14 @@ esp_err_t wifi_hal_scan_start(void)
     wifi_scan_config_t scan_config = {
         .ssid = NULL,
         .bssid = NULL,
-        .channel = 0,           // 모든 채널 스캔
-        .show_hidden = true,     // 숨겨진 AP도 표시
+        .channel = 0,
+        .show_hidden = true,
         .scan_type = WIFI_SCAN_TYPE_ACTIVE,
     };
 
     esp_err_t ret = esp_wifi_scan_start(&scan_config, false);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Failed to start scan: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:0x%x", ret);
     }
     return ret;
 }
@@ -562,28 +557,28 @@ esp_err_t wifi_hal_scan_start(void)
  */
 esp_err_t wifi_hal_scan_get_results(void* ap_records, uint16_t max_count, uint16_t* out_count)
 {
+    T_LOGD(TAG, "scan_get");
+
     if (!s_initialized) {
-        T_LOGE(TAG, "Not initialized");
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (ap_records == NULL) {
-        T_LOGE(TAG, "Invalid parameter: ap_records is NULL");
+        T_LOGE(TAG, "fail:null");
         return ESP_ERR_INVALID_ARG;
     }
-
-    T_LOGD(TAG, "Getting scan results (max_count=%u)", max_count);
 
     // ESP-IDF 5.5.0: number 파라미터가 입력/값으로 사용됨
     uint16_t number = max_count;
     esp_err_t ret = esp_wifi_scan_get_ap_records(&number, (wifi_ap_record_t*)ap_records);
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "Scan results: %u AP(s) found", number);
+        T_LOGD(TAG, "ok:%u", number);
         if (out_count) {
             *out_count = number;
         }
     } else {
-        T_LOGE(TAG, "Failed to get scan results: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:0x%x", ret);
     }
     return ret;
 }

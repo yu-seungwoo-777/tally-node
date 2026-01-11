@@ -138,7 +138,7 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
             case WIFI_EVENT_AP_START: {
-                T_LOGI(TAG, "WiFi AP 시작됨");
+                T_LOGI(TAG, "WIFI_EVENT: AP started");
                 s_ap_started = true;
                 // AP IP는 실제로는 192.168.4.1이지만 이벤트 시점에 아직 할당되지 않을 수 있음
                 // getStatus()에서 실시간 조회로 처리
@@ -146,7 +146,7 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
             }
 
             case WIFI_EVENT_AP_STOP: {
-                T_LOGI(TAG, "WiFi AP 정지됨");
+                T_LOGI(TAG, "WIFI_EVENT: AP stopped");
                 s_ap_started = false;
                 s_ap_clients = 0;
                 memset(s_ap_ip, 0, sizeof(s_ap_ip));
@@ -155,14 +155,14 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
 
             case WIFI_EVENT_AP_STACONNECTED: {
                 auto* event = (wifi_event_ap_staconnected_t*)event_data;
-                T_LOGI(TAG, "STA 연결됨: " MACSTR, MAC2STR(event->mac));
+                T_LOGI(TAG, "WIFI_EVENT: STA connected: " MACSTR, MAC2STR(event->mac));
                 s_ap_clients++;
                 break;
             }
 
             case WIFI_EVENT_AP_STADISCONNECTED: {
                 auto* event = (wifi_event_ap_stadisconnected_t*)event_data;
-                T_LOGI(TAG, "STA 연결 해제됨: " MACSTR, MAC2STR(event->mac));
+                T_LOGI(TAG, "WIFI_EVENT: STA disconnected: " MACSTR, MAC2STR(event->mac));
                 if (s_ap_clients > 0) {
                     s_ap_clients--;
                 }
@@ -170,7 +170,7 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
             }
 
             case WIFI_EVENT_STA_START: {
-                T_LOGI(TAG, "WiFi STA 시작됨, 연결 시도...");
+                T_LOGI(TAG, "WIFI_EVENT: STA started, connecting...");
                 s_sta_retry_count = 0;
                 esp_wifi_connect();
                 break;
@@ -178,7 +178,7 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
 
             case WIFI_EVENT_STA_DISCONNECTED: {
                 auto* event = (wifi_event_sta_disconnected_t*)event_data;
-                T_LOGW(TAG, "STA 연결 해제됨: 이유=%d", event->reason);
+                T_LOGW(TAG, "WIFI_EVENT: STA disconnected: reason=%d", event->reason);
                 s_sta_connected = false;
                 s_sta_rssi = 0;
                 memset(s_sta_ip, 0, sizeof(s_sta_ip));
@@ -193,31 +193,31 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
                 if (event->reason == 15 || event->reason == 202 ||
                     event->reason == 203 || event->reason == 205) {
                     s_sta_auth_failed = true;
-                    T_LOGE(TAG, "인증 실패 (reason=%d), 재시도 중지. 설정을 확인하세요.",
+                    T_LOGE(TAG, "Authentication failed (reason=%d), retry stopped. Check settings.",
                            event->reason);
                     break;
                 }
 
                 // 인증 실패 상태면 재시도하지 않음
                 if (s_sta_auth_failed) {
-                    T_LOGW(TAG, "인증 실패 상태, 재시도 중지");
+                    T_LOGW(TAG, "Authentication failed state, retry stopped");
                     break;
                 }
 
                 if (s_sta_retry_count < MAX_STA_RETRY) {
                     s_sta_retry_count++;
-                    T_LOGI(TAG, "STA 재연결 시도 (%d/%d)...",
+                    T_LOGI(TAG, "STA reconnecting (%d/%d)...",
                         s_sta_retry_count, MAX_STA_RETRY);
                     vTaskDelay(pdMS_TO_TICKS(1000 * s_sta_retry_count));
                     esp_wifi_connect();
                 } else {
-                    T_LOGE(TAG, "STA 재연결 실패 (최대 재시도 도달)");
+                    T_LOGE(TAG, "STA reconnection failed (max retry reached)");
                 }
                 break;
             }
 
             case WIFI_EVENT_SCAN_DONE: {
-                T_LOGD(TAG, "WiFi 스캔 완료");
+                T_LOGD(TAG, "WIFI_EVENT: Scan done");
                 break;
             }
 
@@ -235,10 +235,9 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
             snprintf(s_sta_ip, sizeof(s_sta_ip), IPSTR,
                 IP2STR(&event->ip_info.ip));
 
-            T_LOGD(TAG, "STA IP 획득: " IPSTR, IP2STR(&event->ip_info.ip));
-            T_LOGD(TAG, "STA Netmask: " IPSTR,
-                IP2STR(&event->ip_info.netmask));
-            T_LOGD(TAG, "STA Gateway: " IPSTR, IP2STR(&event->ip_info.gw));
+            T_LOGI(TAG, "IP_EVENT: STA got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+            T_LOGD(TAG, "  Netmask: " IPSTR, IP2STR(&event->ip_info.netmask));
+            T_LOGD(TAG, "  Gateway: " IPSTR, IP2STR(&event->ip_info.gw));
 
             // DNS 서버 명시적 설정 (Google DNS, Cloudflare) - LwIP 직접 사용
             ip_addr_t dns_primary, dns_backup;
@@ -274,7 +273,7 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
 esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
     const char* sta_ssid, const char* sta_password)
 {
-    T_LOGD(TAG, "WiFi Driver 초기화 중...");
+    T_LOGD(TAG, "Initializing WiFi Driver");
 
     // 설정 저장
     s_ap_enabled = (ap_ssid != nullptr);
@@ -301,7 +300,7 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
     // WiFi HAL 초기화 (재초기화 허용)
     esp_err_t ret = wifi_hal_init();
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "WiFi HAL 초기화 실패");
+        T_LOGE(TAG, "Failed to init WiFi HAL: %s (0x%x)", esp_err_to_name(ret), ret);
         return ret;
     }
 
@@ -311,13 +310,13 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
     // 기존 netif 정리 (재초기화 시)
     if (s_netif_sta && !s_sta_enabled) {
         // STA 비활성화: 기존 STA netif 해제
-        T_LOGI(TAG, "STA 비활성화: 기존 STA netif 해제");
+        T_LOGI(TAG, "STA disabled: destroying existing STA netif");
         esp_netif_destroy(s_netif_sta);
         s_netif_sta = nullptr;
     }
     if (s_netif_ap && !s_ap_enabled) {
         // AP 비활성화: 기존 AP netif 해제
-        T_LOGI(TAG, "AP 비활성화: 기존 AP netif 해제");
+        T_LOGI(TAG, "AP disabled: destroying existing AP netif");
         esp_netif_destroy(s_netif_ap);
         s_netif_ap = nullptr;
     }
@@ -333,7 +332,7 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
     }
     esp_wifi_set_mode(mode);
     if (mode == WIFI_MODE_NULL) {
-        T_LOGI(TAG, "WiFi 모드: NULL (AP/STA 모두 비활성화)");
+        T_LOGI(TAG, "WiFi mode: NULL (both AP/STA disabled)");
     }
 
     // AP netif 및 설정
@@ -341,7 +340,7 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
         if (!s_netif_ap) {
             s_netif_ap = (esp_netif_t*)wifi_hal_create_ap_netif();
             if (!s_netif_ap) {
-                T_LOGE(TAG, "AP netif 생성 실패");
+                T_LOGE(TAG, "Failed to create AP netif");
                 return ESP_FAIL;
             }
         }
@@ -370,7 +369,7 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
         if (!s_netif_sta) {
             s_netif_sta = (esp_netif_t*)wifi_hal_create_sta_netif();
             if (!s_netif_sta) {
-                T_LOGE(TAG, "STA netif 생성 실패");
+                T_LOGE(TAG, "Failed to create STA netif");
                 // AP netif 정리
                 if (s_netif_ap) {
                     esp_netif_destroy(s_netif_ap);
@@ -398,17 +397,17 @@ esp_err_t WiFiDriver::init(const char* ap_ssid, const char* ap_password,
     // WiFi 시작
     ret = wifi_hal_start();
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "WiFi 시작 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "Failed to start WiFi: %s (0x%x)", esp_err_to_name(ret), ret);
         return ret;
     }
 
     s_initialized = true;
 
-    T_LOGD(TAG, "WiFi Driver 초기화 완료");
-    T_LOGI(TAG, "  AP: %s (%s)", s_ap_enabled ? s_ap_ssid : "비활성화",
-        s_ap_password[0] != '\0' ? "보호됨" : "열림");
-    T_LOGI(TAG, "  STA: %s (%s)", s_sta_enabled ? s_sta_ssid : "비활성화",
-        s_sta_password[0] != '\0' ? "보호됨" : "열림");
+    T_LOGI(TAG, "WiFi Driver initialized");
+    T_LOGI(TAG, "  AP: %s (%s)", s_ap_enabled ? s_ap_ssid : "disabled",
+        s_ap_password[0] != '\0' ? "secured" : "open");
+    T_LOGI(TAG, "  STA: %s (%s)", s_sta_enabled ? s_sta_ssid : "disabled",
+        s_sta_password[0] != '\0' ? "secured" : "open");
 
     return ESP_OK;
 }
@@ -423,7 +422,7 @@ esp_err_t WiFiDriver::deinit(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "WiFi Driver 정리 중...");
+    T_LOGI(TAG, "Deinitializing WiFi Driver");
 
     wifi_hal_stop();
     wifi_hal_deinit();  // netif는 해제하지 않음 (재사용)
@@ -434,7 +433,7 @@ esp_err_t WiFiDriver::deinit(void)
     s_ap_started = false;
     s_sta_connected = false;
 
-    T_LOGI(TAG, "WiFi Driver 정리 완료");
+    T_LOGI(TAG, "WiFi Driver deinitialized");
     return ESP_OK;
 }
 
@@ -454,11 +453,11 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
     const char* sta_ssid, const char* sta_password)
 {
     if (!s_initialized) {
-        T_LOGE(TAG, "재설정 실패: 초기화되지 않음");
+        T_LOGE(TAG, "Reconfigure failed: not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "WiFi Driver 재설정 중...");
+    T_LOGI(TAG, "Reconfiguring WiFi Driver");
 
     // 새 설정 저장
     bool new_ap_enabled = (ap_ssid != nullptr);
@@ -468,8 +467,8 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
     bool has_sta_netif = (s_netif_sta != nullptr);
     bool has_ap_netif = (s_netif_ap != nullptr);
 
-    T_LOGD(TAG, "  기존 netif: STA=%d, AP=%d", has_sta_netif, has_ap_netif);
-    T_LOGD(TAG, "  새 설정: STA=%d, AP=%d", new_sta_enabled, new_ap_enabled);
+    T_LOGD(TAG, "  Existing netif: STA=%d, AP=%d", has_sta_netif, has_ap_netif);
+    T_LOGD(TAG, "  New config: STA=%d, AP=%d", new_sta_enabled, new_ap_enabled);
 
     // WiFi 모드 결정
     wifi_mode_t mode = WIFI_MODE_NULL;
@@ -483,7 +482,7 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
 
     // 모드가 NULL인 경우 (모두 비활성화)
     if (mode == WIFI_MODE_NULL) {
-        T_LOGI(TAG, "WiFi 모드: NULL (AP/STA 모두 비활성화)");
+        T_LOGI(TAG, "WiFi mode: NULL (both AP/STA disabled)");
 
         // 먼저 STA 연결 해제 (연결된 경우)
         if (s_sta_connected) {
@@ -502,7 +501,7 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
 
         // netif는 파괴하지 않음 (LwIP 충돌 방지)
         // 재활성화 시 기존 netif를 재사용
-        T_LOGD(TAG, "netif 유지 (STA=%p, AP=%p)", (void*)s_netif_sta, (void*)s_netif_ap);
+        T_LOGD(TAG, "netif preserved (STA=%p, AP=%p)", (void*)s_netif_sta, (void*)s_netif_ap);
 
         // 상태 업데이트
         s_ap_enabled = false;
@@ -510,7 +509,7 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
         s_ap_ssid[0] = '\0';
         s_sta_ssid[0] = '\0';
 
-        T_LOGI(TAG, "WiFi Driver 재설정 완료 (모두 비활성화, netif 유지)");
+        T_LOGI(TAG, "WiFi Driver reconfigured (all disabled, netif preserved)");
         return ESP_OK;
     }
 
@@ -519,7 +518,7 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
         if (!s_netif_ap) {
             s_netif_ap = (esp_netif_t*)wifi_hal_create_ap_netif();
             if (!s_netif_ap) {
-                T_LOGE(TAG, "AP netif 생성 실패");
+                T_LOGE(TAG, "Failed to create AP netif");
                 return ESP_FAIL;
             }
         }
@@ -555,7 +554,7 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
         s_ap_enabled = true;
     } else {
         // AP 비활성화: netif는 유지 (LwIP 충돌 방지)
-        T_LOGD(TAG, "AP 비활성화 (netif=%p 유지)", (void*)s_netif_ap);
+        T_LOGD(TAG, "AP disabled (netif=%p preserved)", (void*)s_netif_ap);
         s_ap_enabled = false;
         s_ap_ssid[0] = '\0';
     }
@@ -565,7 +564,7 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
         if (!s_netif_sta) {
             s_netif_sta = (esp_netif_t*)wifi_hal_create_sta_netif();
             if (!s_netif_sta) {
-                T_LOGE(TAG, "STA netif 생성 실패");
+                T_LOGE(TAG, "Failed to create STA netif");
                 return ESP_FAIL;
             }
         }
@@ -596,7 +595,7 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
         s_sta_enabled = true;
     } else {
         // STA 비활성화: netif는 유지 (LwIP 충돌 방지)
-        T_LOGD(TAG, "STA 비활성화 (netif=%p 유지)", (void*)s_netif_sta);
+        T_LOGD(TAG, "STA disabled (netif=%p preserved)", (void*)s_netif_sta);
         s_sta_enabled = false;
         s_sta_ssid[0] = '\0';
     }
@@ -607,7 +606,7 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
 
     // 모드 변경이 필요한 경우만 stop/start
     if (current_mode != mode) {
-        T_LOGD(TAG, "WiFi 모드 변경: %d -> %d", current_mode, mode);
+        T_LOGD(TAG, "WiFi mode change: %d -> %d", current_mode, mode);
 
         // STA 연결 해제 (연결된 경우)
         if (s_sta_connected) {
@@ -627,16 +626,16 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
         // WiFi 시작
         esp_err_t ret = wifi_hal_start();
         if (ret != ESP_OK) {
-            T_LOGE(TAG, "WiFi 시작 실패: %s", esp_err_to_name(ret));
+            T_LOGE(TAG, "Failed to start WiFi: %s (0x%x)", esp_err_to_name(ret), ret);
             return ret;
         }
     }
 
-    T_LOGI(TAG, "WiFi Driver 재설정 완료");
-    T_LOGI(TAG, "  AP: %s (%s)", s_ap_enabled ? s_ap_ssid : "비활성화",
-        s_ap_password[0] != '\0' ? "보호됨" : "열림");
-    T_LOGI(TAG, "  STA: %s (%s)", s_sta_enabled ? s_sta_ssid : "비활성화",
-        s_sta_password[0] != '\0' ? "보호됨" : "열림");
+    T_LOGI(TAG, "WiFi Driver reconfigured");
+    T_LOGI(TAG, "  AP: %s (%s)", s_ap_enabled ? s_ap_ssid : "disabled",
+        s_ap_password[0] != '\0' ? "secured" : "open");
+    T_LOGI(TAG, "  STA: %s (%s)", s_sta_enabled ? s_sta_ssid : "disabled",
+        s_sta_password[0] != '\0' ? "secured" : "open");
 
     return ESP_OK;
 }
@@ -725,17 +724,17 @@ esp_err_t WiFiDriver::disconnectSTA(void)
 esp_err_t WiFiDriver::reconfigSTA(const char* ssid, const char* password)
 {
     if (!s_initialized) {
-        T_LOGE(TAG, "초기화되지 않음");
+        T_LOGE(TAG, "Not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (!ssid) {
-        T_LOGE(TAG, "SSID가 null");
+        T_LOGE(TAG, "SSID is NULL");
         return ESP_ERR_INVALID_ARG;
     }
 
-    T_LOGI(TAG, "STA 재설정: SSID=%s", ssid);
-    T_LOGD(TAG, "  현재 상태: s_ap_enabled=%d, s_sta_enabled=%d, s_netif_ap=%p, s_netif_sta=%p",
+    T_LOGI(TAG, "Reconfiguring STA: SSID=%s", ssid);
+    T_LOGD(TAG, "  Current state: s_ap_enabled=%d, s_sta_enabled=%d, s_netif_ap=%p, s_netif_sta=%p",
             s_ap_enabled, s_sta_enabled, (void*)s_netif_ap, (void*)s_netif_sta);
 
     // 새 SSID/Password 저장
@@ -759,11 +758,11 @@ esp_err_t WiFiDriver::reconfigSTA(const char* ssid, const char* password)
     bool needs_apsta = (s_ap_enabled || (s_netif_ap != nullptr));
     bool needs_mode_change = (current_mode == WIFI_MODE_AP) || (current_mode == WIFI_MODE_STA);
 
-    T_LOGD(TAG, "  WiFi 상태: mode_ret=%d, current_mode=%d, needs_start=%d, needs_apsta=%d, needs_mode_change=%d",
+    T_LOGD(TAG, "  WiFi state: mode_ret=%d, current_mode=%d, needs_start=%d, needs_apsta=%d, needs_mode_change=%d",
             mode_ret, current_mode, needs_start, needs_apsta, needs_mode_change);
 
     if (needs_start) {
-        T_LOGI(TAG, "WiFi가 정지된 상태, 재시작 필요 (mode_ret=%d, current_mode=%d)",
+        T_LOGI(TAG, "WiFi stopped, restart needed (mode_ret=%d, current_mode=%d)",
                 mode_ret, current_mode);
 
         // WiFi 모드 설정 (AP가 있으면 APSTA, 없으면 STA)
@@ -774,41 +773,41 @@ esp_err_t WiFiDriver::reconfigSTA(const char* ssid, const char* password)
         // WiFi 시작
         esp_err_t start_ret = wifi_hal_start();
         if (start_ret != ESP_OK) {
-            T_LOGE(TAG, "WiFi 시작 실패: %s", esp_err_to_name(start_ret));
+            T_LOGE(TAG, "Failed to start WiFi: %s (0x%x)", esp_err_to_name(start_ret), start_ret);
             return start_ret;
         }
-        T_LOGI(TAG, "WiFi 재시작 완료 (모드: %s)", needs_apsta ? "APSTA" : "STA");
+        T_LOGI(TAG, "WiFi restarted (mode: %s)", needs_apsta ? "APSTA" : "STA");
         vTaskDelay(pdMS_TO_TICKS(100));
     } else if (needs_mode_change) {
         // AP → APSTA 또는 STA → APSTA 모드 변경 필요
-        T_LOGI(TAG, "WiFi 모드 변경 필요: %d → APSTA", current_mode);
+        T_LOGI(TAG, "WiFi mode change needed: %d -> APSTA", current_mode);
 
         wifi_mode_t new_mode = WIFI_MODE_APSTA;
         esp_wifi_set_mode(new_mode);
         vTaskDelay(pdMS_TO_TICKS(100));
 
-        T_LOGI(TAG, "WiFi 모드 변경 완료: APSTA");
+        T_LOGI(TAG, "WiFi mode changed: APSTA");
     } else if (!s_netif_sta) {
         // STA netif가 없는 경우 (AP 전용 모드에서 STA 활성화)
-        T_LOGI(TAG, "STA netif 생성 중 (AP -> APSTA 모드 전환)");
+        T_LOGI(TAG, "Creating STA netif (AP -> APSTA mode transition)");
 
         // STA netif 생성 (모드 변경 전)
         s_netif_sta = (esp_netif_t*)wifi_hal_create_sta_netif();
         if (!s_netif_sta) {
-            T_LOGE(TAG, "STA netif 생성 실패");
+            T_LOGE(TAG, "Failed to create STA netif");
             return ESP_FAIL;
         }
 
         // WiFi 모드를 APSTA로 변경
         esp_err_t mode_ret = esp_wifi_set_mode(WIFI_MODE_APSTA);
         if (mode_ret != ESP_OK) {
-            T_LOGE(TAG, "WiFi 모드 변경 실패: %s", esp_err_to_name(mode_ret));
+            T_LOGE(TAG, "Failed to change WiFi mode: %s (0x%x)", esp_err_to_name(mode_ret), mode_ret);
             // 생성된 netif 유지 (LwIP 충돌 방지)
             s_netif_sta = nullptr;
             return mode_ret;
         }
 
-        T_LOGI(TAG, "STA netif 생성 완료, APSTA 모드로 전환");
+        T_LOGI(TAG, "STA netif created, switched to APSTA mode");
         vTaskDelay(pdMS_TO_TICKS(100));  // 모드 변경 안정화 대기
     }
 
@@ -833,7 +832,7 @@ esp_err_t WiFiDriver::reconfigSTA(const char* ssid, const char* password)
 
     esp_err_t ret = wifi_hal_set_config(WIFI_IF_STA, &sta_config);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "STA 설정 변경 실패: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "Failed to set STA config: %s (0x%x)", esp_err_to_name(ret), ret);
         return ret;
     }
 
@@ -843,11 +842,11 @@ esp_err_t WiFiDriver::reconfigSTA(const char* ssid, const char* password)
 
     ret = wifi_hal_connect();
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "STA 연결 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "Failed to connect STA: %s (0x%x)", esp_err_to_name(ret), ret);
         return ret;
     }
 
-    T_LOGI(TAG, "STA 재설정 완료");
+    T_LOGI(TAG, "STA reconfigured");
     return ESP_OK;
 }
 

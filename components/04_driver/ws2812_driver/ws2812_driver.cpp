@@ -8,6 +8,8 @@
 #include "t_log.h"
 #include "PinConfig.h"
 
+static const char* TAG = "04_Ws2812";
+
 class WS2812Driver {
 public:
     static esp_err_t init(int gpio_num, uint32_t num_leds, uint8_t camera_id);
@@ -46,8 +48,10 @@ ws2812_state_t WS2812Driver::s_led_states[8] = {WS2812_OFF};
 
 esp_err_t WS2812Driver::init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
 {
+    T_LOGD(TAG, "init");
+
     if (s_initialized) {
-        T_LOGW("WS2812Drv", "이미 초기화됨");
+        T_LOGD(TAG, "ok:already");
         return ESP_OK;
     }
 
@@ -56,10 +60,9 @@ esp_err_t WS2812Driver::init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
         gpio_num = EORA_S3_LED_WS2812;
     }
 
-    // LED 개수는 드라이버 내부에서 8개 고정
     (void)num_leds;  // 미사용 경고 방지
 
-    // 카메라 ID 설정 (0=기본값 1)
+    // 카메라 ID 설정
     if (camera_id == 0) {
         camera_id = 1;
     }
@@ -67,22 +70,22 @@ esp_err_t WS2812Driver::init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
 
     esp_err_t ret = ws2812_hal_init(gpio_num, 8);
     if (ret != ESP_OK) {
+        T_LOGE(TAG, "fail:hal:0x%x", ret);
         return ret;
     }
 
     s_num_leds = 8;
-    s_brightness = 255;  // 기본값
+    s_brightness = 255;
 
-    // 모든 LED OFF로 초기화 (상태)
+    // 모든 LED OFF로 초기화
     for (uint32_t i = 0; i < 8; i++) {
         s_led_states[i] = WS2812_OFF;
     }
 
     s_initialized = true;
-    off();  // 실제 LED OFF 상태로 전송 (초기화 완료 후)
+    off();
 
-    T_LOGI("WS2812Drv", "WS2812 드라이버 초기화 완료 (GPIO %d, %lu LEDs, 카메라 ID: %d)",
-           gpio_num, s_num_leds, s_camera_id);
+    T_LOGD(TAG, "ok");
     return ESP_OK;
 }
 
@@ -147,15 +150,12 @@ void WS2812Driver::setRgb(uint8_t r, uint8_t g, uint8_t b)
         return;
     }
 
-    // 모든 LED 상태를 CUSTOM으로 표시 (저장 안 함)
     uint8_t data[s_num_leds * 3];
     for (uint32_t i = 0; i < s_num_leds; i++) {
-        // 밝기 적용
         uint8_t rr = (r * s_brightness) / 255;
         uint8_t gg = (g * s_brightness) / 255;
         uint8_t bb = (b * s_brightness) / 255;
 
-        // WS2812B는 GRB 순서
         data[i * 3] = gg;
         data[i * 3 + 1] = rr;
         data[i * 3 + 2] = bb;
@@ -171,7 +171,7 @@ void WS2812Driver::setLedState(uint32_t led_index, ws2812_state_t state)
     }
 
     if (led_index >= s_num_leds) {
-        T_LOGE("WS2812Drv", "LED 인덱스 초과: %d >= %lu", led_index, s_num_leds);
+        T_LOGE(TAG, "fail:idx");
         return;
     }
 
@@ -183,12 +183,10 @@ void WS2812Driver::setLedState(uint32_t led_index, ws2812_state_t state)
         uint8_t r, g, b;
         stateToRgb(s_led_states[i], &r, &g, &b);
 
-        // 밝기 적용
         r = (r * s_brightness) / 255;
         g = (g * s_brightness) / 255;
         b = (b * s_brightness) / 255;
 
-        // WS2812B는 GRB 순서
         data[i * 3] = g;
         data[i * 3 + 1] = r;
         data[i * 3 + 2] = b;
@@ -204,16 +202,14 @@ void WS2812Driver::setLedRgb(uint32_t led_index, uint8_t r, uint8_t g, uint8_t b
     }
 
     if (led_index >= s_num_leds) {
-        T_LOGE("WS2812Drv", "LED 인덱스 초과: %d >= %lu", led_index, s_num_leds);
+        T_LOGE(TAG, "fail:idx");
         return;
     }
 
-    // 밝기 적용
     r = (r * s_brightness) / 255;
     g = (g * s_brightness) / 255;
     b = (b * s_brightness) / 255;
 
-    // WS2812B는 GRB 순서
     uint8_t data[s_num_leds * 3];
     for (uint32_t i = 0; i < s_num_leds; i++) {
         if (i == led_index) {
@@ -221,7 +217,6 @@ void WS2812Driver::setLedRgb(uint32_t led_index, uint8_t r, uint8_t g, uint8_t b
             data[i * 3 + 1] = r;
             data[i * 3 + 2] = b;
         } else {
-            // 다른 LED는 현재 상태 유지
             uint8_t pr, pg, pb;
             stateToRgb(s_led_states[i], &pr, &pg, &pb);
             data[i * 3] = (pg * s_brightness) / 255;
@@ -241,11 +236,9 @@ void WS2812Driver::setBrightness(uint8_t brightness)
 
     if (s_brightness != brightness) {
         s_brightness = brightness;
-        // 현재 상태 다시 적용
         for (uint32_t i = 0; i < s_num_leds; i++) {
             setLedState(i, s_led_states[i]);
         }
-        T_LOGI("WS2812Drv", "밝기 변경: %d", brightness);
     }
 }
 
@@ -257,10 +250,9 @@ void WS2812Driver::off(void)
 void WS2812Driver::setCameraId(uint8_t camera_id)
 {
     if (camera_id == 0) {
-        camera_id = 1;  // 최소 1
+        camera_id = 1;
     }
     s_camera_id = camera_id;
-    T_LOGI("WS2812Drv", "카메라 ID 설정: %d", s_camera_id);
 }
 
 void WS2812Driver::processTallyData(const uint8_t* tally_data, uint8_t channel_count)
@@ -269,52 +261,37 @@ void WS2812Driver::processTallyData(const uint8_t* tally_data, uint8_t channel_c
         return;
     }
 
-    // TallyTypes.h의 packed_data_t 구조체 사용 (로컬 정의)
-    struct packed_data_t {
-        uint8_t* data;
-        uint8_t data_size;
-        uint8_t channel_count;
-    };
+    (void)channel_count;
 
     // 내 카메라 ID의 Tally 상태 확인
-    // packed_data_get_channel 함수 로직 (인라인)
-    // 채널 상태는 2비트로 저장: 0=OFF, 1=PGM, 2=PVW
     uint8_t byte_idx = (s_camera_id - 1) / 4;
     uint8_t bit_shift = ((s_camera_id - 1) % 4) * 2;
     uint8_t my_status = (tally_data[byte_idx] >> bit_shift) & 0x03;
 
-    // Tally 상태 → LED 상태 매핑
     ws2812_state_t led_state;
-    const char* state_str;
-
     switch (my_status) {
-    case 1:  // TALLY_STATUS_PROGRAM
-        led_state = WS2812_PROGRAM;  // 빨강
-        state_str = "PROGRAM";
+    case 1:  // PROGRAM
+        led_state = WS2812_PROGRAM;
         break;
-    case 2:  // TALLY_STATUS_PREVIEW
-        led_state = WS2812_PREVIEW;  // 초록
-        state_str = "PREVIEW";
+    case 2:  // PREVIEW
+        led_state = WS2812_PREVIEW;
         break;
-    case 3:  // TALLY_STATUS_BOTH
-        led_state = WS2812_PROGRAM;  // Program 우선 (빨강)
-        state_str = "BOTH (PGM+PVW)";
+    case 3:  // BOTH
+        led_state = WS2812_PROGRAM;
         break;
-    default:  // TALLY_STATUS_OFF
+    default:  // OFF
         led_state = WS2812_OFF;
-        state_str = "OFF";
         break;
     }
 
     setState(led_state);
-    T_LOGI("WS2812Drv", "Tally 처리: 카메라 %d → %s", s_camera_id, state_str);
 }
 
 void WS2812Driver::deinit(void)
 {
+    T_LOGD(TAG, "deinit");
     ws2812_hal_deinit();
     s_initialized = false;
-    T_LOGI("WS2812Drv", "WS2812 드라이버 해제");
 }
 
 // ============================================================================

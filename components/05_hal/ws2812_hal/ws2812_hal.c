@@ -88,12 +88,13 @@ static bool s_initialized = false;
  */
 esp_err_t ws2812_hal_init(int gpio_num, uint32_t num_leds)
 {
+    T_LOGD(TAG, "init:gpio=%d,n=%lu", gpio_num, num_leds);
+
     if (s_initialized) {
-        T_LOGW(TAG, "WS2812 HAL already initialized");
+        T_LOGD(TAG, "ok:already");
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "Initializing WS2812 HAL (GPIO=%d, LEDs=%lu)", gpio_num, num_leds);
     s_num_leds = num_leds;
 
     // RMT TX 채널 설정
@@ -103,17 +104,16 @@ esp_err_t ws2812_hal_init(int gpio_num, uint32_t num_leds)
         .mem_block_symbols = 64,
         .resolution_hz = RMT_RESOLUTION_HZ,
         .trans_queue_depth = 4,
-        .flags.with_dma = false,  // DMA 비활성화 (polling 모드)
+        .flags.with_dma = false,
     };
 
     esp_err_t ret = rmt_new_tx_channel(&tx_channel_config, &s_tx_channel);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Failed to create RMT channel: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:chan:0x%x", ret);
         return ret;
     }
-    T_LOGD(TAG, "RMT TX channel created (GPIO=%d)", gpio_num);
 
-    // RMT 바이트 인코더 (WS2812 타이밍)
+    // RMT 바이트 인코더
     rmt_bytes_encoder_config_t bytes_encoder_config = {
         .bit0 = {
             .duration0 = WS2812_T0H_DURATION,
@@ -127,22 +127,21 @@ esp_err_t ws2812_hal_init(int gpio_num, uint32_t num_leds)
             .duration1 = WS2812_T1L_DURATION,
             .level1 = 0,
         },
-        .flags.msb_first = 1  // MSB First
+        .flags.msb_first = 1
     };
 
     ret = rmt_new_bytes_encoder(&bytes_encoder_config, &s_bytes_encoder);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Failed to create byte encoder: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:enc:0x%x", ret);
         rmt_del_channel(s_tx_channel);
         s_tx_channel = NULL;
         return ret;
     }
-    T_LOGD(TAG, "Byte encoder created");
 
     // RMT 채널 활성화
     ret = rmt_enable(s_tx_channel);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Failed to enable RMT channel: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:enable:0x%x", ret);
         rmt_del_encoder(s_bytes_encoder);
         rmt_del_channel(s_tx_channel);
         s_bytes_encoder = NULL;
@@ -151,7 +150,7 @@ esp_err_t ws2812_hal_init(int gpio_num, uint32_t num_leds)
     }
 
     s_initialized = true;
-    T_LOGI(TAG, "WS2812 HAL initialized (GPIO=%d, LEDs=%lu)", gpio_num, num_leds);
+    T_LOGD(TAG, "ok");
     return ESP_OK;
 }
 
@@ -168,23 +167,18 @@ esp_err_t ws2812_hal_init(int gpio_num, uint32_t num_leds)
 esp_err_t ws2812_hal_transmit(const uint8_t* data, size_t length)
 {
     if (!s_initialized) {
-        T_LOGE(TAG, "Not initialized");
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (data == NULL) {
-        T_LOGE(TAG, "Invalid parameter: data is NULL");
+        T_LOGE(TAG, "fail:null");
         return ESP_ERR_INVALID_ARG;
     }
 
     if (length == 0) {
-        T_LOGE(TAG, "Invalid parameter: length is 0");
+        T_LOGE(TAG, "fail:len=0");
         return ESP_ERR_INVALID_ARG;
-    }
-
-    // 데이터 길이 검증 (경고만 출력하고 계속 진행)
-    if (length != s_num_leds * 3) {
-        T_LOGW(TAG, "Data length mismatch: %zu != %lu (LEDs * 3)", length, s_num_leds * 3);
     }
 
     rmt_transmit_config_t tx_config = {
@@ -193,21 +187,21 @@ esp_err_t ws2812_hal_transmit(const uint8_t* data, size_t length)
 
     esp_err_t ret = rmt_transmit(s_tx_channel, s_bytes_encoder, data, length, &tx_config);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Failed to transmit: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:tx:0x%x", ret);
         return ret;
     }
 
     // 전송 완료 대기
     ret = rmt_tx_wait_all_done(s_tx_channel, pdMS_TO_TICKS(RMT_TX_WAIT_TIMEOUT_MS));
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "TX wait timeout: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:wait:0x%x", ret);
         return ret;
     }
 
-    // WS2812 리셋 신호 (50us 이상의 로우 레벨)
+    // WS2812 리셋 신호
     esp_rom_delay_us(WS2812_RESET_DURATION_US);
 
-    T_LOGD(TAG, "Transmitted %zu bytes", length);
+    T_LOGD(TAG, "ok:%zu", length);
     return ESP_OK;
 }
 
@@ -218,7 +212,7 @@ esp_err_t ws2812_hal_transmit(const uint8_t* data, size_t length)
  */
 void ws2812_hal_deinit(void)
 {
-    T_LOGI(TAG, "Deinitializing WS2812 HAL");
+    T_LOGD(TAG, "deinit");
 
     if (s_tx_channel) {
         rmt_disable(s_tx_channel);
@@ -232,7 +226,6 @@ void ws2812_hal_deinit(void)
     }
 
     s_initialized = false;
-    T_LOGI(TAG, "WS2812 HAL deinitialized");
 }
 
 /**

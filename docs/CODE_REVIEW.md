@@ -9,24 +9,24 @@
 
 | 레이어 | 컴포넌트 | 상태 | 비고 | 날짜 |
 |--------|----------|------|------|------|
-| 05_hal | battery_hal | ✅ 완료 | 한글 주석, 영문 T_LOG 추가 | 2025-01-11 |
-| 05_hal | display_hal | ✅ 완료 | 한글 주석, 영문 T_LOG 추가 | 2025-01-11 |
-| 05_hal | ethernet_hal | ✅ 완료 | 한글 주석, 영문 T_LOG 추가 | 2025-01-11 |
-| 05_hal | lora_hal | ✅ 완료 | 이미 잘 작성됨 | 2025-01-11 |
-| 05_hal | temperature_hal | ✅ 완료 | 한글 주석, 영문 T_LOG 추가 | 2025-01-11 |
-| 05_hal | wifi_hal | ✅ 완료 | 한글 주석, 영문 T_LOG 추가 | 2025-01-11 |
-| 05_hal | ws2812_hal | ✅ 완료 | 한글 주석, 영문 T_LOG 추가 | 2025-01-11 |
-| 05_hal | u8g2_hal | ✅ 완료 | 라이브러리 래퍼 (최소 수정) | 2025-01-11 |
-| 04_driver | battery_driver | ⬜ 예정 | | |
+| 05_hal | battery_hal | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 05_hal | display_hal | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 05_hal | ethernet_hal | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 05_hal | lora_hal | ⏭️ 건너뜀 | RadioLib (이미 잘 작성됨) | 2025-01-11 |
+| 05_hal | temperature_hal | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 05_hal | wifi_hal | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 05_hal | ws2812_hal | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 05_hal | u8g2_hal | ⏭️ 건너뜀 | 라이브러리 래퍼 | 2025-01-11 |
+| 04_driver | battery_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 04_driver | temperature_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 04_driver | ws2812_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
 | 04_driver | board_led_driver | ⬜ 예정 | | |
 | 04_driver | display_driver | ⬜ 예정 | | |
 | 04_driver | ethernet_driver | ⬜ 예정 | | |
 | 04_driver | license_client | ⬜ 예정 | | |
 | 04_driver | lora_driver | ⬜ 예정 | | |
 | 04_driver | switcher_driver | ⬜ 예정 | | |
-| 04_driver | temperature_driver | ⬜ 예정 | | |
 | 04_driver | wifi_driver | ⬜ 예정 | | |
-| 04_driver | ws2812_driver | ⬜ 예정 | | |
 | 03_service | button_service | ⬜ 예정 | | |
 | 03_service | config_service | ⬜ 예정 | | |
 | 03_service | device_manager | ⬜ 예정 | | |
@@ -64,11 +64,32 @@
 - 주요 상수/매직 넘버 설명
 
 ### T_LOG 작성 (영문)
-- 함수 진입/퇴거: `Enter func_name()`, `Exit func_name()`
-- 주요 상태 변화: `State changed: OLD -> NEW`
-- 에러 발생: `Error: desc (err=0xXXXX)`
-- 중요 값: `Value: name=0xXXXX`
-- ESP-IDF 에러 코드 포함: `esp_err_to_name()`
+
+**로그 레벨 정책 (현재)**:
+| 레이어 | DEBUG | INFO | ERROR |
+|--------|-------|------|-------|
+| 05_hal | O | - | O |
+| 04_driver | O (간결) | - | O |
+| 03_service | O | - | O |
+| 02_presentation | O | - | O |
+| 01_app | O | - | O |
+
+> **INFO 로그는 추후 서비스 계층부터 추가 예정**
+
+**DRIVER 계층 DEBUG 로그 패턴 (간결하게)**:
+```c
+// 함수 진입
+T_LOGD(TAG, "init");
+T_LOGD(TAG, "getVoltage");
+
+// 성공
+T_LOGD(TAG, "ok");
+T_LOGD(TAG, "ok:%.2fV", voltage);
+
+// 에러 (ERROR 레벨)
+T_LOGE(TAG, "fail:0x%x", ret);
+T_LOGE(TAG, "fail:null");
+```
 
 ---
 

@@ -77,13 +77,13 @@ static bool s_initialized = false;
  */
 static esp_err_t init_adc(void)
 {
+    T_LOGD(TAG, "init_adc");
+
     // 이미 초기화된 경우
     if (s_adc_handle != NULL) {
-        T_LOGD(TAG, "ADC already initialized");
+        T_LOGD(TAG, "ok:already");
         return ESP_OK;
     }
-
-    T_LOGI(TAG, "Enter init_adc()");
 
     // ADC 유닛 설정
     adc_oneshot_unit_init_cfg_t init_config = {
@@ -95,10 +95,9 @@ static esp_err_t init_adc(void)
     // ADC 유닛 생성
     esp_err_t ret = adc_oneshot_new_unit(&init_config, &s_adc_handle);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Failed to create ADC unit: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:unit:0x%x", ret);
         return ret;
     }
-    T_LOGD(TAG, "ADC unit created (unit=%d)", BATTERY_ADC_UNIT);
 
     // 채널 설정
     adc_oneshot_chan_cfg_t config = {
@@ -108,15 +107,13 @@ static esp_err_t init_adc(void)
 
     ret = adc_oneshot_config_channel(s_adc_handle, BATTERY_ADC_CHANNEL, &config);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Failed to config ADC channel: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:ch:0x%x", ret);
         adc_oneshot_del_unit(s_adc_handle);
         s_adc_handle = NULL;
         return ret;
     }
-    T_LOGD(TAG, "ADC channel configured (ch=%d, atten=%d, bitwidth=%d)",
-            BATTERY_ADC_CHANNEL, BATTERY_ADC_ATTEN, BATTERY_ADC_BITWIDTH);
 
-    // 캘리브레이션 시도 (선택 사항, 실패 시 raw 값 사용)
+    // 캘리브레이션 시도
     adc_cali_curve_fitting_config_t cali_config = {
         .unit_id = BATTERY_ADC_UNIT,
         .atten = BATTERY_ADC_ATTEN,
@@ -126,13 +123,12 @@ static esp_err_t init_adc(void)
     ret = adc_cali_create_scheme_curve_fitting(&cali_config, &s_adc_cali_handle);
     if (ret == ESP_OK) {
         s_adc_calibrated = true;
-        T_LOGI(TAG, "ADC calibration successful");
+        T_LOGD(TAG, "ok:cali");
     } else {
         s_adc_calibrated = false;
-        T_LOGW(TAG, "ADC calibration failed, using raw ADC values (err=%s)", esp_err_to_name(ret));
+        T_LOGD(TAG, "ok:no_cali");
     }
 
-    T_LOGI(TAG, "Exit init_adc() - OK");
     return ESP_OK;
 }
 
@@ -150,19 +146,19 @@ static esp_err_t init_adc(void)
  */
 esp_err_t battery_hal_init(void)
 {
+    T_LOGD(TAG, "init");
+
     if (s_initialized) {
-        T_LOGD(TAG, "Already initialized");
+        T_LOGD(TAG, "ok:already");
         return ESP_OK;
     }
-
-    T_LOGI(TAG, "Initializing battery HAL");
 
     esp_err_t ret = init_adc();
     if (ret == ESP_OK) {
         s_initialized = true;
-        T_LOGI(TAG, "Battery HAL initialized (calibrated=%d)", s_adc_calibrated);
+        T_LOGD(TAG, "ok");
     } else {
-        T_LOGE(TAG, "Battery HAL initialization failed: %s (0x%x)", esp_err_to_name(ret), ret);
+        T_LOGE(TAG, "fail:0x%x", ret);
     }
 
     return ret;
@@ -178,20 +174,22 @@ esp_err_t battery_hal_init(void)
  */
 esp_err_t battery_hal_read_voltage(float* voltage)
 {
+    T_LOGD(TAG, "read");
+
     // 파라미터 유효성 검사
     if (voltage == NULL) {
-        T_LOGE(TAG, "Invalid parameter: voltage is NULL");
+        T_LOGE(TAG, "fail:null");
         return ESP_ERR_INVALID_ARG;
     }
 
     // 초기화 상태 확인
     if (!s_initialized) {
-        T_LOGE(TAG, "Not initialized (call battery_hal_init first)");
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (s_adc_handle == NULL) {
-        T_LOGE(TAG, "ADC handle is NULL");
+        T_LOGE(TAG, "fail:no_handle");
         return ESP_FAIL;
     }
 
@@ -203,27 +201,25 @@ esp_err_t battery_hal_read_voltage(float* voltage)
         ret = adc_oneshot_get_calibrated_result(s_adc_handle, s_adc_cali_handle,
                                                  BATTERY_ADC_CHANNEL, &adc_value_mv);
         if (ret != ESP_OK) {
-            T_LOGE(TAG, "Failed to get calibrated result: %s (0x%x)", esp_err_to_name(ret), ret);
+            T_LOGE(TAG, "fail:cali:0x%x", ret);
             return ret;
         }
-        T_LOGD(TAG, "Calibrated ADC value: %d mV", adc_value_mv);
     } else {
         // 캘리브레이션 실패 시 raw 값을 사용하여 직접 변환
         int adc_raw;
         ret = adc_oneshot_read(s_adc_handle, BATTERY_ADC_CHANNEL, &adc_raw);
         if (ret != ESP_OK) {
-            T_LOGE(TAG, "Failed to read ADC: %s (0x%x)", esp_err_to_name(ret), ret);
+            T_LOGE(TAG, "fail:read:0x%x", ret);
             return ret;
         }
         // 원시값을 밀리볼트로 변환 (raw * 3300 / 4095)
         adc_value_mv = (adc_raw * ADC_RAW_TO_MV_NUMERATOR) / ADC_RAW_TO_MV_DENOMINATOR;
-        T_LOGD(TAG, "Raw ADC value: %d -> %d mV", adc_raw, adc_value_mv);
     }
 
     // 분배비를 고려하여 실제 배터리 전압 계산
     *voltage = (adc_value_mv / 1000.0f) * BATTERY_DIVIDER_RATIO;
 
-    T_LOGD(TAG, "Battery voltage: %.2f V", *voltage);
+    T_LOGD(TAG, "ok:%.2fV", *voltage);
     return ESP_OK;
 }
 
@@ -237,9 +233,11 @@ esp_err_t battery_hal_read_voltage(float* voltage)
  */
 esp_err_t battery_hal_read_voltage_mV(int* voltage_mv)
 {
+    T_LOGD(TAG, "read_mV");
+
     // 파라미터 유효성 검사
     if (voltage_mv == NULL) {
-        T_LOGE(TAG, "Invalid parameter: voltage_mv is NULL");
+        T_LOGE(TAG, "fail:null");
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -247,7 +245,7 @@ esp_err_t battery_hal_read_voltage_mV(int* voltage_mv)
     esp_err_t ret = battery_hal_read_voltage(&voltage);
     if (ret == ESP_OK) {
         *voltage_mv = (int)(voltage * 1000.0f);
-        T_LOGD(TAG, "Battery voltage: %d mV", *voltage_mv);
+        T_LOGD(TAG, "ok:%dmV", *voltage_mv);
     }
     return ret;
 }

@@ -12,33 +12,40 @@ static bool s_initialized = false;
 
 esp_err_t TemperatureDriver_init(void)
 {
+    T_LOGD(TAG, "init");
+
     if (s_initialized) {
+        T_LOGD(TAG, "ok:already");
         return ESP_OK;
     }
 
     esp_err_t ret = temperature_hal_init();
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "HAL 초기화 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "fail:0x%x", ret);
         return ret;
     }
 
     s_initialized = true;
-    T_LOGI(TAG, "Temperature driver initialized");
+    T_LOGD(TAG, "ok");
     return ESP_OK;
 }
 
 void TemperatureDriver_deinit(void)
 {
+    T_LOGD(TAG, "deinit");
+
     if (s_initialized) {
         temperature_hal_deinit();
         s_initialized = false;
-        T_LOGI(TAG, "Temperature driver deinitialized");
     }
 }
 
 esp_err_t TemperatureDriver_getCelsius(float* temp_c)
 {
+    T_LOGD(TAG, "getc");
+
     if (!s_initialized) {
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -47,7 +54,10 @@ esp_err_t TemperatureDriver_getCelsius(float* temp_c)
 
 esp_err_t TemperatureDriver_getFahrenheit(float* temp_f)
 {
+    T_LOGD(TAG, "getf");
+
     if (!s_initialized) {
+        T_LOGE(TAG, "fail:not_init");
         return ESP_ERR_INVALID_STATE;
     }
 
