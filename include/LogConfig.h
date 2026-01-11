@@ -51,7 +51,7 @@ extern "C" {
  * @brief 태그 최대 길이 (괄호 포함)
  * @note 실제 태그는 TAG_MAX_LEN-2 까지 사용 가능, 초과 시 줄임표(...) 처리
  */
-#define T_LOG_TAG_MAX_LEN 12
+#define T_LOG_TAG_MAX_LEN 16
 
 /**
  * @brief 로그 출력 버퍼 크기

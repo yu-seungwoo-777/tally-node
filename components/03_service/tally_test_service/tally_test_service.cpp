@@ -18,7 +18,7 @@
 #include "freertos/task.h"
 #include <cstring>
 
-static const char* TAG = "TallyTest";
+static const char* TAG = "03_TallyTest";
 
 // ============================================================================
 // 내부 상태

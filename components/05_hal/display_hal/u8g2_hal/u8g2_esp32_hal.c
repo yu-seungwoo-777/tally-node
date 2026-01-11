@@ -10,7 +10,7 @@
 
 #include "u8g2_esp32_hal.h"
 
-static const char* TAG = "u8g2_hal";
+static const char* TAG = "05_U8g2";
 static const unsigned int I2C_TIMEOUT_MS = 1000;
 
 static spi_device_handle_t handle_spi;   // SPI handle.
