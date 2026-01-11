@@ -73,6 +73,18 @@ void tx_page_set_ap_password(const char* password);
  */
 void tx_page_set_ap_ip(const char* ip);
 
+/**
+ * @brief AP 활성화 상태 설정
+ * @param enabled true=활성화, false=비활성화
+ */
+void tx_page_set_ap_enabled(bool enabled);
+
+/**
+ * @brief AP 폴백 상태 설정
+ * @param fallback true=폴백 상태, false=정상 상태
+ */
+void tx_page_set_ap_fallback(bool fallback);
+
 // ========== WIFI 정보 (Page 3) ==========
 
 /**

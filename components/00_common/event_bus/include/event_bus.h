@@ -245,6 +245,7 @@ typedef struct __attribute__((packed)) {
     char ap_ssid[33];        ///< AP SSID
     char ap_ip[16];          ///< AP IP 주소
     bool ap_enabled;         ///< AP 활성화 여부
+    bool ap_fallback;        ///< AP 폴백 활성화 여부 (안전 장치로 강제 활성화된 경우)
 
     // WiFi STA (Page 3)
     char sta_ssid[33];       ///< STA SSID

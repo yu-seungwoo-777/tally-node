@@ -313,6 +313,7 @@ void NetworkServiceClass::publishStatus(void)
 
         // 이벤트 데이터 생성
         event.ap_enabled = s_config.wifi_ap.enabled;
+        event.ap_fallback = s_ap_fallback_triggered;
         event.sta_connected = status.wifi_sta.connected;
         event.eth_connected = status.ethernet.connected;
         event.eth_detected = status.ethernet.detected;
@@ -365,6 +366,9 @@ void NetworkServiceClass::publishStatus(void)
                 if (wifi_driver_is_initialized()) {
                     wifi_driver_reconfigure(ap_ssid, ap_pass, sta_ssid, sta_pass);
                 }
+
+                // 상태 이벤트 발행 (DisplayManager 갱신용)
+                publishStatus();
             }
         }
     }

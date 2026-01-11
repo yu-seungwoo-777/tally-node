@@ -510,6 +510,8 @@ static esp_err_t on_network_status_changed(const event_data_t* event)
     // TxPage에 상태 설정
     tx_page_set_ap_name(net->ap_ssid);
     tx_page_set_ap_ip(net->ap_ip);
+    tx_page_set_ap_enabled(net->ap_enabled);
+    tx_page_set_ap_fallback(net->ap_fallback);
     tx_page_set_wifi_ssid(net->sta_ssid);
     tx_page_set_wifi_ip(net->sta_ip);
     tx_page_set_wifi_connected(net->sta_connected);
