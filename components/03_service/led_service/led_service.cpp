@@ -217,7 +217,7 @@ esp_err_t led_service_init_with_colors(int gpio_num, uint32_t num_leds, uint8_t 
     // WS2812Driver 초기화
     esp_err_t ret = ws2812_driver_init(gpio_num, num_leds, camera_id);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "WS2812Driver 초기화 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "WS2812Driver init failed: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -242,7 +242,7 @@ esp_err_t led_service_set_colors(const led_colors_t* colors)
 
     memcpy(&s_colors, colors, sizeof(led_colors_t));
 
-    T_LOGI(TAG, "색상 설정: PGM(%d,%d,%d) PVW(%d,%d,%d) OFF(%d,%d,%d) BAT(%d,%d,%d)",
+    T_LOGI(TAG, "colors set: PGM(%d,%d,%d) PVW(%d,%d,%d) OFF(%d,%d,%d) BAT(%d,%d,%d)",
              s_colors.program_r, s_colors.program_g, s_colors.program_b,
              s_colors.preview_r, s_colors.preview_g, s_colors.preview_b,
              s_colors.off_r, s_colors.off_g, s_colors.off_b,

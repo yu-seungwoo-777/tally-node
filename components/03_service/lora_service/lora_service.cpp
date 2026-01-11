@@ -387,7 +387,7 @@ static void lora_txq_task(void* arg)
         // 비블로킹으로 큐 체크 (패킷 있으면 즉시 송신)
         if (xQueueReceive(s_tx_queue, &packet, 0) == pdTRUE) {
             // 디버그: 수신된 패킷 크기
-            T_LOGD(TAG, "TX 큐 수신: length=%zu", packet.length);
+            T_LOGD(TAG, "tx queue recv: length=%zu", packet.length);
             if (packet.length <= 8) {
                 for (size_t i = 0; i < packet.length; i++) {
                     T_LOGD(TAG, "  data[%zu]=0x%02X", i, packet.data[i]);
@@ -790,7 +790,7 @@ static void lora_scan_task(void* arg)
             };
             event_bus_publish(EVT_LORA_SCAN_PROGRESS, &progress_event, sizeof(progress_event));
 
-            T_LOGD(TAG, "스캔: %.1f MHz, RSSI %d dBm (%d%%)",
+            T_LOGD(TAG, "scan: %.1f MHz, RSSI %d dBm (%d%%)",
                    freq, results[result_count - 1].rssi, progress);
         }
 

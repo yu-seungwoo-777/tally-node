@@ -251,7 +251,7 @@ void NetworkServiceClass::printStatus(void)
 
     // WiFi AP
     if (status.wifi_ap.active) {
-        T_LOGI(TAG, "WiFi AP: %s", status.wifi_ap.connected ? "시작됨" : "정지됨");
+        T_LOGI(TAG, "WiFi AP: %s", status.wifi_ap.connected ? "started" : "stopped");
         if (status.wifi_ap.connected) {
             T_LOGI(TAG, "  IP: %s", status.wifi_ap.ip);
         }
@@ -261,7 +261,7 @@ void NetworkServiceClass::printStatus(void)
 
     // WiFi STA
     if (status.wifi_sta.active) {
-        T_LOGI(TAG, "WiFi STA: %s", status.wifi_sta.connected ? "연결됨" : "연결 안됨");
+        T_LOGI(TAG, "WiFi STA: %s", status.wifi_sta.connected ? "connected" : "not connected");
         if (status.wifi_sta.connected) {
             T_LOGI(TAG, "  IP: %s", status.wifi_sta.ip);
         }
@@ -271,7 +271,7 @@ void NetworkServiceClass::printStatus(void)
 
     // Ethernet
     if (status.ethernet.active) {
-        T_LOGI(TAG, "Ethernet: %s", status.ethernet.connected ? "연결됨" : "연결 안됨");
+        T_LOGI(TAG, "Ethernet: %s", status.ethernet.connected ? "connected" : "not connected");
         if (status.ethernet.connected) {
             T_LOGI(TAG, "  IP: %s", status.ethernet.ip);
         }

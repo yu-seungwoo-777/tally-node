@@ -261,7 +261,7 @@ void HardwareService::hw_monitor_task(void* arg)
 esp_err_t HardwareService::start(void)
 {
     if (!s_initialized) {
-        T_LOGE(TAG, "초기화되지 않음");
+        T_LOGE(TAG, "not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -282,7 +282,7 @@ esp_err_t HardwareService::start(void)
     );
 
     if (ret != pdPASS) {
-        T_LOGE(TAG, "태스크 생성 실패");
+        T_LOGE(TAG, "task creation failed");
         s_running = false;
         return ESP_FAIL;
     }
@@ -368,26 +368,7 @@ float HardwareService::getTemperature(void)
     return s_temperature;
 }
 
-// RSSI/SNR - device RF에서 관리하므로 hardware_service에서 제거
-// void HardwareService::setRssi(int16_t rssi)
-// {
-//     s_rssi = rssi;
-// }
-//
-// int16_t HardwareService::getRssi(void)
-// {
-//     return s_rssi;
-// }
-//
-// void HardwareService::setSnr(float snr)
-// {
-//     s_snr = snr;
-// }
-//
-// float HardwareService::getSnr(void)
-// {
-//     return s_snr;
-// }
+// RSSI/SNR - device RF에서 관리하므로 hardware_service에서 제거됨
 
 // Uptime/Status
 void HardwareService::setStopped(bool stopped)
@@ -493,26 +474,7 @@ float hardware_service_get_temperature(void)
     return HardwareService::getTemperature();
 }
 
-// RSSI/SNR - device RF에서 관리하므로 제거
-// void hardware_service_set_rssi(int16_t rssi)
-// {
-//     HardwareService::setRssi(rssi);
-// }
-//
-// int16_t hardware_service_get_rssi(void)
-// {
-//     return HardwareService::getRssi();
-// }
-//
-// void hardware_service_set_snr(float snr)
-// {
-//     HardwareService::setSnr(snr);
-// }
-//
-// float hardware_service_get_snr(void)
-// {
-//     return HardwareService::getSnr();
-// }
+// RSSI/SNR - device RF에서 관리하므로 제거됨
 
 void hardware_service_set_stopped(bool stopped)
 {

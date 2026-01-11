@@ -187,7 +187,7 @@ void ButtonService::button_task(void* arg)
             uint64_t idle_time = current_time - s_release_time;
             if (idle_time >= MULTI_CLICK_TIMEOUT_MS * 1000ULL) {
                 // 단일 클릭 확정
-                T_LOGV(TAG, "단일 클릭");
+                T_LOGV(TAG, "single click");
                 event_bus_publish(EVT_BUTTON_SINGLE_CLICK, nullptr, 0);
                 resetState();
             }
@@ -222,7 +222,7 @@ esp_err_t ButtonService::init(void)
 
     esp_err_t ret = gpio_config(&io_conf);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "GPIO 설정 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "GPIO config failed: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -237,7 +237,7 @@ esp_err_t ButtonService::init(void)
 void ButtonService::start(void)
 {
     if (!s_initialized) {
-        T_LOGE(TAG, "초기화되지 않음");
+        T_LOGE(TAG, "not initialized");
         return;
     }
 
@@ -259,7 +259,7 @@ void ButtonService::start(void)
     );
 
     if (ret != pdPASS) {
-        T_LOGE(TAG, "폴링 태스크 생성 실패");
+        T_LOGE(TAG, "polling task creation failed");
         s_running = false;
         return;
     }
