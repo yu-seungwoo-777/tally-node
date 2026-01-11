@@ -1,6 +1,6 @@
 /**
  * @file display_hal.h
- * @brief 디스플레이 HAL (I2C + U8g2)
+ * @brief 디스플레이 HAL 인터페이스
  *
  * SSD1306 OLED 디스플레이를 위한 하드웨어 추상화 계층
  */
@@ -16,36 +16,59 @@
 extern "C" {
 #endif
 
+// ============================================================================
+// 공개 API
+// ============================================================================
+
 /**
  * @brief 디스플레이 HAL 초기화
  *
- * I2C 마스터를 초기화하고 U8g2 HAL을 설정합니다.
+ * 디스플레이 HAL을 초기화합니다.
  *
  * @return ESP_OK 성공, 에러 코드 실패
  */
 esp_err_t display_hal_init(void);
 
 /**
- * @brief I2C 핀 설정 가져오기
+ * @brief 디스플레이 HAL 해제
+ */
+void display_hal_deinit(void);
+
+/**
+ * @brief 초기화 여부 확인
  *
- * @param out_sda SDA 핀 번호 출력 포인터
- * @param out_scl SCL 핀 번호 출력 포인터
+ * @return true 초기화됨, false 초기화 안됨
+ */
+bool display_hal_is_initialized(void);
+
+/**
+ * @brief I2C 핀 번호 조회
+ *
+ * @param out_sda SDA 핀 번호를 저장할 포인터 (NULL 가능)
+ * @param out_scl SCL 핀 번호를 저장할 포인터 (NULL 가능)
  */
 void display_hal_get_i2c_pins(int *out_sda, int *out_scl);
 
 /**
- * @brief I2C 포트 번호 가져오기
+ * @brief I2C 포트 번호 조회
  *
- * @return I2C 포트 번호 (I2C_NUM_0 또는 I2C_NUM_1)
+ * @return I2C 포트 번호
  */
 int display_hal_get_i2c_port(void);
 
 /**
- * @brief 디스플레이 전원 켜기/끄기
+ * @brief 전원 상태 설정
  *
- * @param on true: 켜기, false: 끄기
+ * @param on true=켜기, false=끄기
  */
 void display_hal_set_power(bool on);
+
+/**
+ * @brief 전원 상태 조회
+ *
+ * @return true 켜짐, false 꺼짐
+ */
+bool display_hal_get_power(void);
 
 #ifdef __cplusplus
 }
