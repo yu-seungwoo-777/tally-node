@@ -232,7 +232,7 @@ int AtemDriver::loop() {
 
                 // 10회마다 또는 긴 간격일 때 로그 (DEBUG 레벨)
                 if (packet_count % 50 == 0 || interval > 500) {
-                    T_LOGD(TAG, "패킷 수신: #%u, 간격=%ums, 크기=%db",
+                    T_LOGD(TAG, "rx:#%u,%dms,%db",
                              packet_count, interval, static_cast<int>(received));
                 }
             }
@@ -274,7 +274,7 @@ int AtemDriver::loop() {
         now - state_.last_keepalive_ms > ATEM_KEEPALIVE_INTERVAL_MS) {
         uint8_t keepalive[ATEM_ACK_PACKET_SIZE];
         createKeepalivePacket(keepalive);
-        T_LOGD(TAG, "[%s] Keepalive 전송 (간격: %dms)", config_.name.c_str(), (int)(now - state_.last_keepalive_ms));
+        T_LOGD(TAG, "[%s] ka:%dms", config_.name.c_str(), (int)(now - state_.last_keepalive_ms));
         sendPacket(keepalive, ATEM_ACK_PACKET_SIZE);
         state_.last_keepalive_ms = now;
     }
