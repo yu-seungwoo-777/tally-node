@@ -38,7 +38,7 @@ esp_err_t BatteryDriver::init(void)
     esp_err_t ret = battery_hal_init();
     if (ret == ESP_OK) {
         s_initialized = true;
-        T_LOGI("BatteryDrv", "배터리 드라이버 초기화 완료");
+        T_LOGI("04_BatteryDrv", "배터리 드라이버 초기화 완료");
     }
     return ret;
 }
@@ -65,7 +65,7 @@ uint8_t BatteryDriver::updatePercent(void)
     float voltage;
     if (getVoltage(&voltage) == ESP_OK && voltage > 0.5f) {
         uint8_t percent = voltageToPercent(voltage);
-        // T_LOGD("BatteryDrv", "배터리: %.2fV → %d%%", voltage, percent);
+        // T_LOGD("04_BatteryDrv", "배터리: %.2fV → %d%%", voltage, percent);
         return percent;
     }
     return 100;  // 기본값

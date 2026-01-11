@@ -19,9 +19,9 @@
 #include <string.h>
 #include <stdio.h>
 
-static const char* TAG __attribute__((unused)) = "LORA_SERVICE";
+static const char* TAG __attribute__((unused)) = "03_LoRaSvc";
 #ifdef DEVICE_MODE_TX
-static const char* TAG_RF __attribute__((unused)) = "RF";
+static const char* TAG_RF __attribute__((unused)) = "03_RF";
 #endif
 
 // ============================================================================
