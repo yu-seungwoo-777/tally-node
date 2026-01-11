@@ -27,16 +27,16 @@
 | 04_driver | license_client | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
 | 04_driver | atem_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
 | 04_driver | vmix_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
-| 03_service | button_service | ⬜ 예정 | | |
-| 03_service | config_service | ⬜ 예정 | | |
-| 03_service | device_manager | ⬜ 예정 | | |
-| 03_service | hardware_service | ⬜ 예정 | | |
-| 03_service | led_service | ⬜ 예정 | | |
-| 03_service | license_service | ⬜ 예정 | | |
-| 03_service | lora_service | ⬜ 예정 | | |
-| 03_service | network_service | ⬜ 예정 | | |
-| 03_service | switcher_service | ⬜ 예정 | | |
-| 03_service | tally_test_service | ⬜ 예정 | | |
+| 03_service | button_service | ✅ 완료 | INFO 로그, 영문 메시지 | 2025-01-11 |
+| 03_service | config_service | ✅ 완료 | INFO 로그, 영문 메시지 | 2025-01-11 |
+| 03_service | device_manager | ✅ 완료 | INFO 로그, 영문 메시지 | 2025-01-11 |
+| 03_service | hardware_service | ✅ 완료 | INFO 로그, 영문 메시지 | 2025-01-11 |
+| 03_service | led_service | ✅ 완료 | INFO 로그, 영문 메시지 | 2025-01-11 |
+| 03_service | license_service | ✅ 완료 | INFO 로그, 영문 메시지 | 2025-01-11 |
+| 03_service | lora_service | ✅ 완료 | INFO 로그, 영문 메시지 | 2025-01-11 |
+| 03_service | network_service | ✅ 완료 | INFO 로그, 영문 메시지 | 2025-01-11 |
+| 03_service | switcher_service | ✅ 완료 | INFO 로그, 영문 메시지 | 2025-01-11 |
+| 03_service | tally_test_service | ✅ 완료 | 이미 영문 메시지 | 2025-01-11 |
 | 02_presentation | display | ⬜ 예정 | | |
 | 02_presentation | web_server | ⬜ 예정 | | |
 | 01_app | prod_rx_app | ⬜ 예정 | | |
@@ -70,11 +70,11 @@
 |--------|-------|------|-------|
 | 05_hal | O | - | O |
 | 04_driver | O (간결) | - | O |
-| 03_service | O | - | O |
-| 02_presentation | O | - | O |
-| 01_app | O | - | O |
+| 03_service | O | O (유지) | O |
+| 02_presentation | O | O (유지) | O |
+| 01_app | O | O (유지) | O |
 
-> **INFO 로그는 추후 서비스 계층부터 추가 예정**
+> **SERVICE 계층부터 INFO 로그 유지, 한국어→영문 변환 완료**
 
 **DRIVER 계층 DEBUG 로그 패턴 (간결하게)**:
 ```c
@@ -94,6 +94,29 @@ T_LOGE(TAG, "fail:null");
 ---
 
 ## 📝 리뷰 노트
+
+### 03_service 레이어 완료 (2025-01-11)
+
+**완료된 SERVICE 컴포넌트** (10개):
+1. **button_service** - 버튼 폴링, 단일/롱 프레스 이벤트
+2. **hardware_service** - 배터리/온도 모니터링, uptime
+3. **led_service** - WS2812 + 보드 LED 제어
+4. **tally_test_service** - Tally 테스트 모드 (이미 영문)
+5. **lora_service** - LoRa TX 큐, 송수신 관리
+6. **config_service** - NVS 설정 저장/로드
+7. **license_service** - 라이센스 검증, device_limit
+8. **switcher_service** - ATEM/vMix 듀얼모드
+9. **network_service** - WiFi AP/STA, Ethernet
+10. **device_manager** - TX/RX 디바이스 관리
+
+**적용된 개선사항**:
+- 한국어 로그 메시지 → 영어 변환
+- INFO/WARNING 레벨 유지 (SERVICE 계층 정책)
+- 간결하고 명확한 영문 로그 메시지
+
+**빌드 결과**: SUCCESS (RAM 14.3%, Flash 48.8%)
+
+---
 
 ### 05_hal 레이어 완료 (2025-01-11)
 
@@ -178,8 +201,9 @@ T_LOGE(TAG, "fail:null");
 ## 📊 통계
 
 - **전체 컴포넌트**: 33개
-- **리뷰 완료**: 17개 (52%)
+- **리뷰 완료**: 27개 (82%)
 - **05_hal 완료**: 8/8 (100%)
 - **04_driver 완료**: 9/9 (100%)
+- **03_service 완료**: 10/10 (100%)
 - **진행 중**: 0개
-- **예정**: 16개
+- **예정**: 6개

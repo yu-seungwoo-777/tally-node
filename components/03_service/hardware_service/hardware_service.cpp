@@ -156,7 +156,7 @@ esp_err_t HardwareService::onStopEvent(const event_data_t* event)
     bool stopped = *(const bool*)event->data;
     s_stopped = stopped;
 
-    T_LOGI(TAG, "정지 상태 변경: %s", stopped ? "정지" : "동작");
+    T_LOGI(TAG, "stop state: %s", stopped ? "stopped" : "running");
 
     return ESP_OK;
 }
@@ -168,11 +168,11 @@ esp_err_t HardwareService::onStopEvent(const event_data_t* event)
 esp_err_t HardwareService::init(void)
 {
     if (s_initialized) {
-        T_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "already initialized");
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "HardwareService 초기화 중...");
+    T_LOGI(TAG, "initializing...");
 
     // Device ID 초기화
     initDeviceId();
@@ -198,7 +198,7 @@ esp_err_t HardwareService::init(void)
     event_bus_subscribe(EVT_STOP_CHANGED, onStopEvent);
 
     s_initialized = true;
-    T_LOGI(TAG, "HardwareService 초기화 완료");
+    T_LOGI(TAG, "init complete");
 
     return ESP_OK;
 }
@@ -217,7 +217,7 @@ void HardwareService::deinit(void)
     event_bus_unsubscribe(EVT_STOP_CHANGED, onStopEvent);
 
     s_initialized = false;
-    T_LOGI(TAG, "HardwareService 정리 완료");
+    T_LOGI(TAG, "deinit complete");
 }
 
 // ============================================================================
@@ -227,7 +227,7 @@ void HardwareService::deinit(void)
 void HardwareService::hw_monitor_task(void* arg)
 {
     (void)arg;
-    T_LOGI(TAG, "하드웨어 모니터링 태스크 시작 (1초 주기)");
+    T_LOGI(TAG, "hw monitor task start (1s interval)");
 
     while (s_running) {
         // 배터리 업데이트 (ADC 읽기)
@@ -254,7 +254,7 @@ void HardwareService::hw_monitor_task(void* arg)
         vTaskDelay(pdMS_TO_TICKS(MONITOR_INTERVAL_MS));
     }
 
-    T_LOGI(TAG, "모니터링 태스크 종료");
+    T_LOGI(TAG, "hw monitor task end");
     vTaskDelete(nullptr);
 }
 
@@ -266,7 +266,7 @@ esp_err_t HardwareService::start(void)
     }
 
     if (s_running) {
-        T_LOGW(TAG, "이미 실행 중");
+        T_LOGW(TAG, "already running");
         return ESP_OK;
     }
 
@@ -287,7 +287,7 @@ esp_err_t HardwareService::start(void)
         return ESP_FAIL;
     }
 
-    T_LOGI(TAG, "모니터링 태스크 시작");
+    T_LOGI(TAG, "hw monitor task start");
     return ESP_OK;
 }
 
@@ -309,7 +309,7 @@ void HardwareService::stop(void)
         s_task_handle = nullptr;
     }
 
-    T_LOGI(TAG, "모니터링 태스크 정지");
+    T_LOGI(TAG, "hw monitor task stop");
 }
 
 // Device ID

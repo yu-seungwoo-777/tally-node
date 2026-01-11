@@ -139,7 +139,7 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
 
     const auto* rf = reinterpret_cast<const lora_rf_event_t*>(event->data);
     if (rf == nullptr) {
-        T_LOGW(TAG, "rf 데이터가 NULL");
+        T_LOGW(TAG, "rf data is NULL");
         return ESP_OK;
     }
 
@@ -154,7 +154,7 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
         s_rf_initialized = true;
         s_last_frequency = rf->frequency;
         s_last_sync_word = rf->sync_word;
-        T_LOGD(TAG_RF, "RF 초기화 완료: %.1f MHz, Sync 0x%02X (부팅 시 broadcast 스킵)",
+        T_LOGD(TAG_RF, "RF init done: %.1f MHz, Sync 0x%02X (boot broadcast skipped)",
                  rf->frequency, rf->sync_word);
         return ESP_OK;
     }
@@ -165,7 +165,7 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
     }
 
     // TX: 값이 변경된 경우에만 broadcast
-    T_LOGD(TAG_RF, "RF broadcast 시작 (10회): %.1f MHz, Sync 0x%02X",
+    T_LOGD(TAG_RF, "RF broadcast start (10 times): %.1f MHz, Sync 0x%02X",
              rf->frequency, rf->sync_word);
 
     uint8_t broadcast_pkt[6];
@@ -178,13 +178,13 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
         vTaskDelay(pdMS_TO_TICKS(500));  // 500ms 간격
     }
 
-    T_LOGD(TAG_RF, "RF broadcast 완료: %.1f MHz, Sync 0x%02X (10회)", rf->frequency, rf->sync_word);
+    T_LOGD(TAG_RF, "RF broadcast done: %.1f MHz, Sync 0x%02X (10 times)", rf->frequency, rf->sync_word);
 
     // 드라이버에 RF 설정 적용 (broadcast 완료 후)
     lora_driver_set_frequency(rf->frequency);
     lora_driver_set_sync_word(rf->sync_word);
 
-    T_LOGD(TAG_RF, "드라이버 적용 완료: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
+    T_LOGD(TAG_RF, "driver apply done: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
 
     // 현재 값 저장
     s_last_frequency = rf->frequency;
@@ -194,7 +194,7 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
     event_bus_publish(EVT_RF_SAVED, rf, sizeof(*rf));
 #else
     // RX: 드라이버에 바로 적용
-    T_LOGI(TAG, "드라이버 적용: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
+    T_LOGI(TAG, "driver apply: %.1f MHz, Sync 0x%02X", rf->frequency, rf->sync_word);
     lora_driver_set_frequency(rf->frequency);
     lora_driver_set_sync_word(rf->sync_word);
 #endif
@@ -216,13 +216,13 @@ static void process_tally_packet(const uint8_t* data, size_t length, int16_t rss
 {
     // 패킷 구조: [F1-F4][ChannelCount][Data...]
     if (length < 2) {
-        T_LOGW(TAG, "Tally 패킷 길이 부족: %d", (int)length);
+        T_LOGW(TAG, "Tally packet too short: %d", (int)length);
         return;
     }
 
     uint8_t ch_count = data[1];
     if (ch_count < 1 || ch_count > 20) {
-        T_LOGW(TAG, "잘못된 채널 수: %d", ch_count);
+        T_LOGW(TAG, "invalid channel count: %d", ch_count);
         return;
     }
 
@@ -231,7 +231,7 @@ static void process_tally_packet(const uint8_t* data, size_t length, int16_t rss
     size_t payload_len = length - 2;  // 헤더(2) 제외
 
     if (payload_len != expected_data_len || payload_len > 8) {
-        T_LOGW(TAG, "Tally 데이터 길이 불일치: 예상 %d, 수신 %d", expected_data_len, (int)payload_len);
+        T_LOGW(TAG, "Tally data length mismatch: expected %d, got %d", expected_data_len, (int)payload_len);
         return;
     }
 
@@ -245,7 +245,7 @@ static void process_tally_packet(const uint8_t* data, size_t length, int16_t rss
     };
 
     if (!packed_data_is_valid(&tally)) {
-        T_LOGW(TAG, "잘못된 Tally 데이터");
+        T_LOGW(TAG, "invalid Tally data");
         return;
     }
 
@@ -349,7 +349,7 @@ static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, 
 
     // RX 모드: RX→TX 응답(0xD0~)은 다른 RX가 보낸 것이므로 무시
 #ifdef DEVICE_MODE_RX
-    T_LOGD(TAG, "RX 모드: 다른 RX 패킷 무시 0x%02X", header);
+    T_LOGD(TAG, "RX mode: ignoring other RX packet 0x%02X", header);
     return;
 #endif
 
@@ -379,7 +379,7 @@ static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, 
  */
 static void lora_txq_task(void* arg)
 {
-    T_LOGI(TAG, "LoRa 송신 큐 태스크 시작");
+    T_LOGI(TAG, "LoRa tx queue task start");
 
     lora_tx_packet_t packet;
 
@@ -408,10 +408,10 @@ static void lora_txq_task(void* arg)
 
             if (ret == ESP_OK) {
                 s_packets_sent++;
-                T_LOGD(TAG, "송신: %zu bytes", packet.length);
+                T_LOGD(TAG, "tx: %zu bytes", packet.length);
                 event_bus_publish(EVT_LORA_PACKET_SENT, &s_packets_sent, sizeof(s_packets_sent));
             } else {
-                T_LOGE(TAG, "송신 실패: %d", ret);
+                T_LOGE(TAG, "tx failed: %d", ret);
             }
         }
 
@@ -419,7 +419,7 @@ static void lora_txq_task(void* arg)
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 
-    T_LOGI(TAG, "송신 태스크 종료");
+    T_LOGI(TAG, "tx task end");
     vTaskDelete(nullptr);
 }
 
@@ -432,16 +432,16 @@ extern "C" {
 esp_err_t lora_service_init(const lora_service_config_t* config)
 {
     if (s_initialized) {
-        T_LOGI(TAG, "이미 초기화됨");
+        T_LOGI(TAG, "already initialized");
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "LoRa Service 초기화 중...");
+    T_LOGI(TAG, "initializing...");
 
     // 송신 큐 생성
     s_tx_queue = xQueueCreate(TX_QUEUE_SIZE, sizeof(lora_tx_packet_t));
     if (s_tx_queue == nullptr) {
-        T_LOGI(TAG, "송신 큐 생성 실패");
+        T_LOGI(TAG, "tx queue create failed");
         return ESP_FAIL;
     }
 
@@ -449,7 +449,7 @@ esp_err_t lora_service_init(const lora_service_config_t* config)
     lora_config_t driver_config;
 
     if (config == nullptr) {
-        T_LOGE(TAG, "config는 nullptr일 수 없습니다");
+        T_LOGE(TAG, "config cannot be nullptr");
         vQueueDelete(s_tx_queue);
         s_tx_queue = nullptr;
         return ESP_ERR_INVALID_ARG;
@@ -465,7 +465,7 @@ esp_err_t lora_service_init(const lora_service_config_t* config)
     // 드라이버 초기화
     esp_err_t ret = lora_driver_init(&driver_config);
     if (ret != ESP_OK) {
-        T_LOGI(TAG, "드라이버 초기화 실패");
+        T_LOGI(TAG, "driver init failed");
         vQueueDelete(s_tx_queue);
         s_tx_queue = nullptr;
         return ESP_FAIL;
@@ -475,7 +475,7 @@ esp_err_t lora_service_init(const lora_service_config_t* config)
     lora_driver_set_receive_callback(on_driver_receive);
 
     s_initialized = true;
-    T_LOGI(TAG, "LoRa Service 초기화 완료 (큐 크기: %d)", TX_QUEUE_SIZE);
+    T_LOGI(TAG, "init complete (queue size: %d)", TX_QUEUE_SIZE);
 
     // 이벤트 발행
     bool running = false;
@@ -487,21 +487,21 @@ esp_err_t lora_service_init(const lora_service_config_t* config)
 esp_err_t lora_service_start(void)
 {
     if (!s_initialized) {
-        T_LOGI(TAG, "초기화되지 않음");
+        T_LOGI(TAG, "not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (s_running) {
-        T_LOGI(TAG, "이미 실행 중");
+        T_LOGI(TAG, "already running");
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "LoRa Service 시작 중...");
+    T_LOGI(TAG, "starting...");
 
     // 송신 요청 이벤트 구독
     esp_err_t ret = event_bus_subscribe(EVT_LORA_SEND_REQUEST, on_lora_send_request);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "송신 요청 이벤트 구독 실패");
+        T_LOGE(TAG, "send request event subscribe failed");
         return ret;
     }
 
@@ -515,7 +515,7 @@ esp_err_t lora_service_start(void)
     // 수신 모드 시작
     ret = lora_driver_start_receive();
     if (ret != ESP_OK) {
-        T_LOGI(TAG, "수신 모드 시작 실패");
+        T_LOGI(TAG, "receive mode start failed");
         event_bus_unsubscribe(EVT_LORA_SEND_REQUEST, on_lora_send_request);
         return ret;
     }
@@ -532,13 +532,13 @@ esp_err_t lora_service_start(void)
     );
 
     if (task_ret != pdPASS) {
-        T_LOGI(TAG, "송신 태스크 생성 실패");
+        T_LOGI(TAG, "tx task create failed");
         event_bus_unsubscribe(EVT_LORA_SEND_REQUEST, on_lora_send_request);
         return ESP_FAIL;
     }
 
     s_running = true;
-    T_LOGI(TAG, "LoRa Service 시작 완료");
+    T_LOGI(TAG, "start complete");
 
     // 이벤트 발행
     bool running = true;
@@ -565,7 +565,7 @@ void lora_service_stop(void)
         return;
     }
 
-    T_LOGI(TAG, "LoRa Service 정지 중...");
+    T_LOGI(TAG, "stopping...");
     s_running = false;
 
     // 송신 요청 이벤트 구독 취소
@@ -585,7 +585,7 @@ void lora_service_stop(void)
         s_tx_task = nullptr;
     }
 
-    T_LOGI(TAG, "LoRa Service 정지 완료");
+    T_LOGI(TAG, "stop complete");
 
     // 이벤트 발행
     bool running = false;
@@ -603,7 +603,7 @@ void lora_service_deinit(void)
 
     lora_driver_deinit();
     s_initialized = false;
-    T_LOGI(TAG, "LoRa Service 해제 완료");
+    T_LOGI(TAG, "deinit complete");
 }
 
 esp_err_t lora_service_send(const uint8_t* data, size_t length)
@@ -613,7 +613,7 @@ esp_err_t lora_service_send(const uint8_t* data, size_t length)
     }
 
     if (length > MAX_PACKET_SIZE) {
-        T_LOGI(TAG, "패킷 크기 초과: %zu > %d", length, MAX_PACKET_SIZE);
+        T_LOGI(TAG, "packet size overflow: %zu > %d", length, MAX_PACKET_SIZE);
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -629,7 +629,7 @@ esp_err_t lora_service_send(const uint8_t* data, size_t length)
     }
 
     s_tx_dropped++;
-    T_LOGW(TAG, "송신 큐 full (패킷 폐기)");
+    T_LOGW(TAG, "tx queue full (packet dropped)");
     return ESP_ERR_NO_MEM;
 }
 
@@ -741,7 +741,7 @@ esp_err_t lora_service_set_sync_word(uint8_t sync_word)
  */
 static void lora_scan_task(void* arg)
 {
-    T_LOGI(TAG, "스캔 태스크 시작: %.1f ~ %.1f MHz (step=%.1f)",
+    T_LOGI(TAG, "scan task start: %.1f ~ %.1f MHz (step=%.1f)",
            s_scan_start_freq, s_scan_end_freq, s_scan_step);
 
     // 예상 채널 수 계산
@@ -757,7 +757,7 @@ static void lora_scan_task(void* arg)
     for (float freq = s_scan_start_freq; freq <= s_scan_end_freq && result_count < MAX_SCAN_CHANNELS; freq += s_scan_step) {
         // 중지 요청 확인
         if (s_scan_stop_requested) {
-            T_LOGI(TAG, "스캔 중지 요청됨");
+            T_LOGI(TAG, "scan stop requested");
             break;
         }
 
@@ -805,7 +805,7 @@ static void lora_scan_task(void* arg)
 
     event_bus_publish(EVT_LORA_SCAN_COMPLETE, &complete_event, sizeof(complete_event));
 
-    T_LOGI(TAG, "스캔 완료: %d개 채널", result_count);
+    T_LOGI(TAG, "scan complete: %d channels", result_count);
 
     // 상태 정리
     s_scanning = false;
@@ -829,12 +829,12 @@ esp_err_t lora_service_start_scan(float start_freq, float end_freq, float step)
     }
 
     if (s_scanning) {
-        T_LOGW(TAG, "이미 스캔 중");
+        T_LOGW(TAG, "already scanning");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (start_freq >= end_freq || step <= 0.0f) {
-        T_LOGE(TAG, "잘못된 스캔 파라미터");
+        T_LOGE(TAG, "invalid scan parameters");
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -857,12 +857,12 @@ esp_err_t lora_service_start_scan(float start_freq, float end_freq, float step)
     );
 
     if (task_ret != pdPASS) {
-        T_LOGE(TAG, "스캔 태스크 생성 실패");
+        T_LOGE(TAG, "scan task create failed");
         s_scanning = false;
         return ESP_FAIL;
     }
 
-    T_LOGI(TAG, "스캔 시작됨");
+    T_LOGI(TAG, "scan started");
     return ESP_OK;
 }
 
@@ -873,7 +873,7 @@ esp_err_t lora_service_stop_scan(void)
     }
 
     s_scan_stop_requested = true;
-    T_LOGI(TAG, "스캔 중지 요청됨");
+    T_LOGI(TAG, "scan stop requested");
 
     return ESP_OK;
 }

@@ -70,7 +70,7 @@ static esp_err_t on_camera_id_changed(const event_data_t* event)
     }
 
     uint8_t camera_id = *(uint8_t*)event->data;
-    T_LOGI(TAG, "카메라 ID 변경 이벤트 수신: %d (tally_valid:%d)",
+    T_LOGI(TAG, "camera_id changed: %d (tally_valid:%d)",
            camera_id, s_service.tally_valid);
 
     // 카메라 ID 캐시 업데이트
@@ -83,7 +83,7 @@ static esp_err_t on_camera_id_changed(const event_data_t* event)
     // 캐시된 Tally 데이터로 LED 즉시 업데이트
     if (s_service.tally_valid) {
         ws2812_process_tally_data(s_service.tally_data, s_service.tally_channel_count);
-        T_LOGI(TAG, "카메라 ID 변경 후 Tally 재처리");
+        T_LOGI(TAG, "tally reprocessed after camera_id change");
     }
 
     return ESP_OK;
@@ -99,7 +99,7 @@ static esp_err_t on_brightness_changed(const event_data_t* event)
     }
 
     const uint8_t* brightness = (const uint8_t*)event->data;
-    T_LOGI(TAG, "밝기 변경 이벤트 수신: %d", *brightness);
+    T_LOGI(TAG, "brightness changed: %d", *brightness);
 
     // WS2812Driver에 밝기 설정 (내부에서 LED 즉시 업데이트)
     ws2812_set_brightness(*brightness);
@@ -107,7 +107,7 @@ static esp_err_t on_brightness_changed(const event_data_t* event)
     // 캐시된 Tally 데이터로 LED 재처리 (밝기 적용 후)
     if (s_service.tally_valid) {
         ws2812_process_tally_data(s_service.tally_data, s_service.tally_channel_count);
-        T_LOGI(TAG, "밝기 변경 후 Tally 재처리");
+        T_LOGI(TAG, "tally reprocessed after brightness change");
     }
 
     return ESP_OK;
@@ -173,11 +173,11 @@ static esp_err_t on_stop_changed(const event_data_t* event)
     s_service.stopped = *stopped;
 
     if (s_service.stopped) {
-        T_LOGW(TAG, "기능 정지: LED OFF");
+        T_LOGW(TAG, "stopped: LED OFF");
         // LED 전체 소등
         ws2812_off();
     } else {
-        T_LOGI(TAG, "기능 정지 해제");
+        T_LOGI(TAG, "stop released");
         // 정지 해제 시 현재 상태로 LED 복구
         if (s_service.program_active) {
             ws2812_set_state(WS2812_PROGRAM);
@@ -203,11 +203,11 @@ esp_err_t led_service_init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
 esp_err_t led_service_init_with_colors(int gpio_num, uint32_t num_leds, uint8_t camera_id, const led_colors_t* colors)
 {
     if (s_service.initialized) {
-        T_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "already initialized");
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "LED 서비스 초기화 중...");
+    T_LOGI(TAG, "initializing...");
 
     // 색상 설정
     if (colors != nullptr) {
@@ -227,10 +227,10 @@ esp_err_t led_service_init_with_colors(int gpio_num, uint32_t num_leds, uint8_t 
     event_bus_subscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
     event_bus_subscribe(EVT_STOP_CHANGED, on_stop_changed);
     s_service.event_subscribed = true;
-    T_LOGI(TAG, "이벤트 버스 구독: CAMERA_ID, BRIGHTNESS, TALLY_STATE, STOP_CHANGED");
+    T_LOGI(TAG, "event subscribed: CAMERA_ID, BRIGHTNESS, TALLY_STATE, STOP");
 
     s_service.initialized = true;
-    T_LOGI(TAG, "LED 서비스 초기화 완료");
+    T_LOGI(TAG, "LED service init complete");
     return ESP_OK;
 }
 
@@ -334,7 +334,7 @@ void led_service_deinit(void)
 
     ws2812_deinit();
     s_service.initialized = false;
-    T_LOGI(TAG, "LED 서비스 해제");
+    T_LOGI(TAG, "LED service deinit");
 }
 
 bool led_service_is_initialized(void)

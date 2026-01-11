@@ -453,7 +453,7 @@ static esp_err_t on_rf_saved(const event_data_t* event) {
     config_all_t config;
     esp_err_t ret = ConfigServiceClass::loadAll(&config);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "RF 설정 저장 실패: 설정 로드 실패");
+        T_LOGE(TAG, "RF config save failed: load failed");
         return ret;
     }
 
@@ -464,10 +464,10 @@ static esp_err_t on_rf_saved(const event_data_t* event) {
     // NVS에 저장
     ret = ConfigServiceClass::saveAll(&config);
     if (ret == ESP_OK) {
-        T_LOGD(TAG, "RF 설정 저장: %.1f MHz, Sync 0x%02X (NVS)",
+        T_LOGD(TAG, "RF config saved: %.1f MHz, Sync 0x%02X (NVS)",
                rf->frequency, rf->sync_word);
     } else {
-        T_LOGE(TAG, "RF 설정 NVS 저장 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "RF config NVS save failed: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -556,7 +556,7 @@ static esp_err_t on_camera_id_changed(const event_data_t* event) {
     // 내부 함수 호출 (이벤트 미발행으로 무한 루프 방지)
     esp_err_t ret = ConfigServiceClass::setCameraIdInternal(*camera_id);
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "카메라 ID 저장 (LoRa 수신): %d (NVS)", *camera_id);
+        T_LOGI(TAG, "camera_id saved (LoRa rx): %d (NVS)", *camera_id);
 
         // 설정 변경 후 전체 데이터 이벤트 발행
         config_data_event_t data_event = {};
@@ -564,7 +564,7 @@ static esp_err_t on_camera_id_changed(const event_data_t* event) {
         data_event.device_camera_id = *camera_id;
         event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
     } else {
-        T_LOGE(TAG, "카메라 ID NVS 저장 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "camera_id NVS save failed: %s", esp_err_to_name(ret));
     }
 
     return ret;
@@ -587,7 +587,7 @@ static esp_err_t on_brightness_changed(const event_data_t* event) {
     // 내부 함수 호출 (이벤트 미발행으로 무한 루프 방지)
     esp_err_t ret = ConfigServiceClass::setBrightnessInternal(*brightness);
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "밝기 저장 (LoRa 수신): %d (NVS)", *brightness);
+        T_LOGI(TAG, "brightness saved (LoRa rx): %d (NVS)", *brightness);
 
         // 설정 변경 후 전체 데이터 이벤트 발행
         config_data_event_t data_event = {};
@@ -595,7 +595,7 @@ static esp_err_t on_brightness_changed(const event_data_t* event) {
         data_event.device_brightness = *brightness;
         event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
     } else {
-        T_LOGE(TAG, "밝기 NVS 저장 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "brightness NVS save failed: %s", esp_err_to_name(ret));
     }
 
     return ret;
@@ -622,7 +622,7 @@ static esp_err_t on_device_cam_map_receive(const event_data_t* event)
     // NVS에 저장
     esp_err_t ret = ConfigServiceClass::setDeviceCameraId(device_id, camera_id);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "디바이스-카메라 매핑 NVS 저장 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "device-camera map NVS save failed: %s", esp_err_to_name(ret));
     }
 
     return ret;
@@ -642,11 +642,11 @@ static esp_err_t on_device_cam_map_load(const event_data_t* event)
     config_device_cam_map_t map;
     esp_err_t ret = ConfigServiceClass::getDeviceCamMap(&map);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "디바이스-카메라 매핑 로드 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "device-camera map load failed: %s", esp_err_to_name(ret));
         return ret;
     }
 
-    T_LOGI(TAG, "디바이스-카메라 매핑 로드: %d개", map.count);
+    T_LOGI(TAG, "device-camera map loaded: %d", map.count);
 
     // 각 매핑을 개별 이벤트로 발행
     for (uint8_t i = 0; i < map.count; i++) {
@@ -669,7 +669,7 @@ static void publish_full_config_event(void)
 {
     config_all_t full_config;
     if (ConfigServiceClass::loadAll(&full_config) != ESP_OK) {
-        T_LOGW(TAG, "전체 설정 로드 실패, 이벤트 발행 스킵");
+        T_LOGW(TAG, "full config load failed, event publish skipped");
         return;
     }
 
@@ -736,7 +736,7 @@ static void publish_full_config_event(void)
     data_event.secondary_offset = full_config.secondary_offset;
 
     event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
-    T_LOGD(TAG, "전체 설정 데이터 이벤트 발행");
+    T_LOGD(TAG, "full config data event published");
 }
 
 /**
@@ -748,7 +748,7 @@ static void publish_config_event_with_sta(const config_wifi_sta_t* sta_config)
 {
     config_all_t full_config;
     if (ConfigServiceClass::loadAll(&full_config) != ESP_OK) {
-        T_LOGW(TAG, "전체 설정 로드 실패, 이벤트 발행 스킵");
+        T_LOGW(TAG, "full config load failed, event publish skipped");
         return;
     }
 
@@ -820,7 +820,7 @@ static void publish_config_event_with_sta(const config_wifi_sta_t* sta_config)
     data_event.secondary_offset = full_config.secondary_offset;
 
     event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
-    T_LOGD(TAG, "전체 설정 데이터 이벤트 발행 (STA: enabled=%d)", full_config.wifi_sta.enabled);
+    T_LOGD(TAG, "full config data event published (STA: enabled=%d)", full_config.wifi_sta.enabled);
 }
 
 /**
@@ -831,7 +831,7 @@ static void publish_config_event_with_ap(const config_wifi_ap_t* ap_config)
 {
     config_all_t full_config;
     if (ConfigServiceClass::loadAll(&full_config) != ESP_OK) {
-        T_LOGW(TAG, "전체 설정 로드 실패, 이벤트 발행 스킵");
+        T_LOGW(TAG, "full config load failed, event publish skipped");
         return;
     }
 
@@ -903,7 +903,7 @@ static void publish_config_event_with_ap(const config_wifi_ap_t* ap_config)
     data_event.secondary_offset = full_config.secondary_offset;
 
     event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
-    T_LOGD(TAG, "전체 설정 데이터 이벤트 발행 (AP: enabled=%d)", full_config.wifi_ap.enabled);
+    T_LOGD(TAG, "full config data event published (AP: enabled=%d)", full_config.wifi_ap.enabled);
 }
 
 /**
@@ -914,7 +914,7 @@ static void publish_config_event_with_eth(const config_ethernet_t* eth_config)
 {
     config_all_t full_config;
     if (ConfigServiceClass::loadAll(&full_config) != ESP_OK) {
-        T_LOGW(TAG, "전체 설정 로드 실패, 이벤트 발행 스킵");
+        T_LOGW(TAG, "full config load failed, event publish skipped");
         return;
     }
 
@@ -986,7 +986,7 @@ static void publish_config_event_with_eth(const config_ethernet_t* eth_config)
     data_event.secondary_offset = full_config.secondary_offset;
 
     event_bus_publish(EVT_CONFIG_DATA_CHANGED, &data_event, sizeof(config_data_event_t));
-    T_LOGD(TAG, "전체 설정 데이터 이벤트 발행 (ETH: enabled=%d)", full_config.ethernet.enabled);
+    T_LOGD(TAG, "full config data event published (ETH: enabled=%d)", full_config.ethernet.enabled);
 }
 
 // ============================================================================
@@ -996,11 +996,11 @@ static void publish_config_event_with_eth(const config_ethernet_t* eth_config)
 esp_err_t ConfigServiceClass::init(void)
 {
     if (s_initialized) {
-        T_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "already initialized");
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "Config Service 초기화 중...");
+    T_LOGI(TAG, "initializing...");
 
     // NVS 초기화
     esp_err_t ret = nvs_flash_init();
@@ -1019,9 +1019,9 @@ esp_err_t ConfigServiceClass::init(void)
         T_LOGE(TAG, "NVS init failed: %s", esp_err_to_name(ret));
         return ret;
     }
-    T_LOGI(TAG, "NVS 초기화 완료");
+    T_LOGI(TAG, "NVS init complete");
 
-    T_LOGD(TAG, "Event bus 구독 시작...");
+    T_LOGD(TAG, "event bus subscribe start...");
     // 디바이스 등록/해제 이벤트 구독
     event_bus_subscribe(EVT_DEVICE_REGISTER, on_device_register_request);
     event_bus_subscribe(EVT_DEVICE_UNREGISTER, on_device_unregister_request);
@@ -1040,11 +1040,11 @@ esp_err_t ConfigServiceClass::init(void)
     event_bus_subscribe(EVT_DEVICE_CAM_MAP_RECEIVE, on_device_cam_map_receive);
     // 디바이스 카메라 매핑 로드 요청 이벤트 구독 (TX 시작 시 NVS 매핑 로드)
     event_bus_subscribe(EVT_DEVICE_CAM_MAP_LOAD, on_device_cam_map_load);
-    T_LOGD(TAG, "Event bus 구독 완료");
+    T_LOGD(TAG, "event bus subscribe complete");
 
     s_initialized = true;
 
-    T_LOGI(TAG, "Config Service 초기화 완료");
+    T_LOGI(TAG, "init complete");
 
     // 초기화 완료 후 전체 설정 데이터 이벤트 발행
     // 다른 서비스들이 설정을 로드할 수 있도록 함
@@ -1063,14 +1063,14 @@ esp_err_t ConfigServiceClass::applyDeviceLimit(void)
     config_registered_devices_t devices;
     esp_err_t ret = getRegisteredDevices(&devices);
     if (ret == ESP_OK) {
-        T_LOGD(TAG, "등록된 디바이스 device_limit 적용 완료: %d개", devices.count);
+        T_LOGD(TAG, "registered devices device_limit applied: %d", devices.count);
     }
 
     // getDeviceCamMap 호출 시 device_limit 체크 및 초과분 삭제 수행
     config_device_cam_map_t cam_map;
     ret = getDeviceCamMap(&cam_map);
     if (ret == ESP_OK) {
-        T_LOGD(TAG, "디바이스-카메라 매핑 device_limit 적용 완료: %d개", cam_map.count);
+        T_LOGD(TAG, "device-camera map device_limit applied: %d", cam_map.count);
     }
 
     return ESP_OK;
@@ -1090,7 +1090,7 @@ esp_err_t ConfigServiceClass::loadAll(config_all_t* config)
 
     esp_err_t ret = getWiFiAP(&config->wifi_ap);
     if (ret != ESP_OK) {
-        T_LOGW(TAG, "WiFi AP 설정 로드 실패, 기본값 사용");
+        T_LOGW(TAG, "WiFi AP config load failed, using defaults");
         loadDefaults(config);
         return ret;
     }
@@ -1260,10 +1260,10 @@ esp_err_t ConfigServiceClass::setWiFiSTA(const config_wifi_sta_t* config)
     // password: 빈 문자열이면 NVS 키 삭제, otherwise 저장
     if (config->password[0] != '\0') {
         nvs_set_str(handle, "wifi_sta_pass", config->password);
-        T_LOGD(TAG, "WiFi STA password 저장: 길이=%d", strlen(config->password));
+        T_LOGD(TAG, "WiFi STA password save: len=%d", strlen(config->password));
     } else {
         nvs_erase_key(handle, "wifi_sta_pass");  // 빈 password = 삭제
-        T_LOGD(TAG, "WiFi STA password 삭제 (빈 값)");
+        T_LOGD(TAG, "WiFi STA password erased (empty)");
     }
     nvs_set_u8(handle, "wifi_sta_enbl", config->enabled ? 1 : 0);
 
@@ -1463,13 +1463,13 @@ esp_err_t ConfigServiceClass::loadDefaults(config_all_t* config)
     config->dual_enabled = NVS_DUAL_ENABLED;
     config->secondary_offset = NVS_DUAL_OFFSET;
 
-    T_LOGI(TAG, "기본값 로드됨");
+    T_LOGI(TAG, "defaults loaded");
     return ESP_OK;
 }
 
 esp_err_t ConfigServiceClass::factoryReset(void)
 {
-    T_LOGI(TAG, "공장 초기화 수행 중...");
+    T_LOGI(TAG, "factory reset in progress...");
 
     config_all_t defaultConfig;
     loadDefaults(&defaultConfig);
@@ -1586,7 +1586,7 @@ esp_err_t ConfigServiceClass::setBrightness(uint8_t brightness)
 
     // 밝기 변경 이벤트 발행 (0-255 범위)
     event_bus_publish(EVT_BRIGHTNESS_CHANGED, &brightness, sizeof(brightness));
-    T_LOGD(TAG, "밝기 변경: %d, 이벤트 발행", brightness);
+    T_LOGD(TAG, "brightness changed: %d, event published", brightness);
 
     return ESP_OK;
 }
@@ -1626,7 +1626,7 @@ esp_err_t ConfigServiceClass::setCameraId(uint8_t camera_id)
 
     // 카메라 ID 변경 이벤트 발행
     event_bus_publish(EVT_CAMERA_ID_CHANGED, &camera_id, sizeof(camera_id));
-    T_LOGD(TAG, "카메라 ID 변경: %d, 이벤트 발행", camera_id);
+    T_LOGD(TAG, "camera_id changed: %d, event published", camera_id);
 
     return ESP_OK;
 }
@@ -2054,14 +2054,14 @@ esp_err_t ConfigServiceClass::registerDevice(const uint8_t* device_id)
 
     // 용량 초과 확인
     if (devices.count >= CONFIG_MAX_REGISTERED_DEVICES) {
-        T_LOGE(TAG, "등록된 디바이스 수 초과: %d", devices.count);
+        T_LOGE(TAG, "registered device count exceeded: %d", devices.count);
         return ESP_ERR_NO_MEM;
     }
 
     // device_limit 체크
     uint8_t device_limit = license_service_get_device_limit();
     if (device_limit > 0 && devices.count >= device_limit) {
-        T_LOGW(TAG, "device_limit 초과 (%d/%d), 디바이스 등록 거부: [%02X%02X]",
+        T_LOGW(TAG, "device_limit exceeded (%d/%d), device register denied: [%02X%02X]",
                  devices.count, device_limit, device_id[0], device_id[1]);
         return ESP_ERR_NO_MEM;
     }
@@ -2070,7 +2070,7 @@ esp_err_t ConfigServiceClass::registerDevice(const uint8_t* device_id)
     nvs_handle_t handle;
     ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READWRITE, &handle);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "NVS 열기 실패");
+        T_LOGE(TAG, "NVS open failed");
         return ESP_FAIL;
     }
 
@@ -2090,7 +2090,7 @@ esp_err_t ConfigServiceClass::registerDevice(const uint8_t* device_id)
     if (ret == ESP_OK) {
         char id_str[5];
         device_id_to_str(device_id, id_str);
-        T_LOGI(TAG, "디바이스 등록: %s (%d/%d)",
+        T_LOGI(TAG, "device registered: %s (%d/%d)",
                id_str, devices.count, CONFIG_MAX_REGISTERED_DEVICES);
     }
 
@@ -2154,7 +2154,7 @@ esp_err_t ConfigServiceClass::unregisterDevice(const uint8_t* device_id)
     if (ret == ESP_OK) {
         char id_str[5];
         device_id_to_str(device_id, id_str);
-        T_LOGI(TAG, "디바이스 등록 해제: %s", id_str);
+        T_LOGI(TAG, "device unregistered: %s", id_str);
 
         // 카메라 매핑도 삭제
         removeDeviceCamMap(device_id);
@@ -2219,7 +2219,7 @@ esp_err_t ConfigServiceClass::getRegisteredDevices(config_registered_devices_t* 
     // device_limit 초과분 삭제 (라이선스 다운그레이드 대응)
     uint8_t device_limit = license_service_get_device_limit();
     if (device_limit > 0 && devices->count > device_limit) {
-        T_LOGW(TAG, "등록된 디바이스(%d)가 device_limit(%d) 초과, 초과분 삭제",
+        T_LOGW(TAG, "registered devices(%d) exceeds device_limit(%d), deleting excess",
                  devices->count, device_limit);
 
         // device_limit까지만 유지, 나머지는 NVS에서 삭제
@@ -2234,7 +2234,7 @@ esp_err_t ConfigServiceClass::getRegisteredDevices(config_registered_devices_t* 
         nvs_set_u8(handle, NVS_KEY_DEVICE_COUNT, devices->count);
         nvs_commit(handle);
 
-        T_LOGD(TAG, "초과분 삭제 완료, 유지된 디바이스: %d개", devices->count);
+        T_LOGD(TAG, "excess deletion complete, retained devices: %d", devices->count);
     }
 
     nvs_close(handle);
@@ -2259,7 +2259,7 @@ void ConfigServiceClass::clearRegisteredDevices(void)
         nvs_close(handle);
     }
 
-    T_LOGI(TAG, "등록된 모든 디바이스 삭제");
+    T_LOGI(TAG, "all registered devices deleted");
 }
 
 // ============================================================================
@@ -2278,7 +2278,7 @@ esp_err_t ConfigServiceClass::setDeviceCameraId(const uint8_t* device_id, uint8_
     nvs_handle_t handle;
     esp_err_t ret = nvs_open(NVS_NAMESPACE_DEVICES, NVS_READWRITE, &handle);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "NVS 열기 실패 (setDeviceCameraId)");
+        T_LOGE(TAG, "NVS open failed (setDeviceCameraId)");
         return ret;
     }
 
@@ -2314,7 +2314,7 @@ esp_err_t ConfigServiceClass::setDeviceCameraId(const uint8_t* device_id, uint8_
         uint8_t device_limit = license_service_get_device_limit();
         if (current_count >= device_limit) {
             nvs_close(handle);
-            T_LOGW(TAG, "device_limit 초과 (%d/%d), 매핑 거부: [%02X%02X]",
+            T_LOGW(TAG, "device_limit exceeded (%d/%d), mapping denied: [%02X%02X]",
                      current_count, device_limit, device_id[0], device_id[1]);
             return ESP_ERR_NO_MEM;
         }
@@ -2323,7 +2323,7 @@ esp_err_t ConfigServiceClass::setDeviceCameraId(const uint8_t* device_id, uint8_
     // NVS 꽉 찼을 때
     if (target_idx < 0) {
         nvs_close(handle);
-        T_LOGW(TAG, "디바이스-카메라 매핑 꽉참");
+        T_LOGW(TAG, "device-camera map full");
         return ESP_ERR_NO_MEM;
     }
 
@@ -2335,7 +2335,7 @@ esp_err_t ConfigServiceClass::setDeviceCameraId(const uint8_t* device_id, uint8_
     if (ret == ESP_OK) {
         ret = nvs_commit(handle);
         if (ret == ESP_OK) {
-            T_LOGD(TAG, "디바이스-카메라 매핑 저장: [%02X%02X] → Cam%d (idx=%d)", device_id[0], device_id[1], camera_id, target_idx);
+            T_LOGD(TAG, "device-camera map saved: [%02X%02X] → Cam%d (idx=%d)", device_id[0], device_id[1], camera_id, target_idx);
 
             // 캐시 업데이트
             bool found = false;
@@ -2446,7 +2446,7 @@ esp_err_t ConfigServiceClass::getDeviceCamMap(config_device_cam_map_t* map)
     // device_limit 초과분 삭제 (라이선스 다운그레이드 대응)
     uint8_t device_limit = license_service_get_device_limit();
     if (map->count > device_limit) {
-        T_LOGW(TAG, "디바이스-카메라 매핑(%d)가 device_limit(%d) 초과, 초과분 삭제",
+        T_LOGW(TAG, "device-camera map(%d) exceeds device_limit(%d), deleting excess",
                  map->count, device_limit);
 
         // device_limit까지만 유지, 나머지는 NVS에서 삭제
@@ -2459,7 +2459,7 @@ esp_err_t ConfigServiceClass::getDeviceCamMap(config_device_cam_map_t* map)
         map->count = device_limit;
         nvs_commit(handle);
 
-        T_LOGI(TAG, "초과분 삭제 완료, 유지된 매핑: %d개", map->count);
+        T_LOGI(TAG, "excess deletion complete, retained mappings: %d", map->count);
     }
 
     nvs_close(handle);
@@ -2495,7 +2495,7 @@ esp_err_t ConfigServiceClass::removeDeviceCamMap(const uint8_t* device_id)
                 nvs_erase_key(handle, key);
                 nvs_commit(handle);
 
-                T_LOGI(TAG, "디바이스-카메라 매핑 삭제: [%02X%02X]", device_id[0], device_id[1]);
+                T_LOGI(TAG, "device-camera map deleted: [%02X%02X]", device_id[0], device_id[1]);
 
                 // 캐시에서 제거
                 for (uint8_t j = i; j < s_device_cam_map.count - 1; j++) {
@@ -2531,7 +2531,7 @@ void ConfigServiceClass::clearDeviceCamMap(void)
     }
 
     s_device_cam_map.count = 0;
-    T_LOGI(TAG, "디바이스-카메라 매핑 전체 삭제");
+    T_LOGI(TAG, "all device-camera mappings deleted");
 }
 
 // ============================================================================

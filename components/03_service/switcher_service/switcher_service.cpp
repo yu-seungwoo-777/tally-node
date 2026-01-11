@@ -170,12 +170,12 @@ static esp_err_t onNetworkStatusEvent(const event_data_t* event) {
 // ============================================================================
 
 bool SwitcherService::initialize() {
-    T_LOGI(TAG, "SwitcherService 초기화 (Primary/Secondary 모드)");
+    T_LOGI(TAG, "SwitcherService init (Primary/Secondary mode)");
 
     // Primary 스위처 초기화 및 연결 시작
     if (primary_.adapter) {
         if (!primary_.adapter->initialize()) {
-            T_LOGE(TAG, "Primary 초기화 실패");
+            T_LOGE(TAG, "Primary init failed");
             return false;
         }
         primary_.adapter->connect();
@@ -184,13 +184,13 @@ bool SwitcherService::initialize() {
     // Secondary 스위처 초기화 및 연결 시작
     if (secondary_.adapter) {
         if (!secondary_.adapter->initialize()) {
-            T_LOGE(TAG, "Secondary 초기화 실패");
+            T_LOGE(TAG, "Secondary init failed");
             return false;
         }
         secondary_.adapter->connect();
     }
 
-    T_LOGI(TAG, "SwitcherService 초기화 완료");
+    T_LOGI(TAG, "SwitcherService init complete");
 
     // 초기 상태 이벤트 발행
     publishSwitcherStatus();
@@ -205,7 +205,7 @@ bool SwitcherService::initialize() {
 bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char* ip, uint16_t port, uint8_t camera_limit, tally_network_if_t network_interface) {
     SwitcherInfo* info = getSwitcherInfo(role);
     if (!info) {
-        T_LOGE(TAG, "잘못된 역할: %d", static_cast<int>(role));
+        T_LOGE(TAG, "invalid role: %d", static_cast<int>(role));
         return false;
     }
 
@@ -223,29 +223,29 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
     if (network_interface == TALLY_NET_ETHERNET) {
         if (s_cached_eth_ip[0] != '\0') {
             config.local_bind_ip = s_cached_eth_ip;
-            T_LOGI(TAG, "Ethernet 인터페이스 사용: %s", s_cached_eth_ip);
+            T_LOGI(TAG, "Ethernet interface using: %s", s_cached_eth_ip);
         } else {
             // Ethernet 선택했지만 연결 안됨 -> WiFi로 폴백
-            T_LOGW(TAG, "Ethernet 인터페이스 선택했지만 연결 안됨");
+            T_LOGW(TAG, "Ethernet interface selected but not connected");
             if (s_cached_wifi_sta_ip[0] != '\0') {
                 config.local_bind_ip = s_cached_wifi_sta_ip;
-                T_LOGW(TAG, "  -> WiFi STA로 폴백: %s", s_cached_wifi_sta_ip);
+                T_LOGW(TAG, "  -> fallback to WiFi STA: %s", s_cached_wifi_sta_ip);
             } else {
-                T_LOGW(TAG, "  -> WiFi도 연결 안됨, INADDR_ANY 사용 (연결 실패 예상)");
+                T_LOGW(TAG, "  -> WiFi also not connected, using INADDR_ANY (connection may fail)");
             }
         }
     } else if (network_interface == TALLY_NET_WIFI) {
         if (s_cached_wifi_sta_ip[0] != '\0') {
             config.local_bind_ip = s_cached_wifi_sta_ip;
-            T_LOGI(TAG, "WiFi STA 인터페이스 사용: %s", s_cached_wifi_sta_ip);
+            T_LOGI(TAG, "WiFi STA interface using: %s", s_cached_wifi_sta_ip);
         } else {
             // WiFi 선택했지만 연결 안됨 -> Ethernet으로 폴백
-            T_LOGW(TAG, "WiFi STA 인터페이스 선택했지만 연결 안됨");
+            T_LOGW(TAG, "WiFi STA interface selected but not connected");
             if (s_cached_eth_ip[0] != '\0') {
                 config.local_bind_ip = s_cached_eth_ip;
-                T_LOGW(TAG, "  -> Ethernet으로 폴백: %s", s_cached_eth_ip);
+                T_LOGW(TAG, "  -> fallback to Ethernet: %s", s_cached_eth_ip);
             } else {
-                T_LOGW(TAG, "  -> Ethernet도 연결 안됨, INADDR_ANY 사용 (연결 실패 예상)");
+                T_LOGW(TAG, "  -> Ethernet also not connected, using INADDR_ANY (connection may fail)");
             }
         }
     }
@@ -300,7 +300,7 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
     if (network_interface == TALLY_NET_WIFI) if_str = "WiFi";
     else if (network_interface == TALLY_NET_ETHERNET) if_str = "Ethernet";
 
-    T_LOGD(TAG, "%s ATEM 스위처 설정됨: %s (%s:%d, if=%s)",
+    T_LOGD(TAG, "%s ATEM switcher configured: %s (%s:%d, if=%s)",
              switcher_role_to_string(role), config.name.c_str(), config.ip.c_str(), config.port, if_str);
 
     // 설정 변경 후 상태 이벤트 발행
@@ -312,7 +312,7 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
 bool SwitcherService::setVmix(switcher_role_t role, const char* name, const char* ip, uint16_t port, uint8_t camera_limit) {
     SwitcherInfo* info = getSwitcherInfo(role);
     if (!info) {
-        T_LOGE(TAG, "잘못된 역할: %d", static_cast<int>(role));
+        T_LOGE(TAG, "invalid role: %d", static_cast<int>(role));
         return false;
     }
 
@@ -367,7 +367,7 @@ bool SwitcherService::setVmix(switcher_role_t role, const char* name, const char
     strncpy(info->ip, config.ip.c_str(), sizeof(info->ip) - 1);
     info->port = config.port;
 
-    T_LOGI(TAG, "%s vMix 스위처 설정됨: %s (%s:%d)",
+    T_LOGI(TAG, "%s vMix switcher configured: %s (%s:%d)",
             switcher_role_to_string(role), config.name.c_str(), config.ip.c_str(), config.port);
 
     publishSwitcherStatus();
@@ -381,7 +381,7 @@ void SwitcherService::removeSwitcher(switcher_role_t role) {
         return;
     }
 
-    T_LOGI(TAG, "%s 스위처 제거", switcher_role_to_string(role));
+    T_LOGI(TAG, "%s switcher removed", switcher_role_to_string(role));
     info->cleanup();
 
     // 결합 데이터 캐시 정리
@@ -400,7 +400,7 @@ void SwitcherService::loop() {
         if (state == CONNECTION_STATE_DISCONNECTED) {
             uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
             if (now - primary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
-                T_LOGI(TAG, "Primary 재연결 시도");
+                T_LOGI(TAG, "Primary reconnect attempt");
                 primary_.adapter->connect();
                 primary_.last_reconnect_attempt = now;
             }
@@ -417,7 +417,7 @@ void SwitcherService::loop() {
         if (state == CONNECTION_STATE_DISCONNECTED) {
             uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
             if (now - secondary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
-                T_LOGI(TAG, "Secondary 재연결 시도");
+                T_LOGI(TAG, "Secondary reconnect attempt");
                 secondary_.adapter->connect();
                 secondary_.last_reconnect_attempt = now;
             }
@@ -433,17 +433,17 @@ void SwitcherService::loop() {
 
 bool SwitcherService::start() {
     if (task_running_) {
-        T_LOGW(TAG, "태스크가 이미 실행 중");
+        T_LOGW(TAG, "task already running");
         return true;
     }
 
     // 이벤트 버스 구독 (설정 변경 감지)
     event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
-    T_LOGD(TAG, "이벤트 버스 구독: EVT_CONFIG_DATA_CHANGED");
+    T_LOGD(TAG, "event bus subscribe: EVT_CONFIG_DATA_CHANGED");
 
     // 이벤트 버스 구독 (네트워크 상태 변경 감지 - IP 캐시용)
     event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusEvent);
-    T_LOGD(TAG, "이벤트 버스 구독: EVT_NETWORK_STATUS_CHANGED");
+    T_LOGD(TAG, "event bus subscribe: EVT_NETWORK_STATUS_CHANGED");
 
     // 플래그 먼저 설정 (태스크가 즉시 시작되도록)
     task_running_ = true;
@@ -460,13 +460,13 @@ bool SwitcherService::start() {
     );
 
     if (task_handle_ == nullptr) {
-        T_LOGE(TAG, "태스크 생성 실패");
+        T_LOGE(TAG, "task create failed");
         task_running_ = false;
         event_bus_unsubscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
         return false;
     }
 
-    T_LOGD(TAG, "태스크 시작 (우선순위: 8, 10ms 주기)");
+    T_LOGD(TAG, "task start (priority: 8, 10ms period)");
     return true;
 }
 
@@ -475,7 +475,7 @@ void SwitcherService::stop() {
         return;
     }
 
-    T_LOGI(TAG, "태스크 정지 요청");
+    T_LOGI(TAG, "task stop requested");
     task_running_ = false;
 
     // 태스크가 스스로 종료하도록 대기
@@ -488,22 +488,22 @@ void SwitcherService::stop() {
 
     // 이벤트 버스 구독 해제
     event_bus_unsubscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
-    T_LOGI(TAG, "이벤트 버스 구독 해제: EVT_CONFIG_DATA_CHANGED");
+    T_LOGI(TAG, "event bus unsubscribe: EVT_CONFIG_DATA_CHANGED");
 
-    T_LOGI(TAG, "태스크 정지 완료");
+    T_LOGI(TAG, "task stop complete");
 }
 
 void SwitcherService::switcher_task(void* param) {
     SwitcherService* service = static_cast<SwitcherService*>(param);
 
-    T_LOGD(TAG, "태스크 루프 시작");
+    T_LOGD(TAG, "task loop start");
 
     while (service->task_running_) {
         service->taskLoop();
         vTaskDelay(pdMS_TO_TICKS(10));  // 10ms 주기
     }
 
-    T_LOGI(TAG, "태스크 루프 종료");
+    T_LOGI(TAG, "task loop end");
     vTaskDelete(NULL);
 }
 
@@ -512,13 +512,13 @@ void SwitcherService::switcher_task(void* param) {
 // ============================================================================
 
 void SwitcherService::reconnectAll() {
-    T_LOGI(TAG, "스위처 재연결 시작");
+    T_LOGI(TAG, "switcher reconnect start");
     if (primary_.adapter && primary_.adapter->getConnectionState() == CONNECTION_STATE_DISCONNECTED) {
-        T_LOGI(TAG, "Primary 재연결 시도");
+        T_LOGI(TAG, "Primary reconnect attempt");
         primary_.adapter->connect();
     }
     if (secondary_.adapter && secondary_.adapter->getConnectionState() == CONNECTION_STATE_DISCONNECTED) {
-        T_LOGI(TAG, "Secondary 재연결 시도");
+        T_LOGI(TAG, "Secondary reconnect attempt");
         secondary_.adapter->connect();
     }
 }
@@ -528,17 +528,17 @@ void SwitcherService::reconnectAll() {
 // ============================================================================
 
 void SwitcherService::triggerReconnect() {
-    T_LOGI(TAG, "설정 변경으로 인한 스위처 재연결 트리거 (dual=%d)", dual_mode_enabled_);
+    T_LOGI(TAG, "switcher reconnect triggered by config change (dual=%d)", dual_mode_enabled_);
 
     // Primary 재연결
     if (primary_.adapter) {
         connection_state_t state = primary_.adapter->getConnectionState();
         if (state != CONNECTION_STATE_DISCONNECTED) {
-            T_LOGI(TAG, "Primary 연결 해제 및 재연결");
+            T_LOGI(TAG, "Primary disconnect and reconnect");
             primary_.adapter->disconnect();
             primary_.adapter->connect();
         } else {
-            T_LOGI(TAG, "Primary 연결 시도");
+            T_LOGI(TAG, "Primary connect attempt");
             primary_.adapter->connect();
         }
     }
@@ -549,17 +549,17 @@ void SwitcherService::triggerReconnect() {
             // 듀얼 모드 ON: 연결되어 있으면 재연결, 끊어져 있으면 연결
             connection_state_t state = secondary_.adapter->getConnectionState();
             if (state != CONNECTION_STATE_DISCONNECTED) {
-                T_LOGI(TAG, "Secondary 연결 해제 및 재연결");
+                T_LOGI(TAG, "Secondary disconnect and reconnect");
                 secondary_.adapter->disconnect();
                 secondary_.adapter->connect();
             } else {
-                T_LOGI(TAG, "Secondary 연결 시도");
+                T_LOGI(TAG, "Secondary connect attempt");
                 secondary_.adapter->connect();
             }
         } else {
             // 듀얼 모드 OFF: 연결되어 있으면 해제
             if (secondary_.adapter->getConnectionState() != CONNECTION_STATE_DISCONNECTED) {
-                T_LOGI(TAG, "Dual 모드 비활성화로 Secondary 연결 해제");
+                T_LOGI(TAG, "Dual mode disabled, Secondary disconnected");
                 secondary_.adapter->disconnect();
             }
         }
@@ -579,7 +579,7 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
 
     // 어댑터가 없으면 생성 (초기 설정)
     if (!primary_.adapter) {
-        T_LOGI(TAG, "Primary 어댑터 생성 (이벤트 기반 초기화)");
+        T_LOGI(TAG, "Primary adapter created (event-based init)");
         switch (config->primary_type) {
             case 0: // ATEM
             case 1: // OBS (OBS 드라이버가 없으므로 ATEM으로 대체)
@@ -602,7 +602,7 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
     }
 
     if (!secondary_.adapter && config->dual_enabled) {
-        T_LOGI(TAG, "Secondary 어댑터 생성 (이벤트 기반 초기화)");
+        T_LOGI(TAG, "Secondary adapter created (event-based init)");
         switch (config->secondary_type) {
             case 0: // ATEM
             case 1: // OBS (OBS 드라이버가 없으므로 ATEM으로 대체)
@@ -629,7 +629,7 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
     bool offset_changed = (config->secondary_offset != secondary_offset_);
 
     if (dual_changed || offset_changed) {
-        T_LOGI(TAG, "Dual 모드 설정 변경: dual=%d->%d, offset=%d->%d",
+        T_LOGI(TAG, "Dual mode config changed: dual=%d->%d, offset=%d->%d",
                 dual_mode_enabled_, config->dual_enabled,
                 secondary_offset_, config->secondary_offset);
 
@@ -663,7 +663,7 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
             if (config->primary_interface == 1) if_str = "Ethernet";
             else if (config->primary_interface == 2) if_str = "WiFi";
 
-            T_LOGI(TAG, "Primary 스위처 설정 변경: %s -> %s, %s:%d(if=%d) -> %s:%d(if=%s)",
+            T_LOGI(TAG, "Primary switcher config changed: %s -> %s, %s:%d(if=%d) -> %s:%d(if=%s)",
                     primary_.type, (config->primary_type == 0 ? "ATEM" : "vMix"),
                     primary_.ip, primary_.port, primary_.network_interface,
                     config->primary_ip, config->primary_port, if_str);
@@ -703,7 +703,7 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
             if (config->secondary_interface == 1) if_str = "Ethernet";
             else if (config->secondary_interface == 2) if_str = "WiFi";
 
-            T_LOGI(TAG, "Secondary 스위처 설정 변경: %s -> %s, %s:%d(if=%d) -> %s:%d(if=%s)",
+            T_LOGI(TAG, "Secondary switcher config changed: %s -> %s, %s:%d(if=%d) -> %s:%d(if=%s)",
                     secondary_.type, (config->secondary_type == 0 ? "ATEM" : "vMix"),
                     secondary_.ip, secondary_.port, secondary_.network_interface,
                     config->secondary_ip, config->secondary_port, if_str);
@@ -750,7 +750,7 @@ void SwitcherService::taskLoop() {
         if (state == CONNECTION_STATE_DISCONNECTED) {
             // 비정상 연결 끊김 → 5초마다 재연결 시도
             if (now - primary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
-                T_LOGD(TAG, "Primary 재연결 시도");
+                T_LOGD(TAG, "Primary reconnect attempt");
                 primary_.adapter->connect();
                 primary_.last_reconnect_attempt = now;
             }
@@ -760,7 +760,7 @@ void SwitcherService::taskLoop() {
             if (primary_.last_packed_change_time > 0) {
                 uint32_t no_change_duration = now - primary_.last_packed_change_time;
                 if (no_change_duration > SWITCHER_REFRESH_NO_CHANGE_MS) {
-                    T_LOGI(TAG, "Primary: %d분 동안 Tally 변화 없음 → Health refresh",
+                    T_LOGI(TAG, "Primary: no Tally change for %d min → Health refresh",
                            no_change_duration / 60000);
                     primary_.adapter->disconnect();
                     primary_.adapter->connect();
@@ -777,7 +777,7 @@ void SwitcherService::taskLoop() {
         if (primary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
             AtemDriver* atem = static_cast<AtemDriver*>(primary_.adapter.get());
             if (atem->checkAndClearNetworkRestart()) {
-                T_LOGE(TAG, "네트워크 스택 오류 감지 - 전체 네트워크 재시작 이벤트 발행");
+                T_LOGE(TAG, "network stack error detected - publishing network restart event");
                 network_restart_request_t restart_req = {
                     .type = NETWORK_RESTART_ALL,
                     .ssid = "",
@@ -800,7 +800,7 @@ void SwitcherService::taskLoop() {
         if (state == CONNECTION_STATE_DISCONNECTED) {
             // 비정상 연결 끊김 → 5초마다 재연결 시도
             if (now - secondary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
-                T_LOGD(TAG, "Secondary 재연결 시도");
+                T_LOGD(TAG, "Secondary reconnect attempt");
                 secondary_.adapter->connect();
                 secondary_.last_reconnect_attempt = now;
             }
@@ -810,7 +810,7 @@ void SwitcherService::taskLoop() {
             if (secondary_.last_packed_change_time > 0) {
                 uint32_t no_change_duration = now - secondary_.last_packed_change_time;
                 if (no_change_duration > SWITCHER_REFRESH_NO_CHANGE_MS) {
-                    T_LOGI(TAG, "Secondary: %d분 동안 Tally 변화 없음 → Health refresh",
+                    T_LOGI(TAG, "Secondary: no Tally change for %d min → Health refresh",
                            no_change_duration / 60000);
                     secondary_.adapter->disconnect();
                     secondary_.adapter->connect();
@@ -826,7 +826,7 @@ void SwitcherService::taskLoop() {
         if (secondary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
             AtemDriver* atem_sec = static_cast<AtemDriver*>(secondary_.adapter.get());
             if (atem_sec->checkAndClearNetworkRestart()) {
-                T_LOGE(TAG, "Secondary 네트워크 스택 오류 감지 - 전체 네트워크 재시작 이벤트 발행");
+                T_LOGE(TAG, "Secondary network stack error detected - publishing network restart event");
                 network_restart_request_t restart_req = {
                     .type = NETWORK_RESTART_ALL,
                     .ssid = "",
@@ -990,7 +990,7 @@ switcher_status_t SwitcherService::getSwitcherStatus(switcher_role_t role) const
 
 void SwitcherService::setDualMode(bool enabled) {
     dual_mode_enabled_ = enabled;
-    T_LOGI(TAG, "듀얼모드: %s", enabled ? "활성화" : "비활성화");
+    T_LOGI(TAG, "dual mode: %s", enabled ? "enabled" : "disabled");
 
     if (!enabled) {
         packed_data_cleanup(&combined_packed_);
@@ -1005,7 +1005,7 @@ void SwitcherService::setSecondaryOffset(uint8_t offset) {
     if (offset > 19) {
         secondary_offset_ = 19;
     }
-    T_LOGI(TAG, "Secondary 오프셋: %d", secondary_offset_);
+    T_LOGI(TAG, "Secondary offset: %d", secondary_offset_);
 }
 
 void SwitcherService::setTallyCallback(tally_callback_t callback) {
@@ -1052,7 +1052,7 @@ void SwitcherService::checkSwitcherChange(switcher_role_t role) {
                 strcat(hex_str, buf);
                 if (i < current_packed.data_size - 1) strcat(hex_str, " ");
             }
-            T_LOGI(TAG, "%s packed 변경: [%s] (%d채널, %d바이트)",
+            T_LOGI(TAG, "%s packed changed: [%s] (%d channels, %d bytes)",
                      switcher_role_to_string(role), hex_str, current_packed.channel_count, current_packed.data_size);
         }
     }
@@ -1082,7 +1082,7 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
         char tally_str[64];
         packed_data_format_tally(&combined, tally_str, sizeof(tally_str));
 
-        T_LOGD(TAG, "Combined Tally: [%s] (%d채널, %d바이트) → %s",
+        T_LOGD(TAG, "Combined Tally: [%s] (%d channels, %d bytes) → %s",
                  hex_str, combined.channel_count, combined.data_size, tally_str);
 
         // stack 변수 사용 (이벤트 버스가 복사)
@@ -1120,15 +1120,15 @@ bool SwitcherService::updateNetworkIPCache(const char* eth_ip, const char* wifi_
     if (eth_ip && eth_ip[0] != '\0') {
         strncpy(s_cached_eth_ip, eth_ip, sizeof(s_cached_eth_ip) - 1);
         s_cached_eth_ip[sizeof(s_cached_eth_ip) - 1] = '\0';
-        T_LOGI(TAG, "Ethernet IP 캐시: %s", s_cached_eth_ip);
+        T_LOGI(TAG, "Ethernet IP cached: %s", s_cached_eth_ip);
         if (was_empty_eth) {
-            T_LOGI(TAG, "Ethernet 새 연결 감지, 스위처 재설정 필요");
+            T_LOGI(TAG, "Ethernet new connection detected, switcher reconfigure needed");
             needs_reconfigure = true;
         }
     } else {
         // Ethernet 연결 해제 - 캐시 비움
         if (was_filled_eth) {
-            T_LOGI(TAG, "Ethernet 연결 해제, 캐시 비움");
+            T_LOGI(TAG, "Ethernet disconnected, cache cleared");
             s_cached_eth_ip[0] = '\0';
             needs_reconfigure = true;  // 폴백을 위해 재설정 필요
         }
@@ -1138,15 +1138,15 @@ bool SwitcherService::updateNetworkIPCache(const char* eth_ip, const char* wifi_
     if (wifi_sta_ip && wifi_sta_ip[0] != '\0') {
         strncpy(s_cached_wifi_sta_ip, wifi_sta_ip, sizeof(s_cached_wifi_sta_ip) - 1);
         s_cached_wifi_sta_ip[sizeof(s_cached_wifi_sta_ip) - 1] = '\0';
-        T_LOGI(TAG, "WiFi STA IP 캐시: %s", s_cached_wifi_sta_ip);
+        T_LOGI(TAG, "WiFi STA IP cached: %s", s_cached_wifi_sta_ip);
         if (was_empty_wifi) {
-            T_LOGI(TAG, "WiFi STA 새 연결 감지, 스위처 재설정 필요");
+            T_LOGI(TAG, "WiFi STA new connection detected, switcher reconfigure needed");
             needs_reconfigure = true;
         }
     } else {
         // WiFi 연결 해제 - 캐시 비움
         if (was_filled_wifi) {
-            T_LOGI(TAG, "WiFi STA 연결 해제, 캐시 비움");
+            T_LOGI(TAG, "WiFi STA disconnected, cache cleared");
             s_cached_wifi_sta_ip[0] = '\0';
             needs_reconfigure = true;  // 폴백을 위해 재설정 필요
         }
@@ -1160,7 +1160,7 @@ void SwitcherService::reconfigureSwitchersForNetwork() {
     if (primary_.adapter && primary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
         tally_network_if_t iface = static_cast<tally_network_if_t>(primary_.network_interface);
         if (iface != TALLY_NET_AUTO) {
-            T_LOGD(TAG, "Primary 스위처 네트워크 재설정 (if=%d)", iface);
+            T_LOGD(TAG, "Primary switcher network reconfigure (if=%d)", iface);
             setAtem(SWITCHER_ROLE_PRIMARY, "Primary",
                     primary_.ip, primary_.port, 0, iface);
             if (primary_.adapter) {
@@ -1173,7 +1173,7 @@ void SwitcherService::reconfigureSwitchersForNetwork() {
     if (secondary_.adapter && secondary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
         tally_network_if_t iface = static_cast<tally_network_if_t>(secondary_.network_interface);
         if (iface != TALLY_NET_AUTO) {
-            T_LOGD(TAG, "Secondary 스위처 네트워크 재설정 (if=%d)", iface);
+            T_LOGD(TAG, "Secondary switcher network reconfigure (if=%d)", iface);
             setAtem(SWITCHER_ROLE_SECONDARY, "Secondary",
                     secondary_.ip, secondary_.port, 0, iface);
             if (secondary_.adapter) {

@@ -93,7 +93,7 @@ void LicenseService::publishStateEvent(void)
     event.state = static_cast<uint8_t>(s_state);
     event.grace_remaining = 0;
 
-    T_LOGD(TAG, "라이센스 상태 이벤트 발행: limit=%d, state=%d, addr=%p",
+    T_LOGD(TAG, "license state event published: limit=%d, state=%d, addr=%p",
            event.device_limit, event.state, &event);
 
     event_bus_publish(EVT_LICENSE_STATE_CHANGED, &event, sizeof(event));
@@ -115,7 +115,7 @@ esp_err_t LicenseService::onValidateRequest(const event_data_t* event)
         return ESP_ERR_INVALID_ARG;
     }
 
-    T_LOGI(TAG, "라이센스 검증 요청 수신: %.16s", req->key);
+    T_LOGI(TAG, "license validate request received: %.16s", req->key);
     validateInTask(req->key);
 
     return ESP_OK;
@@ -138,9 +138,9 @@ esp_err_t LicenseService::onNetworkStatusChanged(const event_data_t* event)
     bool now_connected = s_sta_connected || s_eth_connected;
 
     if (!was_connected && now_connected) {
-        T_LOGI(TAG, "네트워크 연결됨 (STA:%d, ETH:%d)", s_sta_connected, s_eth_connected);
+        T_LOGI(TAG, "network connected (STA:%d, ETH:%d)", s_sta_connected, s_eth_connected);
     } else if (was_connected && !now_connected) {
-        T_LOGW(TAG, "네트워크 연결 해제됨");
+        T_LOGW(TAG, "network disconnected");
     }
 
     return ESP_OK;
@@ -156,7 +156,7 @@ void LicenseService::validateInTask(const char* key)
         return;
     }
 
-    T_LOGI(TAG, "라이센스 검증 시작: %.16s", key);
+    T_LOGI(TAG, "license validation start: %.16s", key);
 
     s_state = LICENSE_STATE_CHECKING;
     publishStateEvent();
@@ -174,11 +174,11 @@ void LicenseService::validateInTask(const char* key)
     if (!connected) {
         // 오프라인 상태: 기존 유효 라이센스가 있으면 유지
         if (s_device_limit > 0 && s_license_key[0] != '\0') {
-            T_LOGW(TAG, "오프라인 상태: 기존 라이센스 유지 (limit=%d, key=%.4s****%.4s)",
+            T_LOGW(TAG, "offline: existing license maintained (limit=%d, key=%.4s****%.4s)",
                     s_device_limit, s_license_key, s_license_key + 12);
             s_state = LICENSE_STATE_VALID;
         } else {
-            T_LOGE(TAG, "오프라인 상태: 신규 라이센스 검증 불가 (네트워크 연결 필요)");
+            T_LOGE(TAG, "offline: new license validation failed (network required)");
             s_state = LICENSE_STATE_INVALID;
         }
         publishStateEvent();
@@ -197,9 +197,9 @@ void LicenseService::validateInTask(const char* key)
         nvsSetLicenseKey(s_license_key);
         nvsSetDeviceLimit(s_device_limit);
 
-        T_LOGI(TAG, "라이센스 검증 성공: device_limit = %d", s_device_limit);
+        T_LOGI(TAG, "license validation success: device_limit = %d", s_device_limit);
     } else {
-        T_LOGE(TAG, "라이센스 검증 실패: %s", response.error);
+        T_LOGE(TAG, "license validation failed: %s", response.error);
     }
 
     updateState();
@@ -293,7 +293,7 @@ esp_err_t LicenseService::init(void)
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "LicenseService 초기화 중...");
+    T_LOGI(TAG, "initializing...");
 
     // license_client 초기화 (드라이버 계층)
     license_client_init();
@@ -301,12 +301,12 @@ esp_err_t LicenseService::init(void)
     nvsGetLicenseKey(s_license_key, sizeof(s_license_key));
     s_device_limit = nvsGetDeviceLimit();
 
-    T_LOGI(TAG, "로드된 라이센스: key=%.16s, limit=%d", s_license_key, s_device_limit);
+    T_LOGI(TAG, "loaded license: key=%.16s, limit=%d", s_license_key, s_device_limit);
 
     updateState();
 
     s_initialized = true;
-    T_LOGI(TAG, "LicenseService 초기화 완료 (상태: %d, limit: %d)",
+    T_LOGI(TAG, "init complete (state: %d, limit: %d)",
            s_state, s_device_limit);
 
     // init()에서는 이벤트 발행 안 함 (start()에서 함)
@@ -325,9 +325,9 @@ esp_err_t LicenseService::start(void)
         event_bus_subscribe(EVT_LICENSE_VALIDATE, onValidateRequest);
         event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusChanged);
         s_started = true;
-        T_LOGI(TAG, "LicenseService 시작 (이벤트 구독 완료)");
+        T_LOGI(TAG, "service started (event subscribed)");
     } else {
-        T_LOGI(TAG, "LicenseService 이미 시작됨");
+        T_LOGI(TAG, "already started");
     }
 
     // 상태 이벤트 발행 (재호출 시에도 발행하여 구독자에게 전달)
@@ -347,7 +347,7 @@ void LicenseService::stop(void)
 
     s_started = false;
 
-    T_LOGI(TAG, "LicenseService 정지");
+    T_LOGI(TAG, "service stopped");
 }
 
 esp_err_t LicenseService::validate(const char* key)

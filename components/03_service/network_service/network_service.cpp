@@ -82,18 +82,18 @@ bool NetworkServiceClass::s_ap_fallback_triggered = false;
 esp_err_t NetworkServiceClass::init(void)
 {
     if (s_initialized) {
-        T_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "already initialized");
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "Network Service 초기화 (이벤트 기반, EVT_CONFIG_DATA_CHANGED 대기)");
+    T_LOGI(TAG, "Network Service init (event-based, waiting for EVT_CONFIG_DATA_CHANGED)");
 
     // 이벤트 버스 구독 (재시작 요청, 설정 데이터 변경)
     event_bus_subscribe(EVT_NETWORK_RESTART_REQUEST, onRestartRequest);
     event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
 
     // 드라이버 초기화는 EVT_CONFIG_DATA_CHANGED 이벤트 수신 후 수행
-    T_LOGD(TAG, "이벤트 버스 구독 완료, 설정 이벤트 대기 중");
+    T_LOGD(TAG, "event bus subscribed, waiting for config event");
 
     return ESP_OK;
 }
@@ -101,16 +101,16 @@ esp_err_t NetworkServiceClass::init(void)
 esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config)
 {
     if (s_initialized) {
-        T_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "already initialized");
         return ESP_OK;
     }
 
     if (config == nullptr) {
-        T_LOGE(TAG, "config가 null");
+        T_LOGE(TAG, "config is null");
         return ESP_ERR_INVALID_ARG;
     }
 
-    T_LOGI(TAG, "Network Service 초기화 중...");
+    T_LOGI(TAG, "initializing...");
 
     // 설정 저장
     memcpy(&s_config, config, sizeof(app_network_config_t));
@@ -125,7 +125,7 @@ esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config
 
         ret = wifi_driver_init(ap_ssid, ap_pass, sta_ssid, sta_pass);
         if (ret != ESP_OK) {
-            T_LOGE(TAG, "WiFi Driver 초기화 실패");
+            T_LOGE(TAG, "WiFi Driver init failed");
             return ret;
         }
         // 네트워크 상태 변경 콜백 등록
@@ -141,7 +141,7 @@ esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config
             s_config.ethernet.static_gateway
         );
         if (ret != ESP_OK) {
-            T_LOGW(TAG, "Ethernet Driver 초기화 실패 (하드웨어 미장착 가능성)");
+            T_LOGW(TAG, "Ethernet Driver init failed (hardware may not be attached)");
             // Ethernet은 실패해도 계속 진행
         } else {
             // 네트워크 상태 변경 콜백 등록
@@ -155,7 +155,7 @@ esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config
 
     s_initialized = true;
 
-    T_LOGI(TAG, "Network Service 초기화 완료");
+    T_LOGI(TAG, "init complete");
     return ESP_OK;
 }
 
@@ -165,7 +165,7 @@ esp_err_t NetworkServiceClass::deinit(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "Network Service 정리 중...");
+    T_LOGI(TAG, "Network Service cleanup...");
 
     // 이벤트 버스 구독 해제
     event_bus_unsubscribe(EVT_NETWORK_RESTART_REQUEST, onRestartRequest);
@@ -176,7 +176,7 @@ esp_err_t NetworkServiceClass::deinit(void)
 
     s_initialized = false;
 
-    T_LOGI(TAG, "Network Service 정리 완료");
+    T_LOGI(TAG, "Network Service cleanup complete");
     return ESP_OK;
 }
 
@@ -241,7 +241,7 @@ esp_err_t NetworkServiceClass::updateConfig(const app_network_config_t* config)
 void NetworkServiceClass::printStatus(void)
 {
     if (!s_initialized) {
-        T_LOGI(TAG, "초기화 안됨");
+        T_LOGI(TAG, "not initialized");
         return;
     }
 
@@ -256,7 +256,7 @@ void NetworkServiceClass::printStatus(void)
             T_LOGI(TAG, "  IP: %s", status.wifi_ap.ip);
         }
     } else {
-        T_LOGI(TAG, "WiFi AP: 비활성화");
+        T_LOGI(TAG, "WiFi AP: disabled");
     }
 
     // WiFi STA
@@ -266,7 +266,7 @@ void NetworkServiceClass::printStatus(void)
             T_LOGI(TAG, "  IP: %s", status.wifi_sta.ip);
         }
     } else {
-        T_LOGI(TAG, "WiFi STA: 비활성화");
+        T_LOGI(TAG, "WiFi STA: disabled");
     }
 
     // Ethernet
@@ -276,7 +276,7 @@ void NetworkServiceClass::printStatus(void)
             T_LOGI(TAG, "  IP: %s", status.ethernet.ip);
         }
     } else {
-        T_LOGI(TAG, "Ethernet: 비활성화");
+        T_LOGI(TAG, "Ethernet: disabled");
     }
 
     T_LOGI(TAG, "=========================");
@@ -338,7 +338,7 @@ void NetworkServiceClass::publishStatus(void)
 
     // AP 폴백 체크 (안전 장치: 모든 네트워크가 없는 경우 AP 강제 활성화)
     if (shouldEnableAPFallback(status)) {
-        T_LOGW(TAG, "네트워크 연결 없음, AP 폴백 활성화");
+        T_LOGW(TAG, "no network connection, enabling AP fallback");
         forceEnableAP();
     } else if (s_ap_fallback_triggered) {
         // AP 폴백이 발생한 상태에서 네트워크가 복구된 경우 AP 비활성화
@@ -348,12 +348,12 @@ void NetworkServiceClass::publishStatus(void)
                           s_config.ethernet.dhcp_enabled;
 
         if (wifi_usable || eth_usable) {
-            T_LOGI(TAG, "네트워크 연결 복구, AP 폴백 해제");
+            T_LOGI(TAG, "network connection recovered, disabling AP fallback");
             s_ap_fallback_triggered = false;
 
             // AP 비활성화 (다른 네트워크 유지)
             if (s_config.wifi_ap.enabled) {
-                T_LOGI(TAG, "AP 비활성화 (네트워크 복구)");
+                T_LOGI(TAG, "AP disabled (network recovered)");
 
                 // 설정 업데이트
                 s_config.wifi_ap.enabled = false;
@@ -384,7 +384,7 @@ esp_err_t NetworkServiceClass::restartWiFi(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "WiFi 재시작 중...");
+    T_LOGI(TAG, "WiFi restarting...");
     T_LOGI(TAG, "  wifi_sta.enabled=%d, wifi_ap.enabled=%d",
             s_config.wifi_sta.enabled, s_config.wifi_ap.enabled);
 
@@ -404,7 +404,7 @@ esp_err_t NetworkServiceClass::restartWiFi(void)
         // WiFi Driver 재설정 (stop+start)
         esp_err_t ret = wifi_driver_reconfigure(ap_ssid, ap_pass, sta_ssid, sta_pass);
         if (ret != ESP_OK) {
-            T_LOGE(TAG, "WiFi 재설정 실패: %s", esp_err_to_name(ret));
+            T_LOGE(TAG, "WiFi reset failed: %s", esp_err_to_name(ret));
             // 재설정 실패 시 완전 재초기화 시도
             wifi_driver_deinit();
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -426,11 +426,11 @@ esp_err_t NetworkServiceClass::restartWiFi(void)
 
 esp_err_t NetworkServiceClass::reconnectWiFiSTA(const char* ssid, const char* password)
 {
-    T_LOGI(TAG, "WiFi STA 재연결 중 (AP 유지)...");
+    T_LOGI(TAG, "WiFi STA reconnecting (AP preserved)...");
 
     // WiFi Driver가 초기화되지 않은 경우 먼저 초기화
     if (!wifi_driver_is_initialized()) {
-        T_LOGI(TAG, "WiFi Driver 미초기화, 초기화 수행");
+        T_LOGI(TAG, "WiFi Driver not initialized, initializing");
 
         // AP 설정 유지 (AP가 활성화된 경우)
         const char* ap_ssid = (s_config.wifi_ap.enabled && s_config.wifi_ap.ssid[0] != '\0')
@@ -443,13 +443,13 @@ esp_err_t NetworkServiceClass::reconnectWiFiSTA(const char* ssid, const char* pa
 
         esp_err_t ret = wifi_driver_init(ap_ssid, ap_pass, sta_ssid, sta_pass);
         if (ret != ESP_OK) {
-            T_LOGE(TAG, "WiFi Driver 초기화 실패: %s", esp_err_to_name(ret));
+            T_LOGE(TAG, "WiFi Driver init failed: %s", esp_err_to_name(ret));
             return ret;
         }
         // 네트워크 상태 변경 콜백 등록
         wifi_driver_set_status_callback(onWiFiStatusChange);
 
-        T_LOGI(TAG, "WiFi Driver 초기화 완료 (재연결 요청)");
+        T_LOGI(TAG, "WiFi Driver init complete (reconnect requested)");
         return ESP_OK;
     }
 
@@ -483,13 +483,13 @@ esp_err_t NetworkServiceClass::restartEthernet(void)
 
     // 설정에 따라 재시작 또는 정지 유지
     if (!s_config.ethernet.enabled) {
-        T_LOGI(TAG, "Ethernet 비활성화됨 (재시작하지 않음)");
+        T_LOGI(TAG, "Ethernet disabled (not restarting)");
         // 상태 변경 이벤트 발행 (스위처 폴백용)
         publishStatus();
         return ESP_OK;
     }
 
-    T_LOGI(TAG, "Ethernet 재시작 중...");
+    T_LOGI(TAG, "Ethernet restarting...");
 
     // Ethernet 재시작 (s_config 사용)
     esp_err_t ret = ethernet_driver_init(
@@ -513,12 +513,12 @@ esp_err_t NetworkServiceClass::restartAll(void)
 
     ret = restartWiFi();
     if (ret != ESP_OK) {
-        T_LOGW(TAG, "WiFi 재시작 실패");
+        T_LOGW(TAG, "WiFi restart failed");
     }
 
     ret = restartEthernet();
     if (ret != ESP_OK) {
-        T_LOGW(TAG, "Ethernet 재시작 실패");
+        T_LOGW(TAG, "Ethernet restart failed");
     }
 
     return ESP_OK;
@@ -551,7 +551,7 @@ bool NetworkServiceClass::shouldEnableAPFallback(const network_status_t& status)
                         !s_config.ethernet.enabled;
 
     if (all_disabled) {
-        T_LOGW(TAG, "AP 폴백 필요: 모든 네트워크 비활성화");
+        T_LOGW(TAG, "AP fallback needed: all networks disabled");
         return true;
     }
 
@@ -566,7 +566,7 @@ bool NetworkServiceClass::shouldEnableAPFallback(const network_status_t& status)
                           s_config.ethernet.dhcp_enabled;
 
         if (!wifi_usable && !eth_usable) {
-            T_LOGW(TAG, "AP 폴백 필요: AP 비활성화 + 사용 가능한 네트워크 없음");
+            T_LOGW(TAG, "AP fallback needed: AP disabled + no available network");
             T_LOGW(TAG, "  WiFi STA: enabled=%d, connected=%d",
                     s_config.wifi_sta.enabled, status.wifi_sta.connected);
             T_LOGW(TAG, "  Ethernet: enabled=%d, connected=%d, dhcp=%d",
@@ -586,7 +586,7 @@ bool NetworkServiceClass::shouldEnableAPFallback(const network_status_t& status)
 esp_err_t NetworkServiceClass::forceEnableAP(void)
 {
     T_LOGW(TAG, "==========================================");
-    T_LOGW(TAG, "AP 폴백 활성화 시작 (안전 장치)");
+    T_LOGW(TAG, "AP fallback enable start (safety measure)");
     T_LOGW(TAG, "==========================================");
 
     // AP 폴백 발생 플래그 설정 (재시도 방지)
@@ -603,7 +603,7 @@ esp_err_t NetworkServiceClass::forceEnableAP(void)
     s_config.wifi_ap.password[0] = '\0';  // 열린 네트워크
     s_config.wifi_ap.channel = 1;
 
-    T_LOGI(TAG, "폴백 AP 설정: SSID=%s (열린 네트워크)", fallback_ap_ssid);
+    T_LOGI(TAG, "fallback AP config: SSID=%s (open network)", fallback_ap_ssid);
 
     // WiFi 재시작 (AP만 활성화)
     const char* ap_ssid = s_config.wifi_ap.ssid;
@@ -622,14 +622,14 @@ esp_err_t NetworkServiceClass::forceEnableAP(void)
         // 네트워크 상태 변경 콜백 등록
         wifi_driver_set_status_callback(onWiFiStatusChange);
 
-        T_LOGI(TAG, "AP 폴백 활성화 완료");
+        T_LOGI(TAG, "AP fallback enabled");
         T_LOGI(TAG, "  SSID: %s", fallback_ap_ssid);
-        T_LOGI(TAG, "  IP: 192.168.4.1 (기본값)");
+        T_LOGI(TAG, "  IP: 192.168.4.1 (default)");
 
         // 상태 이벤트 발행
         publishStatus();
     } else {
-        T_LOGE(TAG, "AP 폴백 활성화 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "AP fallback enable failed: %s", esp_err_to_name(ret));
     }
 
     return ret;
@@ -649,31 +649,31 @@ esp_err_t NetworkServiceClass::onRestartRequest(const event_data_t* event)
 
     switch (req->type) {
         case NETWORK_RESTART_WIFI_AP:
-            T_LOGI(TAG, "이벤트 수신: WiFi AP 재시작 요청");
+            T_LOGI(TAG, "event received: WiFi AP restart request");
             return restartWiFi();
 
         case NETWORK_RESTART_WIFI_STA:
-            T_LOGI(TAG, "이벤트 수신: WiFi STA 재연결 요청 (AP 유지)");
+            T_LOGI(TAG, "event received: WiFi STA reconnect request (AP preserved)");
             return reconnectWiFiSTA(req->ssid, req->password);
 
         case NETWORK_RESTART_ETHERNET:
-            T_LOGI(TAG, "이벤트 수신: Ethernet 재시작 요청");
+            T_LOGI(TAG, "event received: Ethernet restart request");
             return restartEthernet();
 
         case NETWORK_RESTART_ALL:
-            T_LOGI(TAG, "이벤트 수신: 전체 네트워크 재시작 요청");
+            T_LOGI(TAG, "event received: full network restart request");
             {
                 esp_err_t ret = restartAll();
                 if (ret == ESP_OK) {
                     // 재시작 완료 후 이벤트 발행 (웹서버 재시작용)
                     event_bus_publish(EVT_NETWORK_RESTARTED, nullptr, 0);
-                    T_LOGD(TAG, "네트워크 재시작 완료 이벤트 발행");
+                    T_LOGD(TAG, "network restart complete event published");
                 }
                 return ret;
             }
 
         default:
-            T_LOGW(TAG, "알 수 없는 재시작 타입: %d", req->type);
+            T_LOGW(TAG, "unknown restart type: %d", req->type);
             return ESP_ERR_INVALID_ARG;
     }
 }
@@ -686,7 +686,7 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
 
     // 사용자가 네트워크 설정을 변경하면 AP 폴백 플래그 리셋
     if (s_ap_fallback_triggered) {
-        T_LOGI(TAG, "사용자 설정 변경 감지, AP 폴백 플래그 리셋");
+        T_LOGI(TAG, "user config change detected, AP fallback flag reset");
         s_ap_fallback_triggered = false;
     }
 
@@ -718,11 +718,11 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
     s_config.ethernet.static_gateway[sizeof(s_config.ethernet.static_gateway) - 1] = '\0';
     s_config.ethernet.enabled = config_event->eth_enabled;
 
-    T_LOGI(TAG, "설정 데이터 업데이트됨 (이벤트)");
+    T_LOGI(TAG, "config data updated (event)");
 
     // 초기화되지 않았으면 드라이버 초기화 수행 (이벤트 기반 초기화)
     if (!s_initialized) {
-        T_LOGI(TAG, "드라이버 초기화 수행 (이벤트 기반)");
+        T_LOGI(TAG, "driver init (event-based)");
 
         // WiFi Driver 초기화
         if (s_config.wifi_ap.enabled || s_config.wifi_sta.enabled) {
@@ -733,7 +733,7 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
 
             esp_err_t ret = wifi_driver_init(ap_ssid, ap_pass, sta_ssid, sta_pass);
             if (ret != ESP_OK) {
-                T_LOGE(TAG, "WiFi Driver 초기화 실패 (이벤트 기반)");
+                T_LOGE(TAG, "WiFi Driver init failed (event-based)");
                 return ret;
             }
             // 네트워크 상태 변경 콜백 등록
@@ -749,7 +749,7 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
                 s_config.ethernet.static_gateway
             );
             if (ret != ESP_OK) {
-                T_LOGW(TAG, "Ethernet Driver 초기화 실패 (이벤트 기반, 하드웨어 미장착 가능성)");
+                T_LOGW(TAG, "Ethernet Driver init failed (event-based, hardware may not be attached)");
                 // Ethernet은 실패해도 계속 진행
             } else {
                 // 네트워크 상태 변경 콜백 등록
@@ -758,7 +758,7 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
         }
 
         s_initialized = true;
-        T_LOGI(TAG, "Network Service 초기화 완료 (이벤트 기반)");
+        T_LOGI(TAG, "init complete (event-based)");
     }
 
     return ESP_OK;
@@ -771,13 +771,13 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
 void NetworkServiceClass::onEthernetStatusChange(bool connected, const char* ip)
 {
     if (connected) {
-        T_LOGI(TAG, "Ethernet 연결됨: %s", ip ? ip : "unknown");
+        T_LOGI(TAG, "Ethernet connected: %s", ip ? ip : "unknown");
         // 이벤트 버스로 네트워크 연결 발행
         if (ip) {
             event_bus_publish(EVT_NETWORK_CONNECTED, ip, strlen(ip) + 1);
         }
     } else {
-        T_LOGW(TAG, "Ethernet 연결 해제됨");
+        T_LOGW(TAG, "Ethernet disconnected");
         // 이벤트 버스로 네트워크 해제 발행
         event_bus_publish(EVT_NETWORK_DISCONNECTED, nullptr, 0);
     }
@@ -788,13 +788,13 @@ void NetworkServiceClass::onEthernetStatusChange(bool connected, const char* ip)
 void NetworkServiceClass::onWiFiStatusChange(bool connected, const char* ip)
 {
     if (connected) {
-        T_LOGI(TAG, "WiFi 연결됨: %s", ip ? ip : "unknown");
+        T_LOGI(TAG, "WiFi connected: %s", ip ? ip : "unknown");
         // 이벤트 버스로 네트워크 연결 발행
         if (ip) {
             event_bus_publish(EVT_NETWORK_CONNECTED, ip, strlen(ip) + 1);
         }
     } else {
-        T_LOGW(TAG, "WiFi 연결 해제됨");
+        T_LOGW(TAG, "WiFi disconnected");
         // 이벤트 버스로 네트워크 해제 발행
         event_bus_publish(EVT_NETWORK_DISCONNECTED, nullptr, 0);
     }

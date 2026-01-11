@@ -112,7 +112,7 @@ void ButtonService::button_task(void* arg)
 {
     (void)arg;
 
-    T_LOGI(TAG, "버튼 폴링 태스크 시작");
+    T_LOGI(TAG, "button task start");
 
     while (s_running) {
         uint64_t current_time = esp_timer_get_time();
@@ -152,7 +152,7 @@ void ButtonService::button_task(void* arg)
 
             } else if (s_state == BUTTON_STATE_WAITING_RELEASE && !current_state) {
                 // 롱 프레스 후 버튼 떼어짐
-                T_LOGI(TAG, "롱 프레스 해제");
+                T_LOGI(TAG, "long press released");
                 event_bus_publish(EVT_BUTTON_LONG_RELEASE, nullptr, 0);
                 resetState();
             }
@@ -163,7 +163,7 @@ void ButtonService::button_task(void* arg)
             uint64_t press_duration = current_time - s_press_time;
             if (press_duration >= LONG_PRESS_MS * 1000ULL) {
                 // 롱 프레스 시작
-                T_LOGI(TAG, "롱 프레스 시작 (%.1f초)", LONG_PRESS_MS / 1000.0f);
+                T_LOGI(TAG, "long press start (%.1fs)", LONG_PRESS_MS / 1000.0f);
                 s_long_press_fired = true;
                 s_click_count = 0;
                 s_state = BUTTON_STATE_WAITING_RELEASE;
@@ -196,7 +196,7 @@ void ButtonService::button_task(void* arg)
         vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
     }
 
-    T_LOGI(TAG, "버튼 폴링 태스크 종료");
+    T_LOGI(TAG, "button task end");
     vTaskDelete(nullptr);
 }
 
@@ -207,7 +207,7 @@ void ButtonService::button_task(void* arg)
 esp_err_t ButtonService::init(void)
 {
     if (s_initialized) {
-        T_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "already initialized");
         return ESP_OK;
     }
 
@@ -230,7 +230,7 @@ esp_err_t ButtonService::init(void)
     resetState();
 
     s_initialized = true;
-    T_LOGI(TAG, "버튼 서비스 초기화 완료 (GPIO %d)", EORA_S3_BUTTON);
+    T_LOGI(TAG, "button service init (GPIO %d)", EORA_S3_BUTTON);
     return ESP_OK;
 }
 
@@ -242,7 +242,7 @@ void ButtonService::start(void)
     }
 
     if (s_running) {
-        T_LOGW(TAG, "이미 실행 중");
+        T_LOGW(TAG, "already running");
         return;
     }
 
@@ -264,7 +264,7 @@ void ButtonService::start(void)
         return;
     }
 
-    T_LOGI(TAG, "버튼 서비스 시작");
+    T_LOGI(TAG, "button service start");
 }
 
 void ButtonService::stop(void)
@@ -285,14 +285,14 @@ void ButtonService::stop(void)
         s_task = nullptr;
     }
 
-    T_LOGI(TAG, "버튼 서비스 정지");
+    T_LOGI(TAG, "button service stop");
 }
 
 void ButtonService::deinit(void)
 {
     stop();
     s_initialized = false;
-    T_LOGI(TAG, "버튼 서비스 해제 완료");
+    T_LOGI(TAG, "button service deinit");
 }
 
 bool ButtonService::isPressed(void)
