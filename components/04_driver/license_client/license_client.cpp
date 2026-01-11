@@ -54,7 +54,7 @@ static esp_err_t http_event_handler(esp_http_client_event_t* evt)
 static esp_err_t http_post(const char* url, const char* request_body,
                            char* out_response, size_t response_size)
 {
-    T_LOGI(TAG, "HTTP 요청 시작: %s", url);
+    T_LOGD(TAG, "post:%s", url);
 
     // 응답 컨텍스트 초기화
     http_response_context_t response_ctx = {
@@ -63,7 +63,7 @@ static esp_err_t http_post(const char* url, const char* request_body,
         .bytes_written = 0
     };
     out_response[0] = '\0';
-    T_LOGD(TAG, "요청 바디: %s", request_body);
+    T_LOGD(TAG, "body:%s", request_body);
 
     esp_http_client_config_t config = {};
     config.url = url;
@@ -79,33 +79,32 @@ static esp_err_t http_post(const char* url, const char* request_body,
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
-        T_LOGE(TAG, "HTTP 클라이언트 초기화 실패");
+        T_LOGE(TAG, "fail:init");
         return ESP_FAIL;
     }
 
     // 헤더 설정
     esp_http_client_set_header(client, "Content-Type", "application/json");
     esp_http_client_set_header(client, "X-API-Key", LICENSE_API_KEY);
-    T_LOGD(TAG, "헤더 설정: X-API-Key: %s", LICENSE_API_KEY);
 
     // 바디 설정
     esp_http_client_set_post_field(client, request_body, strlen(request_body));
 
     // 요청 전송
-    T_LOGI(TAG, "esp_http_client_perform() 호출...");
+    T_LOGD(TAG, "sending...");
     esp_err_t err = esp_http_client_perform(client);
 
     if (err == ESP_OK) {
         int status = esp_http_client_get_status_code(client);
 
-        T_LOGI(TAG, "HTTP POST Status: %d, 응답 길이: %d", status, response_ctx.bytes_written);
+        T_LOGD(TAG, "status:%d,len:%d", status, response_ctx.bytes_written);
 
         if (status != 200) {
-            T_LOGE(TAG, "HTTP 에러: %d", status);
+            T_LOGE(TAG, "fail:http:%d", status);
             err = ESP_FAIL;
         }
     } else {
-        T_LOGE(TAG, "HTTP 요청 실패: %s (0x%x)", esp_err_to_name(err), err);
+        T_LOGE(TAG, "fail:0x%x", err);
     }
 
     esp_http_client_cleanup(client);
@@ -120,7 +119,7 @@ extern "C" {
 
 esp_err_t license_client_init(void)
 {
-    T_LOGI(TAG, "LicenseClient 초기화");
+    T_LOGD(TAG, "init");
     return ESP_OK;
 }
 
@@ -137,7 +136,7 @@ esp_err_t license_client_validate(const char* key, const char* mac_address,
     // WiFi 연결 확인 (license_service에서 확인 후 전달)
     if (!connected) {
         strncpy(out_response->error, "WiFi 연결 안됨", sizeof(out_response->error) - 1);
-        T_LOGE(TAG, "WiFi 연결 안됨 (license_service에서 확인)");
+        T_LOGE(TAG, "fail:no_wifi");
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -153,7 +152,7 @@ esp_err_t license_client_validate(const char* key, const char* mac_address,
     char* request_body = cJSON_PrintUnformatted(req_json);
     cJSON_Delete(req_json);
 
-    T_LOGI(TAG, "라이센스 검증 요청: %s", key);
+    T_LOGD(TAG, "validate:%s", key);
 
     // HTTP POST 전송
     char response_buffer[2048];
@@ -166,12 +165,12 @@ esp_err_t license_client_validate(const char* key, const char* mac_address,
         return err;
     }
 
-    T_LOGD(TAG, "서버 응답: %s", response_buffer);
+    T_LOGD(TAG, "resp:%s", response_buffer);
 
     // JSON 응답 파싱
     cJSON* res_json = cJSON_Parse(response_buffer);
     if (!res_json) {
-        T_LOGE(TAG, "JSON 파싱 실패");
+        T_LOGE(TAG, "fail:json");
         strncpy(out_response->error, "JSON 파싱 실패", sizeof(out_response->error) - 1);
         return ESP_FAIL;
     }
@@ -191,6 +190,7 @@ esp_err_t license_client_validate(const char* key, const char* mac_address,
                 out_response->device_limit = (uint8_t)limit_json->valuedouble;
             }
         }
+        T_LOGD(TAG, "ok");
     } else {
         // 실패: error 메시지 추출
         cJSON* error_json = cJSON_GetObjectItem(res_json, "error");
@@ -198,7 +198,7 @@ esp_err_t license_client_validate(const char* key, const char* mac_address,
             strncpy(out_response->error, error_json->valuestring,
                     sizeof(out_response->error) - 1);
         }
-        T_LOGE(TAG, "라이센스 검증 실패: %s", out_response->error);
+        T_LOGE(TAG, "fail:%s", out_response->error);
     }
 
     cJSON_Delete(res_json);
@@ -225,9 +225,9 @@ bool license_client_connection_test(void)
     esp_http_client_cleanup(client);
 
     if (success) {
-        T_LOGI(TAG, "서버 연결 테스트 성공");
+        T_LOGD(TAG, "conn_test:ok");
     } else {
-        T_LOGE(TAG, "서버 연결 테스트 실패");
+        T_LOGE(TAG, "conn_test:fail:0x%x", err);
     }
 
     return success;
@@ -254,7 +254,7 @@ esp_err_t license_client_search_license(const char* name, const char* phone,
     char* request_body = cJSON_PrintUnformatted(req_json);
     cJSON_Delete(req_json);
 
-    T_LOGI(TAG, "라이센스 검색 요청: name=%s, phone=%s, email=***", name, phone);
+    T_LOGD(TAG, "search:%s,%s", name, phone);
 
     // HTTP POST 전송
     esp_err_t err = http_post(url, request_body, out_response, response_size);
@@ -262,9 +262,9 @@ esp_err_t license_client_search_license(const char* name, const char* phone,
     free(request_body);
 
     if (err == ESP_OK) {
-        T_LOGD(TAG, "라이센스 검색 응답: %s", out_response);
+        T_LOGD(TAG, "search:ok:%s", out_response);
     } else {
-        T_LOGE(TAG, "라이센스 검색 실패");
+        T_LOGE(TAG, "search:fail");
     }
 
     return err;

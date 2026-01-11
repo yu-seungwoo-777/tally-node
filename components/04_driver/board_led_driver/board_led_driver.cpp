@@ -19,7 +19,6 @@ esp_err_t board_led_driver_init(void)
         return ESP_OK;
     }
 
-    // GPIO 설정 (출력, 초기값 LOW)
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << EORA_S3_LED_BOARD),
         .mode = GPIO_MODE_OUTPUT,
@@ -30,15 +29,14 @@ esp_err_t board_led_driver_init(void)
 
     esp_err_t ret = gpio_config(&io_conf);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "GPIO 설정 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "fail:0x%x", ret);
         return ret;
     }
 
-    // 초기 상태: OFF
     gpio_set_level(EORA_S3_LED_BOARD, 0);
 
     s_initialized = true;
-    T_LOGI(TAG, "내장 LED 드라이버 초기화 완료 (GPIO %d)", EORA_S3_LED_BOARD);
+    T_LOGD(TAG, "ok");
 
     return ESP_OK;
 }
@@ -79,7 +77,7 @@ void board_led_driver_deinit(void)
     gpio_reset_pin(EORA_S3_LED_BOARD);
     s_initialized = false;
 
-    T_LOGI(TAG, "내장 LED 드라이버 해제");
+    T_LOGD(TAG, "deinit");
 }
 
 } // extern "C"

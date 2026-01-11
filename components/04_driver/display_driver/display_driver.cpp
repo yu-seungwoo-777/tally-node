@@ -15,7 +15,7 @@
 
 static const char* TAG = "04_DispDrv";
 
-// U8g2 인스턴스 (전역 변수로 u8g2_fonts.c에서 접근 가능)
+// U8g2 인스턴스
 static u8g2_t s_u8g2;
 static bool s_initialized = false;
 static SemaphoreHandle_t s_mutex = NULL;
@@ -29,7 +29,7 @@ esp_err_t DisplayDriver_init(void)
     // 뮤텍스 생성
     s_mutex = xSemaphoreCreateMutex();
     if (s_mutex == NULL) {
-        T_LOGE(TAG, "뮤텍스 생성 실패");
+        T_LOGE(TAG, "fail:mutex");
         return ESP_FAIL;
     }
 
@@ -44,17 +44,17 @@ esp_err_t DisplayDriver_init(void)
     // U8g2 HAL 초기화
     u8g2_esp32_hal_init(hal_config);
 
-    // U8g2 초기화 (SSD1306 128x64 I2C)
+    // U8g2 초기화
     u8g2_Setup_ssd1306_i2c_128x64_noname_f(
         &s_u8g2,
-        U8G2_R0,                           // 회전 없음
-        u8g2_esp32_i2c_byte_cb,            // I2C 콜백
-        u8g2_esp32_gpio_and_delay_cb       // GPIO/Delay 콜백
+        U8G2_R0,
+        u8g2_esp32_i2c_byte_cb,
+        u8g2_esp32_gpio_and_delay_cb
     );
 
     // 디스플레이 초기화
     u8g2_InitDisplay(&s_u8g2);
-    u8g2_SetPowerSave(&s_u8g2, 0);  // 전원 켜기
+    u8g2_SetPowerSave(&s_u8g2, 0);
 
     // 화면 지우기
     u8g2_ClearBuffer(&s_u8g2);
@@ -62,8 +62,7 @@ esp_err_t DisplayDriver_init(void)
 
     s_initialized = true;
 
-    T_LOGI(TAG, "Display driver initialized (SSD1306 128x64)");
-
+    T_LOGD(TAG, "ok");
     return ESP_OK;
 }
 
@@ -97,7 +96,6 @@ void DisplayDriver_sendBuffer(void)
 
 void DisplayDriver_sendBufferSync(void)
 {
-    // 내부용: 이미 뮤텍스 획득 상태에서 호출
     if (s_initialized) {
         u8g2_SendBuffer(&s_u8g2);
     }

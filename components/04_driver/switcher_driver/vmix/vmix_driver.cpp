@@ -55,14 +55,14 @@ VmixDriver::~VmixDriver() {
 
 bool VmixDriver::initialize() {
     if (sock_fd_ >= 0) {
-        T_LOGW(TAG, "이미 초기화됨 (sock_fd=%d)", sock_fd_);
+        T_LOGD(TAG, "ok:already");
         return true;
     }
 
     // TCP 소켓 생성
     sock_fd_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock_fd_ < 0) {
-        T_LOGE(TAG, "소켓 생성 실패 (errno=%d)", errno);
+        T_LOGE(TAG, "fail:socket:%d", errno);
         return false;
     }
 
@@ -70,25 +70,25 @@ bool VmixDriver::initialize() {
     int flags = fcntl(sock_fd_, F_GETFL, 0);
     fcntl(sock_fd_, F_SETFL, flags | O_NONBLOCK);
 
-    T_LOGI(TAG, "초기화 완료 (sock_fd=%d)", sock_fd_);
+    T_LOGD(TAG, "init:ok:fd=%d", sock_fd_);
     return true;
 }
 
 void VmixDriver::connect() {
     if (conn_state_ != CONNECTION_STATE_DISCONNECTED) {
-        T_LOGW(TAG, "이미 연결 중 또는 연결됨 (state=%d)", static_cast<int>(conn_state_));
+        T_LOGW(TAG, "connect:busy");
         return;
     }
 
     // 소켓이 유효하지 않으면 다시 초기화
     if (sock_fd_ < 0) {
         if (!initialize()) {
-            T_LOGE(TAG, "소켓 재초기화 실패");
+            T_LOGE(TAG, "fail:reinit");
             return;
         }
     }
 
-    T_LOGI(TAG, "vMix 연결 시도: %s:%d", config_.ip.c_str(), config_.port);
+    T_LOGD(TAG, "connect:%s:%d", config_.ip.c_str(), config_.port);
 
     // 상태 초기화
     state_ = VmixState();
@@ -109,14 +109,14 @@ void VmixDriver::connect() {
 
     if (result < 0) {
         if (errno == EINPROGRESS) {
-            T_LOGI(TAG, "연결 진행 중...");
+            T_LOGD(TAG, "connecting...");
         } else {
-            T_LOGE(TAG, "연결 실패 (errno=%d)", errno);
+            T_LOGE(TAG, "fail:connect:%d", errno);
             setConnectionState(CONNECTION_STATE_DISCONNECTED);
         }
     } else {
         // 즉시 연결 성공
-        T_LOGI(TAG, "연결 성공");
+        T_LOGD(TAG, "ok");
         state_.connected = true;
         state_.last_update_ms = getMillis();
         setConnectionState(CONNECTION_STATE_READY);
@@ -135,7 +135,7 @@ void VmixDriver::disconnect() {
     setConnectionState(CONNECTION_STATE_DISCONNECTED);
 
     if (was_connected) {
-        T_LOGI(TAG, "연결 종료");
+        T_LOGD(TAG, "disconnect");
     }
 }
 
@@ -155,7 +155,7 @@ int VmixDriver::loop() {
     if (conn_state_ == CONNECTION_STATE_CONNECTING) {
         // 연결 타임아웃 체크
         if (now - connect_attempt_time_ > VMIX_CONNECT_TIMEOUT_MS) {
-            T_LOGE(TAG, "연결 타임아웃");
+            T_LOGE(TAG, "fail:timeout");
             disconnect();
             return -1;
         }
@@ -169,13 +169,13 @@ int VmixDriver::loop() {
                 state_.connected = true;
                 state_.last_update_ms = now;
                 setConnectionState(CONNECTION_STATE_READY);
-                T_LOGI(TAG, "연결 성공");
+                T_LOGD(TAG, "ok");
 
                 // 초기 Tally 요청
                 sendCommand(VMIX_CMD_TALLY);
             } else if (error != EINPROGRESS) {
                 // 연결 실패
-                T_LOGE(TAG, "연결 실패 (error=%d)", error);
+                T_LOGE(TAG, "fail:connect:%d", error);
                 disconnect();
                 return -1;
             }
@@ -191,7 +191,7 @@ int VmixDriver::loop() {
 
         // 타임아웃 체크
         if (now - state_.last_update_ms > VMIX_MAX_SILENCE_TIME_MS) {
-            T_LOGW(TAG, "타임아웃 (무응답 %dms)", (int)(now - state_.last_update_ms));
+            T_LOGW(TAG, "timeout:%dms", (int)(now - state_.last_update_ms));
             disconnect();
             return -1;
         }
@@ -273,7 +273,7 @@ tally_status_t VmixDriver::getChannelTally(uint8_t channel) const {
 
 void VmixDriver::cut() {
     if (!state_.connected) {
-        T_LOGW(TAG, "연결되지 않음 - cut() 무시");
+        T_LOGW(TAG, "not_conn:cut");
         return;
     }
     sendCommand(VMIX_CMD_CUT);
@@ -281,7 +281,7 @@ void VmixDriver::cut() {
 
 void VmixDriver::autoTransition() {
     if (!state_.connected) {
-        T_LOGW(TAG, "연결되지 않음 - auto() 무시");
+        T_LOGW(TAG, "not_conn:auto");
         return;
     }
     sendCommand(VMIX_CMD_AUTO);
@@ -289,7 +289,7 @@ void VmixDriver::autoTransition() {
 
 void VmixDriver::setPreview(uint16_t source_id) {
     if (!state_.connected) {
-        T_LOGW(TAG, "연결되지 않음 - setPreview() 무시");
+        T_LOGW(TAG, "not_conn:prev");
         return;
     }
 
@@ -325,7 +325,7 @@ int VmixDriver::sendCommand(const char* cmd) {
     ssize_t sent = send(sock_fd_, command.c_str(), command.length(), 0);
 
     if (sent < 0) {
-        T_LOGE(TAG, "전송 실패 (errno=%d)", errno);
+        T_LOGE(TAG, "fail:tx:%d", errno);
         return -1;
     }
 
@@ -417,7 +417,7 @@ int VmixDriver::parseTallyData(const char* xml_data) {
             tally_callback_();
         }
 
-        T_LOGI(TAG, "Tally 업데이트: %d개 변경", updates);
+        T_LOGD(TAG, "tally:%d", updates);
     }
 
     return updates;
@@ -436,7 +436,7 @@ void VmixDriver::setConnectionState(connection_state_t new_state) {
         conn_state_ = new_state;
 
         const char* state_name = connection_state_to_string(new_state);
-        T_LOGI(TAG, "[%s] 연결 상태: %s", config_.name.c_str(), state_name);
+        T_LOGD(TAG, "[%s] state:%s", config_.name.c_str(), state_name);
 
         if (connection_callback_) {
             connection_callback_(new_state);

@@ -68,14 +68,14 @@ AtemDriver::~AtemDriver() {
 
 bool AtemDriver::initialize() {
     if (sock_fd_ >= 0) {
-        T_LOGW(TAG, "이미 초기화됨 (sock_fd=%d)", sock_fd_);
+        T_LOGD(TAG, "ok:already");
         return true;
     }
 
     // UDP 소켓 생성
     sock_fd_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock_fd_ < 0) {
-        T_LOGE(TAG, "소켓 생성 실패 (errno=%d)", errno);
+        T_LOGE(TAG, "fail:socket:%d", errno);
         return false;
     }
 
@@ -100,38 +100,38 @@ bool AtemDriver::initialize() {
     // 서비스 레이어에서 설정한 로컬 바인딩 IP 사용
     if (!config_.local_bind_ip.empty()) {
         local_addr.sin_addr.s_addr = inet_addr(config_.local_bind_ip.c_str());
-        T_LOGD(TAG, "인터페이스 바인딩: %s", config_.local_bind_ip.c_str());
+        T_LOGD(TAG, "bind:%s", config_.local_bind_ip.c_str());
     } else {
         local_addr.sin_addr.s_addr = INADDR_ANY;
-        T_LOGD(TAG, "인터페이스: AUTO (INADDR_ANY)");
+        T_LOGD(TAG, "bind:auto");
     }
 
     if (bind(sock_fd_, (struct sockaddr*)&local_addr, sizeof(local_addr)) < 0) {
-        T_LOGE(TAG, "바인드 실패 (errno=%d)", errno);
+        T_LOGE(TAG, "fail:bind:%d", errno);
         close(sock_fd_);
         sock_fd_ = -1;
         return false;
     }
 
-    T_LOGD(TAG, "초기화 완료 (sock_fd=%d)", sock_fd_);
+    T_LOGD(TAG, "init:ok:fd=%d", sock_fd_);
     return true;
 }
 
 void AtemDriver::connect() {
     if (conn_state_ != CONNECTION_STATE_DISCONNECTED) {
-        T_LOGW(TAG, "이미 연결 중 또는 연결됨 (state=%d)", static_cast<int>(conn_state_));
+        T_LOGW(TAG, "connect:busy");
         return;
     }
 
     // 소켓이 유효하지 않으면 다시 초기화
     if (sock_fd_ < 0) {
         if (!initialize()) {
-            T_LOGE(TAG, "소켓 재초기화 실패");
+            T_LOGE(TAG, "fail:reinit");
             return;
         }
     }
 
-    T_LOGI(TAG, "ATEM 연결 시도: %s:%d", config_.ip.c_str(), config_.port);
+    T_LOGD(TAG, "connect:%s:%d", config_.ip.c_str(), config_.port);
 
     // 상태 초기화
     state_ = AtemState();
@@ -145,11 +145,11 @@ void AtemDriver::connect() {
     uint8_t hello[ATEM_HELLO_PACKET_SIZE];
     createHelloPacket(hello);
 
-    T_LOGD(TAG, "Hello 패킷 전송 (20바이트)");
+    T_LOGD(TAG, "hello:tx");
 
     // 전송
     if (sendPacket(hello, ATEM_HELLO_PACKET_SIZE) < 0) {
-        T_LOGE(TAG, "Hello 패킷 전송 실패, 소켓 닫기");
+        T_LOGE(TAG, "fail:hello_tx");
         disconnect();  // 소켓 닫기 (메모리 누수 방지)
         return;
     }
@@ -168,7 +168,7 @@ void AtemDriver::disconnect() {
     setConnectionState(CONNECTION_STATE_DISCONNECTED);
 
     if (was_connected) {
-        T_LOGI(TAG, "연결 종료");
+        T_LOGD(TAG, "disconnect");
     }
 }
 
@@ -192,7 +192,7 @@ int AtemDriver::loop() {
     if (conn_state_ == CONNECTION_STATE_CONNECTING) {
         // Hello 응답 타임아웃 체크
         if (now - connect_attempt_time_ > ATEM_HELLO_RESPONSE_TIMEOUT_MS) {
-            T_LOGE(TAG, "Hello 응답 타임아웃 (%dms 경과, 응답 없음)", ATEM_HELLO_RESPONSE_TIMEOUT_MS);
+            T_LOGE(TAG, "fail:hello_timeout");
             disconnect();
             return -1;
         }
@@ -202,12 +202,12 @@ int AtemDriver::loop() {
             uint8_t hello[ATEM_HELLO_PACKET_SIZE];
             createHelloPacket(hello);
 
-            T_LOGI(TAG, "Hello 재전송 (경과: %dms)", (int)(now - connect_attempt_time_));
+            T_LOGD(TAG, "hello:retry:%dms", (int)(now - connect_attempt_time_));
 
             int send_ret = sendPacket(hello, ATEM_HELLO_PACKET_SIZE);
             if (send_ret < 0) {
                 // 전송 실패 시 소켓 닫고 연결 해제 (메모리 누수 방지)
-                T_LOGE(TAG, "Hello 전송 실패, 소켓 닫기");
+                T_LOGE(TAG, "fail:hello_retry");
                 disconnect();
                 return -1;
             }
@@ -255,12 +255,12 @@ int AtemDriver::loop() {
     now = getMillis();
     if (state_.connected &&
         now - state_.last_contact_ms > ATEM_MAX_SILENCE_TIME_MS) {
-        T_LOGW(TAG, "타임아웃 (무응답 %dms)", (int)(now - state_.last_contact_ms));
+        T_LOGW(TAG, "timeout:%dms", (int)(now - state_.last_contact_ms));
 
         // 연결된 상태에서 타임아웃 = 네트워크 스택 오류 가능성
         uint32_t now_ms = getMillis();
         if (now_ms - lastNetworkRestart_ > RESTART_COOLDOWN_MS) {
-            T_LOGE(TAG, "네트워크 스택 오류 감지 - 재시작 필요 플래그 설정");
+            T_LOGE(TAG, "err:net_stack");
             lastNetworkRestart_ = now_ms;
             needsNetworkRestart_ = true;
         }
@@ -355,7 +355,7 @@ tally_status_t AtemDriver::getChannelTally(uint8_t channel) const {
 
 void AtemDriver::cut() {
     if (!state_.initialized) {
-        T_LOGW(TAG, "초기화되지 않음 - cut() 무시");
+        T_LOGW(TAG, "not_init:cut");
         return;
     }
 
@@ -365,7 +365,7 @@ void AtemDriver::cut() {
 
 void AtemDriver::autoTransition() {
     if (!state_.initialized) {
-        T_LOGW(TAG, "초기화되지 않음 - auto() 무시");
+        T_LOGW(TAG, "not_init:auto");
         return;
     }
 
@@ -375,7 +375,7 @@ void AtemDriver::autoTransition() {
 
 void AtemDriver::setPreview(uint16_t source_id) {
     if (!state_.initialized) {
-        T_LOGW(TAG, "초기화되지 않음 - setPreview() 무시");
+        T_LOGW(TAG, "not_init:prev");
         return;
     }
 
@@ -474,7 +474,7 @@ int AtemDriver::createCommandPacket(const char* cmd, const uint8_t* data, uint16
     uint16_t packet_length = ATEM_HEADER_LENGTH + cmd_length;
 
     if (packet_length > tx_buffer_.size()) {
-        T_LOGE(TAG, "패킷 크기 초과 (%d > %zu)", packet_length, tx_buffer_.size());
+        T_LOGE(TAG, "fail:pkt_size");
         return -1;
     }
 
@@ -525,7 +525,7 @@ int AtemDriver::processPacket(const uint8_t* data, uint16_t length) {
 
     // Hello 응답 처리 (연결 중일 때만)
     if ((flags & ATEM_FLAG_HELLO) && conn_state_ == CONNECTION_STATE_CONNECTING) {
-        T_LOGI(TAG, "Hello 응답: session=0x%04X, pkt=%d", session_id, remote_packet_id);
+        T_LOGD(TAG, "hello:rx:0x%04X,%d", session_id, remote_packet_id);
 
         // ACK 전송
         uint8_t ack[ATEM_ACK_PACKET_SIZE];
@@ -535,7 +535,7 @@ int AtemDriver::processPacket(const uint8_t* data, uint16_t length) {
         state_.connected = true;
         state_.last_contact_ms = getMillis();
 
-        T_LOGD(TAG, "Hello ACK 전송 완료 (Session ID는 데이터 패킷 대기)");
+        T_LOGD(TAG, "hello:ack:tx");
         setConnectionState(CONNECTION_STATE_CONNECTED);
 
         return 0;
@@ -807,15 +807,10 @@ void AtemDriver::printTopology() {
         return;
     }
 
-    T_LOGI(TAG, "===== [%s] 토폴로지 =====", config_.name.c_str());
-    T_LOGI(TAG, "제품명: %s", state_.product_name);
-    T_LOGI(TAG, "프로토콜: %d.%d", state_.protocol_major, state_.protocol_minor);
-    T_LOGI(TAG, "ME: %d", state_.num_mes);
-    T_LOGI(TAG, "소스: %d", state_.num_sources);
-    T_LOGI(TAG, "카메라: %d", state_.num_cameras);
-    T_LOGI(TAG, "DSK: %d", state_.num_dsks);
-    T_LOGI(TAG, "SS: %d", state_.num_supersources);
-    T_LOGI(TAG, "============================");
+    T_LOGD(TAG, "top:%s,%d.%d,me:%d,src:%d,cam:%d,dsk:%d,ss:%d",
+            state_.product_name, state_.protocol_major, state_.protocol_minor,
+            state_.num_mes, state_.num_sources, state_.num_cameras,
+            state_.num_dsks, state_.num_supersources);
 }
 
 // ============================================================================
@@ -833,7 +828,7 @@ int AtemDriver::sendPacket(const uint8_t* data, uint16_t length) {
                           (struct sockaddr*)&remote_addr, sizeof(remote_addr));
 
     if (sent != length) {
-        T_LOGE(TAG, "전송 실패: %d/%d 바이트 (errno=%d)", (int)sent, length, errno);
+        T_LOGE(TAG, "fail:tx:%d/%d", (int)sent, length);
         return -1;
     }
 
@@ -849,7 +844,7 @@ void AtemDriver::setConnectionState(connection_state_t new_state) {
         conn_state_ = new_state;
 
         const char* state_name = connection_state_to_string(new_state);
-        T_LOGI(TAG, "[%s] 연결 상태: %s", config_.name.c_str(), state_name);
+        T_LOGD(TAG, "[%s] state:%s", config_.name.c_str(), state_name);
 
         if (connection_callback_) {
             connection_callback_(new_state);

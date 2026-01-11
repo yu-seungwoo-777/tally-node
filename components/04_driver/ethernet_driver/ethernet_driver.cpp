@@ -99,41 +99,32 @@ void EthernetDriver::eventHandler(void* arg, esp_event_base_t event_base,
 {
     if (event_base == ETH_EVENT) {
         if (event_id == ETHERNET_EVENT_CONNECTED) {
-            T_LOGI(TAG, "Ethernet 링크 업");
-            // 링크업 이벤트만 발행 (IP 획득 전)
-            // 실제 연결 상태는 IP 획득 후 완료됨
+            T_LOGD(TAG, "evt:link_up");
         } else if (event_id == ETHERNET_EVENT_DISCONNECTED) {
-            T_LOGW(TAG, "Ethernet 링크 다운");
-            // 네트워크 상태 변경 콜백 호출 (연결 해제)
+            T_LOGE(TAG, "evt:link_down");
             if (s_network_callback) {
                 s_network_callback(false, nullptr);
             }
         } else if (event_id == ETHERNET_EVENT_START) {
-            T_LOGI(TAG, "Ethernet 시작됨");
+            T_LOGD(TAG, "evt:start");
         } else if (event_id == ETHERNET_EVENT_STOP) {
-            T_LOGI(TAG, "Ethernet 정지됨");
+            T_LOGD(TAG, "evt:stop");
         }
     } else if (event_base == IP_EVENT) {
         if (event_id == IP_EVENT_ETH_GOT_IP) {
             auto* event = (ip_event_got_ip_t*) event_data;
             char ip_str[16];
             snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&event->ip_info.ip));
-            T_LOGI(TAG, "Ethernet IP 획득: %s", ip_str);
+            T_LOGD(TAG, "evt:got_ip:%s", ip_str);
 
-            // DNS 서버 명시적 설정 (Google DNS, Cloudflare) - LwIP 직접 사용
             ip_addr_t dns_primary, dns_backup;
             dns_primary.u_addr.ip4.addr = esp_ip4addr_aton("8.8.8.8");
             dns_primary.type = IPADDR_TYPE_V4;
             dns_backup.u_addr.ip4.addr = esp_ip4addr_aton("1.1.1.1");
             dns_backup.type = IPADDR_TYPE_V4;
+            dns_setserver(0, &dns_primary);
+            dns_setserver(1, &dns_backup);
 
-            // LwIP DNS 서버 직접 설정
-            dns_setserver(0, &dns_primary);   // DNS_INDEX 0 = Primary
-            dns_setserver(1, &dns_backup);    // DNS_INDEX 1 = Backup
-
-            T_LOGI(TAG, "Ethernet DNS 서버 설정 (LwIP): 8.8.8.8 (Primary), 1.1.1.1 (Backup)");
-
-            // 네트워크 상태 변경 콜백 호출 (연결 성공)
             if (s_network_callback) {
                 s_network_callback(true, ip_str);
             }
@@ -150,12 +141,12 @@ esp_err_t EthernetDriver::init(bool dhcp_enabled,
                                const char* static_netmask,
                                const char* static_gateway)
 {
+    T_LOGD(TAG, "init");
+
     if (s_initialized) {
-        T_LOGW(TAG, "이미 초기화됨");
+        T_LOGD(TAG, "ok:already");
         return ESP_OK;
     }
-
-    T_LOGI(TAG, "Ethernet Driver 초기화 중...");
 
     // 설정 저장
     s_dhcp_mode = dhcp_enabled;
@@ -172,7 +163,7 @@ esp_err_t EthernetDriver::init(bool dhcp_enabled,
     // Ethernet HAL 초기화
     esp_err_t ret = ethernet_hal_init();
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "Ethernet HAL 초기화 실패");
+        T_LOGE(TAG, "fail:hal:0x%x", ret);
         return ret;
     }
 
@@ -182,7 +173,7 @@ esp_err_t EthernetDriver::init(bool dhcp_enabled,
     // Ethernet 시작
     ret = ethernet_hal_start();
     if (ret != ESP_OK) {
-        T_LOGW(TAG, "Ethernet 시작 실패 (하드웨어 미장착 가능성): %s", esp_err_to_name(ret));
+        T_LOGD(TAG, "start:0x%x", ret);
     }
 
     // IP 모드 설정
@@ -194,13 +185,7 @@ esp_err_t EthernetDriver::init(bool dhcp_enabled,
 
     s_initialized = true;
 
-    T_LOGI(TAG, "Ethernet Driver 초기화 완료");
-    T_LOGI(TAG, "  모드: %s", s_dhcp_mode ? "DHCP" : "Static");
-    if (!s_dhcp_mode) {
-        T_LOGI(TAG, "  Static IP: %s", s_static_ip);
-        T_LOGI(TAG, "  Netmask: %s", s_static_netmask);
-        T_LOGI(TAG, "  Gateway: %s", s_static_gateway);
-    }
+    T_LOGD(TAG, "ok:%s", s_dhcp_mode ? "dhcp" : "static");
 
     return ESP_OK;
 }
@@ -211,14 +196,14 @@ esp_err_t EthernetDriver::deinit(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "Ethernet Driver 정리 중...");
+    T_LOGD(TAG, "deinit");
 
     ethernet_hal_stop();
     ethernet_hal_deinit();
 
     s_initialized = false;
 
-    T_LOGI(TAG, "Ethernet Driver 정리 완료");
+    T_LOGD(TAG, "ok");
     return ESP_OK;
 }
 
@@ -276,7 +261,7 @@ esp_err_t EthernetDriver::enableDHCP(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "DHCP 모드로 전환");
+    T_LOGD(TAG, "dhcp");
 
     s_dhcp_mode = true;
     return ethernet_hal_enable_dhcp();
@@ -288,7 +273,7 @@ esp_err_t EthernetDriver::enableStatic(const char* ip, const char* netmask, cons
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "Static IP 모드로 전환");
+    T_LOGD(TAG, "static:%s", ip ? ip : "unknown");
 
     s_dhcp_mode = false;
     if (ip) {
@@ -314,7 +299,7 @@ esp_err_t EthernetDriver::restart(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "Ethernet 재시작...");
+    T_LOGD(TAG, "restart");
 
     return ethernet_hal_restart();
 }

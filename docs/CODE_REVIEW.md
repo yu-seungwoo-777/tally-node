@@ -20,13 +20,13 @@
 | 04_driver | battery_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
 | 04_driver | temperature_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
 | 04_driver | ws2812_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
-| 04_driver | board_led_driver | ⬜ 예정 | | |
-| 04_driver | display_driver | ⬜ 예정 | | |
-| 04_driver | ethernet_driver | ⬜ 예정 | | |
-| 04_driver | license_client | ⬜ 예정 | | |
-| 04_driver | lora_driver | ⬜ 예정 | | |
-| 04_driver | switcher_driver | ⬜ 예정 | | |
-| 04_driver | wifi_driver | ⬜ 예정 | | |
+| 04_driver | board_led_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 04_driver | display_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 04_driver | ethernet_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 04_driver | lora_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 04_driver | license_client | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 04_driver | atem_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
+| 04_driver | vmix_driver | ✅ 완료 | DEBUG 로그, 간결 메시지 | 2025-01-11 |
 | 03_service | button_service | ⬜ 예정 | | |
 | 03_service | config_service | ⬜ 예정 | | |
 | 03_service | device_manager | ⬜ 예정 | | |
@@ -178,7 +178,8 @@ T_LOGE(TAG, "fail:null");
 ## 📊 통계
 
 - **전체 컴포넌트**: 33개
-- **리뷰 완료**: 8개 (24%)
+- **리뷰 완료**: 17개 (52%)
 - **05_hal 완료**: 8/8 (100%)
+- **04_driver 완료**: 9/9 (100%)
 - **진행 중**: 0개
-- **예정**: 25개
+- **예정**: 16개
