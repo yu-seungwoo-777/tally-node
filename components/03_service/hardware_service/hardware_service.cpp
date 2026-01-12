@@ -154,9 +154,14 @@ esp_err_t HardwareService::onStopEvent(const event_data_t* event)
     }
 
     bool stopped = *(const bool*)event->data;
-    s_stopped = stopped;
 
-    T_LOGI(TAG, "stop state: %s", stopped ? "stopped" : "running");
+    // 상태 변경 시에만 로그 출력
+    if (s_stopped != stopped) {
+        s_stopped = stopped;
+        T_LOGI(TAG, "stop state: %s", stopped ? "stopped" : "running");
+    } else {
+        s_stopped = stopped;
+    }
 
     return ESP_OK;
 }

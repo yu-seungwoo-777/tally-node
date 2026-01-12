@@ -204,15 +204,14 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
                     break;
                 }
 
-                if (s_sta_retry_count < MAX_STA_RETRY) {
-                    s_sta_retry_count++;
-                    T_LOGI(TAG, "STA reconnecting (%d/%d)...",
-                        s_sta_retry_count, MAX_STA_RETRY);
-                    vTaskDelay(pdMS_TO_TICKS(1000 * s_sta_retry_count));
-                    esp_wifi_connect();
-                } else {
-                    T_LOGE(TAG, "STA reconnection failed (max retry reached)");
-                }
+                // 무한 재연결 (공유기 재부팅 등 대응)
+                s_sta_retry_count++;
+                // 지연 시간: 최대 5초로 제한 (1, 2, 3, 4, 5, 5, 5, ...)
+                uint32_t delay_sec = (s_sta_retry_count > 5) ? 5 : s_sta_retry_count;
+                T_LOGI(TAG, "STA reconnecting (%d)... delay %d sec",
+                        s_sta_retry_count, delay_sec);
+                vTaskDelay(pdMS_TO_TICKS(1000 * delay_sec));
+                esp_wifi_connect();
                 break;
             }
 
@@ -669,14 +668,14 @@ WiFiDriver::Status WiFiDriver::getStatus(void)
     }
     strncpy(status.ap_ip, s_ap_ip, sizeof(status.ap_ip));
 
-    // STA RSSI 갱신
-    if (s_sta_connected) {
-        wifi_ap_record_t ap_info;
-        if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
-            s_sta_rssi = ap_info.rssi;
-            status.sta_rssi = s_sta_rssi;
-        }
-    }
+    // STA RSSI 갱신 (현재 미사용 - 주석 처리)
+    // if (s_sta_connected) {
+    //     wifi_ap_record_t ap_info;
+    //     if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+    //         s_sta_rssi = ap_info.rssi;
+    //         status.sta_rssi = s_sta_rssi;
+    //     }
+    // }
 
     return status;
 }
@@ -695,7 +694,7 @@ esp_err_t WiFiDriver::reconnectSTA(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "STA 재연결 시도...");
+    T_LOGI(TAG, "STA reconnecting...");
     s_sta_retry_count = 0;
     s_sta_auth_failed = false;  // 인증 실패 플래그 리셋
     return wifi_hal_connect();
@@ -711,7 +710,7 @@ esp_err_t WiFiDriver::disconnectSTA(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    T_LOGI(TAG, "STA 연결 해제");
+    T_LOGI(TAG, "STA disconnecting");
     return wifi_hal_disconnect();
 }
 

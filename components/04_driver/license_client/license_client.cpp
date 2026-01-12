@@ -135,7 +135,7 @@ esp_err_t license_client_validate(const char* key, const char* mac_address,
 
     // WiFi 연결 확인 (license_service에서 확인 후 전달)
     if (!connected) {
-        strncpy(out_response->error, "WiFi 연결 안됨", sizeof(out_response->error) - 1);
+        strncpy(out_response->error, "WiFi not connected", sizeof(out_response->error) - 1);
         T_LOGE(TAG, "fail:no_wifi");
         return ESP_ERR_INVALID_STATE;
     }
@@ -161,7 +161,7 @@ esp_err_t license_client_validate(const char* key, const char* mac_address,
     free(request_body);
 
     if (err != ESP_OK) {
-        strncpy(out_response->error, "서버 연결 실패", sizeof(out_response->error) - 1);
+        strncpy(out_response->error, "Server connection failed", sizeof(out_response->error) - 1);
         return err;
     }
 
@@ -171,7 +171,7 @@ esp_err_t license_client_validate(const char* key, const char* mac_address,
     cJSON* res_json = cJSON_Parse(response_buffer);
     if (!res_json) {
         T_LOGE(TAG, "fail:json");
-        strncpy(out_response->error, "JSON 파싱 실패", sizeof(out_response->error) - 1);
+        strncpy(out_response->error, "JSON parsing failed", sizeof(out_response->error) - 1);
         return ESP_FAIL;
     }
 

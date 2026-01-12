@@ -544,13 +544,13 @@ int AtemDriver::processPacket(const uint8_t* data, uint16_t length) {
     // Session ID 업데이트 (첫 번째 유효한 Session ID 저장)
     if (state_.session_id == 0 && session_id != 0) {
         state_.session_id = session_id;
-        T_LOGD(TAG, "Session ID 설정: 0x%04X", session_id);
+        T_LOGD(TAG, "Session ID set: 0x%04X", session_id);
     }
 
     // Session ID 검증 (설정 후)
     if (state_.session_id != 0 && session_id != 0 &&
         session_id != state_.session_id) {
-        T_LOGW(TAG, "세션 ID 불일치: expected=0x%04X, got=0x%04X (패킷 거부)",
+        T_LOGW(TAG, "Session ID mismatch: expected=0x%04X, got=0x%04X (packet rejected)",
                  state_.session_id, session_id);
         return -1;  // Session ID 불일치 - 패킷 거부
     }
@@ -668,7 +668,7 @@ void AtemDriver::handleCommand(const char* cmd_name, const uint8_t* cmd_data, ui
             state_.num_cameras = cmd_data[4];
             state_.tally_config_received = true;
 
-            T_LOGD(TAG, "카메라 수: %d", state_.num_cameras);
+            T_LOGD(TAG, "camera count: %d", state_.num_cameras);
         }
     }
     // PrgI: Program 입력
@@ -691,7 +691,7 @@ void AtemDriver::handleCommand(const char* cmd_name, const uint8_t* cmd_data, ui
     else if (AtemProtocol::cmdEquals(cmd_name, ATEM_CMD_INIT_COMPLETE)) {
         if (!state_.initialized) {
             state_.initialized = true;
-            T_LOGD(TAG, "[%s] 초기화 완료", config_.name.c_str());
+            T_LOGD(TAG, "[%s] init complete", config_.name.c_str());
             setConnectionState(CONNECTION_STATE_READY);
         }
     }
@@ -766,7 +766,7 @@ void AtemDriver::handleTallyByIndex(const uint8_t* data, uint16_t length) {
         if (i < current.data_size - 1) strcat(hex_str, " ");
     }
 
-    T_LOGD(TAG, "Tally: [%s] (%d채널)", hex_str, current.channel_count);
+    T_LOGD(TAG, "Tally: [%s] (%d channels)", hex_str, current.channel_count);
 
     // Program/Preview 카메라 목록 출력
     if (!program_channels.empty() || !preview_channels.empty()) {

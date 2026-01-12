@@ -90,7 +90,7 @@ static void IRAM_ATTR rx_isr_handler(void) {
 // =============================================================================
 
 static void lora_isr_task(void* param) {
-    T_LOGD(TAG, "LoRa ISR 처리 태스크 시작");
+    T_LOGD(TAG, "LoRa ISR task start");
 
     while (1) {
         // 시마포로 깨어나면 모든 플래그 처리 (놓치는 이벤트 없음)
@@ -199,7 +199,7 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     // 인터럽트 등록
     s_radio->setPacketSentAction(tx_isr_handler);
     s_radio->setPacketReceivedAction(rx_isr_handler);
-    T_LOGD(TAG, "✓ 인터럽트 등록 완료");
+    T_LOGD(TAG, "interrupt registered");
 
     // 설정 저장
     s_sync_word = sw;

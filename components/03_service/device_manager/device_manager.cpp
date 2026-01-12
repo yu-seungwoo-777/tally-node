@@ -247,7 +247,7 @@ static esp_err_t send_ping_command(const uint8_t* device_id)
     if (ret == ESP_OK) {
         char device_id_str[5];
         lora_device_id_to_str(device_id, device_id_str);
-        T_LOGI(TAG, "PING sent: ID=%s, TS=%u, len=%zu",
+        T_LOGD(TAG, "PING sent: ID=%s, TS=%u, len=%zu",
                  device_id_str, s_ping.timestamp_low, req.length);
     } else {
         T_LOGE(TAG, "PING send failed");
@@ -265,7 +265,7 @@ static void on_status_response(const lora_msg_status_t* status, int16_t rssi, fl
     lora_device_id_to_str(status->device_id, device_id_str);
 
     T_LOGI(TAG,
-            "상태 수신: ID=%s Bat=%d%% Cam=%d Up=%us Freq=%u SW=0x%02X (RSSI:%d SNR:%.1f)",
+            "Status RX: ID=%s Bat=%d%% Cam=%d Up=%us Freq=%u SW=0x%02X (RSSI:%d SNR:%.1f)",
             device_id_str, status->battery, status->camera_id, status->uptime,
             status->frequency, status->sync_word, rssi, snr);
 

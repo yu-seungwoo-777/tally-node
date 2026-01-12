@@ -7,4 +7,5 @@ idf_component_register(
         event_bus
         tally_types
         t_log
+        board_led_driver
 )

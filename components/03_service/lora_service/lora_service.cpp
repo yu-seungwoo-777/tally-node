@@ -9,6 +9,7 @@
 
 #include "lora_service.h"
 #include "lora_driver.h"
+// #include "board_led_driver.h"  // LED 기능 사용 안 함
 #include "lora_protocol.h"
 #include "event_bus.h"
 #include "t_log.h"
@@ -376,6 +377,7 @@ static void on_driver_receive(const uint8_t* data, size_t length, int16_t rssi, 
  * - 블로킹 없이 주기적으로 큐 체크
  * - 큐에 패킷이 있으면 즉시 송신 → 수신 복귀
  * - 큐가 비어있으면 계속 수신 모드 유지
+ * - 송신 시 LED 펄스 (자동으로 꺼짐)
  */
 static void lora_txq_task(void* arg)
 {
@@ -403,7 +405,8 @@ static void lora_txq_task(void* arg)
                 break;
             }
 
-            // 송신 (완료 후 드라이버가 자동으로 수신 모드로 전환)
+            // 송신 (LED 펄스: 1ms 켜짐 후 자동 꺼짐)
+            // board_led_driver_pulse(1);  // LED 기능 사용 안 함
             esp_err_t ret = lora_driver_transmit(packet.data, packet.length);
 
             if (ret == ESP_OK) {
@@ -416,7 +419,7 @@ static void lora_txq_task(void* arg)
         }
 
         // 큐가 비어있으면 짧게 대기 후 다시 체크 (수신 모드 유지)
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(10));  // 원래대로 10ms
     }
 
     T_LOGI(TAG, "tx task end");
@@ -437,6 +440,9 @@ esp_err_t lora_service_init(const lora_service_config_t* config)
     }
 
     T_LOGI(TAG, "initializing...");
+
+    // 내장 LED 드라이버 초기화
+    // board_led_driver_init();  // LED 기능 사용 안 함
 
     // 송신 큐 생성
     s_tx_queue = xQueueCreate(TX_QUEUE_SIZE, sizeof(lora_tx_packet_t));

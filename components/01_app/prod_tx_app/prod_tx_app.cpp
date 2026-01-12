@@ -80,7 +80,7 @@ static esp_err_t handle_test_mode_start(const event_data_t* event)
 {
     if (event) {
         const tally_test_mode_config_t* config = (const tally_test_mode_config_t*)event->data;
-        T_LOGI(TAG, "테스트 모드 시작: 채널=%d, 간격=%dms", config->max_channels, config->interval_ms);
+        T_LOGI(TAG, "Test mode start: channels=%d, interval=%dms", config->max_channels, config->interval_ms);
 
         esp_err_t ret = tally_test_service_start(config->max_channels, config->interval_ms);
         if (ret != ESP_OK) {
@@ -139,7 +139,7 @@ static void on_tally_change(void)
 
     esp_err_t ret = lora_service_send_tally(&tally);
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "LoRa 송신: [F1][%d][%s] (%d채널, %d바이트)",
+        T_LOGI(TAG, "LoRa TX: [F1][%d][%s] (%d channels, %d bytes)",
                  tally.channel_count, hex_str, tally.channel_count, tally.data_size);
     } else {
         T_LOGE(TAG, "LoRa 송신 실패: [%s] -> %s", hex_str, esp_err_to_name(ret));
@@ -690,7 +690,7 @@ void prod_tx_app_print_status(void)
     if (s_app.last_tally.data && s_app.last_tally.data_size > 0) {
         char hex_str[16];
         packed_data_to_hex(&s_app.last_tally, hex_str, sizeof(hex_str));
-        T_LOGI(TAG, "마지막 Tally: [%s] (%d채널)",
+        T_LOGI(TAG, "Last Tally: [%s] (%d channels)",
                  hex_str, s_app.last_tally.channel_count);
     }
 

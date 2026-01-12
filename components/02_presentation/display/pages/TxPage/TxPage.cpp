@@ -51,13 +51,11 @@ static struct {
     char ap_password[64];   // AP 비밀번호
     char ap_ip[16];        // AP IP
     bool ap_enabled;        // AP 활성화 상태
-    bool ap_fallback;       // AP 폴백 상태 (안전 장치로 강제 활성화된 경우)
 } s_ap_data = {
     .ap_name = "TallyNode-AP",
     .ap_password = "********",
     .ap_ip = "192.168.4.1",
     .ap_enabled = false,    // 기본 비활성화
-    .ap_fallback = false,   // 기본 폴백 아님
 };
 
 // WIFI 정보 (Page 3)
@@ -269,8 +267,6 @@ static void draw_ap_page(u8g2_t* u8g2)
     // 상태 표시
     if (!s_ap_data.ap_enabled) {
         u8g2_DrawStr(u8g2, 2, 61, "DISABLED");
-    } else if (s_ap_data.ap_fallback) {
-        u8g2_DrawStr(u8g2, 2, 61, "FALLBACK");
     } else {
         u8g2_DrawStr(u8g2, 2, 61, "ACTIVE");
     }
@@ -470,11 +466,6 @@ extern "C" void tx_page_set_ap_ip(const char* ip)
 extern "C" void tx_page_set_ap_enabled(bool enabled)
 {
     s_ap_data.ap_enabled = enabled;
-}
-
-extern "C" void tx_page_set_ap_fallback(bool fallback)
-{
-    s_ap_data.ap_fallback = fallback;
 }
 
 // ========== WIFI 정보 (Page 3) ==========

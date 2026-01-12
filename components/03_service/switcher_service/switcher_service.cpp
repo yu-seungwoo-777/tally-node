@@ -400,7 +400,7 @@ void SwitcherService::loop() {
         if (state == CONNECTION_STATE_DISCONNECTED) {
             uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
             if (now - primary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
-                T_LOGI(TAG, "Primary reconnect attempt");
+                T_LOGD(TAG, "Primary reconnect attempt");
                 primary_.adapter->connect();
                 primary_.last_reconnect_attempt = now;
             }
@@ -417,7 +417,7 @@ void SwitcherService::loop() {
         if (state == CONNECTION_STATE_DISCONNECTED) {
             uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
             if (now - secondary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
-                T_LOGI(TAG, "Secondary reconnect attempt");
+                T_LOGD(TAG, "Secondary reconnect attempt");
                 secondary_.adapter->connect();
                 secondary_.last_reconnect_attempt = now;
             }
@@ -514,11 +514,11 @@ void SwitcherService::switcher_task(void* param) {
 void SwitcherService::reconnectAll() {
     T_LOGI(TAG, "switcher reconnect start");
     if (primary_.adapter && primary_.adapter->getConnectionState() == CONNECTION_STATE_DISCONNECTED) {
-        T_LOGI(TAG, "Primary reconnect attempt");
+        T_LOGD(TAG, "Primary reconnect attempt");
         primary_.adapter->connect();
     }
     if (secondary_.adapter && secondary_.adapter->getConnectionState() == CONNECTION_STATE_DISCONNECTED) {
-        T_LOGI(TAG, "Secondary reconnect attempt");
+        T_LOGD(TAG, "Secondary reconnect attempt");
         secondary_.adapter->connect();
     }
 }
@@ -869,33 +869,79 @@ packed_data_t SwitcherService::getCombinedTally() const {
 }
 
 packed_data_t SwitcherService::combineDualModeTally() const {
-    if (!primary_.adapter) {
+    // 싱글모드: Primary만 반환
+    if (!dual_mode_enabled_) {
+        if (!primary_.adapter) {
+            packed_data_t empty = {nullptr, 0, 0};
+            return empty;
+        }
+        return primary_.adapter->getPackedTally();
+    }
+
+    // 듀얼모드: Primary 또는 Secondary 중 하나라도 있으면 처리
+    if (!primary_.adapter && !secondary_.adapter) {
         packed_data_t empty = {nullptr, 0, 0};
         return empty;
     }
 
     // Primary 데이터 가져오기
-    packed_data_t primary_data = primary_.adapter->getPackedTally();
+    packed_data_t primary_data = {nullptr, 0, 0};
+    bool has_primary = false;
+    if (primary_.adapter) {
+        primary_data = primary_.adapter->getPackedTally();
+        has_primary = packed_data_is_valid(&primary_data);
+    }
 
-    if (!packed_data_is_valid(&primary_data)) {
+    // Secondary 데이터 가져오기
+    packed_data_t secondary_data = {nullptr, 0, 0};
+    bool has_secondary = false;
+    if (secondary_.adapter) {
+        secondary_data = secondary_.adapter->getPackedTally();
+        has_secondary = packed_data_is_valid(&secondary_data);
+    }
+
+    // 둘 다 없으면 빈 값 반환
+    if (!has_primary && !has_secondary) {
         packed_data_t empty = {nullptr, 0, 0};
         return empty;
     }
 
-    // 싱글모드: Primary만 반환
-    if (!dual_mode_enabled_) {
-        return primary_data;
-    }
+    // Secondary만 있으면 Secondary만 반환
+    if (!has_primary && has_secondary) {
+        // Secondary를 offset 위치에 맞춰 반환
+        uint8_t effective_offset = (secondary_offset_ > 0) ? secondary_offset_ : TALLY_MAX_CHANNELS;
 
-    // 듀얼모드: Secondary 처리
-    if (!secondary_.adapter) {
-        return primary_data;  // Secondary 없으면 Primary만
-    }
+        // Secondary 데이터 중 20채널 내에 들어가는 개수 계산
+        uint8_t secondary_fitting = 0;
+        for (uint8_t i = 0; i < secondary_data.channel_count; i++) {
+            uint8_t target = i + 1 + effective_offset;
+            if (target <= TALLY_MAX_CHANNELS) {
+                secondary_fitting = i + 1;
+            } else {
+                break;
+            }
+        }
 
-    packed_data_t secondary_data = secondary_.adapter->getPackedTally();
-
-    if (!packed_data_is_valid(&secondary_data)) {
-        return primary_data;  // Secondary 데이터 없으면 Primary만
+        // offset이 0이면 Secondary를 1번부터 매핑
+        if (effective_offset >= TALLY_MAX_CHANNELS) {
+            // offset이 크면 Secondary를 1번 채널부터 사용
+            packed_data_cleanup(&combined_packed_);
+            packed_data_init(&combined_packed_, secondary_data.channel_count);
+            for (uint8_t i = 0; i < secondary_data.channel_count; i++) {
+                uint8_t flags = packed_data_get_channel(&secondary_data, i + 1);
+                packed_data_set_channel(&combined_packed_, i + 1, flags);
+            }
+        } else {
+            // offset만큼 떨어진 위치에 매핑
+            packed_data_cleanup(&combined_packed_);
+            packed_data_init(&combined_packed_, effective_offset + secondary_fitting);
+            for (uint8_t i = 0; i < secondary_fitting; i++) {
+                uint8_t flags = packed_data_get_channel(&secondary_data, i + 1);
+                uint8_t target_channel = i + 1 + effective_offset;
+                packed_data_set_channel(&combined_packed_, target_channel, flags);
+            }
+        }
+        return combined_packed_;
     }
 
     // 전체 채널 수 계산

@@ -341,7 +341,7 @@ int VmixDriver::receiveData() {
 
     if (received <= 0) {
         if (received < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-            T_LOGE(TAG, "수신 오류 (errno=%d)", errno);
+            T_LOGE(TAG, "receive error (errno=%d)", errno);
             disconnect();
         }
         return 0;

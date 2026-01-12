@@ -47,6 +47,9 @@ typedef struct {
 // 수신 콜백 (RSSI, SNR 포함)
 typedef void (*lora_receive_callback_t)(const uint8_t* data, size_t length, int16_t rssi, float snr);
 
+// 송신 완료 콜백
+typedef void (*lora_transmit_complete_callback_t)(void);
+
 /**
  * @brief LoRa 드라이버 초기화
  *
@@ -93,6 +96,11 @@ esp_err_t lora_driver_start_receive(void);
  * @brief 수신 콜백 설정
  */
 void lora_driver_set_receive_callback(lora_receive_callback_t callback);
+
+/**
+ * @brief 송신 완료 콜백 설정
+ */
+void lora_driver_set_transmit_complete_callback(lora_transmit_complete_callback_t callback);
 
 /**
  * @brief 수신 체크 (인터럽트 플래그 확인 후 콜백 호출)

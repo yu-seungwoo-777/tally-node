@@ -55,15 +55,10 @@ private:
     static void onEthernetStatusChange(bool connected, const char* ip);
     static void onWiFiStatusChange(bool connected, const char* ip);
 
-    // AP 폴백 (안전 장치)
-    static bool shouldEnableAPFallback(const network_status_t& status);
-    static esp_err_t forceEnableAP(void);
-
     // 정적 멤버
     static bool s_initialized;
     static app_network_config_t s_config;
     static network_status_t s_last_status;  // 이전 상태 (변경 감지용)
-    static bool s_ap_fallback_triggered;    // AP 폴백 이미 발생 여부
 };
 
 // ============================================================================
@@ -73,7 +68,6 @@ private:
 bool NetworkServiceClass::s_initialized = false;
 app_network_config_t NetworkServiceClass::s_config = {};
 network_status_t NetworkServiceClass::s_last_status = {};
-bool NetworkServiceClass::s_ap_fallback_triggered = false;
 
 // ============================================================================
 // 초기화/정리
@@ -313,7 +307,6 @@ void NetworkServiceClass::publishStatus(void)
 
         // 이벤트 데이터 생성
         event.ap_enabled = s_config.wifi_ap.enabled;
-        event.ap_fallback = s_ap_fallback_triggered;
         event.sta_connected = status.wifi_sta.connected;
         event.eth_connected = status.ethernet.connected;
         event.eth_detected = status.ethernet.detected;
@@ -334,43 +327,6 @@ void NetworkServiceClass::publishStatus(void)
 
         // 현재 상태 저장
         s_last_status = status;
-    }
-
-    // AP 폴백 체크 (안전 장치: 모든 네트워크가 없는 경우 AP 강제 활성화)
-    if (shouldEnableAPFallback(status)) {
-        T_LOGW(TAG, "no network connection, enabling AP fallback");
-        forceEnableAP();
-    } else if (s_ap_fallback_triggered) {
-        // AP 폴백이 발생한 상태에서 네트워크가 복구된 경우 AP 비활성화
-        bool wifi_usable = s_config.wifi_sta.enabled && status.wifi_sta.connected;
-        bool eth_usable = s_config.ethernet.enabled &&
-                          status.ethernet.connected &&
-                          s_config.ethernet.dhcp_enabled;
-
-        if (wifi_usable || eth_usable) {
-            T_LOGI(TAG, "network connection recovered, disabling AP fallback");
-            s_ap_fallback_triggered = false;
-
-            // AP 비활성화 (다른 네트워크 유지)
-            if (s_config.wifi_ap.enabled) {
-                T_LOGI(TAG, "AP disabled (network recovered)");
-
-                // 설정 업데이트
-                s_config.wifi_ap.enabled = false;
-
-                const char* ap_ssid = nullptr;  // AP 비활성화
-                const char* ap_pass = nullptr;
-                const char* sta_ssid = s_config.wifi_sta.enabled ? s_config.wifi_sta.ssid : nullptr;
-                const char* sta_pass = s_config.wifi_sta.enabled ? s_config.wifi_sta.password : nullptr;
-
-                if (wifi_driver_is_initialized()) {
-                    wifi_driver_reconfigure(ap_ssid, ap_pass, sta_ssid, sta_pass);
-                }
-
-                // 상태 이벤트 발행 (DisplayManager 갱신용)
-                publishStatus();
-            }
-        }
     }
 }
 
@@ -525,117 +481,6 @@ esp_err_t NetworkServiceClass::restartAll(void)
 }
 
 // ============================================================================
-// AP 폴백 (안전 장치)
-// ============================================================================
-
-/**
- * @brief AP 폴백이 필요한지 확인
- *
- * 다음 조건에서 AP 폴백 활성화:
- * 1. AP, WiFi STA, Ethernet이 모두 비활성화된 경우
- * 2. AP 비활성화 + (WiFi STA 비활성화 또는 미연결) + (Ethernet 비활성화 또는 Static IP)
- *
- * @param status 현재 네트워크 상태
- * @return true AP 폴백 필요, false 불필요
- */
-bool NetworkServiceClass::shouldEnableAPFallback(const network_status_t& status)
-{
-    // 이미 폴백 발생했으면 재시도하지 않음
-    if (s_ap_fallback_triggered) {
-        return false;
-    }
-
-    // 조건 1: 모든 네트워크가 비활성화된 경우
-    bool all_disabled = !s_config.wifi_ap.enabled &&
-                        !s_config.wifi_sta.enabled &&
-                        !s_config.ethernet.enabled;
-
-    if (all_disabled) {
-        T_LOGW(TAG, "AP fallback needed: all networks disabled");
-        return true;
-    }
-
-    // 조건 2: AP 비활성화 + 다른 네트워크도 사용 불가능한 경우
-    if (!s_config.wifi_ap.enabled) {
-        // WiFi STA 상태 확인
-        bool wifi_usable = s_config.wifi_sta.enabled && status.wifi_sta.connected;
-
-        // Ethernet 상태 확인 (활성화 + 연결됨 + DHCP 사용 중이어야 함)
-        bool eth_usable = s_config.ethernet.enabled &&
-                          status.ethernet.connected &&
-                          s_config.ethernet.dhcp_enabled;
-
-        if (!wifi_usable && !eth_usable) {
-            T_LOGW(TAG, "AP fallback needed: AP disabled + no available network");
-            T_LOGW(TAG, "  WiFi STA: enabled=%d, connected=%d",
-                    s_config.wifi_sta.enabled, status.wifi_sta.connected);
-            T_LOGW(TAG, "  Ethernet: enabled=%d, connected=%d, dhcp=%d",
-                    s_config.ethernet.enabled, status.ethernet.connected,
-                    s_config.ethernet.dhcp_enabled);
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/**
- * @brief AP 모드 강제 활성화 (폴백)
- * @return ESP_OK 성공, 에러 코드 실패
- */
-esp_err_t NetworkServiceClass::forceEnableAP(void)
-{
-    T_LOGW(TAG, "==========================================");
-    T_LOGW(TAG, "AP fallback enable start (safety measure)");
-    T_LOGW(TAG, "==========================================");
-
-    // AP 폴백 발생 플래그 설정 (재시도 방지)
-    s_ap_fallback_triggered = true;
-
-    // 기본 AP SSID/Password (폴백용)
-    const char* fallback_ap_ssid = "TallyNode-AP";
-    // 열린 네트워크 (비밀번호 없음)
-
-    // 설정 저장 (메모리에만, NVS에는 저장하지 않음)
-    s_config.wifi_ap.enabled = true;
-    strncpy(s_config.wifi_ap.ssid, fallback_ap_ssid, sizeof(s_config.wifi_ap.ssid) - 1);
-    s_config.wifi_ap.ssid[sizeof(s_config.wifi_ap.ssid) - 1] = '\0';
-    s_config.wifi_ap.password[0] = '\0';  // 열린 네트워크
-    s_config.wifi_ap.channel = 1;
-
-    T_LOGI(TAG, "fallback AP config: SSID=%s (open network)", fallback_ap_ssid);
-
-    // WiFi 재시작 (AP만 활성화)
-    const char* ap_ssid = s_config.wifi_ap.ssid;
-    const char* ap_pass = s_config.wifi_ap.password;
-    const char* sta_ssid = nullptr;  // STA 비활성화
-    const char* sta_pass = nullptr;
-
-    esp_err_t ret = ESP_OK;
-    if (wifi_driver_is_initialized()) {
-        ret = wifi_driver_reconfigure(ap_ssid, ap_pass, sta_ssid, sta_pass);
-    } else {
-        ret = wifi_driver_init(ap_ssid, ap_pass, sta_ssid, sta_pass);
-    }
-
-    if (ret == ESP_OK) {
-        // 네트워크 상태 변경 콜백 등록
-        wifi_driver_set_status_callback(onWiFiStatusChange);
-
-        T_LOGI(TAG, "AP fallback enabled");
-        T_LOGI(TAG, "  SSID: %s", fallback_ap_ssid);
-        T_LOGI(TAG, "  IP: 192.168.4.1 (default)");
-
-        // 상태 이벤트 발행
-        publishStatus();
-    } else {
-        T_LOGE(TAG, "AP fallback enable failed: %s", esp_err_to_name(ret));
-    }
-
-    return ret;
-}
-
-// ============================================================================
 // 이벤트 핸들러
 // ============================================================================
 
@@ -682,12 +527,6 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
 {
     if (!event) {
         return ESP_ERR_INVALID_ARG;
-    }
-
-    // 사용자가 네트워크 설정을 변경하면 AP 폴백 플래그 리셋
-    if (s_ap_fallback_triggered) {
-        T_LOGI(TAG, "user config change detected, AP fallback flag reset");
-        s_ap_fallback_triggered = false;
     }
 
     // 이벤트 버스가 복사한 데이터를 직접 참조

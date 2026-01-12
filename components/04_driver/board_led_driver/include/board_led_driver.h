@@ -50,6 +50,12 @@ void board_led_driver_off(void);
 void board_led_driver_toggle(void);
 
 /**
+ * @brief 내장 LED 일정 시간 켜기 (펄스)
+ * @param duration_ms 켜질 시간 (ms), 0이면 켜기만 함
+ */
+void board_led_driver_pulse(uint32_t duration_ms);
+
+/**
  * @brief 내장 LED 해제
  */
 void board_led_driver_deinit(void);

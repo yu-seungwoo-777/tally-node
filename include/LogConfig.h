@@ -22,7 +22,7 @@ extern "C" {
  * @note 0=None, 1=Error, 2=Warn, 3=Info, 4=Debug, 5=Verbose
  */
 #ifndef T_LOG_DEFAULT_LEVEL
-#define T_LOG_DEFAULT_LEVEL 4
+#define T_LOG_DEFAULT_LEVEL 3
 #endif
 
 // ============================================================
@@ -35,7 +35,7 @@ extern "C" {
  * @define T_LOG_TIMESTAMP_ENABLE 0  타임스탬프 제거
  */
 #ifndef T_LOG_TIMESTAMP_ENABLE
-#define T_LOG_TIMESTAMP_ENABLE 0
+#define T_LOG_TIMESTAMP_ENABLE 1
 #endif
 
 /**

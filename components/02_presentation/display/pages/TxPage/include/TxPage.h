@@ -79,12 +79,6 @@ void tx_page_set_ap_ip(const char* ip);
  */
 void tx_page_set_ap_enabled(bool enabled);
 
-/**
- * @brief AP 폴백 상태 설정
- * @param fallback true=폴백 상태, false=정상 상태
- */
-void tx_page_set_ap_fallback(bool fallback);
-
 // ========== WIFI 정보 (Page 3) ==========
 
 /**
