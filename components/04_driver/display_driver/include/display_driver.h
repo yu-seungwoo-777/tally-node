@@ -44,50 +44,50 @@ extern "C" {
  *
  * @return ESP_OK 성공, 에러 코드 실패
  */
-esp_err_t DisplayDriver_init(void);
+esp_err_t display_driver_init(void);
 
 /**
  * @brief 디스플레이 전원 켜기/끄기
  *
  * @param on true: 켜기, false: 끄기
  */
-void DisplayDriver_setPower(bool on);
+void display_driver_set_power(bool on);
 
 /**
  * @brief 화면 지우기
  */
-void DisplayDriver_clearBuffer(void);
+void display_driver_clear_buffer(void);
 
 /**
  * @brief 버퍼 전송 (화면 업데이트) - 뮤텍스 보호됨
  */
-void DisplayDriver_sendBuffer(void);
+void display_driver_send_buffer(void);
 
 /**
  * @brief 버퍼 전송 (동기) - 뮤텍스 외부에서 호출
  *
  * @note 이미 뮤텍스를 획득한 상태에서 호출
  */
-void DisplayDriver_sendBufferSync(void);
+void display_driver_send_buffer_sync(void);
 
 /**
  * @brief 디스플레이 뮤텍스 획득
  *
  * @return ESP_OK 성공, ESP_ERR_TIMEOUT 타임아웃
  */
-esp_err_t DisplayDriver_takeMutex(uint32_t timeout_ms);
+esp_err_t display_driver_take_mutex(uint32_t timeout_ms);
 
 /**
  * @brief 디스플레이 뮤텍스 해제
  */
-void DisplayDriver_giveMutex(void);
+void display_driver_give_mutex(void);
 
 /**
  * @brief U8g2 인스턴스 가져오기
  *
  * @return U8g2 구조체 포인터
  */
-u8g2_t* DisplayDriver_getU8g2(void);
+u8g2_t* display_driver_get_u8g2(void);
 
 #ifdef __cplusplus
 }

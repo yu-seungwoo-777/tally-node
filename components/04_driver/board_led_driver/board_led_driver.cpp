@@ -41,7 +41,7 @@ esp_err_t board_led_driver_init(void)
     return ESP_OK;
 }
 
-void board_led_set_state(board_led_state_t state)
+void board_led_driver_set_state(board_led_state_t state)
 {
     if (!s_initialized) {
         return;
@@ -49,17 +49,17 @@ void board_led_set_state(board_led_state_t state)
     gpio_set_level(EORA_S3_LED_BOARD, state);
 }
 
-void board_led_on(void)
+void board_led_driver_on(void)
 {
-    board_led_set_state(BOARD_LED_ON);
+    board_led_driver_set_state(BOARD_LED_ON);
 }
 
-void board_led_off(void)
+void board_led_driver_off(void)
 {
-    board_led_set_state(BOARD_LED_OFF);
+    board_led_driver_set_state(BOARD_LED_OFF);
 }
 
-void board_led_toggle(void)
+void board_led_driver_toggle(void)
 {
     if (!s_initialized) {
         return;

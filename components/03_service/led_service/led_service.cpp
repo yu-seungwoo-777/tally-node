@@ -78,11 +78,11 @@ static esp_err_t on_camera_id_changed(const event_data_t* event)
     s_service.camera_id_valid = true;
 
     // WS2812Driver에 카메라 ID 설정
-    ws2812_set_camera_id(camera_id);
+    ws2812_driver_set_camera_id(camera_id);
 
     // 캐시된 Tally 데이터로 LED 즉시 업데이트
     if (s_service.tally_valid) {
-        ws2812_process_tally_data(s_service.tally_data, s_service.tally_channel_count);
+        ws2812_driver_process_tally_data(s_service.tally_data, s_service.tally_channel_count);
         T_LOGI(TAG, "tally reprocessed after camera_id change");
     }
 
@@ -102,11 +102,11 @@ static esp_err_t on_brightness_changed(const event_data_t* event)
     T_LOGI(TAG, "brightness changed: %d", *brightness);
 
     // WS2812Driver에 밝기 설정 (내부에서 LED 즉시 업데이트)
-    ws2812_set_brightness(*brightness);
+    ws2812_driver_set_brightness(*brightness);
 
     // 캐시된 Tally 데이터로 LED 재처리 (밝기 적용 후)
     if (s_service.tally_valid) {
-        ws2812_process_tally_data(s_service.tally_data, s_service.tally_channel_count);
+        ws2812_driver_process_tally_data(s_service.tally_data, s_service.tally_channel_count);
         T_LOGI(TAG, "tally reprocessed after brightness change");
     }
 
@@ -135,7 +135,7 @@ static esp_err_t on_tally_state_changed(const event_data_t* event)
     s_service.tally_valid = true;
 
     // WS2812 드라이버에 Tally 데이터 전달 (드라이버에서 카메라 ID로 상태 확인)
-    ws2812_process_tally_data(tally_evt->tally_data, tally_evt->channel_count);
+    ws2812_driver_process_tally_data(tally_evt->tally_data, tally_evt->channel_count);
 
     // 현재 상태 캐시 업데이트 (정지 해제 시 복구용)
     // 캐시된 카메라 ID 사용 (이벤트로 업데이트됨)
@@ -175,14 +175,14 @@ static esp_err_t on_stop_changed(const event_data_t* event)
     if (s_service.stopped) {
         T_LOGW(TAG, "stopped: LED OFF");
         // LED 전체 소등
-        ws2812_off();
+        ws2812_driver_off();
     } else {
         T_LOGI(TAG, "stop released");
         // 정지 해제 시 현재 상태로 LED 복구
         if (s_service.program_active) {
-            ws2812_set_state(WS2812_PROGRAM);
+            ws2812_driver_set_state(WS2812_PROGRAM);
         } else if (s_service.preview_active) {
-            ws2812_set_state(WS2812_PREVIEW);
+            ws2812_driver_set_state(WS2812_PREVIEW);
         }
     }
 
@@ -282,7 +282,7 @@ void led_service_set_state(int state)
         break;
     }
 
-    ws2812_set_rgb(r, g, b);
+    ws2812_driver_set_rgb(r, g, b);
 }
 
 void led_service_set_rgb(uint8_t r, uint8_t g, uint8_t b)
@@ -290,7 +290,7 @@ void led_service_set_rgb(uint8_t r, uint8_t g, uint8_t b)
     if (!s_service.initialized) {
         return;
     }
-    ws2812_set_rgb(r, g, b);
+    ws2812_driver_set_rgb(r, g, b);
 }
 
 void led_service_set_brightness(uint8_t brightness)
@@ -298,7 +298,7 @@ void led_service_set_brightness(uint8_t brightness)
     if (!s_service.initialized) {
         return;
     }
-    ws2812_set_brightness(brightness);
+    ws2812_driver_set_brightness(brightness);
 }
 
 void led_service_set_camera_id(uint8_t camera_id)
@@ -306,7 +306,7 @@ void led_service_set_camera_id(uint8_t camera_id)
     if (!s_service.initialized) {
         return;
     }
-    ws2812_set_camera_id(camera_id);
+    ws2812_driver_set_camera_id(camera_id);
 }
 
 void led_service_off(void)
@@ -314,7 +314,7 @@ void led_service_off(void)
     if (!s_service.initialized) {
         return;
     }
-    ws2812_off();
+    ws2812_driver_off();
 }
 
 void led_service_deinit(void)
@@ -332,7 +332,7 @@ void led_service_deinit(void)
         s_service.event_subscribed = false;
     }
 
-    ws2812_deinit();
+    ws2812_driver_deinit();
     s_service.initialized = false;
     T_LOGI(TAG, "LED service deinit");
 }
@@ -358,22 +358,22 @@ void led_service_deinit_board_led(void)
 
 void led_service_set_board_led_state(board_led_state_t state)
 {
-    board_led_set_state(state);
+    board_led_driver_set_state(state);
 }
 
-void led_service_board_led_on(void)
+void led_service_board_led_driver_on(void)
 {
-    board_led_on();
+    board_led_driver_on();
 }
 
-void led_service_board_led_off(void)
+void led_service_board_led_driver_off(void)
 {
-    board_led_off();
+    board_led_driver_off();
 }
 
 void led_service_toggle_board_led(void)
 {
-    board_led_toggle();
+    board_led_driver_toggle();
 }
 
 } // extern "C"

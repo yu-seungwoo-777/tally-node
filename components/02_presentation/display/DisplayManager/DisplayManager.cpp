@@ -114,7 +114,7 @@ static void render_current_page(void)
     }
 
     // 뮤텍스 획득 (전체 렌더링 사이클 보호)
-    if (DisplayDriver_takeMutex(100) != ESP_OK) {
+    if (display_driver_take_mutex(100) != ESP_OK) {
         T_LOGW(TAG, "뮤텍스 획득 실패 - 렌더링 스킵");
         return;
     }
@@ -124,15 +124,15 @@ static void render_current_page(void)
         if (s_mgr.pages[i]->id == s_mgr.current_page) {
             u8g2_t* u8g2 = display_manager_get_u8g2();
             if (u8g2 != nullptr) {
-                DisplayDriver_clearBuffer();
+                display_driver_clear_buffer();
                 s_mgr.pages[i]->render(u8g2);
-                DisplayDriver_sendBufferSync();  // 이미 뮤텍스 보유 중
+                display_driver_send_buffer_sync();  // 이미 뮤텍스 보유 중
             }
             break;
         }
     }
 
-    DisplayDriver_giveMutex();
+    display_driver_give_mutex();
 }
 
 /**
@@ -564,7 +564,7 @@ extern "C" bool display_manager_init(void)
     }
 
     // DisplayDriver 초기화
-    esp_err_t ret = DisplayDriver_init();
+    esp_err_t ret = display_driver_init();
     if (ret != ESP_OK) {
         T_LOGE(TAG, "DisplayDriver 초기화 실패: %s", esp_err_to_name(ret));
         return false;
@@ -705,7 +705,7 @@ extern "C" void display_manager_force_refresh(void)
 extern "C" void display_manager_set_power(bool on)
 {
     s_mgr.power_on = on;
-    DisplayDriver_setPower(on);
+    display_driver_set_power(on);
 
     if (on && s_mgr.initialized) {
         display_manager_force_refresh();
@@ -716,7 +716,7 @@ extern "C" void display_manager_set_power(bool on)
 
 extern "C" u8g2_t* display_manager_get_u8g2(void)
 {
-    return DisplayDriver_getU8g2();
+    return display_driver_get_u8g2();
 }
 
 // ============================================================================

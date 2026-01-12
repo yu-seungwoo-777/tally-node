@@ -32,22 +32,22 @@ esp_err_t board_led_driver_init(void);
  * @brief 내장 LED 상태 설정
  * @param state ON/OFF 상태
  */
-void board_led_set_state(board_led_state_t state);
+void board_led_driver_set_state(board_led_state_t state);
 
 /**
  * @brief 내장 LED 켜기
  */
-void board_led_on(void);
+void board_led_driver_on(void);
 
 /**
  * @brief 내장 LED 끄기
  */
-void board_led_off(void);
+void board_led_driver_off(void);
 
 /**
  * @brief 내장 LED 토글
  */
-void board_led_toggle(void);
+void board_led_driver_toggle(void);
 
 /**
  * @brief 내장 LED 해제

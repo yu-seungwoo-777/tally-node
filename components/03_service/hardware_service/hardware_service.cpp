@@ -181,7 +181,7 @@ esp_err_t HardwareService::init(void)
     battery_driver_init();
 
     // 온도 센서 드라이버 초기화
-    TemperatureDriver_init();
+    temperature_driver_init();
 
     // 배터리 읽기
     s_battery = updateBattery();
@@ -357,7 +357,7 @@ float HardwareService::getVoltage(void)
 void HardwareService::updateTemperature(void)
 {
     float temp = 25.0f;  // 기본값
-    if (TemperatureDriver_getCelsius(&temp) == ESP_OK) {
+    if (temperature_driver_get_celsius(&temp) == ESP_OK) {
         s_temperature = temp;
     }
 }

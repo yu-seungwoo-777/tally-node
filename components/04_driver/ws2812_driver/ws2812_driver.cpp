@@ -305,52 +305,52 @@ esp_err_t ws2812_driver_init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
     return WS2812Driver::init(gpio_num, num_leds, camera_id);
 }
 
-void ws2812_set_state(ws2812_state_t state)
+void ws2812_driver_set_state(ws2812_state_t state)
 {
     WS2812Driver::setState(state);
 }
 
-void ws2812_set_rgb(uint8_t r, uint8_t g, uint8_t b)
+void ws2812_driver_set_rgb(uint8_t r, uint8_t g, uint8_t b)
 {
     WS2812Driver::setRgb(r, g, b);
 }
 
-void ws2812_set_led_state(uint32_t led_index, ws2812_state_t state)
+void ws2812_driver_set_led_state(uint32_t led_index, ws2812_state_t state)
 {
     WS2812Driver::setLedState(led_index, state);
 }
 
-void ws2812_set_led_rgb(uint32_t led_index, uint8_t r, uint8_t g, uint8_t b)
+void ws2812_driver_set_led_rgb(uint32_t led_index, uint8_t r, uint8_t g, uint8_t b)
 {
     WS2812Driver::setLedRgb(led_index, r, g, b);
 }
 
-void ws2812_set_brightness(uint8_t brightness)
+void ws2812_driver_set_brightness(uint8_t brightness)
 {
     WS2812Driver::setBrightness(brightness);
 }
 
-void ws2812_set_camera_id(uint8_t camera_id)
+void ws2812_driver_set_camera_id(uint8_t camera_id)
 {
     WS2812Driver::setCameraId(camera_id);
 }
 
-void ws2812_process_tally_data(const uint8_t* tally_data, uint8_t channel_count)
+void ws2812_driver_process_tally_data(const uint8_t* tally_data, uint8_t channel_count)
 {
     WS2812Driver::processTallyData(tally_data, channel_count);
 }
 
-void ws2812_off(void)
+void ws2812_driver_off(void)
 {
     WS2812Driver::off();
 }
 
-void ws2812_deinit(void)
+void ws2812_driver_deinit(void)
 {
     WS2812Driver::deinit();
 }
 
-bool ws2812_is_initialized(void)
+bool ws2812_driver_is_initialized(void)
 {
     return WS2812Driver::isInitialized();
 }

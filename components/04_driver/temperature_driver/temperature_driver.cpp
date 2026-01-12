@@ -10,7 +10,7 @@
 static const char* TAG = "04_Temp";
 static bool s_initialized = false;
 
-esp_err_t TemperatureDriver_init(void)
+esp_err_t temperature_driver_init(void)
 {
     T_LOGD(TAG, "init");
 
@@ -30,7 +30,7 @@ esp_err_t TemperatureDriver_init(void)
     return ESP_OK;
 }
 
-void TemperatureDriver_deinit(void)
+void temperature_driver_deinit(void)
 {
     T_LOGD(TAG, "deinit");
 
@@ -40,7 +40,7 @@ void TemperatureDriver_deinit(void)
     }
 }
 
-esp_err_t TemperatureDriver_getCelsius(float* temp_c)
+esp_err_t temperature_driver_get_celsius(float* temp_c)
 {
     T_LOGD(TAG, "getc");
 
@@ -52,7 +52,7 @@ esp_err_t TemperatureDriver_getCelsius(float* temp_c)
     return temperature_hal_read_celsius(temp_c);
 }
 
-esp_err_t TemperatureDriver_getFahrenheit(float* temp_f)
+esp_err_t temperature_driver_get_fahrenheit(float* temp_f)
 {
     T_LOGD(TAG, "getf");
 

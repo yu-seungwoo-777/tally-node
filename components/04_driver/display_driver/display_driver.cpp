@@ -20,7 +20,7 @@ static u8g2_t s_u8g2;
 static bool s_initialized = false;
 static SemaphoreHandle_t s_mutex = NULL;
 
-esp_err_t DisplayDriver_init(void)
+esp_err_t display_driver_init(void)
 {
     if (s_initialized) {
         return ESP_OK;
@@ -66,7 +66,7 @@ esp_err_t DisplayDriver_init(void)
     return ESP_OK;
 }
 
-void DisplayDriver_setPower(bool on)
+void display_driver_set_power(bool on)
 {
     if (s_initialized) {
         if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
@@ -77,14 +77,14 @@ void DisplayDriver_setPower(bool on)
     }
 }
 
-void DisplayDriver_clearBuffer(void)
+void display_driver_clear_buffer(void)
 {
     if (s_initialized) {
         u8g2_ClearBuffer(&s_u8g2);
     }
 }
 
-void DisplayDriver_sendBuffer(void)
+void display_driver_send_buffer(void)
 {
     if (s_initialized) {
         if (xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
@@ -94,14 +94,14 @@ void DisplayDriver_sendBuffer(void)
     }
 }
 
-void DisplayDriver_sendBufferSync(void)
+void display_driver_send_buffer_sync(void)
 {
     if (s_initialized) {
         u8g2_SendBuffer(&s_u8g2);
     }
 }
 
-esp_err_t DisplayDriver_takeMutex(uint32_t timeout_ms)
+esp_err_t display_driver_take_mutex(uint32_t timeout_ms)
 {
     if (!s_initialized || s_mutex == NULL) {
         return ESP_ERR_INVALID_STATE;
@@ -113,14 +113,14 @@ esp_err_t DisplayDriver_takeMutex(uint32_t timeout_ms)
     return ESP_ERR_TIMEOUT;
 }
 
-void DisplayDriver_giveMutex(void)
+void display_driver_give_mutex(void)
 {
     if (s_mutex != NULL) {
         xSemaphoreGive(s_mutex);
     }
 }
 
-u8g2_t* DisplayDriver_getU8g2(void)
+u8g2_t* display_driver_get_u8g2(void)
 {
     return &s_u8g2;
 }

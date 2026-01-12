@@ -21,12 +21,12 @@ extern "C" {
  *
  * @return ESP_OK 성공, 에러 코드 실패
  */
-esp_err_t TemperatureDriver_init(void);
+esp_err_t temperature_driver_init(void);
 
 /**
  * @brief 온도 센서 드라이버 해제
  */
-void TemperatureDriver_deinit(void);
+void temperature_driver_deinit(void);
 
 /**
  * @brief 온도 측정 (섭씨)
@@ -34,7 +34,7 @@ void TemperatureDriver_deinit(void);
  * @param temp_c 온도값(섭씨)을 저장할 포인터
  * @return ESP_OK 성공, 에러 코드 실패
  */
-esp_err_t TemperatureDriver_getCelsius(float* temp_c);
+esp_err_t temperature_driver_get_celsius(float* temp_c);
 
 /**
  * @brief 온도 측정 (화씨)
@@ -42,7 +42,7 @@ esp_err_t TemperatureDriver_getCelsius(float* temp_c);
  * @param temp_f 온도값(화씨)을 저장할 포인터
  * @return ESP_OK 성공, 에러 코드 실패
  */
-esp_err_t TemperatureDriver_getFahrenheit(float* temp_f);
+esp_err_t temperature_driver_get_fahrenheit(float* temp_f);
 
 #ifdef __cplusplus
 }
