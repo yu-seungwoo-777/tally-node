@@ -32,7 +32,8 @@ esp_err_t board_led_driver_init(void)
         .callback = timer_callback,
         .arg = nullptr,
         .dispatch_method = ESP_TIMER_TASK,
-        .name = "led_timer"
+        .name = "led_timer",
+        .skip_unhandled_events = false
     };
 
     esp_err_t ret = esp_timer_create(&timer_args, &s_timer);

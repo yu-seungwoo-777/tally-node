@@ -56,9 +56,15 @@ AtemDriver::AtemDriver(const AtemConfig& config)
     cached_packed_.data = nullptr;
     cached_packed_.data_size = 0;
     cached_packed_.channel_count = 0;
+
+    // 디버깅: 드라이버 생성 로그 (이름, IP, 인스턴스 주소)
+    T_LOGD(TAG, "Driver created: %s@%s (this=%p)", config_.name.c_str(), config_.ip.c_str(), this);
 }
 
 AtemDriver::~AtemDriver() {
+    // 디버깅: 드라이버 소멸 로그
+    T_LOGD(TAG, "Driver destroyed: %s@%s (this=%p, session=0x%04X)",
+             config_.name.c_str(), config_.ip.c_str(), this, state_.session_id);
     disconnect();
     packed_data_cleanup(&cached_packed_);
 }
