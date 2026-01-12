@@ -395,14 +395,18 @@ void SwitcherService::removeSwitcher(switcher_role_t role) {
 void SwitcherService::loop() {
     // Primary 처리
     if (primary_.adapter) {
-        // 연결 상태 확인 및 자동 재연결
+        // 연결 상태 확인 및 자동 재연결 (인터페이스 연결 상태 확인 후)
         connection_state_t state = primary_.adapter->getConnectionState();
         if (state == CONNECTION_STATE_DISCONNECTED) {
-            uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-            if (now - primary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
-                T_LOGD(TAG, "Primary reconnect attempt");
-                primary_.adapter->connect();
-                primary_.last_reconnect_attempt = now;
+            // 인터페이스 연결 상태 확인
+            bool interface_connected = isInterfaceConnected(primary_.network_interface);
+            if (interface_connected) {
+                uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+                if (now - primary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
+                    T_LOGD(TAG, "Primary reconnect attempt (interface connected)");
+                    primary_.adapter->connect();
+                    primary_.last_reconnect_attempt = now;
+                }
             }
         }
         // 어댑터 루프 처리
@@ -415,11 +419,15 @@ void SwitcherService::loop() {
     if (dual_mode_enabled_ && secondary_.adapter) {
         connection_state_t state = secondary_.adapter->getConnectionState();
         if (state == CONNECTION_STATE_DISCONNECTED) {
-            uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-            if (now - secondary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
-                T_LOGD(TAG, "Secondary reconnect attempt");
-                secondary_.adapter->connect();
-                secondary_.last_reconnect_attempt = now;
+            // 인터페이스 연결 상태 확인
+            bool interface_connected = isInterfaceConnected(secondary_.network_interface);
+            if (interface_connected) {
+                uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+                if (now - secondary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
+                    T_LOGD(TAG, "Secondary reconnect attempt (interface connected)");
+                    secondary_.adapter->connect();
+                    secondary_.last_reconnect_attempt = now;
+                }
             }
         }
         secondary_.adapter->loop();
@@ -1280,6 +1288,29 @@ void SwitcherService::publishSwitcherStatus() {
     }
 
     event_bus_publish(EVT_SWITCHER_STATUS_CHANGED, &status, sizeof(status));
+}
+
+// ============================================================================
+// 인터페이스 연결 상태 확인
+// ============================================================================
+
+bool SwitcherService::isInterfaceConnected(uint8_t network_interface) {
+    tally_network_if_t iface = static_cast<tally_network_if_t>(network_interface);
+
+    switch (iface) {
+        case TALLY_NET_ETHERNET:
+            // Ethernet만 확인
+            return (s_cached_eth_ip[0] != '\0');
+
+        case TALLY_NET_WIFI:
+            // WiFi만 확인
+            return (s_cached_wifi_sta_ip[0] != '\0');
+
+        case TALLY_NET_AUTO:
+        default:
+            // 둘 중 하나라도 연결되어 있으면 true
+            return (s_cached_eth_ip[0] != '\0' || s_cached_wifi_sta_ip[0] != '\0');
+    }
 }
 
 // ============================================================================

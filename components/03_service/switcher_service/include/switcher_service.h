@@ -527,6 +527,13 @@ private:
      * @return 스위처 상태
      */
     switcher_status_t getSwitcherStatus(switcher_role_t role) const;
+
+    /**
+     * @brief 인터페이스 연결 상태 확인 (캐시된 IP 기반)
+     * @param network_interface 네트워크 인터페이스 (0=Auto, 1=Ethernet, 2=WiFi)
+     * @return 연결되어 있으면 true
+     */
+    static bool isInterfaceConnected(uint8_t network_interface);
 };
 
 #endif // __cplusplus
