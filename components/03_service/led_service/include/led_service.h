@@ -89,6 +89,7 @@ void led_service_deinit(void);
 
 /**
  * @brief 초기화 여부
+ * @return true 초기화됨, false 초기화되지 않음
  */
 bool led_service_is_initialized(void);
 

@@ -23,14 +23,12 @@ extern "C" {
 
 /**
  * @brief 버튼 서비스 초기화
- *
  * @return ESP_OK 성공, 그 외 에러
  */
 esp_err_t button_service_init(void);
 
 /**
  * @brief 버튼 서비스 시작
- *
  * @return ESP_OK 성공, 그 외 에러
  */
 esp_err_t button_service_start(void);
@@ -47,14 +45,12 @@ void button_service_deinit(void);
 
 /**
  * @brief 버튼 현재 상태 확인
- *
  * @return true 버튼 눌림, false 버튼 안 눌림
  */
 bool button_service_is_pressed(void);
 
 /**
  * @brief 버튼 서비스 초기화 여부
- *
  * @return true 초기화됨, false 초기화되지 않음
  */
 bool button_service_is_initialized(void);

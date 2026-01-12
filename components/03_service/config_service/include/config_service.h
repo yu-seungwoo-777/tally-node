@@ -123,52 +123,70 @@ typedef struct {
 
 /**
  * @brief Config Service 초기화
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_init(void);
 
 /**
  * @brief device_limit 적용 (초과분 삭제)
  * @note 라이선스 서비스 초기화 후 호출해야 함
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_apply_device_limit(void);
 
 /**
  * @brief 전체 설정 로드
+ * @param config[out] 설정을 저장할 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_load_all(config_all_t* config);
 
 /**
  * @brief 전체 설정 저장
+ * @param config 저장할 설정 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_save_all(const config_all_t* config);
 
 /**
  * @brief WiFi AP 설정 로드
+ * @param config[out] 설정을 저장할 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_get_wifi_ap(config_wifi_ap_t* config);
 
 /**
  * @brief WiFi AP 설정 저장
+ * @param config 저장할 설정 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_set_wifi_ap(const config_wifi_ap_t* config);
 
 /**
  * @brief WiFi STA 설정 로드
+ * @param config[out] 설정을 저장할 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_get_wifi_sta(config_wifi_sta_t* config);
 
 /**
  * @brief WiFi STA 설정 저장
+ * @param config 저장할 설정 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_set_wifi_sta(const config_wifi_sta_t* config);
 
 /**
  * @brief Ethernet 설정 로드
+ * @param config[out] 설정을 저장할 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_get_ethernet(config_ethernet_t* config);
 
 /**
  * @brief Ethernet 설정 저장
+ * @param config 저장할 설정 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_set_ethernet(const config_ethernet_t* config);
 
@@ -178,41 +196,55 @@ esp_err_t config_service_set_ethernet(const config_ethernet_t* config);
 
 /**
  * @brief Primary Switcher 로드
+ * @param config[out] 설정을 저장할 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_get_primary(config_switcher_t* config);
 
 /**
  * @brief Primary Switcher 저장
+ * @param config 저장할 설정 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_set_primary(const config_switcher_t* config);
 
 /**
  * @brief Secondary Switcher 로드
+ * @param config[out] 설정을 저장할 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_get_secondary(config_switcher_t* config);
 
 /**
  * @brief Secondary Switcher 저장
+ * @param config 저장할 설정 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_set_secondary(const config_switcher_t* config);
 
 /**
  * @brief Dual Mode 활성화 로드
+ * @return true 활성화됨, false 비활성화됨
  */
 bool config_service_get_dual_enabled(void);
 
 /**
  * @brief Dual Mode 활성화 저장
+ * @param enabled 활성화 여부
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_set_dual_enabled(bool enabled);
 
 /**
  * @brief Secondary 오프셋 로드
+ * @return Secondary 오프셋 값 (0~19)
  */
 uint8_t config_service_get_secondary_offset(void);
 
 /**
  * @brief Secondary 오프셋 저장
+ * @param offset 오프셋 값 (0~19)
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_set_secondary_offset(uint8_t offset);
 
@@ -222,26 +254,35 @@ esp_err_t config_service_set_secondary_offset(uint8_t offset);
 
 /**
  * @brief Device 설정 로드
+ * @param config[out] 설정을 저장할 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_get_device(config_device_t* config);
 
 /**
  * @brief Device 설정 저장
+ * @param config 저장할 설정 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_set_device(const config_device_t* config);
 
 /**
  * @brief 밝기 설정
+ * @param brightness 밝기 값 (0-255)
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_set_brightness(uint8_t brightness);
 
 /**
  * @brief 카메라 ID 설정
+ * @param camera_id 카메라 ID
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_set_camera_id(uint8_t camera_id);
 
 /**
  * @brief 카메라 ID 가져오기
+ * @return 카메라 ID
  */
 uint8_t config_service_get_camera_id(void);
 
@@ -253,6 +294,9 @@ uint8_t config_service_get_max_camera_num(void);
 
 /**
  * @brief RF 설정 (주파수 + Sync Word)
+ * @param frequency 주파수 (MHz)
+ * @param sync_word Sync Word
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_set_rf(float frequency, uint8_t sync_word);
 
@@ -262,31 +306,47 @@ esp_err_t config_service_set_rf(float frequency, uint8_t sync_word);
 
 /**
  * @brief LED 색상 설정 로드
+ * @param config[out] 설정을 저장할 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_get_led_colors(config_led_colors_t* config);
 
 /**
  * @brief LED 색상 설정 저장
+ * @param config 저장할 설정 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_set_led_colors(const config_led_colors_t* config);
 
 /**
  * @brief PROGRAM 색상 가져오기
+ * @param r[out] 빨강 값 (0-255)
+ * @param g[out] 초록 값 (0-255)
+ * @param b[out] 파랑 값 (0-255)
  */
 void config_service_get_led_program_color(uint8_t* r, uint8_t* g, uint8_t* b);
 
 /**
  * @brief PREVIEW 색상 가져오기
+ * @param r[out] 빨강 값 (0-255)
+ * @param g[out] 초록 값 (0-255)
+ * @param b[out] 파랑 값 (0-255)
  */
 void config_service_get_led_preview_color(uint8_t* r, uint8_t* g, uint8_t* b);
 
 /**
  * @brief OFF 색상 가져오기
+ * @param r[out] 빨강 값 (0-255)
+ * @param g[out] 초록 값 (0-255)
+ * @param b[out] 파랑 값 (0-255)
  */
 void config_service_get_led_off_color(uint8_t* r, uint8_t* g, uint8_t* b);
 
 /**
  * @brief BATTERY_LOW 색상 가져오기
+ * @param r[out] 빨강 값 (0-255)
+ * @param g[out] 초록 값 (0-255)
+ * @param b[out] 파랑 값 (0-255)
  */
 void config_service_get_led_battery_low_color(uint8_t* r, uint8_t* g, uint8_t* b);
 
@@ -297,12 +357,14 @@ void config_service_get_led_battery_low_color(uint8_t* r, uint8_t* g, uint8_t* b
 /**
  * @brief 디바이스 등록
  * @param device_id 4바이트 디바이스 ID
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_register_device(const uint8_t* device_id);
 
 /**
  * @brief 디바이스 등록 해제
  * @param device_id 4바이트 디바이스 ID
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_unregister_device(const uint8_t* device_id);
 
@@ -322,6 +384,7 @@ esp_err_t config_service_get_registered_devices(config_registered_devices_t* dev
 
 /**
  * @brief 등록된 디바이스 수 가져오기
+ * @return 등록된 디바이스 수
  */
 uint8_t config_service_get_registered_device_count(void);
 
@@ -386,16 +449,20 @@ void config_service_clear_device_cam_map(void);
 
 /**
  * @brief 기본값 로드
+ * @param config[out] 설정을 저장할 구조체
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_load_defaults(config_all_t* config);
 
 /**
  * @brief 공장 초기화
+ * @return ESP_OK 성공, ESP_FAIL 실패
  */
 esp_err_t config_service_factory_reset(void);
 
 /**
  * @brief 초기화 여부
+ * @return true 초기화됨, false 초기화되지 않음
  */
 bool config_service_is_initialized(void);
 

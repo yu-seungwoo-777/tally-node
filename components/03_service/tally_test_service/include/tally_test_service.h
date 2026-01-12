@@ -32,6 +32,7 @@ esp_err_t tally_test_service_start(uint8_t max_channels, uint16_t interval_ms);
 
 /**
  * @brief 테스트 모드 중지
+ * @return 없음
  */
 void tally_test_service_stop(void);
 

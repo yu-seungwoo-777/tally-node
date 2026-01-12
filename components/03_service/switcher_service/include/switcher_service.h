@@ -260,6 +260,7 @@ public:
 
     /**
      * @brief 초기화
+     * @return 성공 여부
      */
     bool initialize();
 
@@ -294,6 +295,7 @@ public:
 
     /**
      * @brief 루프 처리
+     * @note 태스크 모드에서는 자동 호출되므로 사용 불필요
      */
     void loop();
 
@@ -310,51 +312,61 @@ public:
 
     /**
      * @brief 태스크 실행 중 여부
+     * @return 실행 중이면 true
      */
     bool isRunning() const { return task_running_; }
 
     /**
      * @brief 결합된 Tally 데이터 조회
+     * @return 결합된 Packed 데이터
      */
     packed_data_t getCombinedTally() const;
 
     /**
      * @brief Primary 스위처 상태 조회
+     * @return Primary 스위처 상태
      */
     switcher_status_t getPrimaryStatus() const;
 
     /**
      * @brief Secondary 스위처 상태 조회
+     * @return Secondary 스위처 상태
      */
     switcher_status_t getSecondaryStatus() const;
 
     /**
      * @brief 듀얼모드 설정
+     * @param enabled 듀얼모드 활성화 여부
      */
     void setDualMode(bool enabled);
 
     /**
      * @brief Secondary 오프셋 설정
+     * @param offset 오프셋 값 (0~19)
      */
     void setSecondaryOffset(uint8_t offset);
 
     /**
      * @brief 듀얼모드 활성화 여부
+     * @return 듀얼모드 활성화되었으면 true
      */
     bool isDualModeEnabled() const { return dual_mode_enabled_; }
 
     /**
      * @brief Secondary 오프셋 값
+     * @return 오프셋 값
      */
     uint8_t getSecondaryOffset() const { return secondary_offset_; }
 
     /**
      * @brief Tally 변경 콜백 설정
+     * @param callback 콜백 함수
      */
     void setTallyCallback(tally_callback_t callback);
 
     /**
      * @brief 연결 상태 변경 콜백 설정
+     * @param callback 콜백 함수
      */
     void setConnectionCallback(connection_callback_t callback);
 
@@ -365,6 +377,7 @@ public:
 
     /**
      * @brief 스위처 변경 콜백 설정
+     * @param callback 콜백 함수
      */
     void setSwitcherChangeCallback(SwitcherChangeCallback callback);
 
@@ -477,28 +490,41 @@ private:
     void taskLoop();
 
     /**
-     * @brief 스위처 정보 조회 (역할 기반)
-     */
-    SwitcherInfo* getSwitcherInfo(switcher_role_t role);
-    const SwitcherInfo* getSwitcherInfo(switcher_role_t role) const;
-
-    /**
      * @brief 스위처 변경 감지
+     * @param role 스위처 역할
      */
     void checkSwitcherChange(switcher_role_t role);
 
     /**
      * @brief 스위처 Tally 변경 콜백 핸들러
+     * @param role 스위처 역할
      */
     void onSwitcherTallyChange(switcher_role_t role);
 
     /**
      * @brief 듀얼모드 Packed 데이터 결합
+     * @return 결합된 Packed 데이터
      */
     packed_data_t combineDualModeTally() const;
 
     /**
+     * @brief 스위처 정보 조회 (역할 기반)
+     * @param role 스위처 역할
+     * @return 스위처 정보 포인터
+     */
+    SwitcherInfo* getSwitcherInfo(switcher_role_t role);
+
+    /**
+     * @brief 스위처 정보 조회 (역할 기반, const)
+     * @param role 스위처 역할
+     * @return 스위처 정보 포인터 (const)
+     */
+    const SwitcherInfo* getSwitcherInfo(switcher_role_t role) const;
+
+    /**
      * @brief 스위처 상태 조회 (역할 기반, private)
+     * @param role 스위처 역할
+     * @return 스위처 상태
      */
     switcher_status_t getSwitcherStatus(switcher_role_t role) const;
 };

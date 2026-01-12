@@ -60,7 +60,6 @@ void license_service_stop(void);
 
 /**
  * @brief 라이센스 검증 요청
- *
  * @param key 라이센스 키 (16자리)
  * @return ESP_OK 성공
  */
@@ -104,7 +103,7 @@ bool license_service_can_send_tally(void);
 
 /**
  * @brief 라이센스 키 가져오기
- * @param out_key[out] 라이센스 키 버퍼 (17바이트 이상)
+ * @param out_key 라이센스 키 버퍼 (17바이트 이상)
  * @return ESP_OK 성공
  */
 esp_err_t license_service_get_key(char* out_key);
@@ -114,7 +113,7 @@ esp_err_t license_service_get_key(char* out_key);
  * @param name 이름
  * @param phone 전화번호
  * @param email 이메일
- * @param out_response[out] JSON 응답 버퍼
+ * @param out_response JSON 응답 버퍼
  * @param response_size 응답 버퍼 크기
  * @return ESP_OK 성공
  */

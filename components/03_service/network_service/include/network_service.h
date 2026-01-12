@@ -83,6 +83,7 @@ network_status_t network_service_get_status(void);
 
 /**
  * @brief 상태 로그 출력
+ * @return 없음 (void)
  */
 void network_service_print_status(void);
 
@@ -94,6 +95,7 @@ bool network_service_is_initialized(void);
 
 /**
  * @brief 네트워크 상태 이벤트 발행
+ * @return 없음 (void)
  *
  * 상태가 변경된 경우 EVT_NETWORK_STATUS_CHANGED 이벤트 발행
  */
