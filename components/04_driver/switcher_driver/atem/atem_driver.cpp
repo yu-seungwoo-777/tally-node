@@ -49,6 +49,7 @@ AtemDriver::AtemDriver(const AtemConfig& config)
     , last_hello_time_(0)
     , lastNetworkRestart_(0)
     , needsNetworkRestart_(false)
+    , last_tally_packed_for_callback_(0)  // needsNetworkRestart_ 다음
 {
     rx_buffer_.fill(0);
     tx_buffer_.fill(0);
@@ -792,8 +793,13 @@ void AtemDriver::handleTallyByIndex(const uint8_t* data, uint16_t length) {
                  preview_channels.empty() ? "-" : preview_list);
     }
 
-    // Tally 콜백 호출
-    if (state_.tally_packed != 0 && tally_callback_) {
+    // Tally 콜백 호출 (변경 시에만 호출)
+    // state_.tally_packed 값이 변경되었을 때만 콜백 호출
+    if (state_.tally_packed != last_tally_packed_for_callback_ &&
+        state_.tally_packed != 0 && tally_callback_) {
+        // 마지막 값 업데이트
+        last_tally_packed_for_callback_ = state_.tally_packed;
+        // 콜백 호출
         tally_callback_();
     }
 }

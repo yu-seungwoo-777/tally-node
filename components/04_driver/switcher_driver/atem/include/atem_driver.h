@@ -179,6 +179,10 @@ private:
     // 네트워크 오류 감지
     uint32_t lastNetworkRestart_;    ///< 마지막 네트워크 재시작 시간 (ms)
     bool needsNetworkRestart_;       ///< 네트워크 재시작 필요 플래그
+
+    // 콜백 중복 방지용 (마지막으로 콜백을 호출한 tally_packed 값)
+    uint64_t last_tally_packed_for_callback_;
+
     static constexpr uint32_t RESTART_COOLDOWN_MS = 30000; ///< 30초 쿨다운
 
     // ========================================================================
