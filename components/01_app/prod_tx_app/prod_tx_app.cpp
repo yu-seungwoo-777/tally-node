@@ -248,9 +248,6 @@ static esp_err_t handle_network_connected(const event_data_t* event)
 {
     (void)event;
     T_LOGD(TAG, "네트워크 연결됨");
-    if (s_app.service) {
-        switcher_service_reconnect_all(s_app.service);
-    }
 
     // 디스플레이에 네트워크 상태 갱신
     network_status_t net_status = network_service_get_status();
@@ -275,15 +272,8 @@ static esp_err_t handle_network_disconnected(const event_data_t* event)
     (void)event;
     T_LOGD(TAG, "네트워크 연결 해제");
 
-    // WiFi 연결 상태만 갱신 (Ethernet은 EVT_NETWORK_STATUS_CHANGED로 처리)
-    // network_service에서 WiFi/Ethernet 각각의 연결 해제 시 이 이벤트를 발행하지만,
-    // 실제 연결 상태는 EVT_NETWORK_STATUS_CHANGED 이벤트에서 정확히 업데이트됨
-    // 여기서는 스위처 재연결만 트리거하고, 디스플레이 상태는 DisplayManager에서 처리
-
-    // 스위처 재연결 시도
-    if (s_app.service) {
-        switcher_service_reconnect_all(s_app.service);
-    }
+    // 디스플레이 상태는 DisplayManager에서 처리
+    // 스위처 재연결은 EVT_NETWORK_STATUS_CHANGED 이벤트로 SwitcherService에서 처리
 
     return ESP_OK;
 }
