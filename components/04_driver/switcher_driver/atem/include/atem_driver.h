@@ -27,6 +27,7 @@ struct AtemConfig {
     uint16_t port;               ///< 포트 (기본 9910)
     uint8_t camera_limit;        ///< 카메라 제한 (0 = 자동)
     std::string local_bind_ip;   ///< 로컬 바인딩 IP (비어있으면 INADDR_ANY)
+    bool debug_packet;           ///< 패킷 디버그 로그 출력
 
     AtemConfig()
         : name("ATEM")
@@ -34,6 +35,7 @@ struct AtemConfig {
         , port(ATEM_DEFAULT_PORT)
         , camera_limit(0)
         , local_bind_ip("")  // 기본값: 자동 선택 (INADDR_ANY)
+        , debug_packet(false)  // 기본값: 패킷 디버그 비활성화
     {}
 };
 

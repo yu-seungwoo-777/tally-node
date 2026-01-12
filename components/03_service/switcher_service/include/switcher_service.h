@@ -71,6 +71,7 @@ bool switcher_service_initialize(switcher_service_handle_t handle);
  * @param port 포트 번호 (0 = 기본값 9910)
  * @param camera_limit 카메라 제한 (0 = 자동)
  * @param network_interface 네트워크 인터페이스 (0=Auto, 1=Ethernet, 2=WiFi)
+ * @param debug_packet 패킷 디버그 로그 출력
  * @return 성공 여부
  */
 bool switcher_service_set_atem(switcher_service_handle_t handle,
@@ -79,7 +80,8 @@ bool switcher_service_set_atem(switcher_service_handle_t handle,
                                 const char* ip,
                                 uint16_t port,
                                 uint8_t camera_limit,
-                                tally_network_if_t network_interface);
+                                tally_network_if_t network_interface,
+                                bool debug_packet);
 
 /**
  * @brief 스위처 제거
@@ -262,7 +264,7 @@ public:
      * @brief 초기화
      * @return 성공 여부
      */
-    bool initialize();
+    bool init();
 
     /**
      * @brief ATEM 스위처 설정
@@ -272,9 +274,10 @@ public:
      * @param port 포트 번호
      * @param camera_limit 카메라 제한
      * @param network_interface 네트워크 인터페이스 (0=Auto, 1=Ethernet, 2=WiFi)
+     * @param debug_packet 패킷 디버그 로그 출력
      * @return 성공 여부
      */
-    bool setAtem(switcher_role_t role, const char* name, const char* ip, uint16_t port, uint8_t camera_limit, tally_network_if_t network_interface = static_cast<tally_network_if_t>(0));
+    bool setAtem(switcher_role_t role, const char* name, const char* ip, uint16_t port, uint8_t camera_limit, tally_network_if_t network_interface = static_cast<tally_network_if_t>(0), bool debug_packet = false);
 
     /**
      * @brief vMix 스위처 설정

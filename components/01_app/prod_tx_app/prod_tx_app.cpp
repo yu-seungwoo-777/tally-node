@@ -493,24 +493,14 @@ void prod_tx_app_start(void)
         return;
     }
 
-    // HardwareService 시작 (모니터링 태스크)
-    hardware_service_start();
-    T_LOGI(TAG, "HardwareService 시작");
-
-    // LoRa 시작
-    lora_service_start();
-    T_LOGI(TAG, "LoRa 시작");
-
-    // DeviceManager 시작 (상태 요청 태스크)
-    device_manager_start();
-    T_LOGI(TAG, "DeviceManager 시작");
+    // 모든 서비스는 init()에서 자동으로 start() 호출됨
+    // 여기서는 추가 설정만 수행
 
     // LicenseService 재시작 (이벤트 재발행하여 device_manager에서 device_limit 초기화)
     license_service_start();
     T_LOGI(TAG, "LicenseService 재시작 (device_limit 이벤트 발행)");
 
-    // DisplayManager 시작, BootPage로 전환
-    display_manager_start();
+    // DisplayManager BootPage로 전환 (이미 init에서 시작됨)
     display_manager_set_page(PAGE_BOOT);
 
     // 저장된 RF 설정 로드 및 이벤트 발행 (DisplayManager 구독 완료 후)
@@ -528,9 +518,6 @@ void prod_tx_app_start(void)
     } else {
         T_LOGW(TAG, "RF 설정 로드 실패: %s", esp_err_to_name(ret));
     }
-
-    // 버튼 서비스 시작
-    button_service_start();
 
     // 부팅 시나리오
     const char* boot_messages[] = {
@@ -599,6 +586,12 @@ void prod_tx_app_stop(void)
     // LoRa 정지
     lora_service_stop();
 
+    // DisplayManager 정지
+    display_manager_stop();
+
+    // NetworkService 정지
+    network_service_stop();
+
     s_app.running = false;
     T_LOGI(TAG, "TX app stopped");
 }
@@ -630,27 +623,12 @@ void prod_tx_app_deinit(void)
 
 void prod_tx_app_loop(void)
 {
-    if (!s_app.running) {
-        return;
-    }
-
-    // SwitcherService 루프 처리는 내부 태스크에서 자동 실행됨
-    // Tally 변경 시 on_tally_change() 콜백을 통해 즉시 LoRa 송신
-
-    // 디스플레이 갱신 (500ms 주기, DisplayManager 내부에서 체크)
-    display_manager_update();
-
-    // System 데이터는 HardwareService가 EVT_INFO_UPDATED로 발행 (1초마다)
-    // Switcher/Network 데이터는 상태 변경 시 이벤트 발행
-    // DisplayManager가 이벤트를 구독하여 자동 갱신됨
-
-    // 네트워크 상태 이벤트 발행 (주기적 확인)
-    static uint32_t last_network_check = 0;
-    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    if (now - last_network_check >= 1000) {
-        last_network_check = now;
-        network_service_publish_status();
-    }
+    // 각 서비스가 자체 태스크에서 실행되므로 루프에서 처리할 내용 없음
+    // - DisplayManager: 내부 태스크에서 주기적 갱신
+    // - NetworkService: 내부 태스크에서 상태 발행
+    // - SwitcherService: 내부 태스크에서 루프 처리
+    // - HardwareService: 내부 태스크에서 모니터링
+    (void)s_app.running;
 }
 
 void prod_tx_app_print_status(void)

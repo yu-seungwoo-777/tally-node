@@ -8,6 +8,7 @@
 #include "event_bus.h"
 #include "atem_driver.h"
 #include "vmix_driver.h"
+#include "NVSConfig.h"
 #include <cstring>
 
 // =============================================================================
@@ -169,7 +170,7 @@ static esp_err_t onNetworkStatusEvent(const event_data_t* event) {
 // 초기화
 // ============================================================================
 
-bool SwitcherService::initialize() {
+bool SwitcherService::init() {
     T_LOGI(TAG, "SwitcherService init (Primary/Secondary mode)");
 
     // Primary 스위처 초기화 및 연결 시작
@@ -202,7 +203,7 @@ bool SwitcherService::initialize() {
 // 스위처 설정
 // ============================================================================
 
-bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char* ip, uint16_t port, uint8_t camera_limit, tally_network_if_t network_interface) {
+bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char* ip, uint16_t port, uint8_t camera_limit, tally_network_if_t network_interface, bool debug_packet) {
     SwitcherInfo* info = getSwitcherInfo(role);
     if (!info) {
         T_LOGE(TAG, "invalid role: %d", static_cast<int>(role));
@@ -218,6 +219,7 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
     config.ip = ip ? ip : "";
     config.port = (port > 0) ? port : ATEM_DEFAULT_PORT;
     config.camera_limit = camera_limit;
+    config.debug_packet = debug_packet;
 
     // 인터페이스별 로컬 바인딩 IP 설정 (캐시된 IP 사용)
     if (network_interface == TALLY_NET_ETHERNET) {
@@ -594,7 +596,8 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
                 setAtem(SWITCHER_ROLE_PRIMARY, "Primary",
                         config->primary_ip, config->primary_port,
                         config->primary_camera_limit,
-                        static_cast<tally_network_if_t>(config->primary_interface));
+                        static_cast<tally_network_if_t>(config->primary_interface),
+                        NVS_SWITCHER_PRI_DEBUG_PACKET);
                 break;
             case 2: // vMix
                 setVmix(SWITCHER_ROLE_PRIMARY, "Primary",
@@ -617,7 +620,8 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
                 setAtem(SWITCHER_ROLE_SECONDARY, "Secondary",
                         config->secondary_ip, config->secondary_port,
                         config->secondary_camera_limit,
-                        static_cast<tally_network_if_t>(config->secondary_interface));
+                        static_cast<tally_network_if_t>(config->secondary_interface),
+                        NVS_SWITCHER_SEC_DEBUG_PACKET);
                 break;
             case 2: // vMix
                 setVmix(SWITCHER_ROLE_SECONDARY, "Secondary",
@@ -682,7 +686,8 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
                     setAtem(SWITCHER_ROLE_PRIMARY, "Primary",
                             config->primary_ip, config->primary_port,
                             config->primary_camera_limit,
-                            static_cast<tally_network_if_t>(config->primary_interface));
+                            static_cast<tally_network_if_t>(config->primary_interface),
+                            NVS_SWITCHER_PRI_DEBUG_PACKET);
                     break;
                 case 2: // vMix
                     setVmix(SWITCHER_ROLE_PRIMARY, "Primary",
@@ -722,7 +727,8 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
                     setAtem(SWITCHER_ROLE_SECONDARY, "Secondary",
                             config->secondary_ip, config->secondary_port,
                             config->secondary_camera_limit,
-                            static_cast<tally_network_if_t>(config->secondary_interface));
+                            static_cast<tally_network_if_t>(config->secondary_interface),
+                            NVS_SWITCHER_SEC_DEBUG_PACKET);
                     break;
                 case 2: // vMix
                     setVmix(SWITCHER_ROLE_SECONDARY, "Secondary",
@@ -1097,7 +1103,7 @@ void SwitcherService::checkSwitcherChange(switcher_role_t role) {
         // Health refresh 타이머 리셋 (Tally 변화 있으면 reset)
         info->last_packed_change_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
-        // hex 문자열 생성
+        // hex 문자열 생성 (DEBUG)
         if (current_packed.data && current_packed.data_size > 0) {
             char hex_str[64] = "";
             for (uint8_t i = 0; i < current_packed.data_size && i < 10; i++) {
@@ -1106,7 +1112,7 @@ void SwitcherService::checkSwitcherChange(switcher_role_t role) {
                 strcat(hex_str, buf);
                 if (i < current_packed.data_size - 1) strcat(hex_str, " ");
             }
-            T_LOGI(TAG, "%s packed changed: [%s] (%d channels, %d bytes)",
+            T_LOGD(TAG, "%s packed changed: [%s] (%d channels, %d bytes)",
                      switcher_role_to_string(role), hex_str, current_packed.channel_count, current_packed.data_size);
         }
     }
@@ -1133,39 +1139,33 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
         return;
     }
 
-    // 결합 데이터 변경 확인 (중복 콜백 방지)
-    if (!packed_data_equals(&combined, &combined_packed_)) {
-        // 이전 데이터 해제 및 복사
-        packed_data_cleanup(&combined_packed_);
-        packed_data_copy(&combined_packed_, &combined);
+    // 병합된 Tally 값 출력
+    char hex_str[16];
+    packed_data_to_hex(&combined, hex_str, sizeof(hex_str));
 
-        // 병합된 Tally 값 출력 (공통 해석 함수 사용)
-        char hex_str[16];
-        packed_data_to_hex(&combined, hex_str, sizeof(hex_str));
+    char tally_str[64];
+    packed_data_format_tally(&combined, tally_str, sizeof(tally_str));
 
-        char tally_str[64];
-        packed_data_format_tally(&combined, tally_str, sizeof(tally_str));
+    T_LOGI(TAG, "Combined Tally: %s", tally_str);
+    T_LOGD(TAG, "  raw: [%s] (%d channels, %d bytes)",
+             hex_str, combined.channel_count, combined.data_size);
 
-        T_LOGD(TAG, "Combined Tally: [%s] (%d channels, %d bytes) → %s",
-                 hex_str, combined.channel_count, combined.data_size, tally_str);
+    // stack 변수 사용 (이벤트 버스가 복사)
+    tally_event_data_t tally_event;
+    memset(&tally_event, 0, sizeof(tally_event));
+    tally_event.source = 0;  // 0=Primary (듀얼 모드 시 결합됨)
+    tally_event.channel_count = combined.channel_count;
+    memcpy(tally_event.tally_data, combined.data, combined.data_size);
+    tally_event.tally_value = packed_data_to_uint64(&combined);
 
-        // stack 변수 사용 (이벤트 버스가 복사)
-        tally_event_data_t tally_event;
-        memset(&tally_event, 0, sizeof(tally_event));
-        tally_event.source = 0;  // 0=Primary (듀얼 모드 시 결합됨)
-        tally_event.channel_count = combined.channel_count;
-        memcpy(tally_event.tally_data, combined.data, combined.data_size);
-        tally_event.tally_value = packed_data_to_uint64(&combined);
+    event_bus_publish(EVT_TALLY_STATE_CHANGED, &tally_event, sizeof(tally_event));
 
-        event_bus_publish(EVT_TALLY_STATE_CHANGED, &tally_event, sizeof(tally_event));
+    // Tally 변경 시 상태 이벤트도 발행 (웹 서버 등에서 사용)
+    publishSwitcherStatus();
 
-        // Tally 변경 시 상태 이벤트도 발행 (웹 서버 등에서 사용)
-        publishSwitcherStatus();
-
-        // 사용자 콜백 호출 (Tally 변경 알림)
-        if (tally_callback_) {
-            tally_callback_();
-        }
+    // 사용자 콜백 호출 (Tally 변경 알림)
+    if (tally_callback_) {
+        tally_callback_();
     }
 }
 
@@ -1226,7 +1226,7 @@ void SwitcherService::reconfigureSwitchersForNetwork() {
         if (iface != TALLY_NET_AUTO) {
             T_LOGD(TAG, "Primary switcher network reconfigure (if=%d)", iface);
             setAtem(SWITCHER_ROLE_PRIMARY, "Primary",
-                    primary_.ip, primary_.port, 0, iface);
+                    primary_.ip, primary_.port, 0, iface, NVS_SWITCHER_PRI_DEBUG_PACKET);
             if (primary_.adapter) {
                 primary_.adapter->connect();
             }
@@ -1239,7 +1239,7 @@ void SwitcherService::reconfigureSwitchersForNetwork() {
         if (iface != TALLY_NET_AUTO) {
             T_LOGD(TAG, "Secondary switcher network reconfigure (if=%d)", iface);
             setAtem(SWITCHER_ROLE_SECONDARY, "Secondary",
-                    secondary_.ip, secondary_.port, 0, iface);
+                    secondary_.ip, secondary_.port, 0, iface, NVS_SWITCHER_SEC_DEBUG_PACKET);
             if (secondary_.adapter) {
                 secondary_.adapter->connect();
             }
@@ -1341,7 +1341,7 @@ void switcher_service_destroy(switcher_service_handle_t handle) {
 
 bool switcher_service_initialize(switcher_service_handle_t handle) {
     if (!handle) return false;
-    return static_cast<SwitcherService*>(handle)->initialize();
+    return static_cast<SwitcherService*>(handle)->init();
 }
 
 bool switcher_service_set_atem(switcher_service_handle_t handle,
@@ -1350,9 +1350,10 @@ bool switcher_service_set_atem(switcher_service_handle_t handle,
                                 const char* ip,
                                 uint16_t port,
                                 uint8_t camera_limit,
-                                tally_network_if_t network_interface) {
+                                tally_network_if_t network_interface,
+                                bool debug_packet) {
     if (!handle) return false;
-    return static_cast<SwitcherService*>(handle)->setAtem(role, name, ip, port, camera_limit, network_interface);
+    return static_cast<SwitcherService*>(handle)->setAtem(role, name, ip, port, camera_limit, network_interface, debug_packet);
 }
 
 void switcher_service_remove_switcher(switcher_service_handle_t handle, switcher_role_t role) {

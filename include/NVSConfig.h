@@ -55,6 +55,7 @@
 #define NVS_SWITCHER_PRI_PASSWORD     ""
 #define NVS_SWITCHER_PRI_INTERFACE    2         // 1=WiFi, 2=Ethernet
 #define NVS_SWITCHER_PRI_CAMERA_LIMIT 0         // 0=무제한
+#define NVS_SWITCHER_PRI_DEBUG_PACKET false     // 패킷 디버그 로그
 
 // Secondary Switcher
 #define NVS_SWITCHER_SEC_TYPE         0         // 0=ATEM
@@ -63,6 +64,7 @@
 #define NVS_SWITCHER_SEC_PASSWORD     ""
 #define NVS_SWITCHER_SEC_INTERFACE    1         // WiFi
 #define NVS_SWITCHER_SEC_CAMERA_LIMIT 0
+#define NVS_SWITCHER_SEC_DEBUG_PACKET false     // 패킷 디버그 로그
 
 // Dual Mode
 #define NVS_DUAL_ENABLED              true

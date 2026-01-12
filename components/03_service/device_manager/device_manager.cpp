@@ -1243,6 +1243,9 @@ esp_err_t device_manager_init(void)
     s_mgr.initialized = true;
     s_mgr.running = false;
 
+    // 초기화 완료 후 자동 시작
+    device_manager_start();
+
     return ESP_OK;
 }
 

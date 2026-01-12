@@ -26,6 +26,10 @@ public:
     static esp_err_t initWithConfig(const app_network_config_t* config);
     static esp_err_t deinit(void);
 
+    // 시작/정지 (태스크 제어)
+    static esp_err_t start(void);
+    static esp_err_t stop(void);
+
     // 상태 조회
     static network_status_t getStatus(void);
     static void printStatus(void);
@@ -55,10 +59,20 @@ private:
     static void onEthernetStatusChange(bool connected, const char* ip);
     static void onWiFiStatusChange(bool connected, const char* ip);
 
+    // 태스크 함수
+    static void status_publish_task(void* arg);
+
     // 정적 멤버
     static bool s_initialized;
+    static bool s_running;
+    static TaskHandle_t s_task_handle;
     static app_network_config_t s_config;
     static network_status_t s_last_status;  // 이전 상태 (변경 감지용)
+
+    // 태스크 설정 상수
+    static constexpr uint32_t STATUS_PUBLISH_INTERVAL_MS = 1000;  // 1초마다 상태 발행
+    static constexpr uint32_t TASK_STACK_SIZE = 3072;
+    static constexpr uint32_t TASK_PRIORITY = 4;
 };
 
 // ============================================================================
@@ -66,6 +80,8 @@ private:
 // ============================================================================
 
 bool NetworkServiceClass::s_initialized = false;
+bool NetworkServiceClass::s_running = false;
+TaskHandle_t NetworkServiceClass::s_task_handle = nullptr;
 app_network_config_t NetworkServiceClass::s_config = {};
 network_status_t NetworkServiceClass::s_last_status = {};
 
@@ -150,6 +166,10 @@ esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config
     s_initialized = true;
 
     T_LOGI(TAG, "init complete");
+
+    // 초기화 완료 후 상태 발행 태스크 자동 시작
+    start();
+
     return ESP_OK;
 }
 
@@ -161,6 +181,9 @@ esp_err_t NetworkServiceClass::deinit(void)
 
     T_LOGI(TAG, "Network Service cleanup...");
 
+    // 태스크 정지
+    stop();
+
     // 이벤트 버스 구독 해제
     event_bus_unsubscribe(EVT_NETWORK_RESTART_REQUEST, onRestartRequest);
     event_bus_unsubscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
@@ -171,6 +194,80 @@ esp_err_t NetworkServiceClass::deinit(void)
     s_initialized = false;
 
     T_LOGI(TAG, "Network Service cleanup complete");
+    return ESP_OK;
+}
+
+// ============================================================================
+// 태스크 관련
+// ============================================================================
+
+void NetworkServiceClass::status_publish_task(void* arg)
+{
+    (void)arg;
+    T_LOGI(TAG, "Network status publish task start");
+
+    while (s_running) {
+        // 1초마다 상태 이벤트 발행
+        if (s_initialized) {
+            publishStatus();
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(STATUS_PUBLISH_INTERVAL_MS));
+    }
+
+    T_LOGI(TAG, "Network status publish task end");
+    vTaskDelete(nullptr);
+}
+
+esp_err_t NetworkServiceClass::start(void)
+{
+    if (!s_initialized) {
+        T_LOGE(TAG, "not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (s_running) {
+        T_LOGW(TAG, "already running");
+        return ESP_OK;
+    }
+
+    s_running = true;
+
+    BaseType_t ret = xTaskCreate(
+        status_publish_task,
+        "network_status_task",
+        TASK_STACK_SIZE,
+        nullptr,
+        TASK_PRIORITY,
+        &s_task_handle
+    );
+
+    if (ret != pdPASS) {
+        T_LOGE(TAG, "task creation failed");
+        s_running = false;
+        return ESP_FAIL;
+    }
+
+    T_LOGI(TAG, "Network Service started (status publish task running)");
+    return ESP_OK;
+}
+
+esp_err_t NetworkServiceClass::stop(void)
+{
+    if (!s_running) {
+        return ESP_OK;
+    }
+
+    T_LOGI(TAG, "Network Service stopping...");
+    s_running = false;
+
+    // 태스크 종료 대기
+    if (s_task_handle) {
+        vTaskDelay(pdMS_TO_TICKS(200));
+        s_task_handle = nullptr;
+    }
+
+    T_LOGI(TAG, "Network Service stopped");
     return ESP_OK;
 }
 
@@ -598,6 +695,9 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
 
         s_initialized = true;
         T_LOGI(TAG, "init complete (event-based)");
+
+        // 초기화 완료 후 상태 발행 태스크 자동 시작
+        start();
     }
 
     return ESP_OK;
@@ -660,6 +760,16 @@ esp_err_t network_service_init_with_config(const app_network_config_t* config)
 esp_err_t network_service_deinit(void)
 {
     return NetworkServiceClass::deinit();
+}
+
+esp_err_t network_service_start(void)
+{
+    return NetworkServiceClass::start();
+}
+
+esp_err_t network_service_stop(void)
+{
+    return NetworkServiceClass::stop();
 }
 
 network_status_t network_service_get_status(void)

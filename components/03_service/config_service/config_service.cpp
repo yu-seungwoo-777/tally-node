@@ -244,6 +244,8 @@ static esp_err_t on_config_save_request(const event_data_t* event) {
 
         case CONFIG_SAVE_SWITCHER_DUAL:
             // 듀얼 모드 설정 (항상 저장, false일 때도 호출)
+            T_LOGI(TAG, "Saving dual mode: enabled=%d, offset=%d",
+                     req->switcher_dual_enabled, req->switcher_secondary_offset);
             ret = ConfigServiceClass::setDualEnabled(req->switcher_dual_enabled);
             if (ret == ESP_OK) {
                 // Secondary Offset 저장 (0도 유효한 값)
@@ -1450,6 +1452,7 @@ esp_err_t ConfigServiceClass::loadDefaults(config_all_t* config)
     strncpy(config->primary.password, NVS_SWITCHER_PRI_PASSWORD, sizeof(config->primary.password) - 1);
     config->primary.interface = NVS_SWITCHER_PRI_INTERFACE;
     config->primary.camera_limit = NVS_SWITCHER_PRI_CAMERA_LIMIT;
+    config->primary.debug_packet = NVS_SWITCHER_PRI_DEBUG_PACKET;
 
     // Switcher 기본값 - Secondary
     config->secondary.type = NVS_SWITCHER_SEC_TYPE;
@@ -1458,6 +1461,7 @@ esp_err_t ConfigServiceClass::loadDefaults(config_all_t* config)
     strncpy(config->secondary.password, NVS_SWITCHER_SEC_PASSWORD, sizeof(config->secondary.password) - 1);
     config->secondary.interface = NVS_SWITCHER_SEC_INTERFACE;
     config->secondary.camera_limit = NVS_SWITCHER_SEC_CAMERA_LIMIT;
+    config->secondary.debug_packet = NVS_SWITCHER_SEC_DEBUG_PACKET;
 
     // Dual 모드 설정
     config->dual_enabled = NVS_DUAL_ENABLED;
@@ -1855,6 +1859,8 @@ uint8_t ConfigServiceClass::getSecondaryOffset(void)
 
 esp_err_t ConfigServiceClass::setSecondaryOffset(uint8_t offset)
 {
+    T_LOGI(TAG, "setSecondaryOffset: %d", offset);
+
     nvs_handle_t handle;
     esp_err_t ret = nvs_open("config", NVS_READWRITE, &handle);
     if (ret != ESP_OK) {

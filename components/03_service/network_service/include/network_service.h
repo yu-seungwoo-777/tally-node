@@ -71,6 +71,18 @@ esp_err_t network_service_init_with_config(const app_network_config_t* config);
  */
 esp_err_t network_service_deinit(void);
 
+/**
+ * @brief Network Service 시작 (상태 발행 태스크 시작)
+ * @return ESP_OK 성공, ESP_ERR_* 실패
+ */
+esp_err_t network_service_start(void);
+
+/**
+ * @brief Network Service 정지 (상태 발행 태스크 정지)
+ * @return ESP_OK 성공, ESP_ERR_* 실패
+ */
+esp_err_t network_service_stop(void);
+
 // ============================================================================
 // 상태 조회
 // ============================================================================

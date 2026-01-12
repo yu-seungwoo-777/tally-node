@@ -205,6 +205,9 @@ esp_err_t HardwareService::init(void)
     s_initialized = true;
     T_LOGI(TAG, "init complete");
 
+    // 초기화 완료 후 태스크 자동 시작
+    start();
+
     return ESP_OK;
 }
 

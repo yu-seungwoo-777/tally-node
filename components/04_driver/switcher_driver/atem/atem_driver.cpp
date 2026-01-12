@@ -517,6 +517,19 @@ int AtemDriver::processPacket(const uint8_t* data, uint16_t length) {
         return -1;  // 패킷 길이 부족
     }
 
+    // 패킷 디버그 로그 (헥사 덤프)
+    if (config_.debug_packet) {
+        char hex_str[128];
+        int offset = 0;
+        int dump_len = (length > 32) ? 32 : length;  // 최대 32바이트만 출력
+        for (int i = 0; i < dump_len && offset < (int)sizeof(hex_str) - 3; i++) {
+            sprintf(&hex_str[offset], "%02X ", data[i]);
+            offset += 3;
+        }
+        if (offset > 0) hex_str[offset - 1] = '\0';  // 마지막 공백 제거
+        T_LOGI(TAG, "RX [%d bytes]: %s%s", length, hex_str, (length > 32) ? "..." : "");
+    }
+
     /*
      * 헤더 파싱
      *

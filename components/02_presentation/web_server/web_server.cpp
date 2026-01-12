@@ -7,6 +7,7 @@
 #include "license_service.h"
 #include "event_bus.h"
 #include "lora_protocol.h"
+#include "app_types.h"
 #include "cJSON.h"
 #include "esp_http_server.h"
 #include "esp_http_client.h"
@@ -733,6 +734,9 @@ static cJSON* create_system_json(void)
     if (!system) {
         return nullptr;
     }
+
+    // 펌웨어 버전 (빌드타임에 정의된 값)
+    cJSON_AddStringToObject(system, "version", FIRMWARE_VERSION);
 
     if (s_cache.system_valid) {
         cJSON_AddStringToObject(system, "deviceId", s_cache.system.device_id);

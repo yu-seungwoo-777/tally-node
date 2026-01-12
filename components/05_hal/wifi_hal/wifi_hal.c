@@ -208,6 +208,12 @@ esp_err_t wifi_hal_init(void)
         return ret;
     }
 
+    // WiFi 절전 모드 비활성화 (최고 성능)
+    esp_wifi_set_ps(WIFI_PS_NONE);
+
+    // 802.11bgn 프로토콜 설정 (최고 속도)
+    esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N);
+
     s_initialized = true;
     s_state = WIFI_HAL_STATE_IDLE;
 

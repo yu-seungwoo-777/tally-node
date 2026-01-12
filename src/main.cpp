@@ -26,10 +26,9 @@ extern "C" void app_main(void)
     }
     prod_tx_app_start();
 
-    while (1) {
-        prod_tx_app_loop();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
+    // 각 서비스가 자체 태스크에서 실행되므로 메인 루프 없음
+    // 메인 태스크 정지 (삭제하지 않고 일시 중지)
+    vTaskSuspend(NULL);
 
     prod_tx_app_deinit();
 #else
@@ -39,10 +38,9 @@ extern "C" void app_main(void)
     }
     prod_rx_app_start();
 
-    while (1) {
-        prod_rx_app_loop();
-        vTaskDelay(pdMS_TO_TICKS(10));
-    }
+    // 각 서비스가 자체 태스크에서 실행되므로 메인 루프 없음
+    // 메인 태스크 정지 (삭제하지 않고 일시 중지)
+    vTaskSuspend(NULL);
 
     prod_rx_app_deinit();
 #endif

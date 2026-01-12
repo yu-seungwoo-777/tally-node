@@ -22,6 +22,11 @@ static const char* TAG = "02_Display";
 #define MAX_PAGES                     5
 #define STATUS_LOG_INTERVAL_MS       5000  // 상태 로그 출력 주기 (5초)
 
+// 태스크 설정
+#define DISPLAY_TASK_STACK_SIZE      4096
+#define DISPLAY_TASK_PRIORITY        5
+#define DISPLAY_TASK_INTERVAL_MS     100   // 태스크 루프 주기 (100ms)
+
 // ============================================================================
 // 내부 상태
 // ============================================================================
@@ -85,6 +90,9 @@ static struct {
 
     // 통합 데이터 저장
     display_data_t data;
+
+    // 태스크 핸들
+    TaskHandle_t task_handle;
 } s_mgr = {
     .initialized = false,
     .running = false,
@@ -97,7 +105,8 @@ static struct {
     .previous_page = PAGE_NONE,
     .pages = {nullptr},
     .page_count = 0,
-    .data = {}
+    .data = {},
+    .task_handle = nullptr
 };
 
 // ============================================================================
@@ -246,6 +255,43 @@ static void print_status_log(void)
     }
 #endif
     T_LOGI(TAG, "================================================");
+}
+
+// ============================================================================
+// 태스크 관련
+// ============================================================================
+
+/**
+ * @brief 디스플레이 갱신 태스크
+ */
+static void display_task(void* arg)
+{
+    (void)arg;
+    T_LOGI(TAG, "Display task start");
+
+    while (s_mgr.running) {
+        // 디스플레이 갱신
+        if (s_mgr.initialized && s_mgr.power_on) {
+            uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+
+            // 갱신 주기 체크
+            if (now - s_mgr.last_refresh_ms >= s_mgr.refresh_interval_ms) {
+                s_mgr.last_refresh_ms = now;
+                render_current_page();
+            }
+
+            // 상태 로그 주기 체크 (5초마다)
+            if (now - s_mgr.last_status_log_ms >= STATUS_LOG_INTERVAL_MS) {
+                s_mgr.last_status_log_ms = now;
+                print_status_log();
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(DISPLAY_TASK_INTERVAL_MS));
+    }
+
+    T_LOGI(TAG, "Display task end");
+    vTaskDelete(nullptr);
 }
 
 // ============================================================================
@@ -585,6 +631,10 @@ extern "C" bool display_manager_init(void)
 #endif
 
     s_mgr.initialized = true;
+
+    // 초기화 완료 후 자동 시작
+    display_manager_start();
+
     return true;
 }
 
@@ -592,6 +642,11 @@ extern "C" void display_manager_start(void)
 {
     if (!s_mgr.initialized) {
         T_LOGE(TAG, "초기화되지 않음");
+        return;
+    }
+
+    if (s_mgr.running) {
+        T_LOGW(TAG, "이미 실행 중");
         return;
     }
 
@@ -627,7 +682,42 @@ extern "C" void display_manager_start(void)
     }
 
     s_mgr.running = true;
-    T_LOGI(TAG, "DisplayManager 시작");
+
+    // 태스크 생성
+    BaseType_t ret = xTaskCreate(
+        display_task,
+        "display_task",
+        DISPLAY_TASK_STACK_SIZE,
+        nullptr,
+        DISPLAY_TASK_PRIORITY,
+        &s_mgr.task_handle
+    );
+
+    if (ret != pdPASS) {
+        T_LOGE(TAG, "태스크 생성 실패");
+        s_mgr.running = false;
+        return;
+    }
+
+    T_LOGI(TAG, "DisplayManager 시작 (태스크 실행 중)");
+}
+
+extern "C" void display_manager_stop(void)
+{
+    if (!s_mgr.running) {
+        return;
+    }
+
+    T_LOGI(TAG, "DisplayManager 정지 중...");
+    s_mgr.running = false;
+
+    // 태스크 종료 대기
+    if (s_mgr.task_handle) {
+        vTaskDelay(pdMS_TO_TICKS(200));  // 태스크 종료 대기
+        s_mgr.task_handle = nullptr;
+    }
+
+    T_LOGI(TAG, "DisplayManager 정지 완료");
 }
 
 extern "C" void display_manager_set_refresh_interval(uint32_t interval_ms)

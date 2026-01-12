@@ -61,6 +61,11 @@ bool display_manager_init(void);
 void display_manager_start(void);
 
 /**
+ * @brief DisplayManager 정지
+ */
+void display_manager_stop(void);
+
+/**
  * @brief 디스플레이 새로고침 주기 설정
  * @param interval_ms 갱신 주기 (ms)
  */

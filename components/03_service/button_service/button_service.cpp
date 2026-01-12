@@ -231,6 +231,10 @@ esp_err_t ButtonService::init(void)
 
     s_initialized = true;
     T_LOGI(TAG, "button service init (GPIO %d)", EORA_S3_BUTTON);
+
+    // 초기화 완료 후 자동 시작
+    start();
+
     return ESP_OK;
 }
 

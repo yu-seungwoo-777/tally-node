@@ -9,7 +9,7 @@
 
 #include "lora_service.h"
 #include "lora_driver.h"
-// #include "board_led_driver.h"  // LED 기능 사용 안 함
+#include "board_led_driver.h"
 #include "lora_protocol.h"
 #include "event_bus.h"
 #include "t_log.h"
@@ -406,7 +406,7 @@ static void lora_txq_task(void* arg)
             }
 
             // 송신 (LED 펄스: 1ms 켜짐 후 자동 꺼짐)
-            // board_led_driver_pulse(1);  // LED 기능 사용 안 함
+            board_led_driver_pulse(1);
             esp_err_t ret = lora_driver_transmit(packet.data, packet.length);
 
             if (ret == ESP_OK) {
@@ -442,7 +442,7 @@ esp_err_t lora_service_init(const lora_service_config_t* config)
     T_LOGI(TAG, "initializing...");
 
     // 내장 LED 드라이버 초기화
-    // board_led_driver_init();  // LED 기능 사용 안 함
+    board_led_driver_init();
 
     // 송신 큐 생성
     s_tx_queue = xQueueCreate(TX_QUEUE_SIZE, sizeof(lora_tx_packet_t));
@@ -483,8 +483,11 @@ esp_err_t lora_service_init(const lora_service_config_t* config)
     s_initialized = true;
     T_LOGI(TAG, "init complete (queue size: %d)", TX_QUEUE_SIZE);
 
+    // 초기화 완료 후 자동 시작
+    lora_service_start();
+
     // 이벤트 발행
-    bool running = false;
+    bool running = true;
     event_bus_publish(EVT_LORA_STATUS_CHANGED, &running, sizeof(running));
 
     return ESP_OK;

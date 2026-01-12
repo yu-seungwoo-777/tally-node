@@ -63,6 +63,7 @@ typedef struct {
     char password[64];    // 비밀번호
     uint8_t interface;    // 1=WiFi, 2=Ethernet
     uint8_t camera_limit; // 카메라 제한 (0=무제한)
+    bool debug_packet;    // 패킷 디버그 로그 출력
 } config_switcher_t;
 
 // RF 설정 (LoRa)
