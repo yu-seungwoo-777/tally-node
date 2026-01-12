@@ -1127,9 +1127,19 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
         packed_data_cleanup(&combined_packed_);
     }
 
-    // 병합된 Tally 값 출력 (공통 해석 함수 사용)
+    // 병합된 Tally 값 가져오기
     packed_data_t combined = getCombinedTally();
-    if (packed_data_is_valid(&combined)) {
+    if (!packed_data_is_valid(&combined)) {
+        return;
+    }
+
+    // 결합 데이터 변경 확인 (중복 콜백 방지)
+    if (!packed_data_equals(&combined, &combined_packed_)) {
+        // 이전 데이터 해제 및 복사
+        packed_data_cleanup(&combined_packed_);
+        packed_data_copy(&combined_packed_, &combined);
+
+        // 병합된 Tally 값 출력 (공통 해석 함수 사용)
         char hex_str[16];
         packed_data_to_hex(&combined, hex_str, sizeof(hex_str));
 
@@ -1148,14 +1158,14 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
         tally_event.tally_value = packed_data_to_uint64(&combined);
 
         event_bus_publish(EVT_TALLY_STATE_CHANGED, &tally_event, sizeof(tally_event));
-    }
 
-    // Tally 변경 시 상태 이벤트도 발행 (웹 서버 등에서 사용)
-    publishSwitcherStatus();
+        // Tally 변경 시 상태 이벤트도 발행 (웹 서버 등에서 사용)
+        publishSwitcherStatus();
 
-    // 사용자 콜백 호출 (Tally 변경 알림)
-    if (tally_callback_) {
-        tally_callback_();
+        // 사용자 콜백 호출 (Tally 변경 알림)
+        if (tally_callback_) {
+            tally_callback_();
+        }
     }
 }
 
