@@ -5,6 +5,7 @@
 
 #include "hardware_service.h"
 #include "t_log.h"
+#include "LogConfig.h"
 #include "event_bus.h"
 #include "battery_driver.h"
 #include "temperature_driver.h"
@@ -13,6 +14,7 @@
 #include "freertos/task.h"
 #include "esp_system.h"
 #include "esp_mac.h"
+#include "esp_heap_caps.h"
 #include <cstring>
 
 static const char* TAG = "03_Hardware";
@@ -237,6 +239,11 @@ void HardwareService::hw_monitor_task(void* arg)
     (void)arg;
     T_LOGI(TAG, "hw monitor task start (1s interval)");
 
+#if T_LOG_RAM_INFO_INTERVAL_MS > 0
+    uint32_t ram_info_counter = 0;
+    const uint32_t ram_info_interval = T_LOG_RAM_INFO_INTERVAL_MS / MONITOR_INTERVAL_MS;
+#endif
+
     while (s_running) {
         // 배터리 업데이트 (ADC 읽기)
         updateBattery();
@@ -246,6 +253,18 @@ void HardwareService::hw_monitor_task(void* arg)
 
         // uptime 증가
         s_uptime++;
+
+#if T_LOG_RAM_INFO_INTERVAL_MS > 0
+        // 주기적 RAM 정보 출력
+        if (ram_info_counter >= ram_info_interval) {
+            uint32_t free_heap = esp_get_free_heap_size();
+            uint32_t min_free = esp_get_minimum_free_heap_size();
+            T_LOGI(TAG, "Heap: free=%u min=%u bytes", free_heap, min_free);
+            ram_info_counter = 0;
+        } else {
+            ram_info_counter++;
+        }
+#endif
 
         // 하드웨어 정보 이벤트 발행 (stack 변수 사용 - 이벤트 버스가 복사)
         system_info_event_t info;

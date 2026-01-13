@@ -762,6 +762,10 @@ static void lora_scan_task(void* arg)
     lora_channel_info_t results[MAX_SCAN_CHANNELS];
     size_t result_count = 0;
 
+    // 진행 이벤트 발행 간격 (채널 수)
+    const size_t PROGRESS_INTERVAL = 5;  // 5채널마다 발행 (이벤트 80% 감소)
+    size_t last_progress_count = 0;
+
     // 채널별 스캔 (진행도 발행을 위해)
     for (float freq = s_scan_start_freq; freq <= s_scan_end_freq && result_count < MAX_SCAN_CHANNELS; freq += s_scan_step) {
         // 중지 요청 확인
@@ -783,28 +787,46 @@ static void lora_scan_task(void* arg)
             results[result_count].clear_channel = driver_result.clear_channel;
             result_count++;
 
-            // 진행률 계산
-            uint8_t progress = (uint8_t)((result_count * 100) / total_channels);
+            // 진행 이벤트 발행 (PROGRESS_INTERVAL마다 또는 마지막)
+            if (result_count % PROGRESS_INTERVAL == 0 || result_count == (size_t)total_channels) {
+                uint8_t progress = (uint8_t)((result_count * 100) / total_channels);
 
-            // 진행 이벤트 발행
-            lora_scan_progress_t progress_event = {
-                .progress = progress,
-                .current_freq = freq,
-                .result = {
-                    .frequency = results[result_count - 1].frequency,
-                    .rssi = results[result_count - 1].rssi,
-                    .noise_floor = results[result_count - 1].noise_floor,
-                    .clear_channel = results[result_count - 1].clear_channel
-                }
-            };
-            event_bus_publish(EVT_LORA_SCAN_PROGRESS, &progress_event, sizeof(progress_event));
+                lora_scan_progress_t progress_event = {
+                    .progress = progress,
+                    .current_freq = freq,
+                    .result = {
+                        .frequency = results[result_count - 1].frequency,
+                        .rssi = results[result_count - 1].rssi,
+                        .noise_floor = results[result_count - 1].noise_floor,
+                        .clear_channel = results[result_count - 1].clear_channel
+                    }
+                };
+                event_bus_publish(EVT_LORA_SCAN_PROGRESS, &progress_event, sizeof(progress_event));
+                last_progress_count = result_count;
 
-            T_LOGD(TAG, "scan: %.1f MHz, RSSI %d dBm (%d%%)",
-                   freq, results[result_count - 1].rssi, progress);
+                T_LOGD(TAG, "scan: %.1f MHz, RSSI %d dBm (%d%%)",
+                       freq, results[result_count - 1].rssi, progress);
+            }
         }
 
         // 채널 간 약간 대기 (진행 이벤트가 전달될 시간 확보)
         vTaskDelay(pdMS_TO_TICKS(20));
+    }
+
+    // 마지막 진행 이벤트가 발행되지 않았다면 발행
+    if (last_progress_count < result_count && result_count > 0) {
+        uint8_t progress = 100;
+        lora_scan_progress_t progress_event = {
+            .progress = progress,
+            .current_freq = s_scan_end_freq,
+            .result = {
+                .frequency = results[result_count - 1].frequency,
+                .rssi = results[result_count - 1].rssi,
+                .noise_floor = results[result_count - 1].noise_floor,
+                .clear_channel = results[result_count - 1].clear_channel
+            }
+        };
+        event_bus_publish(EVT_LORA_SCAN_PROGRESS, &progress_event, sizeof(progress_event));
     }
 
     // 스캔 완료 이벤트 발행

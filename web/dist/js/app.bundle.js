@@ -23,6 +23,8 @@
       wsConnected: false,
       // 밝기 조절 모달 상태
       showBrightnessModal: false,
+      // LED 색상 모달 상태
+      showLedColorsModal: false,
       // /api/status 응답 데이터 (캐시)
       status: {
         network: { wifi: { connected: false, ssid: "", ip: "--" }, ethernet: { connected: false, ip: "--" } },
@@ -1514,6 +1516,122 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
         } else {
           return `${secs}s`;
         }
+      },
+      /**
+       * 신호 강도 레벨 계산 (1-3)
+       */
+      getSignalLevel(rssi, snr) {
+        if (!rssi && !snr)
+          return 0;
+        if (rssi > -70 && snr > 10)
+          return 3;
+        if (rssi > -85 && snr > 5)
+          return 2;
+        return 1;
+      },
+      /**
+       * 신호 강도 텍스트
+       */
+      getSignalText(rssi, snr) {
+        const level = this.getSignalLevel(rssi, snr);
+        if (level === 3)
+          return "Good";
+        if (level === 2)
+          return "Fair";
+        if (level === 1)
+          return "Weak";
+        return "--";
+      },
+      // ========================================================================
+      // LED Colors
+      // ========================================================================
+      /**
+       * LED 색상 저장
+       */
+      async saveLedColors() {
+        this.ledColors.saving = true;
+        try {
+          const response = await fetch("/api/led/colors", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              program: {
+                r: Number(this.ledColors.program.r),
+                g: Number(this.ledColors.program.g),
+                b: Number(this.ledColors.program.b)
+              },
+              preview: {
+                r: Number(this.ledColors.preview.r),
+                g: Number(this.ledColors.preview.g),
+                b: Number(this.ledColors.preview.b)
+              },
+              off: {
+                r: Number(this.ledColors.off.r),
+                g: Number(this.ledColors.off.g),
+                b: Number(this.ledColors.off.b)
+              }
+            })
+          });
+          if (response.ok) {
+            this.showToast("LED colors saved", "alert-success");
+          } else {
+            this.showToast("Failed to save LED colors", "alert-error");
+          }
+        } catch (e) {
+          this.showToast("Failed to save LED colors", "alert-error");
+        } finally {
+          this.ledColors.saving = false;
+        }
+      },
+      /**
+       * LED 색상 로드
+       */
+      async loadLedColors() {
+        try {
+          const response = await fetch("/api/led/colors");
+          if (response.ok) {
+            const data = await response.json();
+            this.ledColors.program = data.program;
+            this.ledColors.preview = data.preview;
+            this.ledColors.off = data.off;
+          }
+        } catch (e) {
+          console.error("Failed to load LED colors", e);
+        }
+      },
+      /**
+       * RGB를 Hex로 변환 (color input용)
+       */
+      rgbToHex(r, g, b) {
+        return "#" + [r, g, b].map((x) => {
+          const hex = Number(x).toString(16);
+          return hex.length === 1 ? "0" + hex : hex;
+        }).join("");
+      },
+      /**
+       * Color input 변경 시 RGB 업데이트
+       */
+      updateLedColor(type, hex) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        this.ledColors[type].r = r;
+        this.ledColors[type].g = g;
+        this.ledColors[type].b = b;
+      },
+      /**
+       * LED 프리셋 적용
+       */
+      applyLedPreset(pr, pg, pb, vur, vug, vub, offr, offg, offb) {
+        this.ledColors.program = { r: pr, g: pg, b: pb };
+        this.ledColors.preview = { r: vur, g: vug, b: vub };
+        this.ledColors.off = { r: offr, g: offg, b: offb };
+      },
+      /**
+       * LED 프리셋 활성 상태 확인
+       */
+      isLedPresetActive(pr, pg, pb, vur, vug, vub, offr, offg, offb) {
+        return this.ledColors.program.r === pr && this.ledColors.program.g === pg && this.ledColors.program.b === pb && this.ledColors.preview.r === vur && this.ledColors.preview.g === vug && this.ledColors.preview.b === vub && this.ledColors.off.r === offr && this.ledColors.off.g === offg && this.ledColors.off.b === offb;
       }
     };
   }

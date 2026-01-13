@@ -31,6 +31,9 @@ export function stateModule() {
         // 밝기 조절 모달 상태
         showBrightnessModal: false,
 
+        // LED 색상 모달 상태
+        showLedColorsModal: false,
+
         // /api/status 응답 데이터 (캐시)
         status: {
             network: { wifi: { connected: false, ssid: '', ip: '--' }, ethernet: { connected: false, ip: '--' } },

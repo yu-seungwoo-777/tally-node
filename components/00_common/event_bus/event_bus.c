@@ -14,7 +14,7 @@
 static const char* TAG = "00_EventBus";
 
 // 최대 대기열 크기
-#define EVENT_QUEUE_SIZE 32
+#define EVENT_QUEUE_SIZE 12  // 32→12 (약 25KB 절약)
 #define MAX_SUBSCRIBERS_PER_EVENT 8
 
 // 구독자 정보

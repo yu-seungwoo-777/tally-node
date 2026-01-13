@@ -100,6 +100,20 @@ void t_log_set_level_char(int enable);
 int t_log_get_level_char(void);
 
 // ============================================================
+// RAM 정보 출력 설정
+// ============================================================
+
+/**
+ * @brief RAM 사용량 출력 주기 (INFO 레벨)
+ * @define T_LOG_RAM_INFO_INTERVAL_MS 0  비활성화
+ * @define T_LOG_RAM_INFO_INTERVAL_MS 30000  30초마다 출력 (기본)
+ * @note hardware_service에서 주기적으로 출력
+ */
+#ifndef T_LOG_RAM_INFO_INTERVAL_MS
+#define T_LOG_RAM_INFO_INTERVAL_MS 10000
+#endif
+
+// ============================================================
 // 매크로 설정
 // ============================================================
 
