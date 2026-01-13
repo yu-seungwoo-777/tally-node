@@ -96,7 +96,6 @@ typedef struct {
     config_led_color_t program;      // PROGRAM 상태 색상 (빨강)
     config_led_color_t preview;      // PREVIEW 상태 색상 (초록)
     config_led_color_t off;          // OFF 상태 색상 (검정, 변경 가능)
-    config_led_color_t battery_low;  // BATTERY_LOW 상태 색상 (노랑)
 } config_led_colors_t;
 
 // Device 설정 (NVS 저장)
@@ -342,14 +341,6 @@ void config_service_get_led_preview_color(uint8_t* r, uint8_t* g, uint8_t* b);
  * @param b[out] 파랑 값 (0-255)
  */
 void config_service_get_led_off_color(uint8_t* r, uint8_t* g, uint8_t* b);
-
-/**
- * @brief BATTERY_LOW 색상 가져오기
- * @param r[out] 빨강 값 (0-255)
- * @param g[out] 초록 값 (0-255)
- * @param b[out] 파랑 값 (0-255)
- */
-void config_service_get_led_battery_low_color(uint8_t* r, uint8_t* g, uint8_t* b);
 
 // ============================================================================
 // 등록된 디바이스 관리 API

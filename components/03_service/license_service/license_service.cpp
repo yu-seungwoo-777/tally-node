@@ -91,7 +91,6 @@ void LicenseService::publishStateEvent(void)
     memset(&event, 0, sizeof(event));
     event.device_limit = s_device_limit;
     event.state = static_cast<uint8_t>(s_state);
-    event.grace_remaining = 0;
 
     T_LOGD(TAG, "license state event published: limit=%d, state=%d, addr=%p",
            event.device_limit, event.state, &event);
@@ -439,16 +438,6 @@ bool license_service_is_valid(void)
 license_state_t license_service_get_state(void)
 {
     return LicenseService::getState();
-}
-
-bool license_service_is_grace_active(void)
-{
-    return false;  // 유예 기간 미사용
-}
-
-uint32_t license_service_get_grace_remaining(void)
-{
-    return 0;  // 유예 기간 미사용
 }
 
 bool license_service_can_send_tally(void)

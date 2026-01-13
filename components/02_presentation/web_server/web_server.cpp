@@ -361,8 +361,8 @@ static esp_err_t onLicenseStateEvent(const event_data_t* event)
         xSemaphoreGive(s_cache_mutex);
     }
 
-    T_LOGD(TAG, "License state updated: limit=%d, state=%d, grace=%u",
-             license->device_limit, license->state, license->grace_remaining);
+    T_LOGD(TAG, "License state updated: limit=%d, state=%d",
+             license->device_limit, license->state);
 
     return ESP_OK;
 }
@@ -834,16 +834,13 @@ static cJSON* create_license_json(void)
         case LICENSE_STATE_INVALID:
             state_str = "invalid";
             break;
-        case LICENSE_STATE_GRACE:
-            state_str = "grace";
-            break;
         case LICENSE_STATE_CHECKING:
             state_str = "checking";
             break;
     }
     cJSON_AddStringToObject(license, "stateStr", state_str);
 
-    bool is_valid = (state == LICENSE_STATE_VALID || state == LICENSE_STATE_GRACE);
+    bool is_valid = (state == LICENSE_STATE_VALID);
     cJSON_AddBoolToObject(license, "isValid", is_valid);
 
     char key[17];
@@ -2393,6 +2390,157 @@ static esp_err_t api_status_request_handler(httpd_req_t* req)
 }
 #endif // DEVICE_MODE_TX
 
+// ============================================================================
+// LED Colors Cache (이벤트로 업데이트)
+// ============================================================================
+
+static struct {
+    bool initialized;
+    struct { uint8_t r, g, b; } program;
+    struct { uint8_t r, g, b; } preview;
+    struct { uint8_t r, g, b; } off;
+} s_led_colors_cache = {
+    .initialized = false,
+    .program = {255, 0, 0},
+    .preview = {0, 255, 0},
+    .off = {0, 0, 0}
+};
+
+/**
+ * @brief LED 색상 변경 이벤트 핸들러 (캐시 업데이트)
+ */
+static esp_err_t on_led_colors_event(const event_data_t* event)
+{
+    if (event->type == EVT_LED_COLORS_CHANGED) {
+        if (event->data_size >= sizeof(led_colors_event_t)) {
+            const led_colors_event_t* colors = (const led_colors_event_t*)event->data;
+            s_led_colors_cache.program.r = colors->program_r;
+            s_led_colors_cache.program.g = colors->program_g;
+            s_led_colors_cache.program.b = colors->program_b;
+            s_led_colors_cache.preview.r = colors->preview_r;
+            s_led_colors_cache.preview.g = colors->preview_g;
+            s_led_colors_cache.preview.b = colors->preview_b;
+            s_led_colors_cache.off.r = colors->off_r;
+            s_led_colors_cache.off.g = colors->off_g;
+            s_led_colors_cache.off.b = colors->off_b;
+            s_led_colors_cache.initialized = true;
+        }
+    }
+    return ESP_OK;
+}
+
+/**
+ * @brief GET /api/led/colors - LED 색상 조회 (캐시 또는 요청 이벤트)
+ */
+static esp_err_t api_led_colors_get_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 캐시가 없으면 요청 이벤트 발행 (config_service에서 응답)
+    if (!s_led_colors_cache.initialized) {
+        event_bus_publish(EVT_LED_COLORS_REQUEST, NULL, 0);
+        // 응답 대기 (간단 구현을 위해 짧은 지연)
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    char buf[256];
+    snprintf(buf, sizeof(buf),
+             "{\"program\":{\"r\":%d,\"g\":%d,\"b\":%d},"
+             "\"preview\":{\"r\":%d,\"g\":%d,\"b\":%d},"
+             "\"off\":{\"r\":%d,\"g\":%d,\"b\":%d}}",
+             s_led_colors_cache.program.r, s_led_colors_cache.program.g, s_led_colors_cache.program.b,
+             s_led_colors_cache.preview.r, s_led_colors_cache.preview.g, s_led_colors_cache.preview.b,
+             s_led_colors_cache.off.r, s_led_colors_cache.off.g, s_led_colors_cache.off.b);
+    httpd_resp_sendstr(req, buf);
+
+    return ESP_OK;
+}
+
+/**
+ * @brief POST /api/led/colors - LED 색상 설정
+ */
+static esp_err_t api_led_colors_post_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 요청 바디 읽기
+    char* buf = new char[512];
+    int ret = httpd_req_recv(req, buf, 511);
+    if (ret <= 0) {
+        delete[] buf;
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+
+    // JSON 파싱
+    cJSON* root = cJSON_Parse(buf);
+    delete[] buf;
+
+    if (root == nullptr) {
+        T_LOGE(TAG, "POST /api/led/colors JSON 파싱 실패");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+
+    // 정적 구조체로 이벤트 발행
+    static led_colors_event_t colors;
+
+    // 기본값 (기존 색상 유지)
+    cJSON* program = cJSON_GetObjectItem(root, "program");
+    cJSON* preview = cJSON_GetObjectItem(root, "preview");
+    cJSON* off = cJSON_GetObjectItem(root, "off");
+
+    if (program) {
+        cJSON* r = cJSON_GetObjectItem(program, "r");
+        cJSON* g = cJSON_GetObjectItem(program, "g");
+        cJSON* b = cJSON_GetObjectItem(program, "b");
+        if (r && g && b && cJSON_IsNumber(r) && cJSON_IsNumber(g) && cJSON_IsNumber(b)) {
+            colors.program_r = (uint8_t)r->valueint;
+            colors.program_g = (uint8_t)g->valueint;
+            colors.program_b = (uint8_t)b->valueint;
+        }
+    }
+
+    if (preview) {
+        cJSON* r = cJSON_GetObjectItem(preview, "r");
+        cJSON* g = cJSON_GetObjectItem(preview, "g");
+        cJSON* b = cJSON_GetObjectItem(preview, "b");
+        if (r && g && b && cJSON_IsNumber(r) && cJSON_IsNumber(g) && cJSON_IsNumber(b)) {
+            colors.preview_r = (uint8_t)r->valueint;
+            colors.preview_g = (uint8_t)g->valueint;
+            colors.preview_b = (uint8_t)b->valueint;
+        }
+    }
+
+    if (off) {
+        cJSON* r = cJSON_GetObjectItem(off, "r");
+        cJSON* g = cJSON_GetObjectItem(off, "g");
+        cJSON* b = cJSON_GetObjectItem(off, "b");
+        if (r && g && b && cJSON_IsNumber(r) && cJSON_IsNumber(g) && cJSON_IsNumber(b)) {
+            colors.off_r = (uint8_t)r->valueint;
+            colors.off_g = (uint8_t)g->valueint;
+            colors.off_b = (uint8_t)b->valueint;
+        }
+    }
+
+    cJSON_Delete(root);
+
+    // 색상 변경 이벤트 발행 (config_service에서 구독)
+    event_bus_publish(EVT_LED_COLORS_CHANGED, &colors, sizeof(colors));
+
+    T_LOGI(TAG, "LED colors changed: PGM(%d,%d,%d) PVW(%d,%d,%d) OFF(%d,%d,%d)",
+             colors.program_r, colors.program_g, colors.program_b,
+             colors.preview_r, colors.preview_g, colors.preview_b,
+             colors.off_r, colors.off_g, colors.off_b);
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+
+    return ESP_OK;
+}
+
 /**
  * @brief 인덱스 HTML 핸들러
  * @param req HTTP 요청 핸들러
@@ -2689,6 +2837,21 @@ static const httpd_uri_t uri_api_status_request = {
     .handler = api_status_request_handler,
     .user_ctx = nullptr
 };
+
+// LED 색상 API
+static const httpd_uri_t uri_api_led_colors_get = {
+    .uri = "/api/led/colors",
+    .method = HTTP_GET,
+    .handler = api_led_colors_get_handler,
+    .user_ctx = nullptr
+};
+
+static const httpd_uri_t uri_api_led_colors_post = {
+    .uri = "/api/led/colors",
+    .method = HTTP_POST,
+    .handler = api_led_colors_post_handler,
+    .user_ctx = nullptr
+};
 #endif
 
 // 정적 파일 URI
@@ -2870,6 +3033,14 @@ static const httpd_uri_t uri_options_api_status_request = {
 };
 #endif
 
+// LED 색상 API OPTIONS
+static const httpd_uri_t uri_options_api_led_colors = {
+    .uri = "/api/led/colors",
+    .method = HTTP_OPTIONS,
+    .handler = options_handler,
+    .user_ctx = nullptr
+};
+
 // ============================================================================
 // C 인터페이스
 // ============================================================================
@@ -2908,6 +3079,8 @@ esp_err_t web_server_init(void)
     event_bus_subscribe(EVT_LICENSE_STATE_CHANGED, onLicenseStateEvent);
     // 네트워크 재시작 완료 이벤트
     event_bus_subscribe(EVT_NETWORK_RESTARTED, onNetworkRestartedEvent);
+    // LED 색상 이벤트
+    event_bus_subscribe(EVT_LED_COLORS_CHANGED, on_led_colors_event);
 
     s_initialized = true;
     T_LOGI(TAG, "Web server initialized (event subscriptions ready)");
@@ -2934,7 +3107,7 @@ esp_err_t web_server_start(void)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
     config.max_open_sockets = 10;  // 5 → 10 (동시 연결 증가)
-    config.max_uri_handlers = 45;  // API + OPTIONS + 정적 파일 + LoRa + Device + License + Notices
+    config.max_uri_handlers = 48;  // API + OPTIONS + 정적 파일 + LoRa + Device + License + Notices + LED
     config.lru_purge_enable = true;
 
     esp_err_t ret = httpd_start(&s_server, &config);
@@ -2982,6 +3155,9 @@ esp_err_t web_server_start(void)
     httpd_register_uri_handler(s_server, &uri_api_device_brightness);
     // Device Camera ID API
     httpd_register_uri_handler(s_server, &uri_api_device_camera_id);
+    // LED Colors API
+    httpd_register_uri_handler(s_server, &uri_api_led_colors_get);
+    httpd_register_uri_handler(s_server, &uri_api_led_colors_post);
 #ifdef DEVICE_MODE_TX
     // Global Brightness Broadcast API
     httpd_register_uri_handler(s_server, &uri_api_brightness_broadcast);
@@ -3011,6 +3187,8 @@ esp_err_t web_server_start(void)
     httpd_register_uri_handler(s_server, &uri_options_api_notices);
     httpd_register_uri_handler(s_server, &uri_options_api_device_brightness);
     httpd_register_uri_handler(s_server, &uri_options_api_device_camera_id);
+    // LED Colors OPTIONS
+    httpd_register_uri_handler(s_server, &uri_options_api_led_colors);
 #ifdef DEVICE_MODE_TX
     httpd_register_uri_handler(s_server, &uri_options_api_brightness_broadcast);
     httpd_register_uri_handler(s_server, &uri_options_api_device_ping);

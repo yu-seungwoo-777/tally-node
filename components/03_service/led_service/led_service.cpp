@@ -189,6 +189,40 @@ static esp_err_t on_stop_changed(const event_data_t* event)
     return ESP_OK;
 }
 
+/**
+ * @brief LED 색상 변경 이벤트 핸들러 (EVT_LED_COLORS_CHANGED)
+ */
+static esp_err_t on_led_colors_changed(const event_data_t* event)
+{
+    if (!event) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (event->data_size < sizeof(led_colors_event_t)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const led_colors_event_t* colors = (const led_colors_event_t*)event->data;
+
+    // 색상 캐시 업데이트
+    s_colors.program_r = colors->program_r;
+    s_colors.program_g = colors->program_g;
+    s_colors.program_b = colors->program_b;
+    s_colors.preview_r = colors->preview_r;
+    s_colors.preview_g = colors->preview_g;
+    s_colors.preview_b = colors->preview_b;
+    s_colors.off_r = colors->off_r;
+    s_colors.off_g = colors->off_g;
+    s_colors.off_b = colors->off_b;
+
+    T_LOGI(TAG, "colors updated: PGM(%d,%d,%d) PVW(%d,%d,%d) OFF(%d,%d,%d)",
+             s_colors.program_r, s_colors.program_g, s_colors.program_b,
+             s_colors.preview_r, s_colors.preview_g, s_colors.preview_b,
+             s_colors.off_r, s_colors.off_g, s_colors.off_b);
+
+    return ESP_OK;
+}
+
 // ============================================================================
 // 공개 API
 // ============================================================================
@@ -226,8 +260,9 @@ esp_err_t led_service_init_with_colors(int gpio_num, uint32_t num_leds, uint8_t 
     event_bus_subscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
     event_bus_subscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
     event_bus_subscribe(EVT_STOP_CHANGED, on_stop_changed);
+    event_bus_subscribe(EVT_LED_COLORS_CHANGED, on_led_colors_changed);
     s_service.event_subscribed = true;
-    T_LOGI(TAG, "event subscribed: CAMERA_ID, BRIGHTNESS, TALLY_STATE, STOP");
+    T_LOGI(TAG, "event subscribed: CAMERA_ID, BRIGHTNESS, TALLY_STATE, STOP, LED_COLORS");
 
     s_service.initialized = true;
     T_LOGI(TAG, "LED service init complete");
@@ -329,6 +364,7 @@ void led_service_deinit(void)
         event_bus_unsubscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
         event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
         event_bus_unsubscribe(EVT_STOP_CHANGED, on_stop_changed);
+        event_bus_unsubscribe(EVT_LED_COLORS_CHANGED, on_led_colors_changed);
         s_service.event_subscribed = false;
     }
 

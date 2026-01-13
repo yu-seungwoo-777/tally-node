@@ -113,6 +113,60 @@
                             </div>
                         </div>
 
+                        <!-- LED Colors -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-cyan-50 to-transparent flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 bg-cyan-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-4 h-4 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-semibold text-slate-900 text-base">LED Colors</h3>
+                                        <p class="text-xs text-slate-500">PGM / PVW / OFF</p>
+                                    </div>
+                                </div>
+                                <button @click="saveLedColors()" :disabled="ledColors.saving" class="px-3 py-1.5 text-xs font-medium text-white bg-cyan-600 rounded-lg hover:bg-cyan-700 disabled:opacity-50 transition-colors">
+                                    <span x-show="!ledColors.saving">Save</span>
+                                    <span x-show="ledColors.saving">Saving...</span>
+                                </button>
+                            </div>
+                            <div class="p-4">
+                                <div class="flex justify-center gap-6">
+                                    <!-- PROGRAM Color -->
+                                    <div>
+                                        <label class="relative cursor-pointer group block">
+                                            <input type="color" :value="rgbToHex(ledColors.program.r, ledColors.program.g, ledColors.program.b)" @input="updateLedColor('program', $event.target.value)" class="absolute inset-0 w-full opacity-0 cursor-pointer">
+                                            <div class="w-14 h-14 rounded-full border-2 border-slate-200 shadow-sm group-hover:border-cyan-400 group-hover:shadow-md transition-all duration-200" :style="`background-color: rgb(${ledColors.program.r}, ${ledColors.program.g}, ${ledColors.program.b})`"></div>
+                                        </label>
+                                        <p class="text-xs font-medium text-slate-700 text-center mt-2">PROGRAM</p>
+                                        <p class="text-[10px] font-mono text-slate-400 text-center" x-text="rgbToHex(ledColors.program.r, ledColors.program.g, ledColors.program.b)"></p>
+                                    </div>
+
+                                    <!-- PREVIEW Color -->
+                                    <div>
+                                        <label class="relative cursor-pointer group block">
+                                            <input type="color" :value="rgbToHex(ledColors.preview.r, ledColors.preview.g, ledColors.preview.b)" @input="updateLedColor('preview', $event.target.value)" class="absolute inset-0 w-full opacity-0 cursor-pointer">
+                                            <div class="w-14 h-14 rounded-full border-2 border-slate-200 shadow-sm group-hover:border-cyan-400 group-hover:shadow-md transition-all duration-200" :style="`background-color: rgb(${ledColors.preview.r}, ${ledColors.preview.g}, ${ledColors.preview.b})`"></div>
+                                        </label>
+                                        <p class="text-xs font-medium text-slate-700 text-center mt-2">PREVIEW</p>
+                                        <p class="text-[10px] font-mono text-slate-400 text-center" x-text="rgbToHex(ledColors.preview.r, ledColors.preview.g, ledColors.preview.b)"></p>
+                                    </div>
+
+                                    <!-- OFF Color -->
+                                    <div>
+                                        <label class="relative cursor-pointer group block">
+                                            <input type="color" :value="rgbToHex(ledColors.off.r, ledColors.off.g, ledColors.off.b)" @input="updateLedColor('off', $event.target.value)" class="absolute inset-0 w-full opacity-0 cursor-pointer">
+                                            <div class="w-14 h-14 rounded-full border-2 border-slate-200 shadow-sm group-hover:border-cyan-400 group-hover:shadow-md transition-all duration-200" :style="`background-color: rgb(${ledColors.off.r}, ${ledColors.off.g}, ${ledColors.off.b})`"></div>
+                                        </label>
+                                        <p class="text-xs font-medium text-slate-700 text-center mt-2">OFF</p>
+                                        <p class="text-[10px] font-mono text-slate-400 text-center" x-text="rgbToHex(ledColors.off.r, ledColors.off.g, ledColors.off.b)"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Notices -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-transparent flex items-center justify-between">

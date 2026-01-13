@@ -122,10 +122,14 @@ sync_from_remote() {
         --exclude='__pycache__'
         --exclude='.DS_Store'
         --exclude='*.log'
+        --exclude='core'
+        --exclude='core.*'
+        --exclude='.git'
     )
 
     # rsync 명령어 구성 (--delete 추가: 원격에 없는 로컬 파일 삭제)
-    RSYNC_CMD="rsync -avz --delete --progress ${EXCLUDE_LIST[@]} -e 'ssh -p $REMOTE_PORT -o StrictHostKeyChecking=no' $REMOTE_USER@$REMOTE_IP:$REMOTE_PATH/ $PROJECT_DIR/"
+    # --checksum: 파일 내용 기반 비교 (시간 정보 무시, 중복 복사 방지)
+    RSYNC_CMD="rsync -avz --delete --checksum --progress ${EXCLUDE_LIST[@]} -e 'ssh -p $REMOTE_PORT -o StrictHostKeyChecking=no' $REMOTE_USER@$REMOTE_IP:$REMOTE_PATH/ $PROJECT_DIR/"
 
     # expect를 사용하여 rsync 실행
     if run_rsync_with_expect "$RSYNC_CMD"; then

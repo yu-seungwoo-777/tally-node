@@ -394,6 +394,15 @@ typedef struct __attribute__((packed)) {
 } config_data_event_t;
 
 /**
+ * @brief 라이센스 상태
+ */
+typedef enum {
+    LICENSE_STATE_INVALID = 0,   ///< 무효
+    LICENSE_STATE_VALID = 1,     ///< 유효
+    LICENSE_STATE_CHECKING = 2,  ///< 검증 중
+} license_state_t;
+
+/**
  * @brief 라이센스 상태 이벤트 데이터 (EVT_LICENSE_STATE_CHANGED용)
  *
  * license_service에서 발행하는 라이센스 상태 변경 정보
@@ -401,7 +410,6 @@ typedef struct __attribute__((packed)) {
 typedef struct __attribute__((packed)) {
     uint8_t device_limit;      ///< 0 = 미등록, 1~255 = 제한
     uint8_t state;             ///< 라이센스 상태 (license_state_t)
-    uint32_t grace_remaining;  ///< 유예 기간 남은 시간 (초)
 } license_state_event_t;
 
 /**
@@ -422,6 +430,23 @@ typedef struct {
     uint8_t max_channels;      ///< 최대 채널 수 (1-20)
     uint16_t interval_ms;      ///< 송신 간격 (100-3000ms)
 } tally_test_mode_config_t;
+
+/**
+ * @brief LED 색상 설정 (EVT_LED_COLORS_CHANGED용)
+ *
+ * web_server에서 발행하는 LED 색상 변경 요청
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t program_r;        ///< PROGRAM 색상 R (0-255)
+    uint8_t program_g;        ///< PROGRAM 색상 G (0-255)
+    uint8_t program_b;        ///< PROGRAM 색상 B (0-255)
+    uint8_t preview_r;        ///< PREVIEW 색상 R (0-255)
+    uint8_t preview_g;        ///< PREVIEW 색상 G (0-255)
+    uint8_t preview_b;        ///< PREVIEW 색상 B (0-255)
+    uint8_t off_r;            ///< OFF 색상 R (0-255)
+    uint8_t off_g;            ///< OFF 색상 G (0-255)
+    uint8_t off_b;            ///< OFF 색상 B (0-255)
+} led_colors_event_t;
 
 // ============================================================================
 // 이벤트 타입 정의
@@ -482,6 +507,8 @@ typedef enum {
 
     // LED 이벤트 (02_presentation)
     EVT_LED_STATE_CHANGED,
+    EVT_LED_COLORS_CHANGED,         ///< LED 색상 변경 (data: led_colors_event_t)
+    EVT_LED_COLORS_REQUEST,         ///< LED 색상 조회 요청 (data 없음)
 
     // 디바이스 관리 이벤트 (03_service → ConfigService)
     EVT_DEVICE_REGISTER,         ///< 디바이스 등록 요청 (data: device_register_event_t)

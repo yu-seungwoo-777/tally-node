@@ -56,7 +56,7 @@
         temperature: 0,
         uptime: 0,
         freeHeap: 0,
-        version: "0.1.0"
+        version: "2.0.1"
       },
       // 설정 데이터
       config: {
@@ -186,6 +186,7 @@
             this.system.voltage = data.system.voltage || 0;
             this.system.temperature = data.system.temperature || 0;
             this.system.uptime = data.system.uptime || 0;
+            this.system.version = data.system.version || "2.0.1";
           }
           if (data.switcher) {
             this.config.switcher.dualEnabled = data.switcher.dualEnabled || false;
@@ -1523,7 +1524,6 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
         stateStr: "invalid",
         isValid: false,
         deviceLimit: 0,
-        graceRemaining: 0,
         key: "",
         loading: false
       },
@@ -1549,14 +1549,14 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
       licenseForm: {
         key: ""
       },
-      // 라이센스 상태 매핑
+      // 라이센스 상태 매핑 (C enum license_state_t와 동일)
       stateNames: {
-        0: "none",
-        1: "invalid",
-        2: "trial",
-        3: "valid",
-        4: "grace",
-        5: "expired"
+        0: "invalid",
+        // LICENSE_STATE_INVALID
+        1: "valid",
+        // LICENSE_STATE_VALID
+        2: "checking"
+        // LICENSE_STATE_CHECKING
       },
       /**
        * 초기화
@@ -1578,7 +1578,6 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
           this.license.stateStr = lic.stateStr || "invalid";
           this.license.isValid = lic.isValid || false;
           this.license.deviceLimit = lic.deviceLimit || 0;
-          this.license.graceRemaining = lic.graceRemaining || 0;
           this.license.key = lic.key || "";
           if (lic.key && lic.key.length === 16) {
             this.licenseForm.key = this.formatLicenseKeyString(lic.key);
@@ -1750,7 +1749,6 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
         const textMap = {
           "invalid": "Inactive",
           "trial": "Trial",
-          "grace": "Grace Period",
           "checking": "Checking",
           "none": "Not Registered"
         };
@@ -1764,8 +1762,6 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
           return "text-emerald-600 bg-emerald-50";
         if (this.license.stateStr === "trial")
           return "text-blue-600 bg-blue-50";
-        if (this.license.stateStr === "grace")
-          return "text-amber-600 bg-amber-50";
         if (this.license.stateStr === "checking")
           return "text-blue-600 bg-blue-50";
         return "text-rose-600 bg-rose-50";
@@ -1778,8 +1774,6 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
           return "bg-emerald-500";
         if (this.license.stateStr === "trial")
           return "bg-blue-500";
-        if (this.license.stateStr === "grace")
-          return "bg-amber-500";
         if (this.license.stateStr === "checking")
           return "bg-blue-500";
         return "bg-rose-500";
@@ -1795,6 +1789,13 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
         running: false,
         maxChannels: 4,
         interval: 500
+      },
+      // LED 색상 상태
+      ledColors: {
+        program: { r: 255, g: 0, b: 0 },
+        preview: { r: 0, g: 255, b: 0 },
+        off: { r: 0, g: 0, b: 0 },
+        saving: false
       },
       /**
        * 테스트 모드 시작
@@ -1837,6 +1838,80 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
         } catch (e) {
           this.showToast("Failed to stop test mode", "alert-error");
         }
+      },
+      /**
+       * LED 색상 저장
+       */
+      async saveLedColors() {
+        this.ledColors.saving = true;
+        try {
+          const response = await fetch("/api/led/colors", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              program: {
+                r: Number(this.ledColors.program.r),
+                g: Number(this.ledColors.program.g),
+                b: Number(this.ledColors.program.b)
+              },
+              preview: {
+                r: Number(this.ledColors.preview.r),
+                g: Number(this.ledColors.preview.g),
+                b: Number(this.ledColors.preview.b)
+              },
+              off: {
+                r: Number(this.ledColors.off.r),
+                g: Number(this.ledColors.off.g),
+                b: Number(this.ledColors.off.b)
+              }
+            })
+          });
+          if (response.ok) {
+            this.showToast("LED colors saved", "alert-success");
+          } else {
+            this.showToast("Failed to save LED colors", "alert-error");
+          }
+        } catch (e) {
+          this.showToast("Failed to save LED colors", "alert-error");
+        } finally {
+          this.ledColors.saving = false;
+        }
+      },
+      /**
+       * LED 색상 로드
+       */
+      async loadLedColors() {
+        try {
+          const response = await fetch("/api/led/colors");
+          if (response.ok) {
+            const data = await response.json();
+            this.ledColors.program = data.program;
+            this.ledColors.preview = data.preview;
+            this.ledColors.off = data.off;
+          }
+        } catch (e) {
+          console.error("Failed to load LED colors", e);
+        }
+      },
+      /**
+       * RGB를 Hex로 변환 (color input용)
+       */
+      rgbToHex(r, g, b) {
+        return "#" + [r, g, b].map((x) => {
+          const hex = Number(x).toString(16);
+          return hex.length === 1 ? "0" + hex : hex;
+        }).join("");
+      },
+      /**
+       * Color input 변경 시 RGB 업데이트
+       */
+      updateLedColor(type, hex) {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        this.ledColors[type].r = r;
+        this.ledColors[type].g = g;
+        this.ledColors[type].b = b;
       }
     };
   }

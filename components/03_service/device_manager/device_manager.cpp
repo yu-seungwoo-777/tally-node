@@ -352,8 +352,8 @@ static esp_err_t on_license_state_changed(const event_data_t* event)
     s_tx.device_limit = license->device_limit;
     s_tx.limit_valid = true;
 
-    T_LOGI(TAG, "license state changed: limit=%d, state=%d, grace=%u",
-            license->device_limit, license->state, license->grace_remaining);
+    T_LOGI(TAG, "license state changed: limit=%d, state=%d",
+            license->device_limit, license->state);
 
     return ESP_OK;
 }

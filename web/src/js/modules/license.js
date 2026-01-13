@@ -11,7 +11,6 @@ export function licenseModule() {
             stateStr: 'invalid',
             isValid: false,
             deviceLimit: 0,
-            graceRemaining: 0,
             key: '',
             loading: false
         },
@@ -39,14 +38,11 @@ export function licenseModule() {
             key: ''
         },
 
-        // 라이센스 상태 매핑
+        // 라이센스 상태 매핑 (C enum license_state_t와 동일)
         stateNames: {
-            0: 'none',
-            1: 'invalid',
-            2: 'trial',
-            3: 'valid',
-            4: 'grace',
-            5: 'expired'
+            0: 'invalid',   // LICENSE_STATE_INVALID
+            1: 'valid',     // LICENSE_STATE_VALID
+            2: 'checking'   // LICENSE_STATE_CHECKING
         },
 
         /**
@@ -71,7 +67,6 @@ export function licenseModule() {
                 this.license.stateStr = lic.stateStr || 'invalid';
                 this.license.isValid = lic.isValid || false;
                 this.license.deviceLimit = lic.deviceLimit || 0;
-                this.license.graceRemaining = lic.graceRemaining || 0;
                 this.license.key = lic.key || '';
 
                 // 활성화된 라이선스 키를 입력 폼에 표시 (포맷팅 포함)
@@ -291,7 +286,6 @@ export function licenseModule() {
             const textMap = {
                 'invalid': 'Inactive',
                 'trial': 'Trial',
-                'grace': 'Grace Period',
                 'checking': 'Checking',
                 'none': 'Not Registered'
             };
@@ -304,7 +298,6 @@ export function licenseModule() {
         getLicenseStatusClass() {
             if (this.license.isValid) return 'text-emerald-600 bg-emerald-50';
             if (this.license.stateStr === 'trial') return 'text-blue-600 bg-blue-50';
-            if (this.license.stateStr === 'grace') return 'text-amber-600 bg-amber-50';
             if (this.license.stateStr === 'checking') return 'text-blue-600 bg-blue-50';
             return 'text-rose-600 bg-rose-50';
         },
@@ -315,7 +308,6 @@ export function licenseModule() {
         getLicenseIndicatorClass() {
             if (this.license.isValid) return 'bg-emerald-500';
             if (this.license.stateStr === 'trial') return 'bg-blue-500';
-            if (this.license.stateStr === 'grace') return 'bg-amber-500';
             if (this.license.stateStr === 'checking') return 'bg-blue-500';
             return 'bg-rose-500';
         }

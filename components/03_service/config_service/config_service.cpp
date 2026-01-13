@@ -78,10 +78,10 @@ public:
     // LED 색상 설정
     static esp_err_t getLedColors(config_led_colors_t* config);
     static esp_err_t setLedColors(const config_led_colors_t* config);
+    static esp_err_t setLedColorsInternal(const config_led_colors_t* config);
     static void getLedProgramColor(uint8_t* r, uint8_t* g, uint8_t* b);
     static void getLedPreviewColor(uint8_t* r, uint8_t* g, uint8_t* b);
     static void getLedOffColor(uint8_t* r, uint8_t* g, uint8_t* b);
-    static void getLedBatteryLowColor(uint8_t* r, uint8_t* g, uint8_t* b);
 
     // 등록된 디바이스 관리
     static esp_err_t registerDevice(const uint8_t* device_id);
@@ -604,6 +604,74 @@ static esp_err_t on_brightness_changed(const event_data_t* event) {
 }
 
 /**
+ * @brief LED 색상 변경 이벤트 핸들러 (웹에서 변경 시 NVS 저장)
+ */
+static esp_err_t on_led_colors_changed(const event_data_t* event)
+{
+    if (event->type != EVT_LED_COLORS_CHANGED) {
+        return ESP_OK;
+    }
+
+    if (event->data_size < sizeof(led_colors_event_t)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const led_colors_event_t* colors = reinterpret_cast<const led_colors_event_t*>(event->data);
+
+    // NVS 저장 (내부 함수 호출로 무한 루프 방지)
+    config_led_colors_t nvs_colors = {
+        .program = { .r = colors->program_r, .g = colors->program_g, .b = colors->program_b },
+        .preview = { .r = colors->preview_r, .g = colors->preview_g, .b = colors->preview_b },
+        .off = { .r = colors->off_r, .g = colors->off_g, .b = colors->off_b }
+    };
+
+    esp_err_t ret = ConfigServiceClass::setLedColorsInternal(&nvs_colors);
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "LED colors saved: PGM(%d,%d,%d) PVW(%d,%d,%d) OFF(%d,%d,%d)",
+                 colors->program_r, colors->program_g, colors->program_b,
+                 colors->preview_r, colors->preview_g, colors->preview_b,
+                 colors->off_r, colors->off_g, colors->off_b);
+    } else {
+        T_LOGE(TAG, "LED colors NVS save failed: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
+}
+
+/**
+ * @brief LED 색상 조회 요청 이벤트 핸들러 (web_server에서 발행)
+ * NVS에서 색상을 읽어서 EVT_LED_COLORS_CHANGED로 응답
+ */
+static esp_err_t on_led_colors_request(const event_data_t* event)
+{
+    if (event->type != EVT_LED_COLORS_REQUEST) {
+        return ESP_OK;
+    }
+
+    // NVS에서 색상 읽기
+    config_led_colors_t colors;
+    esp_err_t ret = ConfigServiceClass::getLedColors(&colors);
+
+    if (ret == ESP_OK) {
+        // 응답으로 색상 이벤트 발행
+        static led_colors_event_t response;
+        response.program_r = colors.program.r;
+        response.program_g = colors.program.g;
+        response.program_b = colors.program.b;
+        response.preview_r = colors.preview.r;
+        response.preview_g = colors.preview.g;
+        response.preview_b = colors.preview.b;
+        response.off_r = colors.off.r;
+        response.off_g = colors.off.g;
+        response.off_b = colors.off.b;
+
+        event_bus_publish(EVT_LED_COLORS_CHANGED, &response, sizeof(response));
+    }
+
+    return ret;
+}
+
+/**
  * @brief 디바이스 카메라 매핑 수신 이벤트 핸들러
  * @note 상태 응답 수신 시 device_manager에서 발행
  */
@@ -1038,6 +1106,10 @@ esp_err_t ConfigServiceClass::init(void)
     event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
     // 밝기 변경 이벤트 구독 (LoRa 수신 시 NVS 저장)
     event_bus_subscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
+    // LED 색상 변경 이벤트 구독 (웹에서 변경 시 NVS 저장)
+    event_bus_subscribe(EVT_LED_COLORS_CHANGED, on_led_colors_changed);
+    // LED 색상 조회 요청 이벤트 구독 (웹에서 요청 시 NVS 읽어서 응답)
+    event_bus_subscribe(EVT_LED_COLORS_REQUEST, on_led_colors_request);
     // 디바이스 카메라 매핑 수신 이벤트 구독 (상태 응답 수신 시 NVS 저장)
     event_bus_subscribe(EVT_DEVICE_CAM_MAP_RECEIVE, on_device_cam_map_receive);
     // 디바이스 카메라 매핑 로드 요청 이벤트 구독 (TX 시작 시 NVS 매핑 로드)
@@ -1899,10 +1971,6 @@ esp_err_t ConfigServiceClass::getLedColors(config_led_colors_t* config)
     config->off.g = NVS_LED_OFF_G;
     config->off.b = NVS_LED_OFF_B;
 
-    config->battery_low.r = NVS_LED_BATTERY_LOW_R;
-    config->battery_low.g = NVS_LED_BATTERY_LOW_G;
-    config->battery_low.b = NVS_LED_BATTERY_LOW_B;
-
     nvs_handle_t handle;
     esp_err_t ret = nvs_open("config", NVS_READONLY, &handle);
     if (ret != ESP_OK) {
@@ -1943,17 +2011,6 @@ esp_err_t ConfigServiceClass::getLedColors(config_led_colors_t* config)
     nvs_get_u8(handle, "led_off_b", &b);
     config->off.b = b;
 
-    // BATTERY_LOW 색상
-    r = NVS_LED_BATTERY_LOW_R;
-    nvs_get_u8(handle, "led_bat_r", &r);
-    config->battery_low.r = r;
-    g = NVS_LED_BATTERY_LOW_G;
-    nvs_get_u8(handle, "led_bat_g", &g);
-    config->battery_low.g = g;
-    b = NVS_LED_BATTERY_LOW_B;
-    nvs_get_u8(handle, "led_bat_b", &b);
-    config->battery_low.b = b;
-
     nvs_close(handle);
     return ESP_OK;
 }
@@ -1985,10 +2042,40 @@ esp_err_t ConfigServiceClass::setLedColors(const config_led_colors_t* config)
     nvs_set_u8(handle, "led_off_g", config->off.g);
     nvs_set_u8(handle, "led_off_b", config->off.b);
 
-    // BATTERY_LOW 색상
-    nvs_set_u8(handle, "led_bat_r", config->battery_low.r);
-    nvs_set_u8(handle, "led_bat_g", config->battery_low.g);
-    nvs_set_u8(handle, "led_bat_b", config->battery_low.b);
+    nvs_commit(handle);
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+/**
+ * @brief LED 색상 내부 설정 함수 (이벤트 핸들러에서 호출)
+ */
+esp_err_t ConfigServiceClass::setLedColorsInternal(const config_led_colors_t* config)
+{
+    if (!config) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // PROGRAM 색상
+    nvs_set_u8(handle, "led_pgm_r", config->program.r);
+    nvs_set_u8(handle, "led_pgm_g", config->program.g);
+    nvs_set_u8(handle, "led_pgm_b", config->program.b);
+
+    // PREVIEW 색상
+    nvs_set_u8(handle, "led_pvw_r", config->preview.r);
+    nvs_set_u8(handle, "led_pvw_g", config->preview.g);
+    nvs_set_u8(handle, "led_pvw_b", config->preview.b);
+
+    // OFF 색상
+    nvs_set_u8(handle, "led_off_r", config->off.r);
+    nvs_set_u8(handle, "led_off_g", config->off.g);
+    nvs_set_u8(handle, "led_off_b", config->off.b);
 
     nvs_commit(handle);
     nvs_close(handle);
@@ -2020,15 +2107,6 @@ void ConfigServiceClass::getLedOffColor(uint8_t* r, uint8_t* g, uint8_t* b)
     if (r) *r = colors.off.r;
     if (g) *g = colors.off.g;
     if (b) *b = colors.off.b;
-}
-
-void ConfigServiceClass::getLedBatteryLowColor(uint8_t* r, uint8_t* g, uint8_t* b)
-{
-    config_led_colors_t colors;
-    getLedColors(&colors);
-    if (r) *r = colors.battery_low.r;
-    if (g) *g = colors.battery_low.g;
-    if (b) *b = colors.battery_low.b;
 }
 
 // ============================================================================
@@ -2726,11 +2804,6 @@ void config_service_get_led_preview_color(uint8_t* r, uint8_t* g, uint8_t* b)
 void config_service_get_led_off_color(uint8_t* r, uint8_t* g, uint8_t* b)
 {
     ConfigServiceClass::getLedOffColor(r, g, b);
-}
-
-void config_service_get_led_battery_low_color(uint8_t* r, uint8_t* g, uint8_t* b)
-{
-    ConfigServiceClass::getLedBatteryLowColor(r, g, b);
 }
 
 // ============================================================================
