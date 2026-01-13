@@ -88,7 +88,7 @@ void LicenseService::publishStateEvent(void)
         event.key[16] = '\0';
     }
 
-    T_LOGD(TAG, "license state event published: limit=%d, state=%d, key=%.4s****",
+    T_LOGD(TAG, "license state event published: limit=%d, state=%d, key=%.16s",
            event.device_limit, event.state, event.key);
 
     event_bus_publish(EVT_LICENSE_STATE_CHANGED, &event, sizeof(event));
@@ -163,8 +163,6 @@ esp_err_t LicenseService::onLicenseDataSave(const event_data_t* event)
     s_license_key[16] = '\0';
     s_data_loaded = true;
 
-    T_LOGI(TAG, "license data loaded: limit=%d, key=%.4s****", s_device_limit, s_license_key);
-
     // 상태 업데이트 및 이벤트 발행
     updateState();
     publishStateEvent();
@@ -200,8 +198,8 @@ void LicenseService::validateInTask(const char* key)
     if (!connected) {
         // 오프라인 상태: 기존 유효 라이센스가 있으면 유지
         if (s_device_limit > 0 && s_license_key[0] != '\0') {
-            T_LOGW(TAG, "offline: existing license maintained (limit=%d, key=%.4s****%.4s)",
-                    s_device_limit, s_license_key, s_license_key + 12);
+            T_LOGW(TAG, "offline: existing license maintained (limit=%d, key=%.16s)",
+                    s_device_limit, s_license_key);
             s_state = LICENSE_STATE_VALID;
         } else {
             T_LOGE(TAG, "offline: new license validation failed (network required)");
@@ -304,9 +302,7 @@ esp_err_t LicenseService::start(void)
             vTaskDelay(pdMS_TO_TICKS(10));
         }
 
-        if (s_data_loaded) {
-            T_LOGI(TAG, "license data loaded: key=%.4s****, limit=%d", s_license_key, s_device_limit);
-        } else {
+        if (!s_data_loaded) {
             T_LOGW(TAG, "license data load timeout, using defaults");
         }
     }

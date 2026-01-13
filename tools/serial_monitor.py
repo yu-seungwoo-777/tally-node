@@ -12,6 +12,7 @@ import sys
 import time
 import serial
 import serial.tools.list_ports
+import subprocess
 
 # Colors for output
 class Colors:
@@ -23,6 +24,14 @@ class Colors:
     MAGENTA = '\033[95m'
     CYAN = '\033[96m'
     GRAY = '\033[90m'
+
+def release_port(port):
+    """포트 사용 중인 프로세스 종료"""
+    try:
+        subprocess.run(['fuser', '-k', port], check=False, capture_output=True)
+        time.sleep(0.2)  # 포트가 해제될 때까지 대기
+    except FileNotFoundError:
+        pass  # fuser가 없으면 무시
 
 def find_esp_port():
     """자동으로 ESP32 포트 찾기"""
@@ -67,6 +76,9 @@ def main():
     print(f"{Colors.BLUE}Port: {port}{Colors.RESET}")
     print(f"{Colors.BLUE}Baud: 115200{Colors.RESET}")
     print(f"{Colors.CYAN}Press Ctrl+C to exit{Colors.RESET}\n")
+
+    # 포트 사용 중인 프로세스 종료
+    release_port(port)
 
     try:
         ser = serial.Serial(
