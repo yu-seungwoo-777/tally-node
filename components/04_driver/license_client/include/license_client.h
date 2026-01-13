@@ -26,7 +26,6 @@ extern "C" {
 #define LICENSE_API_KEY         "QNbzOIgjVwtUx36mnG1mStrrTOsFGNW7"
 #define LICENSE_SERVER_BASE     "http://tally-node.duckdns.org"
 #define LICENSE_VALIDATE_PATH   "/api/validate-license"
-#define LICENSE_SEARCH_PATH     "/api/search-license"
 #define LICENSE_TIMEOUT_MS      15000   // 15초 타임아웃
 
 // ============================================================================
@@ -69,20 +68,6 @@ esp_err_t license_client_validate(const char* key, const char* mac_address,
  * @return true 연결 성공, false 연결 실패
  */
 bool license_client_connection_test(void);
-
-/**
- * @brief 라이센스 서버 검색 (이름/전화번호/이메일)
- *
- * @param name 이름
- * @param phone 전화번호
- * @param email 이메일
- * @param out_response[out] JSON 응답 버퍼
- * @param response_size 응답 버퍼 크기
- * @return esp_err_t ESP_OK 성공
- */
-esp_err_t license_client_search_license(const char* name, const char* phone,
-                                        const char* email, char* out_response,
-                                        size_t response_size);
 
 #ifdef __cplusplus
 }

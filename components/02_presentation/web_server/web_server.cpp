@@ -1859,75 +1859,6 @@ static esp_err_t api_test_license_server_handler(httpd_req_t* req)
     return ESP_OK;
 }
 
-/**
- * @brief POST /api/search-license - 라이센스 조회 (미들웨어 통해)
- */
-static esp_err_t api_search_license_handler(httpd_req_t* req)
-{
-    set_cors_headers(req);
-
-    // 요청 바디 읽기
-    char* buf = new char[512];
-    int ret = httpd_req_recv(req, buf, 511);
-    if (ret <= 0) {
-        delete[] buf;
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
-        return ESP_FAIL;
-    }
-    buf[ret] = '\0';
-
-    // JSON 파싱
-    cJSON* root = cJSON_Parse(buf);
-    delete[] buf;
-    if (!root) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
-        return ESP_FAIL;
-    }
-
-    // 필드 추출
-    cJSON* name_json = cJSON_GetObjectItem(root, "name");
-    cJSON* phone_json = cJSON_GetObjectItem(root, "phone");
-    cJSON* email_json = cJSON_GetObjectItem(root, "email");
-
-    if (!name_json || !phone_json || !email_json ||
-        !cJSON_IsString(name_json) || !cJSON_IsString(phone_json) || !cJSON_IsString(email_json)) {
-        cJSON_Delete(root);
-        httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"name, phone, email are required\"}");
-        return ESP_OK;
-    }
-
-    const char* name = name_json->valuestring;
-    const char* phone = phone_json->valuestring;
-    const char* email = email_json->valuestring;
-
-    // 미들웨어 서버로 요청 전송 (스택 오버플로우 방지: 힙 할당)
-    char* response_buffer = (char*)malloc(512);
-    if (!response_buffer) {
-        cJSON_Delete(root);
-        httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Memory allocation failed\"}");
-        return ESP_OK;
-    }
-    memset(response_buffer, 0, 512);
-
-    esp_err_t err = license_service_search_license(name, phone, email, response_buffer, 512);
-
-    cJSON_Delete(root);
-
-    // 미들웨어 응답을 그대로 클라이언트에게 전달
-    httpd_resp_set_type(req, "application/json");
-    if (err == ESP_OK) {
-        T_LOGD(TAG, "라이선스 검색 응답: %s", response_buffer);
-        httpd_resp_sendstr(req, response_buffer);
-    } else {
-        httpd_resp_sendstr(req, "{\"success\":false,\"error\":\"Failed to connect to license server\"}");
-    }
-
-    free(response_buffer);
-    return ESP_OK;
-}
-
 // ============================================================================
 // 공지사항 API용 HTTP 이벤트 핸들러
 // ============================================================================
@@ -2774,13 +2705,6 @@ static const httpd_uri_t uri_api_test_license_server = {
     .user_ctx = nullptr
 };
 
-static const httpd_uri_t uri_api_search_license = {
-    .uri = "/api/search-license",
-    .method = HTTP_POST,
-    .handler = api_search_license_handler,
-    .user_ctx = nullptr
-};
-
 static const httpd_uri_t uri_api_notices = {
     .uri = "/api/notices",
     .method = HTTP_GET,
@@ -2968,13 +2892,6 @@ static const httpd_uri_t uri_options_api_test = {
     .user_ctx = nullptr
 };
 
-static const httpd_uri_t uri_options_api_search_license = {
-    .uri = "/api/search-license",
-    .method = HTTP_OPTIONS,
-    .handler = options_handler,
-    .user_ctx = nullptr
-};
-
 static const httpd_uri_t uri_options_api_notices = {
     .uri = "/api/notices",
     .method = HTTP_OPTIONS,
@@ -3147,8 +3064,6 @@ esp_err_t web_server_start(void)
     // Tally Test Mode API
     httpd_register_uri_handler(s_server, &uri_api_test_start);
     httpd_register_uri_handler(s_server, &uri_api_test_stop);
-    // License Search API
-    httpd_register_uri_handler(s_server, &uri_api_search_license);
     // Notices API
     httpd_register_uri_handler(s_server, &uri_api_notices);
     // Device Brightness API
@@ -3183,7 +3098,6 @@ esp_err_t web_server_start(void)
     httpd_register_uri_handler(s_server, &uri_options_api_test);
     httpd_register_uri_handler(s_server, &uri_options_api_test_start);
     httpd_register_uri_handler(s_server, &uri_options_api_test_stop);
-    httpd_register_uri_handler(s_server, &uri_options_api_search_license);
     httpd_register_uri_handler(s_server, &uri_options_api_notices);
     httpd_register_uri_handler(s_server, &uri_options_api_device_brightness);
     httpd_register_uri_handler(s_server, &uri_options_api_device_camera_id);

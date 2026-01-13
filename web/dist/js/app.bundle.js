@@ -1527,15 +1527,6 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
         key: "",
         loading: false
       },
-      // 라이센스 서버 검색
-      licenseSearch: {
-        name: "",
-        phone: "",
-        email: "",
-        searching: false,
-        result: null,
-        success: false
-      },
       // 인터넷 테스트 데이터
       internetTest: {
         status: "none",
@@ -1697,46 +1688,6 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
           this.showToast("Validation request failed", "alert-error");
         } finally {
           this.license.loading = false;
-        }
-      },
-      /**
-       * 라이센스 서버 검색 (ESP32 경유 - 이름/전화번호/이메일)
-       */
-      async searchLicenseServer() {
-        const { name, phone, email } = this.licenseSearch;
-        if (!name || !phone || !email) {
-          this.showToast("Please fill in all fields (Name, Phone, Email)", "alert-warning");
-          return;
-        }
-        try {
-          this.licenseSearch.searching = true;
-          this.licenseSearch.result = null;
-          const res = await fetch("/api/search-license", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, phone, email })
-          });
-          if (!res.ok) {
-            throw new Error("Search request failed");
-          }
-          const data = await res.json();
-          if (data.success && data.count > 0 && data.licenses && data.licenses.length > 0) {
-            this.licenseSearch.success = true;
-            const license = data.licenses[0];
-            this.licenseSearch.result = `License Key: ${license.license_key}, Device Limit: ${license.device_limit}`;
-          } else if (data.success && data.count === 0) {
-            this.licenseSearch.success = false;
-            this.licenseSearch.result = "No license found for the provided information";
-          } else {
-            this.licenseSearch.success = false;
-            this.licenseSearch.result = data.error || "License not found";
-          }
-        } catch (e) {
-          console.error("License search error:", e);
-          this.licenseSearch.success = false;
-          this.licenseSearch.result = "Search failed. Please try again.";
-        } finally {
-          this.licenseSearch.searching = false;
         }
       },
       /**

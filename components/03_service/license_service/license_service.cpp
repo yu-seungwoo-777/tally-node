@@ -33,9 +33,6 @@ public:
     static esp_err_t start(void);
     static void stop(void);
     static esp_err_t validate(const char* key);
-    static esp_err_t searchLicense(const char* name, const char* phone,
-                                  const char* email, char* out_response,
-                                  size_t response_size);
 
     static uint8_t getDeviceLimit(void);
     static bool isValid(void);
@@ -359,14 +356,6 @@ esp_err_t LicenseService::validate(const char* key)
     return ESP_OK;
 }
 
-esp_err_t LicenseService::searchLicense(const char* name, const char* phone,
-                                         const char* email, char* out_response,
-                                         size_t response_size)
-{
-    // license_client (04_driver)로 위임
-    return license_client_search_license(name, phone, email, out_response, response_size);
-}
-
 uint8_t LicenseService::getDeviceLimit(void)
 {
     return s_device_limit;
@@ -448,13 +437,6 @@ bool license_service_can_send_tally(void)
 esp_err_t license_service_get_key(char* out_key)
 {
     return LicenseService::getKey(out_key);
-}
-
-esp_err_t license_service_search_license(const char* name, const char* phone,
-                                          const char* email, char* out_response,
-                                          size_t response_size)
-{
-    return LicenseService::searchLicense(name, phone, email, out_response, response_size);
 }
 
 }  // extern "C"
