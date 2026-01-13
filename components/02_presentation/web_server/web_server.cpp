@@ -4,7 +4,6 @@
  */
 
 #include "web_server.h"
-#include "license_service.h"
 #include "event_bus.h"
 #include "lora_protocol.h"
 #include "app_types.h"
@@ -811,7 +810,7 @@ static cJSON* create_broadcast_json(void)
 }
 
 /**
- * @brief 라이센스 상태 JSON 생성
+ * @brief 라이센스 상태 JSON 생성 (이벤트 캐시 사용)
  */
 static cJSON* create_license_json(void)
 {
@@ -820,14 +819,26 @@ static cJSON* create_license_json(void)
         return nullptr;
     }
 
-    uint8_t device_limit = license_service_get_device_limit();
-    license_state_t state = license_service_get_state();
+    // 캐시된 라이센스 상태 사용 (이벤트 기반)
+    uint8_t device_limit = 0;
+    uint8_t state_val = 0;
+    char key[17] = {0};
+
+    if (s_cache_mutex && xSemaphoreTake(s_cache_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+        if (s_cache.license_valid) {
+            device_limit = s_cache.license.device_limit;
+            state_val = s_cache.license.state;
+            strncpy(key, s_cache.license.key, 16);
+            key[16] = '\0';
+        }
+        xSemaphoreGive(s_cache_mutex);
+    }
 
     cJSON_AddNumberToObject(license, "deviceLimit", device_limit);
-    cJSON_AddNumberToObject(license, "state", (int)state);
+    cJSON_AddNumberToObject(license, "state", (int)state_val);
 
     const char* state_str = "unknown";
-    switch (state) {
+    switch (state_val) {
         case LICENSE_STATE_VALID:
             state_str = "valid";
             break;
@@ -840,15 +851,9 @@ static cJSON* create_license_json(void)
     }
     cJSON_AddStringToObject(license, "stateStr", state_str);
 
-    bool is_valid = (state == LICENSE_STATE_VALID);
+    bool is_valid = (state_val == LICENSE_STATE_VALID);
     cJSON_AddBoolToObject(license, "isValid", is_valid);
-
-    char key[17];
-    if (license_service_get_key(key) == ESP_OK && key[0] != '\0') {
-        cJSON_AddStringToObject(license, "key", key);
-    } else {
-        cJSON_AddStringToObject(license, "key", "");
-    }
+    cJSON_AddStringToObject(license, "key", key);
 
     return license;
 }

@@ -88,9 +88,14 @@ void LicenseService::publishStateEvent(void)
     memset(&event, 0, sizeof(event));
     event.device_limit = s_device_limit;
     event.state = static_cast<uint8_t>(s_state);
+    // 키 복사
+    if (s_license_key[0] != '\0') {
+        strncpy(event.key, s_license_key, 16);
+        event.key[16] = '\0';
+    }
 
-    T_LOGD(TAG, "license state event published: limit=%d, state=%d, addr=%p",
-           event.device_limit, event.state, &event);
+    T_LOGD(TAG, "license state event published: limit=%d, state=%d, key=%.4s****",
+           event.device_limit, event.state, event.key);
 
     event_bus_publish(EVT_LICENSE_STATE_CHANGED, &event, sizeof(event));
 }

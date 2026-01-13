@@ -410,6 +410,7 @@ typedef enum {
 typedef struct __attribute__((packed)) {
     uint8_t device_limit;      ///< 0 = 미등록, 1~255 = 제한
     uint8_t state;             ///< 라이센스 상태 (license_state_t)
+    char key[17];              ///< 라이센스 키 (16자 + null)
 } license_state_event_t;
 
 /**
