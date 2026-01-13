@@ -511,3 +511,246 @@ include/PinConfig.h → 모든 계층에서 사용
 | LED PVW | 39 | Preview LED (녹색) |
 | WS2812 | 45 | RGB LED |
 | BAT ADC | 1 | 배터리 전압 |
+
+---
+
+## 서비스 초기화 패턴 가이드라인
+
+**작성일**: 2026-01-13
+**버전**: 1.0
+
+### 개요
+
+서비스 계층(03_service)의 초기화 패턴을 일관되게 유지하기 위한 가이드라인입니다.
+
+---
+
+### 1. 초기화 패턴 유형
+
+#### 1.1 단일 초기화 패턴 (Simple)
+
+**적용 대상:** 단순한 서비스, 드라이버/HAL 직접 접근
+
+```cpp
+class SimpleService {
+private:
+    static bool s_initialized;
+
+public:
+    static esp_err_t init(void) {
+        if (s_initialized) {
+            T_LOGW(TAG, "already initialized");
+            return ESP_OK;
+        }
+
+        // 드라이버/HW 초기화
+        // 이벤트 구독
+        // 태스크 시작
+
+        s_initialized = true;
+        return ESP_OK;
+    }
+};
+```
+
+**예시:** `button_service`, `config_service`
+
+---
+
+#### 1.2 분리된 초기화 패턴 (Separated)
+
+**적용 대상:** 복잡한 서비스, 이벤트 기반 동작
+
+```cpp
+class ComplexService {
+private:
+    static bool s_initialized;  // 드라이버/리소스 초기화 완료
+    static bool s_started;     // 이벤트 구독/태스크 실행 시작
+
+public:
+    // 드라이버/리소스 초기화만 수행
+    static esp_err_t init(void) {
+        if (s_initialized) {
+            return ESP_OK;
+        }
+
+        // 드라이버 초기화
+        // 정적 리소스 할당
+
+        s_initialized = true;
+        return ESP_OK;
+    }
+
+    // 이벤트 구독, 태스크 시작 수행
+    static esp_err_t start(void) {
+        if (!s_initialized) {
+            return ESP_ERR_INVALID_STATE;
+        }
+        if (s_started) {
+            return ESP_OK;
+        }
+
+        // 이벤트 구독
+        // 태스크 시작
+
+        s_started = true;
+        return ESP_OK;
+    }
+};
+```
+
+**예시:** `license_service`, `hardware_service`, `lora_service`, `device_manager`
+
+---
+
+#### 1.3 이벤트 기반 초기화 패턴 (Event-Driven)
+
+**적용 대상:** 설정 데이터가 필요한 서비스, ConfigService 의존
+
+```cpp
+class EventDrivenService {
+private:
+    static bool s_initialized;       // 서비스 초기화 (이벤트 구독)
+    static bool s_driver_initialized; // 드라이버 초기화 완료
+
+public:
+    static esp_err_t init(void) {
+        if (s_initialized) {
+            return ESP_OK;
+        }
+
+        // 이벤트 구독 (설정 데이터 대기)
+        event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
+
+        s_initialized = true;
+        return ESP_OK;
+    }
+
+    // 이벤트 핸들러에서 드라이버 초기화
+    static esp_err_t onConfigDataEvent(const event_data_t* event) {
+        // 설정 데이터 적용
+
+        if (!s_driver_initialized) {
+            // 드라이버 초기화 (설정값 사용)
+            s_driver_initialized = true;
+        }
+        return ESP_OK;
+    }
+};
+```
+
+**예시:** `network_service`, `switcher_service`
+
+**중요:** `s_initialized`와 `s_driver_initialized`를 분리하여, 이벤트 구독과 드라이버 초기화 상태를 독립적으로 추적해야 합니다.
+
+---
+
+### 2. 플래그 사용 가이드라인
+
+| 플래그 | 용도 | 설정 타이밍 |
+|--------|------|--------------|
+| `s_initialized` | 서비스 초기화 완료 | `init()` 종료 시 |
+| `s_started` | 이벤트 구독/태스크 실행 시작 | `start()` 종료 시 |
+| `s_driver_initialized` | 드라이버 초기화 완료 | 드라이버 `init()` 호출 후 (이벤트 기반 서비스) |
+
+---
+
+### 3. 이벤트 구독 중복 방지
+
+#### 3.1 단일 진입점 확인
+
+```cpp
+// 이벤트 구독은 init() 또는 start() 한 곳에서만 수행
+static esp_err_t init(void) {
+    // ...
+    event_bus_subscribe(EVT_XXX, onEvent);
+    // ...
+}
+
+// 다른 함수에서 init()를 호출할 경우:
+static esp_err_t initWithConfig(const config_t* config) {
+    // 설정 저장
+    // 드라이버 초기화
+    // ...
+
+    // init() 호출하여 이벤트 구독 (중복 방지)
+    return init();
+}
+```
+
+#### 3.2 구독 플래그 확인 (필요시)
+
+```cpp
+static bool s_event_subscribed = false;
+
+static void ensure_subscribed(void) {
+    if (!s_event_subscribed) {
+        event_bus_subscribe(EVT_XXX, onEvent);
+        s_event_subscribed = true;
+    }
+}
+```
+
+---
+
+### 4. 서비스별 패턴 현황
+
+| 서비스 | 패턴 | 플래그 | 특이사항 |
+|--------|------|--------|----------|
+| `button_service` | 분리형 | `s_initialized`, `s_running` | GPIO 폴링 태스크 |
+| `config_service` | 단일형 | `s_initialized` | NVS 직접 접근 |
+| `device_manager` | 분리형 | `s_initialized`, `s_started` | TX/RX 모드별 구독 |
+| `hardware_service` | 분리형 | `s_initialized`, `s_running` | 1초 모니터링 |
+| `led_service` | 분리형 | `s_initialized`, `s_running` | 상태 발행 태스크 |
+| `license_service` | 분리형 | `s_initialized`, `s_started` | 네트워크 의존 초기화 |
+| `lora_service` | 분리형 | 상태 구조체 내 `is_initialized` | config 파라미터 |
+| `network_service` | 이벤트형 | `s_initialized`, `s_driver_initialized` | ⚠️ 드라이버 플래그 분리 필요 |
+| `switcher_service` | 이벤트형 | `task_running_` | 태스크 내 플래그 |
+| `tally_test_service` | 단일형 | - | 간단한 테스트 서비스 |
+
+---
+
+### 5. 주의사항
+
+#### 5.1 초기화 순서
+
+```
+1. ConfigService.init()          (가장 먼저)
+2. 각 서비스.init()               (드라이버/리소스 준비)
+3. 각 서비스.start()              (이벤트 구독/태스크 시작)
+4. App 시작                        (이벤트 발행 시작)
+```
+
+#### 5.2 이벤트 구독 타이밍
+
+- `init()`에서 구독: 설정이 필요 없는 서비스
+- `start()`에서 구독: 설정/초기화 완료 후 구독 필요
+- 이벤트 핸들러 내: 동적 구독 (모드 변경 등)
+
+#### 5.3 드라이버 재초기화
+
+```cpp
+// 재시작 시 드라이버 상태 확인
+if (s_driver_initialized) {
+    // 기존 드라이버 해제 후 재초기화
+    deinitDriver();
+    initDriver();
+} else {
+    // 첫 초기화
+    initDriver();
+}
+```
+
+---
+
+### 6. 새 서비스 작성 체크리스트
+
+- [ ] 초기화 패턴 선택 (단일/분리/이벤트형)
+- [ ] 플래그 변수 정의
+- [ ] 중복 초기화 방지 로직
+- [ ] 이벤트 구독 위치 결정
+- [ ] 드라이버 초기화 타이밍
+- [ ] 에러 처리 및 반환값
+- [ ] 로그 메시지 (초기화 시작/완료)
+
+---
