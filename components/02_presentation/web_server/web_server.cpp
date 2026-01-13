@@ -535,6 +535,11 @@ esp_err_t web_server_start(void)
     config.max_open_sockets = 10;
     config.max_uri_handlers = 48;
     config.lru_purge_enable = true;
+    // Keep-Alive 설정 (단일 사용자 최적화)
+    config.keep_alive_enable = true;
+    config.keep_alive_idle = 30;     // 30초 동안 유휴시 연결 유지
+    config.keep_alive_interval = 5;  // 5초마다 keep-alive 프로브
+    config.keep_alive_count = 3;     // 3회 실패시 연결 종료
 
     esp_err_t ret = httpd_start(&s_server, &config);
     if (ret != ESP_OK) {

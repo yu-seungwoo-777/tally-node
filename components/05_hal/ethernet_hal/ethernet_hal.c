@@ -273,7 +273,7 @@ esp_err_t ethernet_hal_start(void)
         .command_bits = 16,
         .address_bits = 8,
         .mode = 0,
-        .clock_speed_hz = 5 * 1000 * 1000,
+        .clock_speed_hz = 20 * 1000 * 1000,  // 5MHz→20MHz (W5500 속도 향상)
         .queue_size = 32,
         .spics_io_num = EORA_S3_W5500_CS,
     };
@@ -282,8 +282,9 @@ esp_err_t ethernet_hal_start(void)
     eth_w5500_config_t w5500_config = ETH_W5500_DEFAULT_CONFIG(EORA_S3_W5500_SPI_HOST, &spi_devcfg);
     w5500_config.int_gpio_num = EORA_S3_W5500_INT;
 
+    // INT GPIO가 없으면 폴링 모드 사용 (짧은 주기로 설정)
     if (w5500_config.int_gpio_num < 0) {
-        w5500_config.poll_period_ms = 100;
+        w5500_config.poll_period_ms = 10;  // 100ms→10ms (W5500 응답 속도 향상)
     }
 
     // MAC/PHY 설정
