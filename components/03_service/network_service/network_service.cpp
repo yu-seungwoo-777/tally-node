@@ -63,7 +63,8 @@ private:
     static void status_publish_task(void* arg);
 
     // 정적 멤버
-    static bool s_initialized;
+    static bool s_initialized;       // 서비스 초기화 상태 (이벤트 구독 완료)
+    static bool s_driver_initialized; // 드라이버 초기화 상태 (WiFi/Ethernet init 완료)
     static bool s_running;
     static TaskHandle_t s_task_handle;
     static app_network_config_t s_config;
@@ -80,6 +81,7 @@ private:
 // ============================================================================
 
 bool NetworkServiceClass::s_initialized = false;
+bool NetworkServiceClass::s_driver_initialized = false;
 bool NetworkServiceClass::s_running = false;
 TaskHandle_t NetworkServiceClass::s_task_handle = nullptr;
 app_network_config_t NetworkServiceClass::s_config = {};
@@ -163,6 +165,8 @@ esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config
         }
     }
 
+    s_driver_initialized = true;
+
     // 이벤트 버스 구독은 init()에서 처리됨 (init 호출)
     esp_err_t init_ret = init();
     if (init_ret != ESP_OK) {
@@ -197,6 +201,7 @@ esp_err_t NetworkServiceClass::deinit(void)
     ethernet_driver_deinit();
 
     s_initialized = false;
+    s_driver_initialized = false;
 
     T_LOGI(TAG, "Network Service cleanup complete");
     return ESP_OK;
@@ -661,8 +666,8 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
 
     T_LOGI(TAG, "config data updated (event)");
 
-    // 초기화되지 않았으면 드라이버 초기화 수행 (이벤트 기반 초기화)
-    if (!s_initialized) {
+    // 드라이버가 초기화되지 않았으면 드라이버 초기화 수행 (이벤트 기반 초기화)
+    if (!s_driver_initialized) {
         T_LOGI(TAG, "driver init (event-based)");
 
         // WiFi Driver 초기화
@@ -698,8 +703,8 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
             }
         }
 
-        s_initialized = true;
-        T_LOGI(TAG, "init complete (event-based)");
+        s_driver_initialized = true;
+        T_LOGI(TAG, "driver init complete (event-based)");
 
         // 초기화 완료 후 상태 발행 태스크 자동 시작
         start();
