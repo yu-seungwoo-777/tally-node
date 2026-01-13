@@ -97,8 +97,9 @@ select option:checked {
 @media (max-width: 768px) {
     .toast.toast-end {
         right: 0.5rem;
-        left: 0.5rem;
+        left: auto;
         bottom: 0.5rem;
+        max-width: calc(100% - 1rem);
     }
 
     .toast-custom {

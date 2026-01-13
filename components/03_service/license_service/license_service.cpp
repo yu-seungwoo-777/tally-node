@@ -16,6 +16,16 @@
 static const char* TAG = "03_License";
 
 // ============================================================================
+// 이벤트 핸들러 C 링케지 forward declarations
+// ============================================================================
+
+extern "C" {
+    esp_err_t license_on_validate_request(const event_data_t* event);
+    esp_err_t license_on_network_status_changed(const event_data_t* event);
+    esp_err_t license_on_license_data_save(const event_data_t* event);
+}
+
+// ============================================================================
 // 상수 정의
 // ============================================================================
 
@@ -36,14 +46,16 @@ public:
     static bool canSendTally(void);
     static esp_err_t getKey(char* out_key);
 
+    // 이벤트 핸들러 (C 래퍼에서 호출)
+    static esp_err_t onValidateRequest(const event_data_t* event);
+    static esp_err_t onNetworkStatusChanged(const event_data_t* event);
+    static esp_err_t onLicenseDataSave(const event_data_t* event);
+
 private:
     LicenseService() = delete;
     ~LicenseService() = delete;
 
     static void publishStateEvent(void);
-    static esp_err_t onValidateRequest(const event_data_t* event);
-    static esp_err_t onNetworkStatusChanged(const event_data_t* event);
-    static esp_err_t onLicenseDataSave(const event_data_t* event);
     static void validateInTask(const char* key);
 
     static void updateState(void);
@@ -282,9 +294,9 @@ esp_err_t LicenseService::start(void)
 
     // 이벤트 구독 (최초 1회)
     if (!s_started) {
-        event_bus_subscribe(EVT_LICENSE_VALIDATE, onValidateRequest);
-        event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusChanged);
-        event_bus_subscribe(EVT_LICENSE_DATA_SAVE, onLicenseDataSave);
+        event_bus_subscribe(EVT_LICENSE_VALIDATE, license_on_validate_request);
+        event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, license_on_network_status_changed);
+        event_bus_subscribe(EVT_LICENSE_DATA_SAVE, license_on_license_data_save);
         s_started = true;
         T_LOGI(TAG, "service started (event subscribed)");
     } else {
@@ -319,9 +331,9 @@ void LicenseService::stop(void)
         return;
     }
 
-    event_bus_unsubscribe(EVT_LICENSE_VALIDATE, onValidateRequest);
-    event_bus_unsubscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusChanged);
-    event_bus_unsubscribe(EVT_LICENSE_DATA_SAVE, onLicenseDataSave);
+    event_bus_unsubscribe(EVT_LICENSE_VALIDATE, license_on_validate_request);
+    event_bus_unsubscribe(EVT_NETWORK_STATUS_CHANGED, license_on_network_status_changed);
+    event_bus_unsubscribe(EVT_LICENSE_DATA_SAVE, license_on_license_data_save);
 
     s_started = false;
 
@@ -372,6 +384,30 @@ esp_err_t LicenseService::getKey(char* out_key)
 
 // ============================================================================
 // C 인터페이스
+// ============================================================================
+
+// 이벤트 핸들러 래퍼 (event_bus_subscribe를 위한 C 링케지)
+extern "C" {
+
+esp_err_t license_on_validate_request(const event_data_t* event)
+{
+    return LicenseService::onValidateRequest(event);
+}
+
+esp_err_t license_on_network_status_changed(const event_data_t* event)
+{
+    return LicenseService::onNetworkStatusChanged(event);
+}
+
+esp_err_t license_on_license_data_save(const event_data_t* event)
+{
+    return LicenseService::onLicenseDataSave(event);
+}
+
+} // extern "C" for event handlers
+
+// ============================================================================
+// 공개 C 인터페이스
 // ============================================================================
 
 extern "C" {

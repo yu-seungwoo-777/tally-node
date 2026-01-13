@@ -91,7 +91,9 @@ export function stateModule() {
                     bandwidth: 250,
                     txPower: 22
                 }
-            }
+            },
+            // UI 폴링 간격 (ms)
+            pollingInterval: 2000
         },
 
         // 폼 입력 임시 데이터
@@ -347,13 +349,19 @@ export function stateModule() {
          * 상태 폴링 시작 (스위처 카드 정보 주기 업데이트)
          */
         startStatusPolling() {
-            // 이미 실행 중이면 시작 안 함
-            if (this._statusPollingTimer) return;
+            // 이미 실행 중이면 중지 후 재시작
+            this.stopStatusPolling();
 
-            // 2초마다 상태 조회
+            // localStorage에서 설정 로드
+            const saved = localStorage.getItem('pollingInterval');
+            if (saved) {
+                this.config.pollingInterval = parseInt(saved);
+            }
+
+            // 설정된 간격으로 상태 조회
             this._statusPollingTimer = setInterval(async () => {
                 await this.fetchStatus();
-            }, 2000);
+            }, this.config.pollingInterval);
         },
 
         /**
@@ -363,6 +371,24 @@ export function stateModule() {
             if (this._statusPollingTimer) {
                 clearInterval(this._statusPollingTimer);
                 this._statusPollingTimer = null;
+            }
+        },
+
+        /**
+         * 폴링 속도 설정 (ms)
+         * @param {number} interval - 폴링 간격 (500, 1000, 2000, 5000)
+         */
+        setPollingInterval(interval) {
+            const validIntervals = [500, 1000, 2000, 5000];
+            if (!validIntervals.includes(interval)) {
+                interval = 2000; // 기본값
+            }
+            this.config.pollingInterval = interval;
+            localStorage.setItem('pollingInterval', interval.toString());
+
+            // 폴링 중이면 재시작
+            if (this._statusPollingTimer) {
+                this.startStatusPolling();
             }
         },
 

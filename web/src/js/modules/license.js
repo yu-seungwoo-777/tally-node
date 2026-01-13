@@ -28,6 +28,9 @@ export function licenseModule() {
             key: ''
         },
 
+        // 검증 진행 중 플래그
+        validating: false,
+
         // 라이센스 상태 매핑 (C enum license_state_t와 동일)
         stateNames: {
             0: 'invalid',   // LICENSE_STATE_INVALID
@@ -44,8 +47,9 @@ export function licenseModule() {
 
         /**
          * 라이센스 상태 조회 (/api/status에서 가져옴)
+         * @param {boolean} showResult - 결과 토스트 표시 여부 (검증 후 사용)
          */
-        async fetchLicense() {
+        async fetchLicense(showResult = false) {
             try {
                 const res = await fetch('/api/status');
                 if (!res.ok) throw new Error('Status fetch failed');
@@ -63,8 +67,21 @@ export function licenseModule() {
                 if (lic.key && lic.key.length === 16) {
                     this.licenseForm.key = this.formatLicenseKeyString(lic.key);
                 }
+
+                // 검증 완료 후 결과 토스트 표시
+                if (showResult && this.validating) {
+                    this.validating = false;
+                    if (this.license.isValid) {
+                        this.showToast('License validated successfully!', 'alert-success');
+                    } else if (this.license.stateStr === 'checking') {
+                        this.showToast('License validation in progress...', 'alert-info');
+                    } else if (this.license.stateStr === 'invalid') {
+                        this.showToast('License validation failed', 'alert-error');
+                    }
+                }
             } catch (e) {
                 console.error('License fetch error:', e);
+                this.validating = false;
             }
         },
 
@@ -188,8 +205,9 @@ export function licenseModule() {
 
             try {
                 this.license.loading = true;
+                this.validating = true;  // 검증 진행 중 플래그 설정
 
-                const res = await fetch('/api/validate-license', {
+                const res = await fetch('/api/license/validate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ key: cleanKey })
@@ -205,8 +223,8 @@ export function licenseModule() {
                     this.showToast('License validation started. Please wait...', 'alert-info');
                     this.licenseForm.key = '';
 
-                    // 3초 후 상태 갱신
-                    setTimeout(() => this.fetchLicense(), 3000);
+                    // 3초 후 상태 갱신 (결과 토스트 표시)
+                    setTimeout(() => this.fetchLicense(true), 3000);
                 } else {
                     this.showToast('Validation failed: ' + (data.error || 'Unknown error'), 'alert-error');
                 }

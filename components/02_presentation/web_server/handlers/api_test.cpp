@@ -1,0 +1,231 @@
+/**
+ * @file api_test.cpp
+ * @brief API Test 핸들러 구현
+ */
+
+#include "api_test.h"
+#include "event_bus.h"
+#include "esp_log.h"
+#include "esp_timer.h"
+#include "sys/socket.h"
+#include "netdb.h"
+#include "arpa/inet.h"
+#include "cJSON.h"
+#include <cstring>
+
+static const char* TAG = "02_WebSvr_Test";
+
+static void set_cors_headers(httpd_req_t* req)
+{
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
+}
+
+extern "C" {
+
+esp_err_t api_test_start_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // JSON 파싱
+    char buf[128];
+    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
+    if (ret <= 0) {
+        ESP_LOGE(TAG, "httpd_req_recv failed: ret=%d", ret);
+        httpd_resp_set_status(req, HTTPD_400);
+        httpd_resp_sendstr(req, "{\"error\":\"Invalid request\"}");
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+    ESP_LOGD(TAG, "Received JSON: %s", buf);
+
+    cJSON* root = cJSON_Parse(buf);
+    if (!root) {
+        ESP_LOGE(TAG, "cJSON_Parse failed");
+        httpd_resp_set_status(req, HTTPD_400);
+        httpd_resp_sendstr(req, "{\"error\":\"Invalid JSON\"}");
+        return ESP_FAIL;
+    }
+
+    // 파라미터 추출
+    cJSON* max_channels_item = cJSON_GetObjectItem(root, "max_channels");
+    cJSON* interval_ms_item = cJSON_GetObjectItem(root, "interval_ms");
+
+    if (!max_channels_item || !interval_ms_item) {
+        ESP_LOGE(TAG, "Missing parameters: max_channels=%p, interval_ms=%p",
+               max_channels_item, interval_ms_item);
+        cJSON_Delete(root);
+        httpd_resp_set_status(req, HTTPD_400);
+        httpd_resp_sendstr(req, "{\"error\":\"Missing parameters\"}");
+        return ESP_FAIL;
+    }
+
+    uint8_t max_channels = (uint8_t)cJSON_GetNumberValue(max_channels_item);
+    uint16_t interval_ms = (uint16_t)cJSON_GetNumberValue(interval_ms_item);
+    cJSON_Delete(root);
+
+    ESP_LOGD(TAG, "Parsed params: max_channels=%d, interval_ms=%d", max_channels, interval_ms);
+
+    // 파라미터 검증
+    if (max_channels < 1 || max_channels > 20) {
+        ESP_LOGE(TAG, "Invalid max_channels: %d", max_channels);
+        httpd_resp_set_status(req, HTTPD_400);
+        httpd_resp_sendstr(req, "{\"error\":\"max_channels must be 1-20\"}");
+        return ESP_FAIL;
+    }
+
+    if (interval_ms < 100 || interval_ms > 3000) {
+        ESP_LOGE(TAG, "Invalid interval_ms: %d", interval_ms);
+        httpd_resp_set_status(req, HTTPD_400);
+        httpd_resp_sendstr(req, "{\"error\":\"interval_ms must be 100-3000\"}");
+        return ESP_FAIL;
+    }
+
+    // 이벤트 발행
+    tally_test_mode_config_t test_config = {
+        .max_channels = max_channels,
+        .interval_ms = interval_ms
+    };
+    event_bus_publish(EVT_TALLY_TEST_MODE_START, &test_config, sizeof(test_config));
+
+    // 응답
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"started\"}");
+
+    return ESP_OK;
+}
+
+esp_err_t api_test_stop_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    // 이벤트 발행
+    event_bus_publish(EVT_TALLY_TEST_MODE_STOP, nullptr, 0);
+
+    // 응답
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"stopped\"}");
+
+    return ESP_OK;
+}
+
+esp_err_t api_test_internet_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    cJSON* root = cJSON_CreateObject();
+    if (!root) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    bool success = false;
+    int ping_ms = 0;
+
+    // 8.8.8.8 (Google DNS) 핑 테스트
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock >= 0) {
+        struct sockaddr_in addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(53);  // DNS 포트
+        inet_pton(AF_INET, "8.8.8.8", &addr.sin_addr);
+
+        // 타이머 시작
+        int64_t start = esp_timer_get_time();
+
+        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+            int64_t end = esp_timer_get_time();
+            ping_ms = (end - start) / 1000;  // ms 변환
+            success = true;
+        }
+
+        close(sock);
+    }
+
+    cJSON_AddBoolToObject(root, "success", success);
+    if (success) {
+        cJSON_AddNumberToObject(root, "ping", ping_ms);
+    }
+
+    char* json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (json_str) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, json_str);
+        free(json_str);
+    } else {
+        httpd_resp_send_500(req);
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t api_test_license_server_handler(httpd_req_t* req)
+{
+    set_cors_headers(req);
+
+    cJSON* root = cJSON_CreateObject();
+    if (!root) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    bool success = false;
+    int ping_ms = 0;
+
+    // 프록시 서버 연결 테스트 (tally-node.duckdns.org:80)
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock >= 0) {
+        // 소켓 타임아웃 설정 (5초)
+        struct timeval tv;
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
+        struct sockaddr_in addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(80);
+
+        // DNS 해결 (gethostbyname)
+        struct hostent* host = gethostbyname("tally-node.duckdns.org");
+        if (host) {
+            addr.sin_addr.s_addr = *((uint32_t*)host->h_addr_list[0]);
+
+            // 타이머 시작
+            int64_t start = esp_timer_get_time();
+
+            if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+                int64_t end = esp_timer_get_time();
+                ping_ms = (end - start) / 1000;
+                success = true;
+            }
+        }
+
+        close(sock);
+    }
+
+    cJSON_AddBoolToObject(root, "success", success);
+    if (success) {
+        cJSON_AddNumberToObject(root, "ping", ping_ms);
+    }
+
+    char* json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (json_str) {
+        httpd_resp_set_type(req, "application/json");
+        httpd_resp_sendstr(req, json_str);
+        free(json_str);
+    } else {
+        httpd_resp_send_500(req);
+    }
+
+    return ESP_OK;
+}
+
+} // extern "C"
