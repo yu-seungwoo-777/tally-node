@@ -86,6 +86,8 @@ static const char* EVENT_NAMES[] = {
     "EVT_DEVICE_CAM_MAP_LOAD",
     "EVT_LICENSE_STATE_CHANGED",
     "EVT_LICENSE_VALIDATE",
+    "EVT_LICENSE_DATA_REQUEST",
+    "EVT_LICENSE_DATA_SAVE",
 };
 
 const char* event_type_to_string(event_type_t type) {

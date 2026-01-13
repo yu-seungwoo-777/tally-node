@@ -83,6 +83,11 @@ public:
     static void getLedPreviewColor(uint8_t* r, uint8_t* g, uint8_t* b);
     static void getLedOffColor(uint8_t* r, uint8_t* g, uint8_t* b);
 
+    // 라이센스 데이터 (NVS "license" 네임스페이스)
+    static esp_err_t getLicenseData(uint8_t* device_limit, char* key);
+    static esp_err_t setLicenseData(uint8_t device_limit, const char* key);
+    static esp_err_t setLicenseDataInternal(const license_data_event_t* data);
+
     // 등록된 디바이스 관리
     static esp_err_t registerDevice(const uint8_t* device_id);
     static esp_err_t unregisterDevice(const uint8_t* device_id);
@@ -672,6 +677,61 @@ static esp_err_t on_led_colors_request(const event_data_t* event)
 }
 
 /**
+ * @brief 라이센스 데이터 저장 이벤트 핸들러
+ * @note license_service에서 발행, NVS에 저장
+ */
+static esp_err_t on_license_data_save(const event_data_t* event)
+{
+    if (event->type != EVT_LICENSE_DATA_SAVE) {
+        return ESP_OK;
+    }
+
+    if (event->data_size < sizeof(license_data_event_t)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const license_data_event_t* data = reinterpret_cast<const license_data_event_t*>(event->data);
+
+    // NVS 저장 (내부 함수 호출로 무한 루프 방지)
+    esp_err_t ret = ConfigServiceClass::setLicenseDataInternal(data);
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "license data saved: limit=%d, key=%.4s****", data->device_limit, data->key);
+    } else {
+        T_LOGE(TAG, "license data NVS save failed: %s", esp_err_to_name(ret));
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 라이센스 데이터 조회 요청 이벤트 핸들러
+ * @note license_service에서 발행, NVS에서 읽어서 EVT_LICENSE_DATA_SAVE로 응답
+ */
+static esp_err_t on_license_data_request(const event_data_t* event)
+{
+    if (event->type != EVT_LICENSE_DATA_REQUEST) {
+        return ESP_OK;
+    }
+
+    // NVS에서 라이센스 데이터 읽기
+    uint8_t device_limit = 0;
+    char key[17] = {0};
+    esp_err_t ret = ConfigServiceClass::getLicenseData(&device_limit, key);
+
+    if (ret == ESP_OK) {
+        // 응답으로 라이센스 데이터 이벤트 발행
+        license_data_event_t response;
+        response.device_limit = device_limit;
+        strncpy(response.key, key, 16);
+        response.key[16] = '\0';
+
+        event_bus_publish(EVT_LICENSE_DATA_SAVE, &response, sizeof(response));
+    }
+
+    return ret;
+}
+
+/**
  * @brief 디바이스 카메라 매핑 수신 이벤트 핸들러
  * @note 상태 응답 수신 시 device_manager에서 발행
  */
@@ -1110,6 +1170,10 @@ esp_err_t ConfigServiceClass::init(void)
     event_bus_subscribe(EVT_LED_COLORS_CHANGED, on_led_colors_changed);
     // LED 색상 조회 요청 이벤트 구독 (웹에서 요청 시 NVS 읽어서 응답)
     event_bus_subscribe(EVT_LED_COLORS_REQUEST, on_led_colors_request);
+    // 라이센스 데이터 저장 이벤트 구독 (license_service에서 발행, NVS 저장)
+    event_bus_subscribe(EVT_LICENSE_DATA_SAVE, on_license_data_save);
+    // 라이센스 데이터 조회 요청 이벤트 구독 (license_service에서 발행, NVS 읽어서 응답)
+    event_bus_subscribe(EVT_LICENSE_DATA_REQUEST, on_license_data_request);
     // 디바이스 카메라 매핑 수신 이벤트 구독 (상태 응답 수신 시 NVS 저장)
     event_bus_subscribe(EVT_DEVICE_CAM_MAP_RECEIVE, on_device_cam_map_receive);
     // 디바이스 카메라 매핑 로드 요청 이벤트 구독 (TX 시작 시 NVS 매핑 로드)
@@ -2867,6 +2931,85 @@ esp_err_t config_service_remove_device_cam_map(const uint8_t* device_id)
 void config_service_clear_device_cam_map(void)
 {
     ConfigServiceClass::clearDeviceCamMap();
+}
+
+// ============================================================================
+// 라이센스 데이터 (NVS "license" 네임스페이스)
+// ============================================================================
+
+/**
+ * @brief NVS에서 라이센스 데이터 읽기
+ */
+esp_err_t ConfigServiceClass::getLicenseData(uint8_t* device_limit, char* key)
+{
+    if (!device_limit || !key) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    *device_limit = 0;
+    key[0] = '\0';
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("license", NVS_READONLY, &handle);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // device_limit 읽기
+    uint8_t limit = 0;
+    nvs_get_u8(handle, "device_limit", &limit);
+    *device_limit = limit;
+
+    // key 읽기
+    size_t key_len = 17;
+    nvs_get_str(handle, "license_key", key, &key_len);
+
+    nvs_close(handle);
+    return ESP_OK;
+}
+
+/**
+ * @brief NVS에 라이센스 데이터 저장
+ */
+esp_err_t ConfigServiceClass::setLicenseData(uint8_t device_limit, const char* key)
+{
+    license_data_event_t data;
+    data.device_limit = device_limit;
+    if (key) {
+        strncpy(data.key, key, 16);
+        data.key[16] = '\0';
+    } else {
+        data.key[0] = '\0';
+    }
+    return setLicenseDataInternal(&data);
+}
+
+/**
+ * @brief NVS에 라이센스 데이터 저장 (내부 함수)
+ */
+esp_err_t ConfigServiceClass::setLicenseDataInternal(const license_data_event_t* data)
+{
+    if (!data) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("license", NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    ret = nvs_set_u8(handle, "device_limit", data->device_limit);
+    if (ret == ESP_OK) {
+        ret = nvs_set_str(handle, "license_key", data->key);
+    }
+
+    if (ret == ESP_OK) {
+        ret = nvs_commit(handle);
+    }
+
+    nvs_close(handle);
+    return ret;
 }
 
 } // extern "C"

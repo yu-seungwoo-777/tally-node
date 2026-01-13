@@ -1,14 +1,12 @@
 /**
  * @file license_service.cpp
- * @brief 라이센스 상태 관리 서비스 구현 (간소화 버전)
+ * @brief 라이센스 상태 관리 서비스 구현 (이벤트 기반 NVS)
  */
 
 #include "license_service.h"
 #include "license_client.h"
 #include "event_bus.h"
 #include "t_log.h"
-#include "nvs_flash.h"
-#include "nvs.h"
 #include "esp_mac.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -20,8 +18,6 @@ static const char* TAG = "03_License";
 // ============================================================================
 // 상수 정의
 // ============================================================================
-
-#define NVS_NAMESPACE "license"
 
 // ============================================================================
 // LicenseService 클래스 (싱글톤)
@@ -47,12 +43,8 @@ private:
     static void publishStateEvent(void);
     static esp_err_t onValidateRequest(const event_data_t* event);
     static esp_err_t onNetworkStatusChanged(const event_data_t* event);
+    static esp_err_t onLicenseDataSave(const event_data_t* event);
     static void validateInTask(const char* key);
-
-    static esp_err_t nvsSetDeviceLimit(uint8_t limit);
-    static uint8_t nvsGetDeviceLimit(void);
-    static esp_err_t nvsSetLicenseKey(const char* key);
-    static esp_err_t nvsGetLicenseKey(char* key, size_t len);
 
     static void updateState(void);
 
@@ -63,6 +55,7 @@ private:
     static char s_license_key[17];
     static bool s_sta_connected;
     static bool s_eth_connected;
+    static bool s_data_loaded;  // NVS 데이터 로드 완료 여부
 };
 
 // ============================================================================
@@ -76,6 +69,7 @@ uint8_t LicenseService::s_device_limit = 0;
 char LicenseService::s_license_key[17] = {0};
 bool LicenseService::s_sta_connected = false;
 bool LicenseService::s_eth_connected = false;
+bool LicenseService::s_data_loaded = false;
 
 // ============================================================================
 // 이벤트 발행 헬퍼
@@ -147,6 +141,37 @@ esp_err_t LicenseService::onNetworkStatusChanged(const event_data_t* event)
     return ESP_OK;
 }
 
+/**
+ * @brief 라이센스 데이터 저장 이벤트 핸들러
+ * @note config_service에서 NVS 데이터를 발행
+ */
+esp_err_t LicenseService::onLicenseDataSave(const event_data_t* event)
+{
+    if (!event || event->type != EVT_LICENSE_DATA_SAVE) {
+        return ESP_OK;
+    }
+
+    if (event->data_size < sizeof(license_data_event_t)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const license_data_event_t* data = (const license_data_event_t*)event->data;
+
+    // 로컬 캐시 업데이트
+    s_device_limit = data->device_limit;
+    strncpy(s_license_key, data->key, 16);
+    s_license_key[16] = '\0';
+    s_data_loaded = true;
+
+    T_LOGI(TAG, "license data loaded: limit=%d, key=%.4s****", s_device_limit, s_license_key);
+
+    // 상태 업데이트 및 이벤트 발행
+    updateState();
+    publishStateEvent();
+
+    return ESP_OK;
+}
+
 // ============================================================================
 // 검증 함수
 // ============================================================================
@@ -195,8 +220,12 @@ void LicenseService::validateInTask(const char* key)
         strncpy(s_license_key, key, 16);
         s_license_key[16] = '\0';
 
-        nvsSetLicenseKey(s_license_key);
-        nvsSetDeviceLimit(s_device_limit);
+        // NVS 저장은 이벤트로 요청 (config_service가 처리)
+        license_data_event_t save_data;
+        save_data.device_limit = s_device_limit;
+        strncpy(save_data.key, s_license_key, 16);
+        save_data.key[16] = '\0';
+        event_bus_publish(EVT_LICENSE_DATA_SAVE, &save_data, sizeof(save_data));
 
         T_LOGI(TAG, "license validation success: device_limit = %d", s_device_limit);
     } else {
@@ -205,70 +234,6 @@ void LicenseService::validateInTask(const char* key)
 
     updateState();
     publishStateEvent();
-}
-
-// ============================================================================
-// NVS 헬퍼
-// ============================================================================
-
-esp_err_t LicenseService::nvsSetDeviceLimit(uint8_t limit)
-{
-    nvs_handle_t handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (ret != ESP_OK) {
-        return ret;
-    }
-    ret = nvs_set_u8(handle, "device_limit", limit);
-    if (ret == ESP_OK) {
-        ret = nvs_commit(handle);
-    }
-    nvs_close(handle);
-    return ret;
-}
-
-uint8_t LicenseService::nvsGetDeviceLimit(void)
-{
-    nvs_handle_t handle;
-    if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) {
-        return 0;
-    }
-    uint8_t limit = 0;
-    nvs_get_u8(handle, "device_limit", &limit);
-    nvs_close(handle);
-    return limit;
-}
-
-esp_err_t LicenseService::nvsSetLicenseKey(const char* key)
-{
-    nvs_handle_t handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (ret != ESP_OK) {
-        return ret;
-    }
-    ret = nvs_set_str(handle, "license_key", key);
-    if (ret == ESP_OK) {
-        ret = nvs_commit(handle);
-    }
-    nvs_close(handle);
-    return ret;
-}
-
-esp_err_t LicenseService::nvsGetLicenseKey(char* key, size_t len)
-{
-    if (!key || len == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    key[0] = '\0';
-
-    nvs_handle_t handle;
-    esp_err_t ret = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-    if (ret != ESP_OK) {
-        return ret;
-    }
-    size_t actual_len = len;
-    ret = nvs_get_str(handle, "license_key", key, &actual_len);
-    nvs_close(handle);
-    return ret;
 }
 
 // ============================================================================
@@ -299,16 +264,12 @@ esp_err_t LicenseService::init(void)
     // license_client 초기화 (드라이버 계층)
     license_client_init();
 
-    nvsGetLicenseKey(s_license_key, sizeof(s_license_key));
-    s_device_limit = nvsGetDeviceLimit();
-
-    T_LOGI(TAG, "loaded license: key=%.16s, limit=%d", s_license_key, s_device_limit);
-
-    updateState();
+    // NVS에서 직접 읽지 않고 start()에서 이벤트로 요청
+    s_device_limit = 0;
+    s_license_key[0] = '\0';
 
     s_initialized = true;
-    T_LOGI(TAG, "init complete (state: %d, limit: %d)",
-           s_state, s_device_limit);
+    T_LOGI(TAG, "init complete");
 
     // init()에서는 이벤트 발행 안 함 (start()에서 함)
 
@@ -325,13 +286,32 @@ esp_err_t LicenseService::start(void)
     if (!s_started) {
         event_bus_subscribe(EVT_LICENSE_VALIDATE, onValidateRequest);
         event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusChanged);
+        event_bus_subscribe(EVT_LICENSE_DATA_SAVE, onLicenseDataSave);
         s_started = true;
         T_LOGI(TAG, "service started (event subscribed)");
     } else {
         T_LOGI(TAG, "already started");
     }
 
-    // 상태 이벤트 발행 (재호출 시에도 발행하여 구독자에게 전달)
+    // 라이센스 데이터 로드 요청 (config_service가 NVS에서 읽어서 응답)
+    if (!s_data_loaded) {
+        T_LOGI(TAG, "requesting license data from NVS...");
+        event_bus_publish(EVT_LICENSE_DATA_REQUEST, NULL, 0);
+
+        // 응답 대기 (최대 100ms)
+        int retry = 10;
+        while (!s_data_loaded && retry-- > 0) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+
+        if (s_data_loaded) {
+            T_LOGI(TAG, "license data loaded: key=%.4s****, limit=%d", s_license_key, s_device_limit);
+        } else {
+            T_LOGW(TAG, "license data load timeout, using defaults");
+        }
+    }
+
+    updateState();
     publishStateEvent();
 
     return ESP_OK;
@@ -345,6 +325,7 @@ void LicenseService::stop(void)
 
     event_bus_unsubscribe(EVT_LICENSE_VALIDATE, onValidateRequest);
     event_bus_unsubscribe(EVT_NETWORK_STATUS_CHANGED, onNetworkStatusChanged);
+    event_bus_unsubscribe(EVT_LICENSE_DATA_SAVE, onLicenseDataSave);
 
     s_started = false;
 
