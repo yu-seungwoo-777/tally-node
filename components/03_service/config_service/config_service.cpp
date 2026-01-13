@@ -46,14 +46,17 @@ public:
     // WiFi AP 설정
     static esp_err_t getWiFiAP(config_wifi_ap_t* config);
     static esp_err_t setWiFiAP(const config_wifi_ap_t* config);
+    static esp_err_t setWiFiAPInternal(const config_wifi_ap_t* config);  // 내부용 (이벤트 미발행)
 
     // WiFi STA 설정
     static esp_err_t getWiFiSTA(config_wifi_sta_t* config);
     static esp_err_t setWiFiSTA(const config_wifi_sta_t* config);
+    static esp_err_t setWiFiSTAInternal(const config_wifi_sta_t* config);  // 내부용 (이벤트 미발행)
 
     // Ethernet 설정
     static esp_err_t getEthernet(config_ethernet_t* config);
     static esp_err_t setEthernet(const config_ethernet_t* config);
+    static esp_err_t setEthernetInternal(const config_ethernet_t* config);  // 내부용 (이벤트 미발행)
 
     // Device 설정
     static esp_err_t getDevice(config_device_t* config);
@@ -1252,13 +1255,14 @@ esp_err_t ConfigServiceClass::saveAll(const config_all_t* config)
 
     esp_err_t ret;
 
-    ret = setWiFiAP(&config->wifi_ap);
+    // 내부 함수 사용 (이벤트 미발행으로 중복 이벤트 방지)
+    ret = setWiFiAPInternal(&config->wifi_ap);
     if (ret != ESP_OK) return ret;
 
-    ret = setWiFiSTA(&config->wifi_sta);
+    ret = setWiFiSTAInternal(&config->wifi_sta);
     if (ret != ESP_OK) return ret;
 
-    ret = setEthernet(&config->ethernet);
+    ret = setEthernetInternal(&config->ethernet);
     if (ret != ESP_OK) return ret;
 
     ret = setDevice(&config->device);
@@ -1348,6 +1352,37 @@ esp_err_t ConfigServiceClass::setWiFiAP(const config_wifi_ap_t* config)
     return ESP_OK;
 }
 
+// 내부용 (이벤트 발행 안 함)
+esp_err_t ConfigServiceClass::setWiFiAPInternal(const config_wifi_ap_t* config)
+{
+    if (!config) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    if (config->ssid[0] != '\0') {
+        nvs_set_str(handle, "wifi_ap_ssid", config->ssid);
+    }
+    // password: 빈 문자열이면 NVS 키 삭제, otherwise 저장
+    if (config->password[0] != '\0') {
+        nvs_set_str(handle, "wifi_ap_pass", config->password);
+    } else {
+        nvs_erase_key(handle, "wifi_ap_pass");  // 빈 password = 삭제
+    }
+    nvs_set_u8(handle, "wifi_ap_chan", config->channel);
+    nvs_set_u8(handle, "wifi_ap_enbl", config->enabled ? 1 : 0);
+
+    nvs_commit(handle);
+    nvs_close(handle);
+
+    return ESP_OK;
+}
+
 // ============================================================================
 // WiFi STA 설정
 // ============================================================================
@@ -1410,6 +1445,36 @@ esp_err_t ConfigServiceClass::setWiFiSTA(const config_wifi_sta_t* config)
 
     // 설정 변경 후 전체 데이터 이벤트 발행 (파라미터 값 직접 사용)
     publish_config_event_with_sta(config);
+
+    return ESP_OK;
+}
+
+// 내부용 (이벤트 발행 안 함)
+esp_err_t ConfigServiceClass::setWiFiSTAInternal(const config_wifi_sta_t* config)
+{
+    if (!config) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    if (config->ssid[0] != '\0') {
+        nvs_set_str(handle, "wifi_sta_ssid", config->ssid);
+    }
+    // password: 빈 문자열이면 NVS 키 삭제, otherwise 저장
+    if (config->password[0] != '\0') {
+        nvs_set_str(handle, "wifi_sta_pass", config->password);
+    } else {
+        nvs_erase_key(handle, "wifi_sta_pass");  // 빈 password = 삭제
+    }
+    nvs_set_u8(handle, "wifi_sta_enbl", config->enabled ? 1 : 0);
+
+    nvs_commit(handle);
+    nvs_close(handle);
 
     return ESP_OK;
 }
@@ -1537,6 +1602,39 @@ esp_err_t ConfigServiceClass::setEthernet(const config_ethernet_t* config)
 
     // 설정 변경 후 전체 데이터 이벤트 발행 (파라미터 값 직접 사용)
     publish_config_event_with_eth(config);
+
+    return ESP_OK;
+}
+
+// 내부용 (이벤트 발행 안 함)
+esp_err_t ConfigServiceClass::setEthernetInternal(const config_ethernet_t* config)
+{
+    if (!config) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    nvs_handle_t handle;
+    esp_err_t ret = nvs_open("config", NVS_READWRITE, &handle);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    nvs_set_u8(handle, "eth_dhcp_enbl", config->dhcp_enabled ? 1 : 0);
+
+    if (config->static_ip[0] != '\0') {
+        nvs_set_str(handle, "eth_static_ip", config->static_ip);
+    }
+    if (config->static_netmask[0] != '\0') {
+        nvs_set_str(handle, "eth_static_net", config->static_netmask);
+    }
+    if (config->static_gateway[0] != '\0') {
+        nvs_set_str(handle, "eth_static_gw", config->static_gateway);
+    }
+
+    nvs_set_u8(handle, "eth_enbl", config->enabled ? 1 : 0);
+
+    nvs_commit(handle);
+    nvs_close(handle);
 
     return ESP_OK;
 }
