@@ -521,6 +521,55 @@ static esp_err_t on_device_reboot_request(const event_data_t* event)
 }
 
 /**
+ * @brief LED 색상 브로드캐스트 명령 송신 (0xE8)
+ */
+static esp_err_t send_led_colors_command(const lora_cmd_led_colors_t* colors)
+{
+    static lora_cmd_led_colors_t s_cmd;
+
+    s_cmd.header = LORA_HDR_LED_COLORS;
+    s_cmd.program_r = colors->program_r;
+    s_cmd.program_g = colors->program_g;
+    s_cmd.program_b = colors->program_b;
+    s_cmd.preview_r = colors->preview_r;
+    s_cmd.preview_g = colors->preview_g;
+    s_cmd.preview_b = colors->preview_b;
+    s_cmd.off_r = colors->off_r;
+    s_cmd.off_g = colors->off_g;
+    s_cmd.off_b = colors->off_b;
+
+    lora_send_request_t req = {
+        .data = (const uint8_t*)&s_cmd,
+        .length = sizeof(s_cmd)
+    };
+
+    esp_err_t ret = event_bus_publish(EVT_LORA_SEND_REQUEST, &req, sizeof(req));
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "LED colors broadcast sent: PGM(%d,%d,%d) PVW(%d,%d,%d) OFF(%d,%d,%d)",
+                 colors->program_r, colors->program_g, colors->program_b,
+                 colors->preview_r, colors->preview_g, colors->preview_b,
+                 colors->off_r, colors->off_g, colors->off_b);
+    } else {
+        T_LOGE(TAG, "LED colors broadcast send failed: %d", ret);
+    }
+
+    return ret;
+}
+
+/**
+ * @brief LED 색상 브로드캐스트 요청 이벤트 핸들러
+ */
+static esp_err_t on_device_led_colors_request(const event_data_t* event)
+{
+    if (!event || event->data_size < sizeof(lora_cmd_led_colors_t)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    const lora_cmd_led_colors_t* colors = (const lora_cmd_led_colors_t*)event->data;
+    return send_led_colors_command(colors);
+}
+
+/**
  * @brief 상태 요청 이벤트 핸들러
  */
 static esp_err_t on_status_request(const event_data_t* event)
@@ -1070,6 +1119,23 @@ static void handle_brightness_broadcast(const lora_cmd_brightness_broadcast_t* c
 }
 
 /**
+ * @brief LED 색상 Broadcast 명령 처리 (0xE8)
+ * @param cmd LED 색상 설정 명령 구조체
+ * @note 모든 디바이스 대상으로 LED 색상 변경 이벤트 발행
+ */
+static void handle_led_colors_command(const lora_cmd_led_colors_t* cmd)
+{
+    T_LOGI(TAG, "LED colors broadcast received: PGM(%d,%d,%d) PVW(%d,%d,%d) OFF(%d,%d,%d)",
+             cmd->program_r, cmd->program_g, cmd->program_b,
+             cmd->preview_r, cmd->preview_g, cmd->preview_b,
+             cmd->off_r, cmd->off_g, cmd->off_b);
+
+    // 헤더 제외하고 데이터만 발행 (다른 패킷들과 동일 방식)
+    const uint8_t* data_start = (const uint8_t*)&cmd->program_r;
+    event_bus_publish(EVT_LED_COLORS_CHANGED, data_start, sizeof(led_colors_event_t));
+}
+
+/**
  * @brief 기능 정지 명령 처리 (0xE4)
  * @param cmd 기능 정지 명령 구조체 (device_id)
  * @note 자신의 Device ID인 경우에만 기능 정지 상태로 변경 및 이벤트 발행
@@ -1192,6 +1258,14 @@ static esp_err_t on_lora_tx_command(const event_data_t* event)
             }
             break;
 
+        case LORA_HDR_LED_COLORS:  // 0xE8
+            if (len >= sizeof(lora_cmd_led_colors_t)) {
+                handle_led_colors_command((const lora_cmd_led_colors_t*)data);
+            } else {
+                T_LOGW(TAG, "LED colors command length too short: %d < %zu", len, sizeof(lora_cmd_led_colors_t));
+            }
+            break;
+
         case LORA_HDR_STOP:  // 0xE4
             if (len >= sizeof(lora_cmd_stop_t)) {
                 handle_stop_command((const lora_cmd_stop_t*)data);
@@ -1277,6 +1351,7 @@ esp_err_t device_manager_start(void)
     event_bus_subscribe(EVT_DEVICE_PING_REQUEST, on_device_ping_request);
     event_bus_subscribe(EVT_DEVICE_STOP_REQUEST, on_device_stop_request);
     event_bus_subscribe(EVT_DEVICE_REBOOT_REQUEST, on_device_reboot_request);
+    event_bus_subscribe(EVT_DEVICE_LED_COLORS_REQUEST, on_device_led_colors_request);
     event_bus_subscribe(EVT_STATUS_REQUEST, on_status_request);
     event_bus_subscribe(EVT_DEVICE_UNREGISTER, on_device_unregister);
 
@@ -1347,6 +1422,7 @@ void device_manager_stop(void)
     event_bus_unsubscribe(EVT_DEVICE_PING_REQUEST, on_device_ping_request);
     event_bus_unsubscribe(EVT_DEVICE_STOP_REQUEST, on_device_stop_request);
     event_bus_unsubscribe(EVT_DEVICE_REBOOT_REQUEST, on_device_reboot_request);
+    event_bus_unsubscribe(EVT_DEVICE_LED_COLORS_REQUEST, on_device_led_colors_request);
     event_bus_unsubscribe(EVT_STATUS_REQUEST, on_status_request);
 
     // 테스트 모드 이벤트 구독 해제

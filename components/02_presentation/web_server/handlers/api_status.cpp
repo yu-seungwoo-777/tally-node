@@ -91,6 +91,12 @@ esp_err_t api_status_handler(httpd_req_t* req)
         cJSON_AddItemToObject(root, "license", license);
     }
 
+    // LED Colors
+    cJSON* led = web_server_json_create_led_colors();
+    if (led) {
+        cJSON_AddItemToObject(root, "led", led);
+    }
+
     char* json_str = cJSON_PrintUnformatted(root);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_send(req, json_str, strlen(json_str));

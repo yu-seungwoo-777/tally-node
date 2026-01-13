@@ -273,8 +273,8 @@ esp_err_t ethernet_hal_start(void)
         .command_bits = 16,
         .address_bits = 8,
         .mode = 0,
-        .clock_speed_hz = 20 * 1000 * 1000,
-        .queue_size = 20,
+        .clock_speed_hz = 5 * 1000 * 1000,
+        .queue_size = 32,
         .spics_io_num = EORA_S3_W5500_CS,
     };
 

@@ -96,6 +96,13 @@ export function stateModule() {
             pollingInterval: 2000
         },
 
+        // LED 색상 (API status에서 가져옴)
+        ledColors: {
+            program: { r: 255, g: 0, b: 0 },
+            preview: { r: 0, g: 255, b: 0 },
+            off: { r: 0, g: 0, b: 0 }
+        },
+
         // 폼 입력 임시 데이터
         form: {
             ap: { ssid: '', password: '', channel: 1, enabled: false },
@@ -332,6 +339,31 @@ export function stateModule() {
                     if (!this._initialized) {
                         this.form.broadcast.syncCode = 18;
                         this.form.broadcast.frequency = 868.0;
+                    }
+                }
+
+                // LED 색상 업데이트 (첫 로드 시에만 - 사용자 변경 방지)
+                if (data.led && !this._initialized) {
+                    if (data.led.program) {
+                        this.ledColors.program = {
+                            r: data.led.program.r || 255,
+                            g: data.led.program.g || 0,
+                            b: data.led.program.b || 0
+                        };
+                    }
+                    if (data.led.preview) {
+                        this.ledColors.preview = {
+                            r: data.led.preview.r || 0,
+                            g: data.led.preview.g || 255,
+                            b: data.led.preview.b || 0
+                        };
+                    }
+                    if (data.led.off) {
+                        this.ledColors.off = {
+                            r: data.led.off.r || 0,
+                            g: data.led.off.g || 0,
+                            b: data.led.off.b || 0
+                        };
                     }
                 }
 

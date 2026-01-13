@@ -19,6 +19,9 @@ public:
     static void setLedRgb(uint32_t led_index, uint8_t r, uint8_t g, uint8_t b);
     static void setBrightness(uint8_t brightness);
     static void setCameraId(uint8_t camera_id);
+    static void setColors(uint8_t program_r, uint8_t program_g, uint8_t program_b,
+                         uint8_t preview_r, uint8_t preview_g, uint8_t preview_b,
+                         uint8_t off_r, uint8_t off_g, uint8_t off_b);
     static void off(void);
     static void deinit(void);
     static bool isInitialized(void) { return s_initialized; }
@@ -38,6 +41,13 @@ private:
     static uint8_t s_brightness;
     static uint8_t s_camera_id;
     static ws2812_state_t s_led_states[8];
+
+    // 상태별 색상 캐시 (led_service에서 설정)
+    static struct {
+        uint8_t program_r, program_g, program_b;
+        uint8_t preview_r, preview_g, preview_b;
+        uint8_t off_r, off_g, off_b;
+    } s_colors;
 };
 
 bool WS2812Driver::s_initialized = false;
@@ -45,6 +55,11 @@ uint32_t WS2812Driver::s_num_leds = 1;
 uint8_t WS2812Driver::s_brightness = 255;
 uint8_t WS2812Driver::s_camera_id = 1;
 ws2812_state_t WS2812Driver::s_led_states[8] = {WS2812_OFF};
+decltype(WS2812Driver::s_colors) WS2812Driver::s_colors = {
+    .program_r = 255, .program_g = 0, .program_b = 0,
+    .preview_r = 0, .preview_g = 255, .preview_b = 0,
+    .off_r = 0, .off_g = 0, .off_b = 0
+};
 
 esp_err_t WS2812Driver::init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
 {
@@ -91,24 +106,35 @@ esp_err_t WS2812Driver::init(int gpio_num, uint32_t num_leds, uint8_t camera_id)
 
 void WS2812Driver::stateToRgb(ws2812_state_t state, uint8_t* r, uint8_t* g, uint8_t* b)
 {
+    // 캐시된 색상 사용 (led_service에서 설정)
     switch (state) {
     case WS2812_OFF:
-        *r = 0; *g = 0; *b = 0;
+        *r = s_colors.off_r;
+        *g = s_colors.off_g;
+        *b = s_colors.off_b;
         break;
     case WS2812_PROGRAM:
-        *r = 255; *g = 0; *b = 0;
+        *r = s_colors.program_r;
+        *g = s_colors.program_g;
+        *b = s_colors.program_b;
         break;
     case WS2812_PREVIEW:
-        *r = 0; *g = 255; *b = 0;
+        *r = s_colors.preview_r;
+        *g = s_colors.preview_g;
+        *b = s_colors.preview_b;
         break;
     case WS2812_LIVE:
         *r = 0; *g = 0; *b = 255;
         break;
     case WS2812_BATTERY_LOW:
-        *r = 255; *g = 255; *b = 0;
+        *r = s_colors.off_r;  // 배터리 경고도 OFF 색상 사용
+        *g = s_colors.off_g;
+        *b = s_colors.off_b;
         break;
     default:
-        *r = 0; *g = 0; *b = 0;
+        *r = s_colors.off_r;
+        *g = s_colors.off_g;
+        *b = s_colors.off_b;
         break;
     }
 }
@@ -287,6 +313,21 @@ void WS2812Driver::processTallyData(const uint8_t* tally_data, uint8_t channel_c
     setState(led_state);
 }
 
+void WS2812Driver::setColors(uint8_t program_r, uint8_t program_g, uint8_t program_b,
+                            uint8_t preview_r, uint8_t preview_g, uint8_t preview_b,
+                            uint8_t off_r, uint8_t off_g, uint8_t off_b)
+{
+    s_colors.program_r = program_r;
+    s_colors.program_g = program_g;
+    s_colors.program_b = program_b;
+    s_colors.preview_r = preview_r;
+    s_colors.preview_g = preview_g;
+    s_colors.preview_b = preview_b;
+    s_colors.off_r = off_r;
+    s_colors.off_g = off_g;
+    s_colors.off_b = off_b;
+}
+
 void WS2812Driver::deinit(void)
 {
     T_LOGD(TAG, "deinit");
@@ -333,6 +374,15 @@ void ws2812_driver_set_brightness(uint8_t brightness)
 void ws2812_driver_set_camera_id(uint8_t camera_id)
 {
     WS2812Driver::setCameraId(camera_id);
+}
+
+void ws2812_driver_set_colors(uint8_t program_r, uint8_t program_g, uint8_t program_b,
+                              uint8_t preview_r, uint8_t preview_g, uint8_t preview_b,
+                              uint8_t off_r, uint8_t off_g, uint8_t off_b)
+{
+    WS2812Driver::setColors(program_r, program_g, program_b,
+                           preview_r, preview_g, preview_b,
+                           off_r, off_g, off_b);
 }
 
 void ws2812_driver_process_tally_data(const uint8_t* tally_data, uint8_t channel_count)

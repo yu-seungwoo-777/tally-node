@@ -71,6 +71,22 @@ void ws2812_driver_set_led_rgb(uint32_t led_index, uint8_t r, uint8_t g, uint8_t
 void ws2812_driver_set_brightness(uint8_t brightness);
 
 /**
+ * @brief WS2812 상태별 색상 설정
+ * @param program_r PGM Red (0-255)
+ * @param program_g PGM Green (0-255)
+ * @param program_b PGM Blue (0-255)
+ * @param preview_r PVW Red (0-255)
+ * @param preview_g PVW Green (0-255)
+ * @param preview_b PVW Blue (0-255)
+ * @param off_r OFF Red (0-255)
+ * @param off_g OFF Green (0-255)
+ * @param off_b OFF Blue (0-255)
+ */
+void ws2812_driver_set_colors(uint8_t program_r, uint8_t program_g, uint8_t program_b,
+                              uint8_t preview_r, uint8_t preview_g, uint8_t preview_b,
+                              uint8_t off_r, uint8_t off_g, uint8_t off_b);
+
+/**
  * @brief 카메라 ID 설정 (Tally 이벤트 수신 시 사용)
  * @param camera_id 카메라 ID (1-255)
  */

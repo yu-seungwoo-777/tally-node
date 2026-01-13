@@ -51,8 +51,7 @@ static led_colors_t s_colors = {
     // 기본값: R G OFF (빨강, 초록, 검정)
     .program_r = 255, .program_g = 0, .program_b = 0,
     .preview_r = 0, .preview_g = 255, .preview_b = 0,
-    .off_r = 0, .off_g = 0, .off_b = 0,
-    .battery_low_r = 255, .battery_low_g = 255, .battery_low_b = 0
+    .off_r = 0, .off_g = 0, .off_b = 0
 };
 
 // ============================================================================
@@ -220,6 +219,23 @@ static esp_err_t on_led_colors_changed(const event_data_t* event)
              s_colors.preview_r, s_colors.preview_g, s_colors.preview_b,
              s_colors.off_r, s_colors.off_g, s_colors.off_b);
 
+    // WS2812 드라이버에 색상 전달
+    ws2812_driver_set_colors(colors->program_r, colors->program_g, colors->program_b,
+                              colors->preview_r, colors->preview_g, colors->preview_b,
+                              colors->off_r, colors->off_g, colors->off_b);
+
+    // 현재 Tally 상태로 LED 즉시 업데이트
+    if (s_service.stopped) {
+        ws2812_driver_off();
+    } else if (s_service.program_active) {
+        ws2812_driver_set_state(WS2812_PROGRAM);
+    } else if (s_service.preview_active) {
+        ws2812_driver_set_state(WS2812_PREVIEW);
+    } else if (s_service.tally_valid) {
+        // Tally는 유효하지만 내 카메라는 OFF 상태
+        ws2812_driver_set_state(WS2812_OFF);
+    }
+
     return ESP_OK;
 }
 
@@ -277,11 +293,10 @@ esp_err_t led_service_set_colors(const led_colors_t* colors)
 
     memcpy(&s_colors, colors, sizeof(led_colors_t));
 
-    T_LOGI(TAG, "colors set: PGM(%d,%d,%d) PVW(%d,%d,%d) OFF(%d,%d,%d) BAT(%d,%d,%d)",
+    T_LOGI(TAG, "colors set: PGM(%d,%d,%d) PVW(%d,%d,%d) OFF(%d,%d,%d)",
              s_colors.program_r, s_colors.program_g, s_colors.program_b,
              s_colors.preview_r, s_colors.preview_g, s_colors.preview_b,
-             s_colors.off_r, s_colors.off_g, s_colors.off_b,
-             s_colors.battery_low_r, s_colors.battery_low_g, s_colors.battery_low_b);
+             s_colors.off_r, s_colors.off_g, s_colors.off_b);
 
     return ESP_OK;
 }
@@ -292,7 +307,7 @@ void led_service_set_state(int state)
         return;
     }
 
-    // 상태를 RGB로 변환 (ConfigService에서 로드한 색상 사용)
+    // 상태를 RGB로 변환 (ws2812_driver의 stateToRgb와 동일하게)
     uint8_t r, g, b;
     switch (state) {
     case 1:  // WS2812_PROGRAM
@@ -305,11 +320,7 @@ void led_service_set_state(int state)
         g = s_colors.preview_g;
         b = s_colors.preview_b;
         break;
-    case 4:  // WS2812_BATTERY_LOW
-        r = s_colors.battery_low_r;
-        g = s_colors.battery_low_g;
-        b = s_colors.battery_low_b;
-        break;
+    case 4:  // WS2812_BATTERY_LOW (OFF 색상 사용)
     default:  // WS2812_OFF
         r = s_colors.off_r;
         g = s_colors.off_g;

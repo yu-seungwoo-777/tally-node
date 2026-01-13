@@ -448,6 +448,7 @@ typedef struct {
  * @brief LED 색상 설정 (EVT_LED_COLORS_CHANGED용)
  *
  * web_server에서 발행하는 LED 색상 변경 요청
+ * LoRa 패킷의 데이터 부분만 해당 (header 제외)
  */
 typedef struct __attribute__((packed)) {
     uint8_t program_r;        ///< PROGRAM 색상 R (0-255)
@@ -532,6 +533,7 @@ typedef enum {
     EVT_DEVICE_PING_REQUEST,     ///< 디바이스 PING 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
     EVT_DEVICE_STOP_REQUEST,     ///< 디바이스 기능 정지 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
     EVT_DEVICE_REBOOT_REQUEST,   ///< 디바이스 재부팅 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
+    EVT_DEVICE_LED_COLORS_REQUEST, ///< 디바이스 LED 색상 브로드캐스트 요청 (data: lora_cmd_led_colors_t)
     EVT_STATUS_REQUEST,          ///< 상태 요청 (Broadcast, data: none)
     EVT_DEVICE_CAM_MAP_RECEIVE,  ///< 디바이스 카메라 ID 수신 (data: uint8_t[3] = {device_id[0], device_id[1], camera_id})
     EVT_DEVICE_CAM_MAP_LOAD,     ///< 디바이스 카메라 매핑 로드 요청 (data: none, ConfigService가 저장된 매핑 발행)

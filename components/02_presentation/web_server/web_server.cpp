@@ -235,6 +235,7 @@ static const httpd_uri_t uri_api_device_camera_id = {
     .user_ctx = nullptr
 };
 
+#ifdef DEVICE_MODE_TX
 static const httpd_uri_t uri_api_brightness_broadcast = {
     .uri = "/api/brightness/broadcast",
     .method = HTTP_POST,
@@ -269,6 +270,7 @@ static const httpd_uri_t uri_api_status_request = {
     .handler = api_status_request_handler,
     .user_ctx = nullptr
 };
+#endif // DEVICE_MODE_TX
 
 // ============================================================================
 // URI 라우팅 (API - License)
@@ -503,6 +505,10 @@ esp_err_t web_server_init(void)
     event_bus_subscribe(EVT_LED_COLORS_CHANGED, web_server_on_led_colors_event);
 
     s_initialized = true;
+
+    // 부팅 시 NVS에서 LED 색상 로드 (config_service에서 응답)
+    event_bus_publish(EVT_LED_COLORS_REQUEST, NULL, 0);
+
     ESP_LOGI(TAG, "Web server initialized (event subscriptions ready)");
     return ESP_OK;
 }

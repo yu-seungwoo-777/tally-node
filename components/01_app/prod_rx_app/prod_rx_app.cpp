@@ -310,6 +310,9 @@ void prod_rx_app_start(void)
         // 밝기 이벤트 발행
         event_bus_publish(EVT_BRIGHTNESS_CHANGED, &saved_config.device.brightness, sizeof(uint8_t));
         T_LOGD(TAG, "밝기 이벤트 발행: %d", saved_config.device.brightness);
+        // LED 색상 요청 이벤트 발행 (NVS에서 로드)
+        event_bus_publish(EVT_LED_COLORS_REQUEST, NULL, 0);
+        T_LOGD(TAG, "LED 색상 요청 이벤트 발행");
         // RF 설정 이벤트 발행
         lora_rf_event_t rf_event = {
             .frequency = saved_config.device.rf.frequency,

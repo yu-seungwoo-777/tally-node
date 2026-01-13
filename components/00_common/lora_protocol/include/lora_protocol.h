@@ -34,6 +34,7 @@ extern "C" {
 #define LORA_HDR_REBOOT        0xE5   // 재부팅 (Unicast)
 #define LORA_HDR_PING          0xE6   // 지연시간 테스트 (Unicast) - 등록된 디바이스 개별 체크
 #define LORA_HDR_BRIGHTNESS_BROADCAST 0xE7  // 전역 밝기 설정 (Broadcast, device_id 없음)
+#define LORA_HDR_LED_COLORS    0xE8   // LED 색상 설정 (Broadcast, device_id 없음)
 
 // RX → TX 응답
 #define LORA_HDR_STATUS        0xD0   // 상태 정보
@@ -149,6 +150,22 @@ typedef struct __attribute__((packed)) {
     uint8_t header;                  // 0xE7
     uint8_t brightness;              // 0-255
 } lora_cmd_brightness_broadcast_t;
+
+/**
+ * @brief LED 색상 설정 명령 (0xE8) - Broadcast, device_id 없음
+ */
+typedef struct __attribute__((packed)) {
+    uint8_t header;                  // 0xE8
+    uint8_t program_r;               // PGM R
+    uint8_t program_g;               // PGM G
+    uint8_t program_b;               // PGM B
+    uint8_t preview_r;               // PVW R
+    uint8_t preview_g;               // PVW G
+    uint8_t preview_b;               // PVW B
+    uint8_t off_r;                   // OFF R
+    uint8_t off_g;                   // OFF G
+    uint8_t off_b;                   // OFF B
+} lora_cmd_led_colors_t;
 
 // ============================================================================
 // 유틸리티 함수

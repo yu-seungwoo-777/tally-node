@@ -80,7 +80,15 @@
             bandwidth: 250,
             txPower: 22
           }
-        }
+        },
+        // UI 폴링 간격 (ms)
+        pollingInterval: 2e3
+      },
+      // LED 색상 (API status에서 가져옴)
+      ledColors: {
+        program: { r: 255, g: 0, b: 0 },
+        preview: { r: 0, g: 255, b: 0 },
+        off: { r: 0, g: 0, b: 0 }
       },
       // 폼 입력 임시 데이터
       form: {
@@ -272,6 +280,29 @@
               this.form.broadcast.frequency = 868;
             }
           }
+          if (data.led && !this._initialized) {
+            if (data.led.program) {
+              this.ledColors.program = {
+                r: data.led.program.r || 255,
+                g: data.led.program.g || 0,
+                b: data.led.program.b || 0
+              };
+            }
+            if (data.led.preview) {
+              this.ledColors.preview = {
+                r: data.led.preview.r || 0,
+                g: data.led.preview.g || 255,
+                b: data.led.preview.b || 0
+              };
+            }
+            if (data.led.off) {
+              this.ledColors.off = {
+                r: data.led.off.r || 0,
+                g: data.led.off.g || 0,
+                b: data.led.off.b || 0
+              };
+            }
+          }
           this._initialized = true;
           this.wsConnected = true;
         } catch (e) {
@@ -283,11 +314,14 @@
        * 상태 폴링 시작 (스위처 카드 정보 주기 업데이트)
        */
       startStatusPolling() {
-        if (this._statusPollingTimer)
-          return;
+        this.stopStatusPolling();
+        const saved = localStorage.getItem("pollingInterval");
+        if (saved) {
+          this.config.pollingInterval = parseInt(saved);
+        }
         this._statusPollingTimer = setInterval(async () => {
           await this.fetchStatus();
-        }, 2e3);
+        }, this.config.pollingInterval);
       },
       /**
        * 상태 폴링 중지
@@ -296,6 +330,21 @@
         if (this._statusPollingTimer) {
           clearInterval(this._statusPollingTimer);
           this._statusPollingTimer = null;
+        }
+      },
+      /**
+       * 폴링 속도 설정 (ms)
+       * @param {number} interval - 폴링 간격 (500, 1000, 2000, 5000)
+       */
+      setPollingInterval(interval) {
+        const validIntervals = [500, 1e3, 2e3, 5e3];
+        if (!validIntervals.includes(interval)) {
+          interval = 2e3;
+        }
+        this.config.pollingInterval = interval;
+        localStorage.setItem("pollingInterval", interval.toString());
+        if (this._statusPollingTimer) {
+          this.startStatusPolling();
         }
       },
       // ========================================================================
@@ -571,7 +620,7 @@
             type: this.form.switcher.primary.type,
             ip: this.form.switcher.primary.ip,
             port: this.form.switcher.primary.port,
-            cameraLimit: this.form.switcher.primary.cameraLimit
+            cameraLimit: parseInt(this.form.switcher.primary.cameraLimit) || 0
           };
           if (this.form.switcher.primary.type === "ATEM") {
             payload.interface = this.form.switcher.primary.interface;
@@ -605,7 +654,7 @@
             type: this.form.switcher.secondary.type,
             ip: this.form.switcher.secondary.ip,
             port: this.form.switcher.secondary.port,
-            cameraLimit: this.form.switcher.secondary.cameraLimit
+            cameraLimit: parseInt(this.form.switcher.secondary.cameraLimit) || 0
           };
           if (this.form.switcher.secondary.type === "ATEM") {
             payload.interface = this.form.switcher.secondary.interface;
@@ -1540,6 +1589,8 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
       licenseForm: {
         key: ""
       },
+      // 검증 진행 중 플래그
+      validating: false,
       // 라이센스 상태 매핑 (C enum license_state_t와 동일)
       stateNames: {
         0: "invalid",
@@ -1557,8 +1608,9 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
       },
       /**
        * 라이센스 상태 조회 (/api/status에서 가져옴)
+       * @param {boolean} showResult - 결과 토스트 표시 여부 (검증 후 사용)
        */
-      async fetchLicense() {
+      async fetchLicense(showResult = false) {
         try {
           const res = await fetch("/api/status");
           if (!res.ok)
@@ -1573,8 +1625,19 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
           if (lic.key && lic.key.length === 16) {
             this.licenseForm.key = this.formatLicenseKeyString(lic.key);
           }
+          if (showResult && this.validating) {
+            this.validating = false;
+            if (this.license.isValid) {
+              this.showToast("License validated successfully!", "alert-success");
+            } else if (this.license.stateStr === "checking") {
+              this.showToast("License validation in progress...", "alert-info");
+            } else if (this.license.stateStr === "invalid") {
+              this.showToast("License validation failed", "alert-error");
+            }
+          }
         } catch (e) {
           console.error("License fetch error:", e);
+          this.validating = false;
         }
       },
       /**
@@ -1667,7 +1730,8 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
         }
         try {
           this.license.loading = true;
-          const res = await fetch("/api/validate-license", {
+          this.validating = true;
+          const res = await fetch("/api/license/validate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ key: cleanKey })
@@ -1679,7 +1743,7 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
           if (data.status === "accepted") {
             this.showToast("License validation started. Please wait...", "alert-info");
             this.licenseForm.key = "";
-            setTimeout(() => this.fetchLicense(), 3e3);
+            setTimeout(() => this.fetchLicense(true), 3e3);
           } else {
             this.showToast("Validation failed: " + (data.error || "Unknown error"), "alert-error");
           }

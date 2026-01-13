@@ -11,6 +11,8 @@
 #include <cstring>
 
 static const char* TAG = "02_WebSvr_JSON";
+// 사용하지 않는 변수 경고 방지
+static inline void suppress_unused_tag_warning(void) { (void)TAG; }
 
 extern "C" {
 
@@ -411,6 +413,49 @@ cJSON* web_server_json_create_broadcast(void)
     }
 
     return broadcast;
+}
+
+// ============================================================================
+// LED 색상 JSON 생성 함수
+// ============================================================================
+
+cJSON* web_server_json_create_led_colors(void)
+{
+    cJSON* led = cJSON_CreateObject();
+    if (!led) {
+        return nullptr;
+    }
+
+    const web_server_led_colors_t* colors = web_server_cache_get_led_colors();
+
+    // Program 색상
+    cJSON* program = cJSON_CreateObject();
+    if (program) {
+        cJSON_AddNumberToObject(program, "r", colors->program.r);
+        cJSON_AddNumberToObject(program, "g", colors->program.g);
+        cJSON_AddNumberToObject(program, "b", colors->program.b);
+        cJSON_AddItemToObject(led, "program", program);
+    }
+
+    // Preview 색상
+    cJSON* preview = cJSON_CreateObject();
+    if (preview) {
+        cJSON_AddNumberToObject(preview, "r", colors->preview.r);
+        cJSON_AddNumberToObject(preview, "g", colors->preview.g);
+        cJSON_AddNumberToObject(preview, "b", colors->preview.b);
+        cJSON_AddItemToObject(led, "preview", preview);
+    }
+
+    // Off 색상
+    cJSON* off = cJSON_CreateObject();
+    if (off) {
+        cJSON_AddNumberToObject(off, "r", colors->off.r);
+        cJSON_AddNumberToObject(off, "g", colors->off.g);
+        cJSON_AddNumberToObject(off, "b", colors->off.b);
+        cJSON_AddItemToObject(led, "off", off);
+    }
+
+    return led;
 }
 
 // ============================================================================

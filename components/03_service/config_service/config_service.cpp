@@ -6,6 +6,7 @@
 #include "config_service.h"
 #include "NVSConfig.h"
 #include "event_bus.h"
+#include "lora_protocol.h"
 #include "t_log.h"
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -612,7 +613,7 @@ static esp_err_t on_brightness_changed(const event_data_t* event) {
 }
 
 /**
- * @brief LED 색상 변경 이벤트 핸들러 (웹에서 변경 시 NVS 저장)
+ * @brief LED 색상 변경 이벤트 핸들러 (웹에서 변경 시 NVS 저장 + LoRa 브로드캐스트)
  */
 static esp_err_t on_led_colors_changed(const event_data_t* event)
 {
@@ -639,6 +640,23 @@ static esp_err_t on_led_colors_changed(const event_data_t* event)
                  colors->program_r, colors->program_g, colors->program_b,
                  colors->preview_r, colors->preview_g, colors->preview_b,
                  colors->off_r, colors->off_g, colors->off_b);
+
+        // LoRa 브로드캐스트 (TX에서만 송신)
+#ifdef DEVICE_MODE_TX
+        lora_cmd_led_colors_t led_cmd = {
+            .header = LORA_HDR_LED_COLORS,
+            .program_r = colors->program_r,
+            .program_g = colors->program_g,
+            .program_b = colors->program_b,
+            .preview_r = colors->preview_r,
+            .preview_g = colors->preview_g,
+            .preview_b = colors->preview_b,
+            .off_r = colors->off_r,
+            .off_g = colors->off_g,
+            .off_b = colors->off_b
+        };
+        event_bus_publish(EVT_DEVICE_LED_COLORS_REQUEST, &led_cmd, sizeof(led_cmd));
+#endif
     } else {
         T_LOGE(TAG, "LED colors NVS save failed: %s", esp_err_to_name(ret));
     }

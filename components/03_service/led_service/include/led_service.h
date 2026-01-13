@@ -22,7 +22,6 @@ typedef struct {
     uint8_t program_r, program_g, program_b;
     uint8_t preview_r, preview_g, preview_b;
     uint8_t off_r, off_g, off_b;
-    uint8_t battery_low_r, battery_low_g, battery_low_b;
 } led_colors_t;
 
 /**
