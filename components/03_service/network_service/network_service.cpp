@@ -105,19 +105,23 @@ esp_err_t NetworkServiceClass::init(void)
     // 드라이버 초기화는 EVT_CONFIG_DATA_CHANGED 이벤트 수신 후 수행
     T_LOGD(TAG, "event bus subscribed, waiting for config event");
 
+    s_initialized = true;
+
     return ESP_OK;
 }
 
 esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config)
 {
-    if (s_initialized) {
-        T_LOGW(TAG, "already initialized");
-        return ESP_OK;
-    }
-
     if (config == nullptr) {
         T_LOGE(TAG, "config is null");
         return ESP_ERR_INVALID_ARG;
+    }
+
+    if (s_initialized) {
+        T_LOGW(TAG, "already initialized, updating config");
+        // 이미 초기화된 경우 설정만 업데이트
+        memcpy(&s_config, config, sizeof(app_network_config_t));
+        return ESP_OK;
     }
 
     T_LOGI(TAG, "initializing...");
@@ -159,11 +163,12 @@ esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config
         }
     }
 
-    // 이벤트 버스 구독 (재시작 요청, 설정 데이터 변경)
-    event_bus_subscribe(EVT_NETWORK_RESTART_REQUEST, onRestartRequest);
-    event_bus_subscribe(EVT_CONFIG_DATA_CHANGED, onConfigDataEvent);
-
-    s_initialized = true;
+    // 이벤트 버스 구독은 init()에서 처리됨 (init 호출)
+    esp_err_t init_ret = init();
+    if (init_ret != ESP_OK) {
+        T_LOGE(TAG, "init() failed");
+        return init_ret;
+    }
 
     T_LOGI(TAG, "init complete");
 
