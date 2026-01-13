@@ -430,8 +430,9 @@ private:
         char ip[16];               ///< IP 주소
         uint16_t port;             ///< 포트 번호
         uint8_t network_interface; ///< 네트워크 인터페이스 (0=Auto, 1=Ethernet, 2=WiFi)
+        uint8_t camera_limit;      ///< 카메라 제한 (0=무제한)
 
-        SwitcherInfo() : adapter(nullptr), last_packed{nullptr, 0, 0}, has_changed(false), change_notified(false), last_reconnect_attempt(0), last_packed_change_time(0), is_connected(false), type(""), ip(""), port(0), network_interface(0) {}
+        SwitcherInfo() : adapter(nullptr), last_packed{nullptr, 0, 0}, has_changed(false), change_notified(false), last_reconnect_attempt(0), last_packed_change_time(0), is_connected(false), type(""), ip(""), port(0), network_interface(0), camera_limit(0) {}
 
         void cleanup() {
             adapter.reset();

@@ -1914,6 +1914,7 @@ esp_err_t ConfigServiceClass::getPrimary(config_switcher_t* config)
     esp_err_t ret = nvs_open("config", NVS_READONLY, &handle);
     if (ret != ESP_OK) {
         // NVS 열기 실패 시 기본값 반환
+        T_LOGW(TAG, "getPrimary: NVS open failed, using defaults");
         return ESP_OK;
     }
 

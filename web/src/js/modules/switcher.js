@@ -14,7 +14,7 @@ export function switcherModule() {
                     type: this.form.switcher.primary.type,
                     ip: this.form.switcher.primary.ip,
                     port: this.form.switcher.primary.port,
-                    cameraLimit: this.form.switcher.primary.cameraLimit
+                    cameraLimit: parseInt(this.form.switcher.primary.cameraLimit) || 0
                 };
                 // ATEM만 interface 지원
                 if (this.form.switcher.primary.type === 'ATEM') {
@@ -51,7 +51,7 @@ export function switcherModule() {
                     type: this.form.switcher.secondary.type,
                     ip: this.form.switcher.secondary.ip,
                     port: this.form.switcher.secondary.port,
-                    cameraLimit: this.form.switcher.secondary.cameraLimit
+                    cameraLimit: parseInt(this.form.switcher.secondary.cameraLimit) || 0
                 };
                 // ATEM만 interface 지원
                 if (this.form.switcher.secondary.type === 'ATEM') {

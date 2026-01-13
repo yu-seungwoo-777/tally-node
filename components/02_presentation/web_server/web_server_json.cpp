@@ -213,14 +213,14 @@ cJSON* web_server_json_create_switcher_primary(void)
         cJSON_AddStringToObject(primary, "ip", cache->switcher.s1_ip);
         cJSON_AddNumberToObject(primary, "port", cache->switcher.s1_port);
 
+        // cameraLimit는 switcher 이벤트에서 가져옴
+        cJSON_AddNumberToObject(primary, "cameraLimit", cache->switcher.s1_camera_limit);
+
+        // interface는 config 이벤트에서 가져옴
         if (web_server_cache_is_config_valid()) {
-            cJSON_AddNumberToObject(primary, "interface",
-                                  cache->config.primary_interface);
-            cJSON_AddNumberToObject(primary, "cameraLimit",
-                                  cache->config.primary_camera_limit);
+            cJSON_AddNumberToObject(primary, "interface", cache->config.primary_interface);
         } else {
             cJSON_AddNumberToObject(primary, "interface", 2);
-            cJSON_AddNumberToObject(primary, "cameraLimit", 0);
         }
 
         cJSON* tally = web_server_json_create_tally(cache->switcher.s1_tally_data,
@@ -233,8 +233,9 @@ cJSON* web_server_json_create_switcher_primary(void)
         cJSON_AddStringToObject(primary, "type", "--");
         cJSON_AddStringToObject(primary, "ip", "--");
         cJSON_AddNumberToObject(primary, "port", 0);
+        // 기본값: switcher 이벤트가 없으면 0 사용
+        cJSON_AddNumberToObject(primary, "cameraLimit", cache->switcher.s1_camera_limit);
         cJSON_AddNumberToObject(primary, "interface", 2);
-        cJSON_AddNumberToObject(primary, "cameraLimit", 0);
 
         cJSON* tally = web_server_json_create_empty_tally();
         if (tally) {
@@ -260,14 +261,14 @@ cJSON* web_server_json_create_switcher_secondary(void)
         cJSON_AddStringToObject(secondary, "ip", cache->switcher.s2_ip);
         cJSON_AddNumberToObject(secondary, "port", cache->switcher.s2_port);
 
+        // cameraLimit는 switcher 이벤트에서 가져옴
+        cJSON_AddNumberToObject(secondary, "cameraLimit", cache->switcher.s2_camera_limit);
+
+        // interface는 config 이벤트에서 가져옴
         if (web_server_cache_is_config_valid()) {
-            cJSON_AddNumberToObject(secondary, "interface",
-                                  cache->config.secondary_interface);
-            cJSON_AddNumberToObject(secondary, "cameraLimit",
-                                  cache->config.secondary_camera_limit);
+            cJSON_AddNumberToObject(secondary, "interface", cache->config.secondary_interface);
         } else {
             cJSON_AddNumberToObject(secondary, "interface", 1);
-            cJSON_AddNumberToObject(secondary, "cameraLimit", 0);
         }
 
         cJSON* tally = web_server_json_create_tally(cache->switcher.s2_tally_data,
@@ -280,8 +281,9 @@ cJSON* web_server_json_create_switcher_secondary(void)
         cJSON_AddStringToObject(secondary, "type", "--");
         cJSON_AddStringToObject(secondary, "ip", "--");
         cJSON_AddNumberToObject(secondary, "port", 0);
+        // 기본값: switcher 이벤트가 없으면 0 사용
+        cJSON_AddNumberToObject(secondary, "cameraLimit", cache->switcher.s2_camera_limit);
         cJSON_AddNumberToObject(secondary, "interface", 1);
-        cJSON_AddNumberToObject(secondary, "cameraLimit", 0);
 
         cJSON* tally = web_server_json_create_empty_tally();
         if (tally) {

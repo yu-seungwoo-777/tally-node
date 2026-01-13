@@ -213,6 +213,9 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
     // 기존 어댑터 정리
     info->cleanup();
 
+    // camera_limit 저장
+    info->camera_limit = camera_limit;
+
     // AtemConfig 설정
     AtemConfig config;
     config.name = name ? name : switcher_role_to_string(role);
@@ -270,8 +273,8 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
             bool now_connected = (state == CONNECTION_STATE_READY || state == CONNECTION_STATE_CONNECTED);
             info->is_connected = now_connected;
 
-            // 상태 변경 시 이벤트 발행
-            if (was_connected != now_connected) {
+            // 연결 완료 시 항상 이벤트 발행 (camera_limit 등 최신 상태 반영)
+            if (now_connected && !was_connected) {
                 publishSwitcherStatus();
             }
         }
@@ -321,6 +324,9 @@ bool SwitcherService::setVmix(switcher_role_t role, const char* name, const char
     // 기존 어댑터 정리
     info->cleanup();
 
+    // camera_limit 저장
+    info->camera_limit = camera_limit;
+
     // VmixConfig 설정
     VmixConfig config;
     config.name = name ? name : switcher_role_to_string(role);
@@ -344,7 +350,8 @@ bool SwitcherService::setVmix(switcher_role_t role, const char* name, const char
             bool now_connected = (state == CONNECTION_STATE_READY || state == CONNECTION_STATE_CONNECTED);
             info->is_connected = now_connected;
 
-            if (was_connected != now_connected) {
+            // 연결 완료 시 항상 이벤트 발행 (camera_limit 등 최신 상태 반영)
+            if (now_connected && !was_connected) {
                 publishSwitcherStatus();
             }
         }
@@ -662,15 +669,21 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
         return 0; // default ATEM
     };
 
-    // Primary 스위처 설정 변경 확인 (타입, IP, Port, Interface)
+    // Primary 스위처 설정 변경 확인 (타입, IP, Port, Interface, Camera Limit)
     if (primary_.adapter) {
         int current_type = getCurrentType(primary_.type);
         bool type_changed = (current_type != config->primary_type);
         bool ip_changed = (strncmp(config->primary_ip, primary_.ip, sizeof(config->primary_ip)) != 0);
         bool port_changed = (config->primary_port != primary_.port);
         bool interface_changed = (config->primary_interface != primary_.network_interface);
+        bool camera_limit_changed = (config->primary_camera_limit != primary_.camera_limit);
 
-        if (type_changed || ip_changed || port_changed || interface_changed) {
+        if (type_changed || ip_changed || port_changed || interface_changed || camera_limit_changed) {
+            // camera_limit 변경만 있는 경우 별도 로그
+            if (camera_limit_changed && !(type_changed || ip_changed || port_changed || interface_changed)) {
+                T_LOGI(TAG, "Primary camera_limit changed: %d -> %d",
+                        primary_.camera_limit, config->primary_camera_limit);
+            }
             const char* if_str = "Auto";
             if (config->primary_interface == 1) if_str = "Ethernet";
             else if (config->primary_interface == 2) if_str = "WiFi";
@@ -710,8 +723,14 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
         bool ip_changed = (strncmp(config->secondary_ip, secondary_.ip, sizeof(config->secondary_ip)) != 0);
         bool port_changed = (config->secondary_port != secondary_.port);
         bool interface_changed = (config->secondary_interface != secondary_.network_interface);
+        bool camera_limit_changed = (config->secondary_camera_limit != secondary_.camera_limit);
 
-        if (type_changed || ip_changed || port_changed || interface_changed) {
+        if (type_changed || ip_changed || port_changed || interface_changed || camera_limit_changed) {
+            // camera_limit 변경만 있는 경우 별도 로그
+            if (camera_limit_changed && !(type_changed || ip_changed || port_changed || interface_changed)) {
+                T_LOGI(TAG, "Secondary camera_limit changed: %d -> %d",
+                        secondary_.camera_limit, config->secondary_camera_limit);
+            }
             const char* if_str = "Auto";
             if (config->secondary_interface == 1) if_str = "Ethernet";
             else if (config->secondary_interface == 2) if_str = "WiFi";
@@ -748,6 +767,9 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
     if (reconnect_needed) {
         triggerReconnect();
     }
+
+    // 설정 변경 후 즉시 상태 발행 (camera_limit 변경 반영)
+    publishSwitcherStatus();
 }
 
 void SwitcherService::taskLoop() {
@@ -1226,7 +1248,7 @@ void SwitcherService::reconfigureSwitchersForNetwork() {
         if (iface != TALLY_NET_AUTO) {
             T_LOGD(TAG, "Primary switcher network reconfigure (if=%d)", iface);
             setAtem(SWITCHER_ROLE_PRIMARY, "Primary",
-                    primary_.ip, primary_.port, 0, iface, NVS_SWITCHER_PRI_DEBUG_PACKET);
+                    primary_.ip, primary_.port, primary_.camera_limit, iface, NVS_SWITCHER_PRI_DEBUG_PACKET);
             if (primary_.adapter) {
                 primary_.adapter->connect();
             }
@@ -1239,7 +1261,7 @@ void SwitcherService::reconfigureSwitchersForNetwork() {
         if (iface != TALLY_NET_AUTO) {
             T_LOGD(TAG, "Secondary switcher network reconfigure (if=%d)", iface);
             setAtem(SWITCHER_ROLE_SECONDARY, "Secondary",
-                    secondary_.ip, secondary_.port, 0, iface, NVS_SWITCHER_SEC_DEBUG_PACKET);
+                    secondary_.ip, secondary_.port, secondary_.camera_limit, iface, NVS_SWITCHER_SEC_DEBUG_PACKET);
             if (secondary_.adapter) {
                 secondary_.adapter->connect();
             }
@@ -1283,6 +1305,8 @@ void SwitcherService::publishSwitcherStatus() {
                    s1_packed.data_size > 8 ? 8 : s1_packed.data_size);
         }
     }
+    status.s1_camera_limit = primary_.camera_limit;
+
     if (secondary_.adapter) {
         packed_data_t s2_packed;
         if (secondary_.last_packed.data) {
@@ -1296,6 +1320,7 @@ void SwitcherService::publishSwitcherStatus() {
                    s2_packed.data_size > 8 ? 8 : s2_packed.data_size);
         }
     }
+    status.s2_camera_limit = secondary_.camera_limit;
 
     event_bus_publish(EVT_SWITCHER_STATUS_CHANGED, &status, sizeof(status));
 }
