@@ -19,7 +19,7 @@
 #include "handlers/api_static.h"
 #include "event_bus.h"
 #include "esp_http_server.h"
-#include "esp_log.h"
+#include "t_log.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 
@@ -479,7 +479,7 @@ static bool s_initialized = false;
 esp_err_t web_server_init(void)
 {
     if (s_initialized) {
-        ESP_LOGW(TAG, "Web server already initialized");
+        T_LOGW(TAG, "Web server already initialized");
         return ESP_OK;
     }
 
@@ -509,7 +509,7 @@ esp_err_t web_server_init(void)
     // 부팅 시 NVS에서 LED 색상 로드 (config_service에서 응답)
     event_bus_publish(EVT_LED_COLORS_REQUEST, NULL, 0);
 
-    ESP_LOGI(TAG, "Web server initialized (event subscriptions ready)");
+    T_LOGI(TAG, "Web server initialized (event subscriptions ready)");
     return ESP_OK;
 }
 
@@ -521,12 +521,12 @@ esp_err_t web_server_init(void)
 esp_err_t web_server_start(void)
 {
     if (!s_initialized) {
-        ESP_LOGE(TAG, "Web server not initialized");
+        T_LOGE(TAG, "Web server not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
     if (s_server != nullptr) {
-        ESP_LOGW(TAG, "Web server already running");
+        T_LOGW(TAG, "Web server already running");
         return ESP_OK;
     }
 
@@ -543,7 +543,7 @@ esp_err_t web_server_start(void)
 
     esp_err_t ret = httpd_start(&s_server, &config);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start web server: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "Failed to start web server: %s", esp_err_to_name(ret));
         return ret;
     }
 
@@ -620,7 +620,7 @@ esp_err_t web_server_start(void)
     // 설정 데이터 요청 (초기 캐시 populate)
     event_bus_publish(EVT_CONFIG_DATA_REQUEST, nullptr, 0);
 
-    ESP_LOGI(TAG, "Web server started on port 80");
+    T_LOGI(TAG, "Web server started on port 80");
     return ESP_OK;
 }
 
@@ -635,7 +635,7 @@ esp_err_t web_server_stop(void)
         return ESP_OK;
     }
 
-    ESP_LOGI(TAG, "Stopping web server");
+    T_LOGI(TAG, "Stopping web server");
 
     esp_err_t ret = httpd_stop(s_server);
     s_server = nullptr;

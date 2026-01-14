@@ -32,7 +32,7 @@ static struct {
  */
 static void page_init(void)
 {
-    T_LOGI(TAG, "BootPage 초기화");
+    T_LOGI(TAG, "BootPage initialized");
 }
 
 /**
@@ -114,7 +114,7 @@ static void page_render(u8g2_t* u8g2)
  */
 static void page_on_enter(void)
 {
-    T_LOGD(TAG, "BootPage 진입");
+    T_LOGD(TAG, "BootPage entered");
 }
 
 /**
@@ -122,7 +122,7 @@ static void page_on_enter(void)
  */
 static void page_on_exit(void)
 {
-    T_LOGD(TAG, "BootPage 퇴장");
+    T_LOGD(TAG, "BootPage exited");
 }
 
 // ============================================================================

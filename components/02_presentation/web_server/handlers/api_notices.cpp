@@ -4,7 +4,7 @@
  */
 
 #include "api_notices.h"
-#include "esp_log.h"
+#include "t_log.h"
 #include "esp_http_client.h"
 #include <cstring>
 #include <malloc.h>
@@ -81,12 +81,12 @@ esp_err_t api_notices_handler(httpd_req_t* req)
 
     if (err == ESP_OK && context.bytes_written > 0) {
         response_buffer[context.bytes_written] = '\0';
-        ESP_LOGI(TAG, "공지사항 조회 성공: %d bytes", context.bytes_written);
+        T_LOGI(TAG, "Notices fetched successfully: %d bytes", context.bytes_written);
     } else {
         if (err != ESP_OK) {
-            ESP_LOGW(TAG, "공지사항 조회 실패: %s", esp_err_to_name(err));
+            T_LOGW(TAG, "Notices fetch failed: %s", esp_err_to_name(err));
         } else {
-            ESP_LOGW(TAG, "응답 데이터 없음");
+            T_LOGW(TAG, "No response data");
         }
         snprintf(response_buffer, 2048, "{\"success\":false,\"notices\":[]}");
     }

@@ -55,7 +55,7 @@ static void start_camera_id_timer(void)
     }
     if (s_camera_id_timer != NULL) {
         xTimerStart(s_camera_id_timer, 0);
-        T_LOGD(TAG, "Camera ID 타이머 시작");
+        T_LOGD(TAG, "Camera ID timer started");
     }
 }
 
@@ -63,7 +63,7 @@ static void stop_camera_id_timer(void)
 {
     if (s_camera_id_timer != NULL) {
         xTimerStop(s_camera_id_timer, 0);
-        T_LOGD(TAG, "Camera ID 타이머 정지");
+        T_LOGD(TAG, "Camera ID timer stopped");
     }
 }
 #endif // DEVICE_MODE_RX
@@ -92,7 +92,7 @@ static esp_err_t handle_button_single_click(const event_data_t* event)
         display_manager_hide_camera_id_popup();
         stop_camera_id_timer();
         display_manager_force_refresh();
-        T_LOGD(TAG, "Camera ID 팝업 닫기 (클릭)");
+        T_LOGD(TAG, "Camera ID popup closed (click)");
         return ESP_OK;
     }
 
@@ -117,7 +117,7 @@ static esp_err_t handle_button_long_press(const event_data_t* event)
         display_manager_set_camera_id_changing(true);
         start_camera_id_timer();
         display_manager_force_refresh();
-        T_LOGD(TAG, "Camera ID 팝업 표시 (롱프레스, max: %d)", max_camera);
+        T_LOGD(TAG, "Camera ID popup shown (long press, max: %d)", max_camera);
     }
 
     return ESP_OK;
@@ -138,19 +138,19 @@ static esp_err_t handle_button_long_release(const event_data_t* event)
             esp_err_t ret = config_service_set_camera_id(new_id);
             if (ret == ESP_OK) {
                 uint8_t saved_id = config_service_get_camera_id();
-                T_LOGI(TAG, "Camera ID 저장: %d -> %d (확인: %d)", old_id, new_id, saved_id);
+                T_LOGI(TAG, "Camera ID saved: %d -> %d (verified: %d)", old_id, new_id, saved_id);
             } else {
-                T_LOGE(TAG, "Camera ID 저장 실패: %s", esp_err_to_name(ret));
+                T_LOGE(TAG, "Camera ID save failed: %s", esp_err_to_name(ret));
             }
             // LED 업데이트는 led_service에서 EVT_CAMERA_ID_CHANGED로 처리
         } else {
-            T_LOGI(TAG, "Camera ID 변경 없음: %d", new_id);
+            T_LOGI(TAG, "Camera ID unchanged: %d", new_id);
         }
 
         display_manager_set_camera_id_changing(false);
         display_manager_hide_camera_id_popup();
         display_manager_force_refresh();
-        T_LOGD(TAG, "Camera ID 팝업 닫기 (롱프레스 해제)");
+        T_LOGD(TAG, "Camera ID popup closed (long press released)");
     }
 
     return ESP_OK;
@@ -208,10 +208,10 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
         saved_cr = device_config.rf.cr;
         saved_bw = device_config.rf.bw;
         saved_txp = device_config.rf.tx_power;
-        T_LOGD(TAG, "RF 설정 로드: %.1f MHz, Sync 0x%02X, SF%d, CR%d, BW%.0f, TXP%ddBm",
+        T_LOGD(TAG, "RF config loaded: %.1f MHz, Sync 0x%02X, SF%d, CR%d, BW%.0f, TXP%ddBm",
                  saved_freq, saved_sync, saved_sf, saved_cr, saved_bw, saved_txp);
     } else {
-        T_LOGW(TAG, "RF 설정 로드 실패, 기본값 사용");
+        T_LOGW(TAG, "RF config load failed, using defaults");
     }
 
     lora_service_config_t lora_config = {
@@ -224,18 +224,18 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
     };
     esp_err_t lora_ret = lora_service_init(&lora_config);
     if (lora_ret != ESP_OK) {
-        T_LOGE(TAG, "LoRa 초기화 실패: %s", esp_err_to_name(lora_ret));
+        T_LOGE(TAG, "LoRa init failed: %s", esp_err_to_name(lora_ret));
         return false;
     }
-    T_LOGI(TAG, "LoRa 초기화 완료 (이벤트 기반 설정)");
+    T_LOGI(TAG, "LoRa init complete (event-based config)");
 
     // WS2812 LED 초기화 (기본 색상으로)
     uint8_t camera_id = config_service_get_camera_id();
     esp_err_t led_ret = led_service_init_with_colors(-1, 0, camera_id, nullptr);
     if (led_ret == ESP_OK) {
-        T_LOGI(TAG, "WS2812 초기화 완료 (카메라 ID: %d)", camera_id);
+        T_LOGI(TAG, "WS2812 init complete (camera ID: %d)", camera_id);
     } else {
-        T_LOGW(TAG, "WS2812 초기화 실패: %s", esp_err_to_name(led_ret));
+        T_LOGW(TAG, "WS2812 init failed: %s", esp_err_to_name(led_ret));
     }
 
     // DisplayManager 초기화 (RxPage 자동 등록됨)
@@ -260,12 +260,12 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
     T_LOGI(TAG, "RX app init complete");
 
     // LoRa 설정 로그
-    T_LOGD(TAG, "  주파수: %.1f MHz", lora_config.frequency);
+    T_LOGD(TAG, "  Frequency: %.1f MHz", lora_config.frequency);
     T_LOGD(TAG, "  SF: %d, CR: 4/%d, BW: %.0f kHz",
              lora_config.spreading_factor,
              lora_config.coding_rate,
              lora_config.bandwidth);
-    T_LOGD(TAG, "  전력: %d dBm, SyncWord: 0x%02X",
+    T_LOGD(TAG, "  Power: %d dBm, SyncWord: 0x%02X",
              lora_config.tx_power,
              lora_config.sync_word);
 
@@ -286,15 +286,15 @@ void prod_rx_app_start(void)
 
     // HardwareService 시작 (모니터링 태스크)
     hardware_service_start();
-    T_LOGI(TAG, "HardwareService 시작");
+    T_LOGI(TAG, "HardwareService started");
 
     // LoRa 시작
     lora_service_start();
-    T_LOGI(TAG, "LoRa 시작");
+    T_LOGI(TAG, "LoRa started");
 
     // DeviceManager 시작 (상태 요청 수신 처리)
     device_manager_start();
-    T_LOGI(TAG, "DeviceManager 시작");
+    T_LOGI(TAG, "DeviceManager started");
 
     // DisplayManager 시작 (이벤트 구독 먼저 완료)
     display_manager_start();
@@ -306,23 +306,23 @@ void prod_rx_app_start(void)
     if (ret == ESP_OK) {
         // 카메라 ID 이벤트 발행
         event_bus_publish(EVT_CAMERA_ID_CHANGED, &saved_config.device.camera_id, sizeof(uint8_t));
-        T_LOGD(TAG, "카메라 ID 이벤트 발행: %d", saved_config.device.camera_id);
+        T_LOGD(TAG, "Camera ID event published: %d", saved_config.device.camera_id);
         // 밝기 이벤트 발행
         event_bus_publish(EVT_BRIGHTNESS_CHANGED, &saved_config.device.brightness, sizeof(uint8_t));
-        T_LOGD(TAG, "밝기 이벤트 발행: %d", saved_config.device.brightness);
+        T_LOGD(TAG, "Brightness event published: %d", saved_config.device.brightness);
         // LED 색상 요청 이벤트 발행 (NVS에서 로드)
         event_bus_publish(EVT_LED_COLORS_REQUEST, NULL, 0);
-        T_LOGD(TAG, "LED 색상 요청 이벤트 발행");
+        T_LOGD(TAG, "LED colors request event published");
         // RF 설정 이벤트 발행
         lora_rf_event_t rf_event = {
             .frequency = saved_config.device.rf.frequency,
             .sync_word = saved_config.device.rf.sync_word
         };
         event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
-        T_LOGD(TAG, "RF 설정 이벤트 발행: %.1f MHz, Sync 0x%02X",
+        T_LOGD(TAG, "RF config event published: %.1f MHz, Sync 0x%02X",
                  rf_event.frequency, rf_event.sync_word);
     } else {
-        T_LOGW(TAG, "설정 로드 실패: %s", esp_err_to_name(ret));
+        T_LOGW(TAG, "Config load failed: %s", esp_err_to_name(ret));
     }
 
 #ifdef DEVICE_MODE_RX
@@ -330,7 +330,7 @@ void prod_rx_app_start(void)
     event_bus_subscribe(EVT_BUTTON_SINGLE_CLICK, handle_button_single_click);
     event_bus_subscribe(EVT_BUTTON_LONG_PRESS, handle_button_long_press);
     event_bus_subscribe(EVT_BUTTON_LONG_RELEASE, handle_button_long_release);
-    T_LOGD(TAG, "버튼 이벤트 구독 완료");
+    T_LOGD(TAG, "Button event subscription completed");
 #endif
 
     // 버튼 서비스 시작

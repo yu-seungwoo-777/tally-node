@@ -8,7 +8,6 @@
 #include "web_server_cache.h"
 #include "event_bus.h"
 #include "lora_protocol.h"
-#include "esp_log.h"
 #include "t_log.h"
 #include "freertos/FreeRTOS.h"
 #include <cstring>
@@ -57,7 +56,7 @@ esp_err_t api_config_post_handler(httpd_req_t* req)
     // JSON 파싱
     cJSON* root = cJSON_Parse(buf);
     if (root == nullptr) {
-        T_LOGE(TAG, "POST /api/config/%s JSON 파싱 실패", path);
+        T_LOGE(TAG, "POST /api/config/%s JSON parse failed", path);
         delete[] buf;
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
         return ESP_FAIL;
@@ -80,7 +79,7 @@ esp_err_t api_config_post_handler(httpd_req_t* req)
             rf_event.sync_word = (uint8_t)sync->valueint;
             event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
 
-            T_LOGD(TAG_RF, "RF 설정 요청: %.1f MHz, Sync 0x%02X",
+            T_LOGD(TAG_RF, "RF config request: %.1f MHz, Sync 0x%02X",
                      rf_event.frequency, rf_event.sync_word);
 
             cJSON_Delete(root);

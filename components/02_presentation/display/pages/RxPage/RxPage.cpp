@@ -104,7 +104,7 @@ static void draw_stopped_popup(u8g2_t* u8g2);
  */
 static void page_init(void)
 {
-    T_LOGI(TAG, "RxPage 초기화");
+    T_LOGI(TAG, "RxPage initialized");
 }
 
 /**
@@ -139,7 +139,7 @@ static void page_render(u8g2_t* u8g2)
  */
 static void page_on_enter(void)
 {
-    T_LOGD(TAG, "RxPage 진입 (page %d)", s_current_page);
+    T_LOGD(TAG, "RxPage entered (page %d)", s_current_page);
 }
 
 /**
@@ -147,7 +147,7 @@ static void page_on_enter(void)
  */
 static void page_on_exit(void)
 {
-    T_LOGD(TAG, "RxPage 퇴장");
+    T_LOGD(TAG, "RxPage exited");
 }
 
 // ============================================================================
@@ -512,14 +512,14 @@ extern "C" void rx_page_show_camera_id_popup_with_max(uint8_t max_camera_num)
         s_display_camera_id = 1;  // max를 초과하면 1로 리셋
     }
     s_camera_id_changing = false;
-    T_LOGD(TAG, "Camera ID 팝업 표시 (ID: %d, max: %d)", s_display_camera_id, max_camera_num);
+    T_LOGD(TAG, "Camera ID popup shown (ID: %d, max: %d)", s_display_camera_id, max_camera_num);
 }
 
 extern "C" void rx_page_hide_camera_id_popup(void)
 {
     s_page_state = RX_PAGE_STATE_NORMAL;
     s_camera_id_changing = false;
-    T_LOGD(TAG, "Camera ID 팝업 숨김");
+    T_LOGD(TAG, "Camera ID popup hidden");
 }
 
 extern "C" uint8_t rx_page_get_display_camera_id(void)
@@ -551,7 +551,7 @@ extern "C" uint8_t rx_page_cycle_camera_id(uint8_t max_camera_num)
     } else {
         s_display_camera_id++;
     }
-    T_LOGD(TAG, "Camera ID 순환: %d (최대: %d)", s_display_camera_id, max_camera_num);
+    T_LOGD(TAG, "Camera ID cycled: %d (max: %d)", s_display_camera_id, max_camera_num);
     return s_display_camera_id;
 }
 
@@ -640,9 +640,9 @@ extern "C" void rx_page_set_stopped(bool stopped)
 {
     s_stopped = stopped;
     if (stopped) {
-        T_LOGW(TAG, "RxPage: 기능 정지 상태로 설정");
+        T_LOGW(TAG, "RxPage: Function stopped state set");
     } else {
-        T_LOGI(TAG, "RxPage: 기능 정지 상태 해제");
+        T_LOGI(TAG, "RxPage: Function stopped state cleared");
     }
 }
 

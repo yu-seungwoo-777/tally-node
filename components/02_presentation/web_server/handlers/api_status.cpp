@@ -130,7 +130,7 @@ esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
     for (int i = 0; i < 3; i++) {
         ret = event_bus_publish(EVT_DEVICE_REBOOT_REQUEST, broadcast_id, LORA_DEVICE_ID_LEN);
         if (ret != ESP_OK) {
-            T_LOGE(TAG, "브로드캐스트 재부팅 실패 (회차 %d): %d", i + 1, ret);
+            T_LOGE(TAG, "Broadcast reboot failed (attempt %d): %d", i + 1, ret);
             httpd_resp_set_status(req, HTTPD_500);
             httpd_resp_sendstr(req, "{\"error\":\"Failed to send broadcast reboot\"}");
             return ESP_FAIL;
@@ -138,7 +138,7 @@ esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
     }
 
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "브로드캐스트 재부팅 명령 3회 송신 완료, 500ms 후 TX 재부팅");
+        T_LOGI(TAG, "Broadcast reboot command sent 3 times, TX rebooting in 500ms");
         httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Broadcast reboot sent (3x), TX rebooting...\"}");
 
         // 3회 송신 후 500ms 대기 후 TX 재부팅

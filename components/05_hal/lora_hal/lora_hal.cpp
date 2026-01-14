@@ -65,9 +65,9 @@ public:
 
         esp_err_t ret = spi_bus_initialize(spi_host, &buscfg, SPI_DMA_DISABLED);
         if (ret == ESP_ERR_INVALID_STATE) {
-            T_LOGD(TAG, "SPI 버스 이미 초기화됨");
+            T_LOGD(TAG, "SPI bus already initialized");
         } else if (ret != ESP_OK) {
-            T_LOGE(TAG, "SPI 버스 초기화 실패: %d", ret);
+            T_LOGE(TAG, "SPI bus init failed: %d", ret);
             return;
         }
 
@@ -81,12 +81,12 @@ public:
 
         ret = spi_bus_add_device(spi_host, &devcfg, &spi_device);
         if (ret != ESP_OK) {
-            T_LOGE(TAG, "SPI 디바이스 추가 실패: %d (%s)", ret, esp_err_to_name(ret));
+            T_LOGE(TAG, "SPI device add failed: %d (%s)", ret, esp_err_to_name(ret));
             return;
         }
 
         initialized = true;
-        T_LOGD(TAG, "LoRa HAL 초기화 완료 (spi_device=%p)", (void*)spi_device);
+        T_LOGD(TAG, "LoRa HAL init complete (spi_device=%p)", (void*)spi_device);
     }
 
     // 초기화 상태 확인
@@ -169,7 +169,7 @@ public:
     void spiTransfer(uint8_t* out, size_t len, uint8_t* in) override {
         if (len == 0) return;
         if (spi_device == nullptr) {
-            T_LOGE(TAG, "SPI 디바이스가 초기화되지 않음");
+            T_LOGE(TAG, "SPI device not initialized");
             return;
         }
 
@@ -196,7 +196,7 @@ public:
             if (ret == ESP_OK) {
                 s_isr_service_installed = true;
             } else if (ret != ESP_ERR_INVALID_STATE) {
-                T_LOGE(TAG, "GPIO ISR 서비스 설치 실패: %s", esp_err_to_name(ret));
+                T_LOGE(TAG, "GPIO ISR service install failed: %s", esp_err_to_name(ret));
             }
         }
 
@@ -237,7 +237,7 @@ esp_err_t lora_hal_init(void)
 
     // 초기화 성공 확인
     if (!s_hal->isInitialized()) {
-        T_LOGE(TAG, "HAL 초기화 실패 (spi_device가 nullptr)");
+        T_LOGE(TAG, "HAL init failed (spi_device is nullptr)");
         return ESP_FAIL;
     }
 

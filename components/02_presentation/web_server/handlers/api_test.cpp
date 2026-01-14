@@ -5,7 +5,7 @@
 
 #include "api_test.h"
 #include "event_bus.h"
-#include "esp_log.h"
+#include "t_log.h"
 #include "esp_timer.h"
 #include "sys/socket.h"
 #include "netdb.h"
@@ -32,17 +32,17 @@ esp_err_t api_test_start_handler(httpd_req_t* req)
     char buf[128];
     int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
     if (ret <= 0) {
-        ESP_LOGE(TAG, "httpd_req_recv failed: ret=%d", ret);
+        T_LOGE(TAG, "httpd_req_recv failed: ret=%d", ret);
         httpd_resp_set_status(req, HTTPD_400);
         httpd_resp_sendstr(req, "{\"error\":\"Invalid request\"}");
         return ESP_FAIL;
     }
     buf[ret] = '\0';
-    ESP_LOGD(TAG, "Received JSON: %s", buf);
+    T_LOGD(TAG, "Received JSON: %s", buf);
 
     cJSON* root = cJSON_Parse(buf);
     if (!root) {
-        ESP_LOGE(TAG, "cJSON_Parse failed");
+        T_LOGE(TAG, "cJSON_Parse failed");
         httpd_resp_set_status(req, HTTPD_400);
         httpd_resp_sendstr(req, "{\"error\":\"Invalid JSON\"}");
         return ESP_FAIL;
@@ -53,7 +53,7 @@ esp_err_t api_test_start_handler(httpd_req_t* req)
     cJSON* interval_ms_item = cJSON_GetObjectItem(root, "interval_ms");
 
     if (!max_channels_item || !interval_ms_item) {
-        ESP_LOGE(TAG, "Missing parameters: max_channels=%p, interval_ms=%p",
+        T_LOGE(TAG, "Missing parameters: max_channels=%p, interval_ms=%p",
                max_channels_item, interval_ms_item);
         cJSON_Delete(root);
         httpd_resp_set_status(req, HTTPD_400);
@@ -65,18 +65,18 @@ esp_err_t api_test_start_handler(httpd_req_t* req)
     uint16_t interval_ms = (uint16_t)cJSON_GetNumberValue(interval_ms_item);
     cJSON_Delete(root);
 
-    ESP_LOGD(TAG, "Parsed params: max_channels=%d, interval_ms=%d", max_channels, interval_ms);
+    T_LOGD(TAG, "Parsed params: max_channels=%d, interval_ms=%d", max_channels, interval_ms);
 
     // 파라미터 검증
     if (max_channels < 1 || max_channels > 20) {
-        ESP_LOGE(TAG, "Invalid max_channels: %d", max_channels);
+        T_LOGE(TAG, "Invalid max_channels: %d", max_channels);
         httpd_resp_set_status(req, HTTPD_400);
         httpd_resp_sendstr(req, "{\"error\":\"max_channels must be 1-20\"}");
         return ESP_FAIL;
     }
 
     if (interval_ms < 100 || interval_ms > 3000) {
-        ESP_LOGE(TAG, "Invalid interval_ms: %d", interval_ms);
+        T_LOGE(TAG, "Invalid interval_ms: %d", interval_ms);
         httpd_resp_set_status(req, HTTPD_400);
         httpd_resp_sendstr(req, "{\"error\":\"interval_ms must be 100-3000\"}");
         return ESP_FAIL;

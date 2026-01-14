@@ -153,7 +153,7 @@ esp_err_t api_delete_device_handler(httpd_req_t* req)
 
     char id_str[5];
     snprintf(id_str, sizeof(id_str), "%02X%02X", device_id[0], device_id[1]);
-    T_LOGI(TAG, "디바이스 삭제 요청: %s", id_str);
+    T_LOGI(TAG, "Device delete request: %s", id_str);
 
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
@@ -211,7 +211,7 @@ esp_err_t api_device_brightness_handler(httpd_req_t* req)
     uint8_t event_data[3] = {device_id[0], device_id[1], brightness};
     event_bus_publish(EVT_DEVICE_BRIGHTNESS_REQUEST, event_data, sizeof(event_data));
 
-    T_LOGD(TAG, "디바이스 밝기 설정 요청: ID[%02X%02X], 밝기=%d",
+    T_LOGD(TAG, "Device brightness request: ID[%02X%02X], brightness=%d",
              device_id[0], device_id[1], brightness);
 
     httpd_resp_set_type(req, "application/json");
@@ -270,7 +270,7 @@ esp_err_t api_device_camera_id_handler(httpd_req_t* req)
     uint8_t event_data[3] = {device_id[0], device_id[1], camera_id};
     event_bus_publish(EVT_DEVICE_CAMERA_ID_REQUEST, event_data, sizeof(event_data));
 
-    T_LOGD(TAG, "디바이스 카메라 ID 설정 요청: ID[%02X%02X], CameraID=%d",
+    T_LOGD(TAG, "Device camera ID request: ID[%02X%02X], CameraID=%d",
              device_id[0], device_id[1], camera_id);
 
     httpd_resp_set_type(req, "application/json");
@@ -323,7 +323,7 @@ esp_err_t api_brightness_broadcast_handler(httpd_req_t* req)
 
     cJSON_Delete(root);
 
-    T_LOGD(TAG, "일괄 밝기 제어 요청 (Broadcast): brightness=%d", brightness);
+    T_LOGD(TAG, "Broadcast brightness control request: brightness=%d", brightness);
 
     // 전역 밝기 Broadcast 명령 패킷 생성 (0xE7, device_id 없음)
     static lora_cmd_brightness_broadcast_t cmd;
@@ -381,7 +381,7 @@ esp_err_t api_device_ping_handler(httpd_req_t* req)
     // PING 요청 이벤트 발행 (device_manager가 구독하여 LoRa 전송)
     event_bus_publish(EVT_DEVICE_PING_REQUEST, device_id, sizeof(device_id));
 
-    T_LOGD(TAG, "디바이스 PING 요청: ID[%02X%02X]", device_id[0], device_id[1]);
+    T_LOGD(TAG, "Device PING request: ID[%02X%02X]", device_id[0], device_id[1]);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
 
@@ -426,7 +426,7 @@ esp_err_t api_device_stop_handler(httpd_req_t* req)
     // STOP 요청 이벤트 발행
     event_bus_publish(EVT_DEVICE_STOP_REQUEST, device_id, sizeof(device_id));
 
-    T_LOGD(TAG, "디바이스 기능 정지 요청: ID[%02X%02X]", device_id[0], device_id[1]);
+    T_LOGD(TAG, "Device stop request: ID[%02X%02X]", device_id[0], device_id[1]);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
 
@@ -471,7 +471,7 @@ esp_err_t api_device_reboot_handler(httpd_req_t* req)
     // REBOOT 요청 이벤트 발행
     event_bus_publish(EVT_DEVICE_REBOOT_REQUEST, device_id, sizeof(device_id));
 
-    T_LOGD(TAG, "디바이스 재부팅 요청: ID[%02X%02X]", device_id[0], device_id[1]);
+    T_LOGD(TAG, "Device reboot request: ID[%02X%02X]", device_id[0], device_id[1]);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
 
@@ -485,7 +485,7 @@ esp_err_t api_status_request_handler(httpd_req_t* req)
     // 상태 요청 이벤트 발행
     event_bus_publish(EVT_STATUS_REQUEST, nullptr, 0);
 
-    T_LOGD(TAG, "상태 요청 전송 (Broadcast)");
+    T_LOGD(TAG, "Status request sent (Broadcast)");
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
 

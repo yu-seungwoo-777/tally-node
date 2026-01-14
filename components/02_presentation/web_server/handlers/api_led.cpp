@@ -6,7 +6,6 @@
 #include "api_led.h"
 #include "web_server_cache.h"
 #include "event_bus.h"
-#include "esp_log.h"
 #include "t_log.h"
 #include "freertos/FreeRTOS.h"
 #include "cJSON.h"
@@ -68,7 +67,7 @@ esp_err_t api_led_colors_post_handler(httpd_req_t* req)
     delete[] buf;
 
     if (root == nullptr) {
-        T_LOGE(TAG, "POST /api/led/colors JSON 파싱 실패");
+        T_LOGE(TAG, "POST /api/led/colors JSON parse failed");
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
         return ESP_FAIL;
     }

@@ -180,7 +180,7 @@ esp_err_t web_server_on_license_state_event(const event_data_t* event)
 esp_err_t web_server_on_network_restarted_event(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "네트워크 재시작 완료 - 웹서버 재시작");
+    T_LOGI(TAG, "Network restart complete - restarting web server");
 
     // 웹서버가 실행 중이면 재시작
     if (web_server_is_running()) {

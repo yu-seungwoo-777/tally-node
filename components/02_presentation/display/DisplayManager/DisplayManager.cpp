@@ -124,7 +124,7 @@ static void render_current_page(void)
 
     // 뮤텍스 획득 (전체 렌더링 사이클 보호)
     if (display_driver_take_mutex(100) != ESP_OK) {
-        T_LOGW(TAG, "뮤텍스 획득 실패 - 렌더링 스킵");
+        T_LOGW(TAG, "Mutex acquire failed - Rendering skipped");
         return;
     }
 
@@ -454,7 +454,7 @@ static esp_err_t on_camera_id_changed(const event_data_t* event)
     s_mgr.data.device.valid = true;
     rx_page_set_cam_id(*camera_id);
     render_current_page();
-    T_LOGI(TAG, "카메라 ID 변경 (디스플레이): %d", *camera_id);
+    T_LOGI(TAG, "Camera ID changed (display): %d", *camera_id);
 
     return ESP_OK;
 }
@@ -473,7 +473,7 @@ static esp_err_t on_brightness_changed(const event_data_t* event)
     const uint8_t* brightness = (const uint8_t*)event->data;
     s_mgr.data.device.brightness = *brightness;
     s_mgr.data.device.valid = true;
-    T_LOGI(TAG, "밝기 변경 (디스플레이): %d", *brightness);
+    T_LOGI(TAG, "Brightness changed (display): %d", *brightness);
 
     return ESP_OK;
 }
@@ -496,9 +496,9 @@ static esp_err_t on_stop_changed(const event_data_t* event)
     rx_page_set_stopped(*stopped);
 
     if (*stopped) {
-        T_LOGW(TAG, "기능 정지 상태 (디스플레이)");
+        T_LOGW(TAG, "Function stopped (display)");
     } else {
-        T_LOGI(TAG, "기능 정지 해제 (디스플레이)");
+        T_LOGI(TAG, "Function resumed (display)");
     }
 
     // 즉시 갱신
@@ -604,14 +604,14 @@ static esp_err_t on_rf_changed(const event_data_t* event)
 extern "C" bool display_manager_init(void)
 {
     if (s_mgr.initialized) {
-        T_LOGW(TAG, "이미 초기화됨");
+        T_LOGW(TAG, "Already initialized");
         return true;
     }
 
     // DisplayDriver 초기화
     esp_err_t ret = display_driver_init();
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "DisplayDriver 초기화 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "DisplayDriver init failed: %s", esp_err_to_name(ret));
         return false;
     }
 
@@ -641,12 +641,12 @@ extern "C" bool display_manager_init(void)
 extern "C" void display_manager_start(void)
 {
     if (!s_mgr.initialized) {
-        T_LOGE(TAG, "초기화되지 않음");
+        T_LOGE(TAG, "Not initialized");
         return;
     }
 
     if (s_mgr.running) {
-        T_LOGW(TAG, "이미 실행 중");
+        T_LOGW(TAG, "Already running");
         return;
     }
 
@@ -672,7 +672,7 @@ extern "C" void display_manager_start(void)
 #endif
 
         s_mgr.events_subscribed = true;
-        T_LOGI(TAG, "이벤트 구독 완료: EVT_INFO_UPDATED, EVT_LORA_RSSI_CHANGED"
+        T_LOGI(TAG, "Event subscription completed: EVT_INFO_UPDATED, EVT_LORA_RSSI_CHANGED"
 #ifdef DEVICE_MODE_RX
                ", EVT_TALLY_STATE_CHANGED, EVT_CAMERA_ID_CHANGED, EVT_BRIGHTNESS_CHANGED, EVT_RF_CHANGED, EVT_STOP_CHANGED, EVT_LORA_RX_STATUS_CHANGED"
 #elif defined(DEVICE_MODE_TX)
@@ -694,12 +694,12 @@ extern "C" void display_manager_start(void)
     );
 
     if (ret != pdPASS) {
-        T_LOGE(TAG, "태스크 생성 실패");
+        T_LOGE(TAG, "Task creation failed");
         s_mgr.running = false;
         return;
     }
 
-    T_LOGI(TAG, "DisplayManager 시작 (태스크 실행 중)");
+    T_LOGI(TAG, "DisplayManager started (task running)");
 }
 
 extern "C" void display_manager_stop(void)
@@ -708,7 +708,7 @@ extern "C" void display_manager_stop(void)
         return;
     }
 
-    T_LOGI(TAG, "DisplayManager 정지 중...");
+    T_LOGI(TAG, "DisplayManager stopping...");
     s_mgr.running = false;
 
     // 태스크 종료 대기
@@ -717,7 +717,7 @@ extern "C" void display_manager_stop(void)
         s_mgr.task_handle = nullptr;
     }
 
-    T_LOGI(TAG, "DisplayManager 정지 완료");
+    T_LOGI(TAG, "DisplayManager stopped");
 }
 
 extern "C" void display_manager_set_refresh_interval(uint32_t interval_ms)
@@ -728,25 +728,25 @@ extern "C" void display_manager_set_refresh_interval(uint32_t interval_ms)
 extern "C" bool display_manager_register_page(const display_page_interface_t* page_interface)
 {
     if (page_interface == nullptr) {
-        T_LOGE(TAG, "페이지 인터페이스가 nullptr임");
+        T_LOGE(TAG, "Page interface is nullptr");
         return false;
     }
 
     if (s_mgr.page_count >= MAX_PAGES) {
-        T_LOGE(TAG, "페이지 등록 한도 도달 (%d)", MAX_PAGES);
+        T_LOGE(TAG, "Page registration limit reached (%d)", MAX_PAGES);
         return false;
     }
 
     // 중복 확인
     for (int i = 0; i < s_mgr.page_count; i++) {
         if (s_mgr.pages[i]->id == page_interface->id) {
-            T_LOGW(TAG, "페이지 ID %d 이미 등록됨", page_interface->id);
+            T_LOGW(TAG, "Page ID %d already registered", page_interface->id);
             return false;
         }
     }
 
     s_mgr.pages[s_mgr.page_count++] = page_interface;
-    T_LOGI(TAG, "페이지 등록: %s (ID=%d)", page_interface->name, page_interface->id);
+    T_LOGI(TAG, "Page registered: %s (ID=%d)", page_interface->name, page_interface->id);
 
     // 페이지 초기화
     if (page_interface->init != nullptr) {
@@ -769,7 +769,7 @@ extern "C" void display_manager_set_page(display_page_t page_id)
     s_mgr.previous_page = s_mgr.current_page;
     s_mgr.current_page = page_id;
 
-    T_LOGD(TAG, "페이지 전환: %d -> %d", s_mgr.previous_page, s_mgr.current_page);
+    T_LOGD(TAG, "Page transition: %d -> %d", s_mgr.previous_page, s_mgr.current_page);
 
     handle_page_transition();
     // 페이지 전환 시 즉시 렌더링 (플래그 방식 사용 안 함)
@@ -800,7 +800,7 @@ extern "C" void display_manager_set_power(bool on)
         display_manager_force_refresh();
     }
 
-    T_LOGI(TAG, "디스플레이 전원: %s", on ? "ON" : "OFF");
+    T_LOGI(TAG, "Display power: %s", on ? "ON" : "OFF");
 }
 
 extern "C" u8g2_t* display_manager_get_u8g2(void)
@@ -877,7 +877,7 @@ extern "C" void display_manager_boot_complete(void)
 {
     display_page_t default_page = get_default_page();
 
-    T_LOGD(TAG, "부팅 완료 -> 페이지 전환: %d", default_page);
+    T_LOGD(TAG, "Boot complete -> page transition: %d", default_page);
     display_manager_set_page(default_page);
 }
 

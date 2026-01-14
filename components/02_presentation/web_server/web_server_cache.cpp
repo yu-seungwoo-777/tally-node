@@ -4,7 +4,7 @@
  */
 
 #include "web_server_cache.h"
-#include "esp_log.h"
+#include "t_log.h"
 #include "freertos/FreeRTOS.h"
 #include "string.h"
 
@@ -146,7 +146,7 @@ void web_server_cache_update_lora_scan_progress(const lora_scan_progress_t* prog
             s_cache.lora_scan.count++;
             s_cache.lora_scan_valid = true;
         } else {
-            ESP_LOGW(TAG, "LoRa scan progress: channel buffer full (100), ignoring");
+            T_LOGW(TAG, "LoRa scan progress: channel buffer full (100), ignoring");
         }
         web_server_cache_unlock();
     }
@@ -157,7 +157,7 @@ void web_server_cache_update_lora_scan_complete(const lora_scan_complete_t* resu
     if (web_server_cache_lock() == pdTRUE) {
         // count 유효성 검증 (최대 100 채널)
         if (result->count > 100) {
-            ESP_LOGW(TAG, "LoRa scan: count=%d exceeds limit, clamping to 100", result->count);
+            T_LOGW(TAG, "LoRa scan: count=%d exceeds limit, clamping to 100", result->count);
             memcpy(&s_cache.lora_scan, result, sizeof(lora_scan_complete_t));
             s_cache.lora_scan.count = 100;
         } else {
@@ -175,7 +175,7 @@ void web_server_cache_update_devices(const device_list_event_t* devices_list)
     if (web_server_cache_lock() == pdTRUE) {
         // count 유효성 검증 (최대 20 디바이스)
         if (devices_list->count > 20) {
-            ESP_LOGW(TAG, "Device list: count=%d exceeds limit, clamping to 20", devices_list->count);
+            T_LOGW(TAG, "Device list: count=%d exceeds limit, clamping to 20", devices_list->count);
             memcpy(&s_cache.devices, devices_list, sizeof(device_list_event_t));
             s_cache.devices.count = 20;
         } else {
@@ -185,7 +185,7 @@ void web_server_cache_update_devices(const device_list_event_t* devices_list)
         web_server_cache_unlock();
     }
 
-    ESP_LOGD(TAG, "Device list updated: %d devices (registered: %d)",
+    T_LOGD(TAG, "Device list updated: %d devices (registered: %d)",
              devices_list->count, devices_list->registered_count);
 }
 
@@ -197,7 +197,7 @@ void web_server_cache_update_license(const license_state_event_t* license)
         web_server_cache_unlock();
     }
 
-    ESP_LOGD(TAG, "License state updated: limit=%d, state=%d",
+    T_LOGD(TAG, "License state updated: limit=%d, state=%d",
              license->device_limit, license->state);
 }
 

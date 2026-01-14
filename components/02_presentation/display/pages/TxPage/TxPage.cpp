@@ -121,7 +121,7 @@ static void draw_system_page(u8g2_t* u8g2);
 
 static void page_init(void)
 {
-    T_LOGI(TAG, "TxPage 초기화");
+    T_LOGI(TAG, "TxPage initialized");
 }
 
 static void page_render(u8g2_t* u8g2)
@@ -150,12 +150,12 @@ static void page_render(u8g2_t* u8g2)
 
 static void page_on_enter(void)
 {
-    T_LOGD(TAG, "TxPage 진입 (page %d)", s_current_page);
+    T_LOGD(TAG, "TxPage entered (page %d)", s_current_page);
 }
 
 static void page_on_exit(void)
 {
-    T_LOGD(TAG, "TxPage 퇴장");
+    T_LOGD(TAG, "TxPage exited");
 }
 
 static const display_page_interface_t s_tx_page_interface = {

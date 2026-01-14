@@ -51,15 +51,15 @@ static esp_err_t handle_button_single_click(const event_data_t* event)
 static esp_err_t handle_button_long_press(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "Long press -> 라이센스 검증 시도");
+    T_LOGI(TAG, "Long press -> License validation attempt");
 
     // 저장된 라이센스 키로 검증
     char license_key[17] = {0};
     if (license_service_get_key(license_key) == ESP_OK && strlen(license_key) == 16) {
-        T_LOGI(TAG, "저장된 라이센스 키로 검증: %.16s", license_key);
+        T_LOGI(TAG, "Validating with saved license key: %.16s", license_key);
         license_service_validate(license_key);
     } else {
-        T_LOGW(TAG, "라이센스 키 없음, 검증 스킵");
+        T_LOGW(TAG, "No license key, skipping validation");
     }
     return ESP_OK;
 }
@@ -84,7 +84,7 @@ static esp_err_t handle_test_mode_start(const event_data_t* event)
 
         esp_err_t ret = tally_test_service_start(config->max_channels, config->interval_ms);
         if (ret != ESP_OK) {
-            T_LOGE(TAG, "테스트 모드 시작 실패: %s", esp_err_to_name(ret));
+            T_LOGE(TAG, "Test mode start failed: %s", esp_err_to_name(ret));
             return ESP_FAIL;
         }
     }
@@ -94,7 +94,7 @@ static esp_err_t handle_test_mode_start(const event_data_t* event)
 static esp_err_t handle_test_mode_stop(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "테스트 모드 중지");
+    T_LOGI(TAG, "Test mode stopped");
     tally_test_service_stop();
     return ESP_OK;
 }
@@ -130,7 +130,7 @@ static void on_tally_change(void)
 
     // 라이센스 확인
     if (!license_service_can_send_tally()) {
-        T_LOGW(TAG, "LoRa 송신 스킵: 라이센스 미인증 상태");
+        T_LOGW(TAG, "LoRa TX skipped: License not authenticated");
         return;
     }
 
@@ -142,7 +142,7 @@ static void on_tally_change(void)
         T_LOGI(TAG, "LoRa TX: [F1][%d][%s] (%d channels, %d bytes)",
                  tally.channel_count, hex_str, tally.channel_count, tally.data_size);
     } else {
-        T_LOGE(TAG, "LoRa 송신 실패: [%s] -> %s", hex_str, esp_err_to_name(ret));
+        T_LOGE(TAG, "LoRa TX failed: [%s] -> %s", hex_str, esp_err_to_name(ret));
     }
 
     // 마지막 Tally 저장
@@ -154,12 +154,12 @@ static void on_tally_change(void)
 
 static void on_connection_change(connection_state_t state)
 {
-    T_LOGD(TAG, "연결 상태 변경: %s", connection_state_to_string(state));
+    T_LOGD(TAG, "Connection state changed: %s", connection_state_to_string(state));
 }
 
 static void on_switcher_change(switcher_role_t role)
 {
-    T_LOGD(TAG, "%s 스위처 변경 감지", switcher_role_to_string(role));
+    T_LOGD(TAG, "%s switcher change detected", switcher_role_to_string(role));
 }
 
 // ============================================================================
@@ -211,10 +211,10 @@ static esp_err_t handle_tally_state_changed(const event_data_t* event)
 
     esp_err_t ret = lora_service_send_tally(&tally);
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "LoRa 송신 (테스트 모드): [F1][%d][%s] (%d채널, %d바이트)",
+        T_LOGI(TAG, "LoRa TX (test mode): [F1][%d][%s] (%d channels, %d bytes)",
                  tally.channel_count, hex_str, tally.channel_count, tally.data_size);
     } else {
-        T_LOGE(TAG, "LoRa 송신 실패: [%s] -> %s", hex_str, esp_err_to_name(ret));
+        T_LOGE(TAG, "LoRa TX failed: [%s] -> %s", hex_str, esp_err_to_name(ret));
     }
 
     // 마지막 Tally 저장
@@ -233,21 +233,21 @@ static esp_err_t handle_tally_state_changed(const event_data_t* event)
 static esp_err_t handle_switcher_connected(const event_data_t* event)
 {
     (void)event;
-    T_LOGD(TAG, "스위처 연결됨");
+    T_LOGD(TAG, "Switcher connected");
     return ESP_OK;
 }
 
 static esp_err_t handle_switcher_disconnected(const event_data_t* event)
 {
     (void)event;
-    T_LOGD(TAG, "스위처 연결 해제");
+    T_LOGD(TAG, "Switcher disconnected");
     return ESP_OK;
 }
 
 static esp_err_t handle_network_connected(const event_data_t* event)
 {
     (void)event;
-    T_LOGD(TAG, "네트워크 연결됨");
+    T_LOGD(TAG, "Network connected");
 
     // 디스플레이에 네트워크 상태 갱신
     network_status_t net_status = network_service_get_status();
@@ -270,7 +270,7 @@ static esp_err_t handle_network_connected(const event_data_t* event)
 static esp_err_t handle_network_disconnected(const event_data_t* event)
 {
     (void)event;
-    T_LOGD(TAG, "네트워크 연결 해제");
+    T_LOGD(TAG, "Network disconnected");
 
     // 디스플레이 상태는 DisplayManager에서 처리
     // 스위처 재연결은 EVT_NETWORK_STATUS_CHANGED 이벤트로 SwitcherService에서 처리
@@ -296,12 +296,12 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     // 네트워크 스택 초기화
     ret = esp_netif_init();
     if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
-        T_LOGE(TAG, "esp_netif_init 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "esp_netif_init failed: %s", esp_err_to_name(ret));
         return false;
     }
     ret = esp_event_loop_create_default();
     if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
-        T_LOGE(TAG, "이벤트 루프 생성 실패: %s", esp_err_to_name(ret));
+        T_LOGE(TAG, "Event loop creation failed: %s", esp_err_to_name(ret));
         return false;
     }
 
@@ -330,7 +330,7 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     event_bus_subscribe(EVT_TALLY_TEST_MODE_STOP, handle_test_mode_stop);
     // Tally 상태 변경 이벤트 (테스트 모드 포함)
     event_bus_subscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
-    T_LOGD(TAG, "이벤트 구독 완료");
+    T_LOGD(TAG, "Event subscription completed");
 
     // ConfigService 초기화
     ret = config_service_init();
@@ -357,7 +357,7 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         T_LOGE(TAG, "LicenseService start failed: %s", esp_err_to_name(ret));
         return false;
     }
-    T_LOGI(TAG, "LicenseService 초기화 완료");
+    T_LOGI(TAG, "LicenseService initialization completed");
 
     // device_limit 적용 (초과분 삭제)
     config_service_apply_device_limit();
@@ -366,7 +366,7 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     config_all_t current_config;
     ret = config_service_load_all(&current_config);
     if (ret != ESP_OK || strlen(current_config.wifi_ap.ssid) == 0) {
-        T_LOGI(TAG, "네트워크 설정 없음, 기본값 저장");
+        T_LOGI(TAG, "No network config, saving defaults");
         config_service_load_defaults(&current_config);
         config_service_save_all(&current_config);
     }
@@ -377,12 +377,12 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         T_LOGE(TAG, "NetworkService init failed: %s", esp_err_to_name(ret));
         return false;
     }
-    T_LOGI(TAG, "NetworkService 초기화 완료 (이벤트 기반)");
+    T_LOGI(TAG, "NetworkService initialized (event-based)");
 
     // SwitcherService 생성 (이벤트 기반 설정)
     s_app.service = switcher_service_create();
     if (!s_app.service) {
-        T_LOGE(TAG, "SwitcherService 생성 실패");
+        T_LOGE(TAG, "SwitcherService creation failed");
         return false;
     }
 
@@ -393,12 +393,12 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
 
     // 태스크 시작 (EVT_CONFIG_DATA_CHANGED에서 어댑터 자동 생성)
     if (!switcher_service_start(s_app.service)) {
-        T_LOGE(TAG, "SwitcherService 태스크 시작 실패");
+        T_LOGE(TAG, "SwitcherService task start failed");
         switcher_service_destroy(s_app.service);
         s_app.service = nullptr;
         return false;
     }
-    T_LOGI(TAG, "SwitcherService 태스크 시작 (이벤트 기반 설정)");
+    T_LOGI(TAG, "SwitcherService task started (event-based config)");
 
     // LoRa 초기화 (NVS에 저장된 RF 설정 사용)
     config_device_t device_config;
@@ -417,10 +417,10 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         saved_cr = device_config.rf.cr;
         saved_bw = device_config.rf.bw;
         saved_txp = device_config.rf.tx_power;
-        T_LOGI(TAG, "RF 설정 로드: %.1f MHz, Sync 0x%02X, SF%d, CR%d, BW%.0f, TXP%ddBm",
+        T_LOGI(TAG, "RF config loaded: %.1f MHz, Sync 0x%02X, SF%d, CR%d, BW%.0f, TXP%ddBm",
                  saved_freq, saved_sync, saved_sf, saved_cr, saved_bw, saved_txp);
     } else {
-        T_LOGW(TAG, "RF 설정 로드 실패, 기본값 사용");
+        T_LOGW(TAG, "RF config load failed, using defaults");
     }
 
     lora_service_config_t lora_config = {
@@ -433,9 +433,9 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     };
     esp_err_t lora_ret = lora_service_init(&lora_config);
     if (lora_ret != ESP_OK) {
-        T_LOGW(TAG, "LoRa 초기화 실패: %s", esp_err_to_name(lora_ret));
+        T_LOGW(TAG, "LoRa init failed: %s", esp_err_to_name(lora_ret));
     } else {
-        T_LOGI(TAG, "LoRa 초기화 완료 (이벤트 기반 설정)");
+        T_LOGI(TAG, "LoRa init complete (event-based config)");
     }
 
     // DisplayManager 초기화 (TxPage 자동 등록됨)
@@ -472,7 +472,7 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     T_LOGI(TAG, "TX app init complete");
 
     // 설정 로그 (Switcher는 이미 위에서 출력됨)
-    T_LOGI(TAG, "  주파수: %.1f MHz", lora_config.frequency);
+    T_LOGI(TAG, "  Frequency: %.1f MHz", lora_config.frequency);
     T_LOGI(TAG, "  SF: %d, CR: 4/%d, BW: %.0f kHz",
              lora_config.spreading_factor,
              lora_config.coding_rate,
@@ -498,7 +498,7 @@ void prod_tx_app_start(void)
 
     // LicenseService 재시작 (이벤트 재발행하여 device_manager에서 device_limit 초기화)
     license_service_start();
-    T_LOGI(TAG, "LicenseService 재시작 (device_limit 이벤트 발행)");
+    T_LOGI(TAG, "LicenseService restarted (device_limit event published)");
 
     // DisplayManager BootPage로 전환 (이미 init에서 시작됨)
     display_manager_set_page(PAGE_BOOT);
@@ -513,10 +513,10 @@ void prod_tx_app_start(void)
             .sync_word = saved_config.device.rf.sync_word
         };
         event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
-        T_LOGD(TAG, "RF 설정 이벤트 발행: %.1f MHz, Sync 0x%02X",
+        T_LOGD(TAG, "RF config event published: %.1f MHz, Sync 0x%02X",
                  rf_event.frequency, rf_event.sync_word);
     } else {
-        T_LOGW(TAG, "RF 설정 로드 실패: %s", esp_err_to_name(ret));
+        T_LOGW(TAG, "RF config load failed: %s", esp_err_to_name(ret));
     }
 
     // 부팅 시나리오
@@ -541,9 +541,9 @@ void prod_tx_app_start(void)
 
     // WebServer 시작 (HTTP 서버)
     if (web_server_start() == ESP_OK) {
-        T_LOGI(TAG, "WebServer 시작");
+        T_LOGI(TAG, "WebServer started");
     } else {
-        T_LOGW(TAG, "WebServer 시작 실패");
+        T_LOGW(TAG, "WebServer start failed");
     }
 
     s_app.running = true;
@@ -639,20 +639,20 @@ void prod_tx_app_print_status(void)
     if (s_app.service) {
         // Primary 상태
         switcher_status_t primary_status = switcher_service_get_switcher_status(s_app.service, SWITCHER_ROLE_PRIMARY);
-        T_LOGI(TAG, "  Primary: %s, 카메라=%d",
+        T_LOGI(TAG, "  Primary: %s, cameras=%d",
                  connection_state_to_string(primary_status.state),
                  primary_status.camera_count);
 
         // Secondary 상태
         if (switcher_service_is_dual_mode_enabled(s_app.service)) {
             switcher_status_t secondary_status = switcher_service_get_switcher_status(s_app.service, SWITCHER_ROLE_SECONDARY);
-            T_LOGI(TAG, "  Secondary: %s, 카메라=%d",
+            T_LOGI(TAG, "  Secondary: %s, cameras=%d",
                      connection_state_to_string(secondary_status.state),
                      secondary_status.camera_count);
         }
 
-        T_LOGI(TAG, "듀얼모드: %s",
-                 switcher_service_is_dual_mode_enabled(s_app.service) ? "활성화" : "비활성화");
+        T_LOGI(TAG, "Dual mode: %s",
+                 switcher_service_is_dual_mode_enabled(s_app.service) ? "enabled" : "disabled");
     }
 
     if (s_app.last_tally.data && s_app.last_tally.data_size > 0) {
