@@ -4,47 +4,43 @@
                         <p class="text-xs md:text-sm text-slate-500 hidden sm:block">Configure system settings</p>
                     </div>
 
-                    <!-- 1행: System Actions (Reboot) -->
-                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mb-4">
-                        <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-rose-50 to-transparent">
-                            <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 bg-rose-100 rounded-lg flex items-center justify-center">
-                                    <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
-                                    </svg>
+                    <!-- 카드 그리드 -->
+                    <div class="columns-1 md:columns-2 gap-4">
+                        <!-- System Actions -->
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden break-inside-avoid mb-4 inline-block w-full">
+                            <div class="px-3 py-2.5 border-b border-slate-100 bg-gradient-to-r from-rose-50 to-transparent">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 bg-rose-100 rounded-lg flex items-center justify-center">
+                                        <svg class="w-3.5 h-3.5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-semibold text-slate-900 text-sm">System Actions</h3>
+                                    </div>
                                 </div>
-                                <div>
-                                    <h3 class="font-semibold text-slate-900 text-base">System Actions</h3>
-                                    <p class="text-xs text-slate-500">Device control</p>
+                            </div>
+                            <div class="p-3">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <!-- TX 재부팅 -->
+                                    <button @click="rebootTx()" class="px-3 py-2 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors flex items-center justify-center gap-1.5">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                        </svg>
+                                        <span>Reboot TX</span>
+                                    </button>
+                                    <!-- 전체 재부팅 -->
+                                    <button @click="rebootAll()" class="px-3 py-2 text-xs font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-lg hover:bg-rose-100 transition-colors flex items-center justify-center gap-1.5">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        <span>Reboot All</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                        <div class="p-4">
-                            <div class="grid grid-cols-2 gap-3">
-                                <!-- TX 재부팅 -->
-                                <button @click="rebootTx()" class="px-4 py-3 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors flex flex-col items-center justify-center gap-2">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                    </svg>
-                                    <span class="text-center">Reboot TX</span>
-                                    <span class="text-xs text-amber-600/70">(This Device)</span>
-                                </button>
-                                <!-- 전체 재부팅 -->
-                                <button @click="rebootAll()" class="px-4 py-3 text-sm font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-xl hover:bg-rose-100 transition-colors flex flex-col items-center justify-center gap-2">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
-                                    <span class="text-center">Reboot All</span>
-                                    <span class="text-xs text-rose-600/70">(Broadcast)</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 2행: Tally Test Mode, Notices -->
-                    <div class="grid gap-4 lg:grid-cols-2 items-start">
                         <!-- Tally Test Mode -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden break-inside-avoid mb-4 inline-block w-full">
                             <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-purple-50 to-transparent flex items-center justify-between">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -114,7 +110,7 @@
                         </div>
 
                         <!-- UI Polling Speed -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden break-inside-avoid mb-4 inline-block w-full">
                             <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-transparent">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
@@ -171,7 +167,7 @@
                         </div>
 
                         <!-- Notices -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden break-inside-avoid mb-4 inline-block w-full">
                             <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-transparent flex items-center justify-between">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">

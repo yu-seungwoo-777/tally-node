@@ -9,7 +9,7 @@
 
     <!-- Status bar -->
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
-        <div class="flex items-center justify-between">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-2">
                     <span class="w-2 h-2 rounded-full" :class="devices.onlineCount > 0 ? 'bg-emerald-500' : 'bg-slate-300'"></span>
@@ -22,7 +22,7 @@
                 <div class="w-px h-4 bg-slate-200"></div>
                 <span class="text-xs text-slate-500">Total: <span class="font-medium" x-text="devices.list.length"></span> / <span class="font-medium" x-text="license.deviceLimit"></span> Limit</span>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                 <!-- 상태 요청 버튼 -->
                 <button @click="requestStatus()"
                         :disabled="statusControl.sending"
@@ -265,7 +265,7 @@
 
                     <!-- 기능 제어 버튼 (온라인/오프라인 모두) -->
                     <div class="pt-3 border-t border-slate-100">
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
                             <!-- 기능 정지 버튼 -->
                             <button @click="stopDevice(device.id)"
                                     :disabled="stopControl.sending === device.id"
