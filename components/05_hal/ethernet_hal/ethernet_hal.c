@@ -273,7 +273,7 @@ esp_err_t ethernet_hal_start(void)
         .command_bits = 16,
         .address_bits = 8,
         .mode = 0,
-        .clock_speed_hz = 20 * 1000 * 1000,  // 5MHz→20MHz (W5500 속도 향상)
+        .clock_speed_hz = 10 * 1000 * 1000,  // 10MHz (안정성과 속도 균형)
         .queue_size = 32,
         .spics_io_num = EORA_S3_W5500_CS,
     };
@@ -282,9 +282,35 @@ esp_err_t ethernet_hal_start(void)
     eth_w5500_config_t w5500_config = ETH_W5500_DEFAULT_CONFIG(EORA_S3_W5500_SPI_HOST, &spi_devcfg);
     w5500_config.int_gpio_num = EORA_S3_W5500_INT;
 
-    // INT GPIO가 없으면 폴링 모드 사용 (짧은 주기로 설정)
+    // INT 핀 연결 여부 감지 (W5500 INT는 active-low, 유휴 시 High 출력)
+    // 풀다운 모드로 설정하여 W5500 연결 여부 확인
+    if (w5500_config.int_gpio_num >= 0) {
+        gpio_config_t io_conf = {};
+        io_conf.pin_bit_mask = (1ULL << w5500_config.int_gpio_num);
+        io_conf.mode = GPIO_MODE_INPUT;
+        io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+        io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;  // 풀다운
+        io_conf.intr_type = GPIO_INTR_DISABLE;
+        gpio_config(&io_conf);
+
+        // W5500가 연결되어 있으면 INT 핀은 High (유휴 상태)
+        // 연결되어 있지 않으면 핀은 Low (풀다운에 의해)
+        vTaskDelay(pdMS_TO_TICKS(10));  // 안정화 대기
+        int int_level = gpio_get_level(w5500_config.int_gpio_num);
+
+        if (int_level == 1) {
+            // High 감지 = W5500 INT 연결됨
+            T_LOGD(TAG, "int:connected");
+        } else {
+            // Low 감지 = INT 핀 미연결 (폴링 모드 사용)
+            w5500_config.int_gpio_num = -1;
+            T_LOGD(TAG, "int:not_connected");
+        }
+    }
+
+    // INT GPIO가 없거나 감지되지 않으면 폴링 모드 사용
     if (w5500_config.int_gpio_num < 0) {
-        w5500_config.poll_period_ms = 10;  // 100ms→10ms (W5500 응답 속도 향상)
+        w5500_config.poll_period_ms = 20;  // 20ms (인터럽트 부하와 응답 속도 균형)
     }
 
     // MAC/PHY 설정

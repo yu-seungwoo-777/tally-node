@@ -43,7 +43,7 @@
 #define EORA_S3_W5500_RST       GPIO_NUM_12   // 흰색
 #define EORA_S3_W5500_SCK       GPIO_NUM_48   // 파란색
 #define EORA_S3_W5500_CS        GPIO_NUM_47   // 노란색
-#define EORA_S3_W5500_INT       -1            // 미사용
+#define EORA_S3_W5500_INT       GPIO_NUM_35   // W5500 인터럽트 (부팅 시 자동 감지)
 #define EORA_S3_W5500_SPI_HOST  SPI3_HOST
 
 // LED (Tally Light)
