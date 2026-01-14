@@ -9,7 +9,7 @@ export function licenseModule() {
         license: {
             state: 1,
             stateStr: 'invalid',
-            isValid: false,
+            isValid: null,  // 로드 전: null, 로드 후: true/false
             deviceLimit: 0,
             key: '',
             loading: false
