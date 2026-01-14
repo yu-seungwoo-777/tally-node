@@ -1,0 +1,10 @@
+{
+  "user_name": "유승우",
+  "conversation_language": "ko",
+  "conversation_language_name": "Korean",
+  "is_korean": true,
+  "has_personalization": true,
+  "config_source": "fallback",
+  "personalized_greeting": "유승우님",
+  "needs_setup": false
+}
