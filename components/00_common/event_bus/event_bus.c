@@ -160,12 +160,19 @@ esp_err_t event_bus_init(void) {
 
     // 이벤트 처리 태스크 생성 (스택 크기 증가: 4096 → 12288 → 16384)
     // 콜백 체인이 깊어 스택 부족 현상 발생으로 증가
+    // 우선순위: RX 모드에서는 LED 반응 속도 최우선, TX 모드에서는 SwitcherService가 우선
+#ifdef DEVICE_MODE_RX
+    #define EVENT_BUS_PRIORITY 8  // RX: LED 업데이트 실시간 반응 최우선
+#else
+    #define EVENT_BUS_PRIORITY 4  // TX: SwitcherService(8)보다 낮게
+#endif
+
     BaseType_t ret = xTaskCreate(
         event_handler_task,
         "event_bus",
         16384,  // 16KB (device_list_event 등 큰 구조체 처리용 충분한 공간)
         NULL,
-        4,  // 우선순위 (SwitcherService 8보다 낮게, 지연 최소화)
+        EVENT_BUS_PRIORITY,  // 모드별 우선순위
         &g_event_bus.handler_task
     );
 
