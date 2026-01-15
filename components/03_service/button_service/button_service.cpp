@@ -253,12 +253,19 @@ void ButtonService::start(void)
     resetState();
     s_running = true;
 
+    // RX 모드에서는 사용자 입력 반응 최우선, TX 모드에서는 일반 우선순위
+#ifdef DEVICE_MODE_RX
+    #define BUTTON_TASK_PRIORITY  8  // RX: 사용자 입력 실시간 반응
+#else
+    #define BUTTON_TASK_PRIORITY  5  // TX: 일반 우선순위
+#endif
+
     BaseType_t ret = xTaskCreate(
         button_task,
         "button_task",
         4096,
         nullptr,
-        5,  // 우선순위
+        BUTTON_TASK_PRIORITY,
         &s_task
     );
 

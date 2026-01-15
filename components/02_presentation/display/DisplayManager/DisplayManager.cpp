@@ -24,7 +24,12 @@ static const char* TAG = "02_Display";
 
 // 태스크 설정
 #define DISPLAY_TASK_STACK_SIZE      8192  // 스택 크기 증가 (4KB → 8KB)
-#define DISPLAY_TASK_PRIORITY        4     // 우선순위 (SwitcherService 8보다 낮게, 지연 최소화)
+// RX 모드에서는 실시간 LED 반응을 위해 최고 우선순위, TX 모드에서는 SwitcherService보다 낮게
+#ifdef DEVICE_MODE_RX
+    #define DISPLAY_TASK_PRIORITY    8     // RX: LED 업데이트 실시간 반응 최우선
+#else
+    #define DISPLAY_TASK_PRIORITY    4     // TX: SwitcherService(8)보다 낮게
+#endif
 #define DISPLAY_TASK_INTERVAL_MS     100   // 태스크 루프 주기 (100ms)
 
 // ============================================================================

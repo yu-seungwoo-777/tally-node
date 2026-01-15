@@ -25,7 +25,12 @@ static const char* TAG = "03_Hardware";
 // ============================================================================
 
 #define MONITOR_STACK_SIZE   3072
-#define MONITOR_PRIORITY     4
+// RX 모드에서는 배터리/온도 모니터링을 높은 우선순위로
+#ifdef DEVICE_MODE_RX
+    #define MONITOR_PRIORITY   8     // RX: 하드웨어 모니터링 최우선
+#else
+    #define MONITOR_PRIORITY   4     // TX: 일반 우선순위
+#endif
 #define MONITOR_INTERVAL_MS  1000   // 1초
 
 // ============================================================================

@@ -71,12 +71,14 @@ const httpd_uri_t g_routes[] = {
     { .uri = "/api/led/colors",      .method = HTTP_GET,    .handler = api_led_colors_get_handler, .user_ctx = nullptr },
     { .uri = "/api/led/colors",      .method = HTTP_POST,   .handler = api_led_colors_post_handler, .user_ctx = nullptr },
 
+#ifdef DEVICE_MODE_TX
     // TX 전용
     { .uri = "/api/brightness/broadcast", .method = HTTP_POST, .handler = api_brightness_broadcast_handler, .user_ctx = nullptr },
     { .uri = "/api/device/ping",          .method = HTTP_POST, .handler = api_device_ping_handler, .user_ctx = nullptr },
     { .uri = "/api/device/stop",          .method = HTTP_POST, .handler = api_device_stop_handler, .user_ctx = nullptr },
     { .uri = "/api/device/reboot",        .method = HTTP_POST, .handler = api_device_reboot_handler, .user_ctx = nullptr },
     { .uri = "/api/device/status-request", .method = HTTP_POST, .handler = api_status_request_handler, .user_ctx = nullptr },
+#endif
 
     // CORS OPTIONS
     { .uri = "/api/status",         .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
@@ -91,11 +93,13 @@ const httpd_uri_t g_routes[] = {
     { .uri = "/api/device/brightness", .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
     { .uri = "/api/device/camera-id",  .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
     { .uri = "/api/led/colors",     .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
+#ifdef DEVICE_MODE_TX
     { .uri = "/api/brightness/broadcast", .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
     { .uri = "/api/device/ping",          .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
     { .uri = "/api/device/stop",          .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
     { .uri = "/api/device/reboot",        .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
     { .uri = "/api/device/status-request", .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
+#endif
 };
 
 const size_t g_route_count = sizeof(g_routes) / sizeof(g_routes[0]);
