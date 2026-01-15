@@ -10,12 +10,13 @@
 #include "cJSON.h"
 #include <cstring>
 
-static const char* TAG = "02_WebSvr_LoRa";
+static const char* TAG = "02_WS_LoRa";
 
 extern "C" {
 
 esp_err_t api_lora_scan_get_handler(httpd_req_t* req)
 {
+    T_LOGD(TAG, "GET /api/lora/scan");
     web_server_set_cors_headers(req);
 
     const web_server_data_t* cache = web_server_cache_get();

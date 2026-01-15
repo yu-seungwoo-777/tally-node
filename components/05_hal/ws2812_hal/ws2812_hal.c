@@ -174,6 +174,15 @@ esp_err_t ws2812_hal_transmit(const uint8_t* data, size_t length)
         return ESP_ERR_INVALID_ARG;
     }
 
+    // 이전 전송이 완료될 때까지 대기 (Non-blocking이 아니지만 최대 10ms만 대기)
+    // 실제 전송은 0.3ms 정도 소요되므로 대부분 즉시 완료됨
+    esp_err_t wait_ret = rmt_tx_wait_all_done(s_tx_channel, 0);  // Non-blocking 체크
+    if (wait_ret == ESP_ERR_TIMEOUT) {
+        // 이전 전송이 진행 중이면 skip (LED 업데이트보다 실시간성 우선)
+        T_LOGD(TAG, "skip:tx_busy");
+        return ESP_OK;  // 에러가 아닌 정상 처리 (업데이트 건너뜀)
+    }
+
     rmt_transmit_config_t tx_config = {
         .loop_count = 0,
     };
@@ -184,14 +193,10 @@ esp_err_t ws2812_hal_transmit(const uint8_t* data, size_t length)
         return ret;
     }
 
-    // 전송 완료 대기
-    ret = rmt_tx_wait_all_done(s_tx_channel, pdMS_TO_TICKS(RMT_TX_WAIT_TIMEOUT_MS));
-    if (ret != ESP_OK) {
-        T_LOGE(TAG, "fail:wait:0x%x", ret);
-        return ret;
-    }
+    // Non-blocking: 전송 완료 대기 없이 바로 반환
+    // RMT는 백그라운드에서 전송 계속
 
-    // WS2812 리셋 신호
+    // WS2812 리셋 신호만 유지 (짧은 delay)
     esp_rom_delay_us(WS2812_RESET_DURATION_US);
 
     T_LOGD(TAG, "ok:%zu", length);

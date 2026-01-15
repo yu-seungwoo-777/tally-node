@@ -8,7 +8,7 @@
 #include "t_log.h"
 #include "string.h"
 
-static const char* TAG = "02_WebSvr_Config";
+static const char* TAG = "02_WS_Config";
 
 extern "C" {
 

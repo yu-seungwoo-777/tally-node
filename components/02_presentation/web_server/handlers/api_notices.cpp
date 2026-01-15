@@ -10,7 +10,7 @@
 #include <cstring>
 #include <malloc.h>
 
-static const char* TAG = "02_WebSvr_Notices";
+static const char* TAG = "02_WS_Notices";
 
 extern "C" {
 

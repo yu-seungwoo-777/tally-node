@@ -9,8 +9,6 @@
 #include "cJSON.h"
 #include <cstring>
 
-static const char* TAG = "02_WebSvr_License";
-
 extern "C" {
 
 esp_err_t api_license_validate_handler(httpd_req_t* req)

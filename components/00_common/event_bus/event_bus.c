@@ -102,6 +102,9 @@ const char* event_type_to_string(event_type_t type) {
  */
 static void event_handler_task(void* arg) {
     event_data_t event;
+    static UBaseType_t last_high_watermark = 0;
+
+    T_LOGI(TAG, "Event handler task started (stack size: 16384)");
 
     while (1) {
         if (xQueueReceive(g_event_bus.queue, &event, portMAX_DELAY) == pdTRUE) {
@@ -120,6 +123,13 @@ static void event_handler_task(void* arg) {
                 }
 
                 xSemaphoreGive(g_event_bus.mutex);
+
+                // 주기적으로 스택 사용량 확인 (디버깅용)
+                UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+                if (watermark < 512 || watermark != last_high_watermark) {
+                    T_LOGD(TAG, "Stack high water mark: %u bytes", watermark);
+                    last_high_watermark = watermark;
+                }
             }
         }
     }
@@ -148,13 +158,14 @@ esp_err_t event_bus_init(void) {
     // 구독자 테이블 초기화
     memset(g_event_bus.subscribers, 0, sizeof(g_event_bus.subscribers));
 
-    // 이벤트 처리 태스크 생성 (스택 크기 증가: 4096 → 12288)
+    // 이벤트 처리 태스크 생성 (스택 크기 증가: 4096 → 12288 → 16384)
+    // 콜백 체인이 깊어 스택 부족 현상 발생으로 증가
     BaseType_t ret = xTaskCreate(
         event_handler_task,
         "event_bus",
-        12288,  // 12KB (HTTPS 응답 처리 등을 위한 충분한 공간)
+        16384,  // 16KB (device_list_event 등 큰 구조체 처리용 충분한 공간)
         NULL,
-        5,  // 우선순위 (중간)
+        4,  // 우선순위 (SwitcherService 8보다 낮게, 지연 최소화)
         &g_event_bus.handler_task
     );
 

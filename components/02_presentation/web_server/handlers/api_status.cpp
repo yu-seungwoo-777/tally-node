@@ -13,7 +13,7 @@
 #include "freertos/FreeRTOS.h"
 #include <cstring>
 
-static const char* TAG = "02_WebSvr_Status";
+static const char* TAG = "02_WS_Status";
 
 extern "C" {
 
@@ -23,6 +23,7 @@ extern "C" {
 
 esp_err_t api_status_handler(httpd_req_t* req)
 {
+    T_LOGD(TAG, "GET /api/status");
     web_server_set_cors_headers(req);
 
     cJSON* root = cJSON_CreateObject();
@@ -86,6 +87,7 @@ esp_err_t api_status_handler(httpd_req_t* req)
 
 esp_err_t api_reboot_handler(httpd_req_t* req)
 {
+    T_LOGI(TAG, "POST /api/reboot");
     web_server_set_cors_headers(req);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"rebooting\"}");
@@ -97,6 +99,7 @@ esp_err_t api_reboot_handler(httpd_req_t* req)
 
 esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
 {
+    T_LOGI(TAG, "POST /api/reboot/broadcast");
     web_server_set_cors_headers(req);
 
     // 브로드캐스트 ID (0xFF 0xFF)

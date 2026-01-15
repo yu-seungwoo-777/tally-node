@@ -4,6 +4,7 @@
  */
 
 #include "prod_tx_app.h"
+#include "PackedData.h"
 #include "t_log.h"
 #include "NVSConfig.h"
 #include "event_bus.h"
@@ -107,12 +108,12 @@ static struct {
     switcher_service_handle_t service;
     bool running;
     bool initialized;
-    packed_data_t last_tally;
+    PackedData last_tally;         // RAII 래퍼 (자동 메모리 관리)
 } s_app = {
     .service = nullptr,
     .running = false,
     .initialized = false,
-    .last_tally = {nullptr, 0, 0}
+    .last_tally = PackedData(TALLY_MAX_CHANNELS)  // RAII 자동 초기화
 };
 
 // ============================================================================
@@ -145,11 +146,8 @@ static void on_tally_change(void)
         T_LOGE(TAG, "LoRa TX failed: [%s] -> %s", hex_str, esp_err_to_name(ret));
     }
 
-    // 마지막 Tally 저장
-    if (s_app.last_tally.data) {
-        packed_data_cleanup(&s_app.last_tally);
-    }
-    packed_data_copy(&s_app.last_tally, &tally);
+    // 마지막 Tally 저장 (RAII)
+    packed_data_copy(s_app.last_tally.get(), &tally);
 }
 
 static void on_connection_change(connection_state_t state)
@@ -217,11 +215,8 @@ static esp_err_t handle_tally_state_changed(const event_data_t* event)
         T_LOGE(TAG, "LoRa TX failed: [%s] -> %s", hex_str, esp_err_to_name(ret));
     }
 
-    // 마지막 Tally 저장
-    if (s_app.last_tally.data) {
-        packed_data_cleanup(&s_app.last_tally);
-    }
-    packed_data_copy(&s_app.last_tally, &tally);
+    // 마지막 Tally 저장 (RAII)
+    packed_data_copy(s_app.last_tally.get(), &tally);
 
     return ESP_OK;
 }
@@ -607,9 +602,7 @@ void prod_tx_app_deinit(void)
         s_app.service = nullptr;
     }
 
-    if (s_app.last_tally.data) {
-        packed_data_cleanup(&s_app.last_tally);
-    }
+    // last_tally는 자동 정리 (RAII)
 
     // LoRa 정리
     lora_service_deinit();
@@ -655,11 +648,11 @@ void prod_tx_app_print_status(void)
                  switcher_service_is_dual_mode_enabled(s_app.service) ? "enabled" : "disabled");
     }
 
-    if (s_app.last_tally.data && s_app.last_tally.data_size > 0) {
+    if (s_app.last_tally.get()->data && s_app.last_tally.get()->data_size > 0) {
         char hex_str[16];
-        packed_data_to_hex(&s_app.last_tally, hex_str, sizeof(hex_str));
+        packed_data_to_hex(s_app.last_tally.get(), hex_str, sizeof(hex_str));
         T_LOGI(TAG, "Last Tally: [%s] (%d channels)",
-                 hex_str, s_app.last_tally.channel_count);
+                 hex_str, s_app.last_tally.get()->channel_count);
     }
 
     T_LOGI(TAG, "=========================");

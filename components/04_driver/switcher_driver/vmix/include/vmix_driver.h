@@ -11,6 +11,7 @@
 #define VMIX_DRIVER_H
 
 #include "TallyTypes.h"
+#include "PackedData.h"
 #include <array>
 #include <string>
 #include <functional>
@@ -133,8 +134,8 @@ private:
     // 버퍼
     std::array<uint8_t, 4096> rx_buffer_;
 
-    // Packed Tally 데이터 (캐시)
-    mutable packed_data_t cached_packed_;
+    // Packed Tally 데이터 (캐시, RAII 래퍼)
+    mutable PackedData cached_packed_;
 
     // 콜백
     std::function<void()> tally_callback_;

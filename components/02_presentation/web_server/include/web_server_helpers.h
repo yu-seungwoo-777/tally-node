@@ -1,6 +1,6 @@
 /**
  * @file web_server_helpers.h
- * @brief Web Server 공통 헬퍼 함수 (CORS, JSON 파싱/응답)
+ * @brief Web Server 공통 헬퍼 함수 (CORS, JSON 파싱/응답, 로깅)
  */
 
 #ifndef TALLY_WEB_SERVER_HELPERS_H
@@ -9,10 +9,51 @@
 #include "esp_http_server.h"
 #include "esp_err.h"
 #include "cJSON.h"
+#include "t_log.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// ============================================================================
+// API 로깅 매크로
+// ============================================================================
+
+/**
+ * @brief API 요청 수신 로그 (DEBUG)
+ * @param tag 로그 태그
+ * @param method HTTP 메서드 ("GET", "POST" 등)
+ * @param uri 요청 URI
+ */
+#define API_LOG_REQ(tag, method, uri) \
+    T_LOGD(tag, "%s %s", method, uri)
+
+/**
+ * @brief API 응답 성공 로그 (DEBUG)
+ * @param tag 로그 태그
+ * @param uri 요청 URI
+ * @param detail 추가 정보 (선택)
+ */
+#define API_LOG_RES_OK(tag, uri, detail) \
+    T_LOGD(tag, "OK %s: %s", uri, detail)
+
+/**
+ * @brief API 응답 에러 로그 (ERROR)
+ * @param tag 로그 태그
+ * @param uri 요청 URI
+ * @param msg 에러 메시지
+ */
+#define API_LOG_RES_ERR(tag, uri, msg) \
+    T_LOGE(tag, "ERR %s: %s", uri, msg)
+
+/**
+ * @brief API 중요 이벤트 로그 (INFO)
+ * @param tag 로그 태그
+ * @param uri 요청 URI
+ * @param event 이벤트 설명
+ */
+#define API_LOG_EVENT(tag, uri, event) \
+    T_LOGI(tag, "EVENT %s: %s", uri, event)
 
 // ============================================================================
 // CORS 헤더
@@ -202,8 +243,11 @@ static inline cJSON* web_server_parse_json_body(httpd_req_t* req, char* buf, siz
  * @brief CORS Preflight OPTIONS 핸들러
  * @param req HTTP 요청 핸들러
  * @return ESP_OK
+ *
+ * @note 라우팅 테이블 등록 전까지 미사용 경고 방지용 __attribute__((unused))
+ *       Phase 3 완료 후 라우팅 테이블에 등록 시 제거
  */
-static esp_err_t web_server_options_handler(httpd_req_t* req)
+static __attribute__((unused)) esp_err_t web_server_options_handler(httpd_req_t* req)
 {
     web_server_set_cors_headers(req);
     httpd_resp_send(req, nullptr, 0);

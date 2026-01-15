@@ -10,7 +10,20 @@
 #include "error_macros.h"
 #include "string.h"
 
-static const char* TAG = "02_WebSvr_Events";
+static const char* TAG = "02_WS_Events";
+
+// ============================================================================
+// 이벤트 크기 검증 매크로
+// ============================================================================
+
+#define VALIDATE_EVENT_SIZE(event, type_t, name) \
+    do { \
+        if ((event)->data_size < sizeof(type_t)) { \
+            T_LOGE(TAG, "%s: invalid size %d (expected %zu)", \
+                    name, (event)->data_size, sizeof(type_t)); \
+            return ESP_ERR_INVALID_ARG; \
+        } \
+    } while(0)
 
 extern "C" {
 
@@ -21,13 +34,7 @@ extern "C" {
 esp_err_t web_server_on_system_info_event(const event_data_t* event)
 {
     RETURN_ERR_IF_NULL(event);
-
-    // 데이터 크기 검증
-    if (event->data_size < sizeof(system_info_event_t)) {
-        T_LOGE(TAG, "System info: invalid data size %d (expected %zu)",
-                 event->data_size, sizeof(system_info_event_t));
-        return ESP_ERR_INVALID_ARG;
-    }
+    VALIDATE_EVENT_SIZE(event, system_info_event_t, "System info");
 
     const system_info_event_t* info = (const system_info_event_t*)event->data;
     web_server_cache_update_system(info);
@@ -38,13 +45,7 @@ esp_err_t web_server_on_system_info_event(const event_data_t* event)
 esp_err_t web_server_on_switcher_status_event(const event_data_t* event)
 {
     RETURN_ERR_IF_NULL(event);
-
-    // 데이터 크기 검증
-    if (event->data_size < sizeof(switcher_status_event_t)) {
-        T_LOGE(TAG, "Switcher status: invalid data size %d (expected %zu)",
-                 event->data_size, sizeof(switcher_status_event_t));
-        return ESP_ERR_INVALID_ARG;
-    }
+    VALIDATE_EVENT_SIZE(event, switcher_status_event_t, "Switcher status");
 
     const switcher_status_event_t* status = (const switcher_status_event_t*)event->data;
     web_server_cache_update_switcher(status);
@@ -55,13 +56,7 @@ esp_err_t web_server_on_switcher_status_event(const event_data_t* event)
 esp_err_t web_server_on_network_status_event(const event_data_t* event)
 {
     RETURN_ERR_IF_NULL(event);
-
-    // 데이터 크기 검증
-    if (event->data_size < sizeof(network_status_event_t)) {
-        T_LOGE(TAG, "Network status: invalid data size %d (expected %zu)",
-                 event->data_size, sizeof(network_status_event_t));
-        return ESP_ERR_INVALID_ARG;
-    }
+    VALIDATE_EVENT_SIZE(event, network_status_event_t, "Network status");
 
     const network_status_event_t* status = (const network_status_event_t*)event->data;
     web_server_cache_update_network(status);
@@ -72,13 +67,7 @@ esp_err_t web_server_on_network_status_event(const event_data_t* event)
 esp_err_t web_server_on_config_data_event(const event_data_t* event)
 {
     RETURN_ERR_IF_NULL(event);
-
-    // 데이터 크기 검증
-    if (event->data_size < sizeof(config_data_event_t)) {
-        T_LOGE(TAG, "Config data: invalid data size %d (expected %zu)",
-                 event->data_size, sizeof(config_data_event_t));
-        return ESP_ERR_INVALID_ARG;
-    }
+    VALIDATE_EVENT_SIZE(event, config_data_event_t, "Config data");
 
     const config_data_event_t* config = (const config_data_event_t*)event->data;
     web_server_cache_update_config(config);
@@ -96,13 +85,7 @@ esp_err_t web_server_on_lora_scan_start_event(const event_data_t* event)
 esp_err_t web_server_on_lora_scan_progress_event(const event_data_t* event)
 {
     RETURN_ERR_IF_NULL(event);
-
-    // 데이터 크기 검증
-    if (event->data_size < sizeof(lora_scan_progress_t)) {
-        T_LOGE(TAG, "LoRa scan progress: invalid data size %d (expected %zu)",
-                 event->data_size, sizeof(lora_scan_progress_t));
-        return ESP_ERR_INVALID_ARG;
-    }
+    VALIDATE_EVENT_SIZE(event, lora_scan_progress_t, "LoRa scan progress");
 
     const lora_scan_progress_t* progress = (const lora_scan_progress_t*)event->data;
     web_server_cache_update_lora_scan_progress(progress);
@@ -113,13 +96,7 @@ esp_err_t web_server_on_lora_scan_progress_event(const event_data_t* event)
 esp_err_t web_server_on_lora_scan_complete_event(const event_data_t* event)
 {
     RETURN_ERR_IF_NULL(event);
-
-    // 데이터 크기 검증
-    if (event->data_size < sizeof(lora_scan_complete_t)) {
-        T_LOGE(TAG, "LoRa scan complete: invalid data size %d (expected %zu)",
-                 event->data_size, sizeof(lora_scan_complete_t));
-        return ESP_ERR_INVALID_ARG;
-    }
+    VALIDATE_EVENT_SIZE(event, lora_scan_complete_t, "LoRa scan complete");
 
     const lora_scan_complete_t* result = (const lora_scan_complete_t*)event->data;
     web_server_cache_update_lora_scan_complete(result);
@@ -130,13 +107,7 @@ esp_err_t web_server_on_lora_scan_complete_event(const event_data_t* event)
 esp_err_t web_server_on_device_list_event(const event_data_t* event)
 {
     RETURN_ERR_IF_NULL(event);
-
-    // 데이터 크기 검증
-    if (event->data_size < sizeof(device_list_event_t)) {
-        T_LOGE(TAG, "Device list: invalid data size %d (expected %zu)",
-                 event->data_size, sizeof(device_list_event_t));
-        return ESP_ERR_INVALID_ARG;
-    }
+    VALIDATE_EVENT_SIZE(event, device_list_event_t, "Device list");
 
     const device_list_event_t* devices = (const device_list_event_t*)event->data;
     web_server_cache_update_devices(devices);
@@ -147,13 +118,7 @@ esp_err_t web_server_on_device_list_event(const event_data_t* event)
 esp_err_t web_server_on_license_state_event(const event_data_t* event)
 {
     RETURN_ERR_IF_NULL(event);
-
-    // 데이터 크기 검증
-    if (event->data_size < sizeof(license_state_event_t)) {
-        T_LOGE(TAG, "License state: invalid data size %d (expected %zu)",
-                 event->data_size, sizeof(license_state_event_t));
-        return ESP_ERR_INVALID_ARG;
-    }
+    VALIDATE_EVENT_SIZE(event, license_state_event_t, "License state");
 
     const license_state_event_t* license = (const license_state_event_t*)event->data;
     web_server_cache_update_license(license);

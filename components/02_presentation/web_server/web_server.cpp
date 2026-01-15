@@ -16,7 +16,7 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 
-static const char* TAG = "02_WebSvr";
+static const char* TAG = "02_WS";
 static httpd_handle_t s_server = nullptr;
 
 // ============================================================================
@@ -91,6 +91,7 @@ esp_err_t web_server_start(void)
     config.max_open_sockets = 10;
     config.max_uri_handlers = g_route_count + 4;  // 여유분 확보
     config.stack_size = 8192;  // 스택 오버플로우 방지 (기본 4KB → 8KB)
+    config.task_priority = 3;  // 우선순위 낮춤 (SwitcherService 8보다 낮게, event_bus 5보다도 낮게)
     config.lru_purge_enable = true;
     // Keep-Alive 설정 (단일 사용자 최적화)
     config.keep_alive_enable = true;

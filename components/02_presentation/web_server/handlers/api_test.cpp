@@ -14,7 +14,7 @@
 #include "cJSON.h"
 #include <cstring>
 
-static const char* TAG = "02_WebSvr_Test";
+static const char* TAG = "02_WS_Test";
 
 extern "C" {
 

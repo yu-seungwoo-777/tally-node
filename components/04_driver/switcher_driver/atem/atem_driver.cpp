@@ -43,6 +43,9 @@ AtemDriver::AtemDriver(const AtemConfig& config)
     , state_()
     , conn_state_(CONNECTION_STATE_DISCONNECTED)
     , sock_fd_(-1)
+    , rx_buffer_()
+    , tx_buffer_()
+    , cached_packed_(TALLY_MAX_CHANNELS)  // RAII 자동 초기화
     , tally_callback_()
     , connection_callback_()
     , connect_attempt_time_(0)
@@ -52,9 +55,6 @@ AtemDriver::AtemDriver(const AtemConfig& config)
 {
     rx_buffer_.fill(0);
     tx_buffer_.fill(0);
-    cached_packed_.data = nullptr;
-    cached_packed_.data_size = 0;
-    cached_packed_.channel_count = 0;
 
     // 디버깅: 드라이버 생성 로그 (이름, IP, 인스턴스 주소)
     T_LOGD(TAG, "Driver created: %s@%s (this=%p)", config_.name.c_str(), config_.ip.c_str(), this);
@@ -65,7 +65,7 @@ AtemDriver::~AtemDriver() {
     T_LOGD(TAG, "Driver destroyed: %s@%s (this=%p, session=0x%04X)",
              config_.name.c_str(), config_.ip.c_str(), this, state_.session_id);
     disconnect();
-    packed_data_cleanup(&cached_packed_);
+    // cached_packed_은 자동 정리 (RAII)
 }
 
 // ============================================================================
@@ -323,19 +323,18 @@ packed_data_t AtemDriver::getPackedTally() const {
         channel_count = TALLY_MAX_CHANNELS;
     }
 
-    // 캐시된 데이터와 채널 수가 다르면 재생성
-    if (cached_packed_.channel_count != channel_count) {
-        packed_data_cleanup(&cached_packed_);
-        packed_data_init(&cached_packed_, channel_count);
+    // 캐시된 데이터와 채널 수가 다르면 재생성 (RAII resize)
+    if (cached_packed_.channelCount() != channel_count) {
+        cached_packed_.resize(channel_count);
     }
 
     // 64비트 값에서 비트 추출하여 PackedData로 변환
     for (uint8_t i = 0; i < channel_count; i++) {
         uint8_t flags = (state_.tally_packed >> (i * 2)) & 0x03;
-        packed_data_set_channel(&cached_packed_, i + 1, flags);
+        cached_packed_.setChannel(i + 1, flags);
     }
 
-    return cached_packed_;
+    return *cached_packed_.get();
 }
 
 uint8_t AtemDriver::getCameraCount() const {

@@ -270,6 +270,28 @@ export function licenseModule() {
             if (this.license.stateStr === 'trial') return 'bg-blue-500';
             if (this.license.stateStr === 'checking') return 'bg-blue-500';
             return 'bg-rose-500';
+        },
+
+        /**
+         * 라이센스 키 마스킹 (앞 4자리만 표시)
+         */
+        maskLicenseKey(key) {
+            if (!key || key.length === 0) return 'Not registered';
+
+            // 포맷팅된 키 (xxxx-xxxx-xxxx-xxxx)
+            if (key.includes('-')) {
+                const parts = key.split('-');
+                if (parts.length === 4) {
+                    return `${parts[0]}-****-****-****`;
+                }
+            }
+
+            // 16자리 원본 키
+            if (key.length >= 4) {
+                return key.substring(0, 4) + '-****-****-****';
+            }
+
+            return key;
         }
     };
 }

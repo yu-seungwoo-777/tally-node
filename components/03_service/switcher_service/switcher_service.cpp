@@ -71,11 +71,8 @@ SwitcherService::SwitcherService()
     , tally_changed_(false)
     , switcher_changed_(false)
     , last_switcher_role_(SWITCHER_ROLE_PRIMARY)
+    , combined_packed_(TALLY_MAX_CHANNELS)  // RAII 자동 초기화
 {
-    combined_packed_.data = nullptr;
-    combined_packed_.data_size = 0;
-    combined_packed_.channel_count = 0;
-
     // 전역 인스턴스 포인터 설정
     g_switcher_service_instance = this;
 }
@@ -84,7 +81,7 @@ SwitcherService::~SwitcherService() {
     stop();  // 태스크 정지
     primary_.cleanup();
     secondary_.cleanup();
-    packed_data_cleanup(&combined_packed_);
+    // combined_packed_은 자동 정리 (RAII)
 
     // 전역 인스턴스 포인터 해제
     g_switcher_service_instance = nullptr;
@@ -283,9 +280,7 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
 
     // 어댑터 설정
     info->adapter = std::move(driver);
-    info->last_packed.data = nullptr;
-    info->last_packed.data_size = 0;
-    info->last_packed.channel_count = 0;
+    // last_packed은 RAII로 자동 관리됨
     info->has_changed = false;
     info->last_reconnect_attempt = 0;
     info->last_packed_change_time = 0;  // 첫 Tally 데이터 받을 때까지 대기
@@ -360,9 +355,7 @@ bool SwitcherService::setVmix(switcher_role_t role, const char* name, const char
 
     // 어댑터 설정
     info->adapter = std::move(driver);
-    info->last_packed.data = nullptr;
-    info->last_packed.data_size = 0;
-    info->last_packed.channel_count = 0;
+    // last_packed은 RAII로 자동 관리됨
     info->has_changed = false;
     info->last_reconnect_attempt = 0;
     info->last_packed_change_time = 0;
@@ -389,9 +382,7 @@ void SwitcherService::removeSwitcher(switcher_role_t role) {
 
     T_LOGI(TAG, "%s switcher removed", switcher_role_to_string(role));
     info->cleanup();
-
-    // 결합 데이터 캐시 정리
-    packed_data_cleanup(&combined_packed_);
+    // combined_packed_은 자동 정리 (RAII)
 }
 
 // ============================================================================
@@ -462,11 +453,11 @@ bool SwitcherService::start() {
     // 플래그 먼저 설정 (태스크가 즉시 시작되도록)
     task_running_ = true;
 
-    // 정적 태스크 생성
+    // 정적 태스크 생성 (스택 크기: 4KB → 8KB)
     task_handle_ = xTaskCreateStatic(
         switcher_task,            // 태스크 함수
         "switcher_task",          // 태스크 이름
-        4096,                     // 스택 크기
+        8192,                     // 스택 크기 (8KB, 스택 오버플로우 방지)
         this,                     // 파라미터 (this 포인터)
         8,                        // 우선순위 (lwIP보다 높게)
         task_stack_,              // 스택 버퍼
@@ -509,12 +500,24 @@ void SwitcherService::stop() {
 
 void SwitcherService::switcher_task(void* param) {
     SwitcherService* service = static_cast<SwitcherService*>(param);
+    static UBaseType_t last_high_watermark = 0;
+    uint32_t loop_count = 0;
 
-    T_LOGD(TAG, "task loop start");
+    T_LOGI(TAG, "task loop start (stack size: 8192)");
 
     while (service->task_running_) {
         service->taskLoop();
         vTaskDelay(pdMS_TO_TICKS(10));  // 10ms 주기
+
+        // 500회마다 스택 사용량 확인 (약 5초마다)
+        if (++loop_count >= 500) {
+            UBaseType_t watermark = uxTaskGetStackHighWaterMark(NULL);
+            if (watermark < 512 || watermark != last_high_watermark) {
+                T_LOGD(TAG, "Stack high water mark: %u bytes", watermark);
+                last_high_watermark = watermark;
+            }
+            loop_count = 0;
+        }
     }
 
     T_LOGI(TAG, "task loop end");
@@ -958,23 +961,21 @@ packed_data_t SwitcherService::combineDualModeTally() const {
         // offset이 0이면 Secondary를 1번부터 매핑
         if (effective_offset >= TALLY_MAX_CHANNELS) {
             // offset이 크면 Secondary를 1번 채널부터 사용
-            packed_data_cleanup(&combined_packed_);
-            packed_data_init(&combined_packed_, secondary_data.channel_count);
+            combined_packed_.resize(secondary_data.channel_count);
             for (uint8_t i = 0; i < secondary_data.channel_count; i++) {
                 uint8_t flags = packed_data_get_channel(&secondary_data, i + 1);
-                packed_data_set_channel(&combined_packed_, i + 1, flags);
+                combined_packed_.setChannel(i + 1, flags);
             }
         } else {
             // offset만큼 떨어진 위치에 매핑
-            packed_data_cleanup(&combined_packed_);
-            packed_data_init(&combined_packed_, effective_offset + secondary_fitting);
+            combined_packed_.resize(effective_offset + secondary_fitting);
             for (uint8_t i = 0; i < secondary_fitting; i++) {
                 uint8_t flags = packed_data_get_channel(&secondary_data, i + 1);
                 uint8_t target_channel = i + 1 + effective_offset;
-                packed_data_set_channel(&combined_packed_, target_channel, flags);
+                combined_packed_.setChannel(target_channel, flags);
             }
         }
-        return combined_packed_;
+        return *combined_packed_.get();
     }
 
     // 전체 채널 수 계산
@@ -1011,14 +1012,13 @@ packed_data_t SwitcherService::combineDualModeTally() const {
         }
     }
 
-    // 결합 데이터 생성
-    packed_data_cleanup(&combined_packed_);
-    packed_data_init(&combined_packed_, max_channel_used);
+    // 결합 데이터 생성 (resize로 재초기화)
+    combined_packed_.resize(max_channel_used);
 
     // Primary 데이터 복사
     for (uint8_t i = 0; i < primary_channels; i++) {
         uint8_t flags = packed_data_get_channel(&primary_data, i + 1);
-        packed_data_set_channel(&combined_packed_, i + 1, flags);
+        combined_packed_.setChannel(i + 1, flags);
     }
 
     // Secondary 데이터 복사 (offset 적용, 20채널 제한)
@@ -1027,11 +1027,11 @@ packed_data_t SwitcherService::combineDualModeTally() const {
         uint8_t target_channel = i + 1 + effective_offset;
 
         // 기존 값과 OR 결합
-        uint8_t existing = packed_data_get_channel(&combined_packed_, target_channel);
-        packed_data_set_channel(&combined_packed_, target_channel, existing | flags);
+        uint8_t existing = combined_packed_.getChannel(target_channel);
+        combined_packed_.setChannel(target_channel, existing | flags);
     }
 
-    return combined_packed_;
+    return *combined_packed_.get();
 }
 
 // ============================================================================
@@ -1070,10 +1070,7 @@ switcher_status_t SwitcherService::getSwitcherStatus(switcher_role_t role) const
 void SwitcherService::setDualMode(bool enabled) {
     dual_mode_enabled_ = enabled;
     T_LOGI(TAG, "dual mode: %s", enabled ? "enabled" : "disabled");
-
-    if (!enabled) {
-        packed_data_cleanup(&combined_packed_);
-    }
+    // combined_packed_은 자동 정리 (RAII)
 
     // 설정 변경 후 상태 이벤트 발행
     publishSwitcherStatus();
@@ -1111,12 +1108,11 @@ void SwitcherService::checkSwitcherChange(switcher_role_t role) {
 
     packed_data_t current_packed = info->adapter->getPackedTally();
 
-    // 변경 감지
-    if (!packed_data_equals(&current_packed, &info->last_packed)) {
-        // 이전 데이터 해제
-        packed_data_cleanup(&info->last_packed);
-        // 현재 데이터 복사
-        packed_data_copy(&info->last_packed, &current_packed);
+    // 변경 감지 (RAII 래퍼 사용)
+    if (!packed_data_equals(&current_packed, info->last_packed.get())) {
+        // 현재 데이터 복사 (RAII)
+        info->last_packed.copyFrom(PackedData());  // 임시 객체로 해제 후 복사
+        packed_data_copy(info->last_packed.get(), &current_packed);
         info->has_changed = true;
 
         // Health refresh 타이머 리셋 (Tally 변화 있으면 reset)
@@ -1146,11 +1142,7 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
 
     // 어댑터에서 변경 알림 받음
     checkSwitcherChange(role);
-
-    // 결합 데이터 업데이트 (듀얼모드인 경우)
-    if (dual_mode_enabled_) {
-        packed_data_cleanup(&combined_packed_);
-    }
+    // combined_packed_은 자동 관리 (RAII)
 
     // 병합된 Tally 값 가져오기
     packed_data_t combined = getCombinedTally();
@@ -1291,8 +1283,8 @@ void SwitcherService::publishSwitcherStatus() {
     // Tally 데이터 (개별 상태) - last_packed가 없으면 어댑터에서 직접 가져옴
     if (primary_.adapter) {
         packed_data_t s1_packed;
-        if (primary_.last_packed.data) {
-            s1_packed = primary_.last_packed;
+        if (primary_.last_packed.get()->data) {
+            s1_packed = *primary_.last_packed.get();
         } else {
             s1_packed = primary_.adapter->getPackedTally();
         }
@@ -1306,8 +1298,8 @@ void SwitcherService::publishSwitcherStatus() {
 
     if (secondary_.adapter) {
         packed_data_t s2_packed;
-        if (secondary_.last_packed.data) {
-            s2_packed = secondary_.last_packed;
+        if (secondary_.last_packed.get()->data) {
+            s2_packed = *secondary_.last_packed.get();
         } else {
             s2_packed = secondary_.adapter->getPackedTally();
         }

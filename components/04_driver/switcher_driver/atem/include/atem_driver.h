@@ -11,6 +11,7 @@
 #define ATEM_DRIVER_H
 
 #include "TallyTypes.h"
+#include "PackedData.h"
 #include "AtemProtocol.h"
 #include <array>
 #include <string>
@@ -167,8 +168,8 @@ private:
     std::array<uint8_t, ATEM_MAX_PACKET_SIZE> rx_buffer_;
     std::array<uint8_t, 64> tx_buffer_;
 
-    // Packed Tally 데이터 (캐시)
-    mutable packed_data_t cached_packed_;
+    // Packed Tally 데이터 (캐시, RAII 래퍼)
+    mutable PackedData cached_packed_;
 
     // 콜백
     std::function<void()> tally_callback_;

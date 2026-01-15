@@ -13,8 +13,8 @@
 #include "freertos/FreeRTOS.h"
 #include <cstring>
 
-static const char* TAG = "02_WebSvr_Config";
-static const char* TAG_RF = "02_RF";
+static const char* TAG = "02_WS_Config";
+static const char* TAG_RF = "02_WS_RF";
 
 extern "C" {
 

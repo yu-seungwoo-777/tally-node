@@ -23,8 +23,8 @@ static const char* TAG = "02_Display";
 #define STATUS_LOG_INTERVAL_MS       5000  // 상태 로그 출력 주기 (5초)
 
 // 태스크 설정
-#define DISPLAY_TASK_STACK_SIZE      4096
-#define DISPLAY_TASK_PRIORITY        5
+#define DISPLAY_TASK_STACK_SIZE      8192  // 스택 크기 증가 (4KB → 8KB)
+#define DISPLAY_TASK_PRIORITY        4     // 우선순위 (SwitcherService 8보다 낮게, 지연 최소화)
 #define DISPLAY_TASK_INTERVAL_MS     100   // 태스크 루프 주기 (100ms)
 
 // ============================================================================
@@ -181,12 +181,12 @@ static void handle_page_transition(void)
  */
 static void print_status_log(void)
 {
-    T_LOGI(TAG, "==================== Status ====================");
+    T_LOGD(TAG, "==================== Status ====================");
 #ifdef DEVICE_MODE_TX
     // TX 모드 상태 로그
     // System
     if (s_mgr.data.system_valid) {
-        T_LOGI(TAG, "[System] ID=%s Bat=%d%% V=%.2fV T=%.1f°C Up=%us",
+        T_LOGD(TAG, "[System] ID=%s Bat=%d%% V=%.2fV T=%.1f°C Up=%us",
                 s_mgr.data.system.device_id,
                 s_mgr.data.system.battery,
                 s_mgr.data.system.voltage,
@@ -196,24 +196,24 @@ static void print_status_log(void)
 
     // LoRa
     if (s_mgr.data.lora.valid) {
-        T_LOGI(TAG, "[LoRa] RSSI=%d SNR=%.1f", s_mgr.data.lora.rssi, s_mgr.data.lora.snr);
+        T_LOGD(TAG, "[LoRa] RSSI=%d SNR=%.1f", s_mgr.data.lora.rssi, s_mgr.data.lora.snr);
     }
 
     // RF
     if (s_mgr.data.rf_valid) {
-        T_LOGI(TAG, "[RF] %.1f MHz Sync=0x%02X", s_mgr.data.rf.frequency, s_mgr.data.rf.sync_word);
+        T_LOGD(TAG, "[RF] %.1f MHz Sync=0x%02X", s_mgr.data.rf.frequency, s_mgr.data.rf.sync_word);
     }
 
     // Network
     if (s_mgr.data.network_valid) {
-        T_LOGI(TAG, "[Network] WiFi STA=%s(%s) ETH=%s(%s)",
+        T_LOGD(TAG, "[Network] WiFi STA=%s(%s) ETH=%s(%s)",
                 s_mgr.data.network.sta_connected ? "CONN" : "DIS", s_mgr.data.network.sta_ip,
                 s_mgr.data.network.eth_connected ? "CONN" : "DIS", s_mgr.data.network.eth_ip);
     }
 
     // Switcher
     if (s_mgr.data.switcher_valid) {
-        T_LOGI(TAG, "[Switcher] Dual=%d S1=%s:%d(%s) S2=%s:%d(%s)",
+        T_LOGD(TAG, "[Switcher] Dual=%d S1=%s:%d(%s) S2=%s:%d(%s)",
                 s_mgr.data.switcher.dual_mode,
                 s_mgr.data.switcher.s1_type, s_mgr.data.switcher.s1_port,
                 s_mgr.data.switcher.s1_connected ? "OK" : "FAIL",
@@ -225,7 +225,7 @@ static void print_status_log(void)
     // RX 모드 상태 로그
     // System
     if (s_mgr.data.system_valid) {
-        T_LOGI(TAG, "[System] ID=%s Bat=%d%% V=%.2fV T=%.1f°C Up=%us Stop=%d",
+        T_LOGD(TAG, "[System] ID=%s Bat=%d%% V=%.2fV T=%.1f°C Up=%us Stop=%d",
                 s_mgr.data.system.device_id,
                 s_mgr.data.system.battery,
                 s_mgr.data.system.voltage,
@@ -236,25 +236,25 @@ static void print_status_log(void)
 
     // LoRa
     if (s_mgr.data.lora.valid) {
-        T_LOGI(TAG, "[LoRa] RSSI=%d SNR=%.1f", s_mgr.data.lora.rssi, s_mgr.data.lora.snr);
+        T_LOGD(TAG, "[LoRa] RSSI=%d SNR=%.1f", s_mgr.data.lora.rssi, s_mgr.data.lora.snr);
     }
 
     // RF
     if (s_mgr.data.rf_valid) {
-        T_LOGI(TAG, "[RF] %.1f MHz Sync=0x%02X", s_mgr.data.rf.frequency, s_mgr.data.rf.sync_word);
+        T_LOGD(TAG, "[RF] %.1f MHz Sync=0x%02X", s_mgr.data.rf.frequency, s_mgr.data.rf.sync_word);
     }
 
     // Device
     if (s_mgr.data.device.valid) {
-        T_LOGI(TAG, "[Device] CamID=%d Bright=%d", s_mgr.data.device.camera_id, s_mgr.data.device.brightness);
+        T_LOGD(TAG, "[Device] CamID=%d Bright=%d", s_mgr.data.device.camera_id, s_mgr.data.device.brightness);
     }
 
     // Tally
     if (s_mgr.data.tally.valid) {
-        T_LOGI(TAG, "[Tally] PGM=%d PVW=%d", s_mgr.data.tally.pgm_count, s_mgr.data.tally.pvw_count);
+        T_LOGD(TAG, "[Tally] PGM=%d PVW=%d", s_mgr.data.tally.pgm_count, s_mgr.data.tally.pvw_count);
     }
 #endif
-    T_LOGI(TAG, "================================================");
+    T_LOGD(TAG, "================================================");
 }
 
 // ============================================================================
@@ -454,7 +454,7 @@ static esp_err_t on_camera_id_changed(const event_data_t* event)
     s_mgr.data.device.valid = true;
     rx_page_set_cam_id(*camera_id);
     render_current_page();
-    T_LOGI(TAG, "Camera ID changed (display): %d", *camera_id);
+    T_LOGD(TAG, "Camera ID changed (display): %d", *camera_id);
 
     return ESP_OK;
 }
@@ -473,7 +473,7 @@ static esp_err_t on_brightness_changed(const event_data_t* event)
     const uint8_t* brightness = (const uint8_t*)event->data;
     s_mgr.data.device.brightness = *brightness;
     s_mgr.data.device.valid = true;
-    T_LOGI(TAG, "Brightness changed (display): %d", *brightness);
+    T_LOGD(TAG, "Brightness changed (display): %d", *brightness);
 
     return ESP_OK;
 }
@@ -498,7 +498,7 @@ static esp_err_t on_stop_changed(const event_data_t* event)
     if (*stopped) {
         T_LOGW(TAG, "Function stopped (display)");
     } else {
-        T_LOGI(TAG, "Function resumed (display)");
+        T_LOGD(TAG, "Function resumed (display)");
     }
 
     // 즉시 갱신
@@ -672,7 +672,7 @@ extern "C" void display_manager_start(void)
 #endif
 
         s_mgr.events_subscribed = true;
-        T_LOGI(TAG, "Event subscription completed: EVT_INFO_UPDATED, EVT_LORA_RSSI_CHANGED"
+        T_LOGD(TAG, "Event subscription completed: EVT_INFO_UPDATED, EVT_LORA_RSSI_CHANGED"
 #ifdef DEVICE_MODE_RX
                ", EVT_TALLY_STATE_CHANGED, EVT_CAMERA_ID_CHANGED, EVT_BRIGHTNESS_CHANGED, EVT_RF_CHANGED, EVT_STOP_CHANGED, EVT_LORA_RX_STATUS_CHANGED"
 #elif defined(DEVICE_MODE_TX)

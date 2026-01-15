@@ -13,6 +13,7 @@
 #define SWITCHER_SERVICE_H
 
 #include "TallyTypes.h"
+#include "PackedData.h"
 #include "event_bus.h"
 #include <memory>
 #include <functional>
@@ -420,7 +421,7 @@ public:
 private:
     struct SwitcherInfo {
         std::unique_ptr<ISwitcherPort> adapter;
-        packed_data_t last_packed;
+        PackedData last_packed;       // RAII 래퍼 (자동 메모리 관리)
         bool has_changed;
         bool change_notified;       // 콜백 중복 방지 플래그
         uint32_t last_reconnect_attempt;
@@ -432,20 +433,27 @@ private:
         uint8_t network_interface; ///< 네트워크 인터페이스 (0=Auto, 1=Ethernet, 2=WiFi)
         uint8_t camera_limit;      ///< 카메라 제한 (0=무제한)
 
-        SwitcherInfo() : adapter(nullptr), last_packed{nullptr, 0, 0}, has_changed(false), change_notified(false), last_reconnect_attempt(0), last_packed_change_time(0), is_connected(false), type(""), ip(""), port(0), network_interface(0), camera_limit(0) {}
+        SwitcherInfo()
+            : adapter(nullptr)
+            , last_packed(TALLY_MAX_CHANNELS)  // RAII 자동 초기화
+            , has_changed(false)
+            , change_notified(false)
+            , last_reconnect_attempt(0)
+            , last_packed_change_time(0)
+            , is_connected(false)
+            , type("")
+            , ip("")
+            , port(0)
+            , network_interface(0)
+            , camera_limit(0) {}
 
         void cleanup() {
             adapter.reset();
-            if (last_packed.data) {
-                packed_data_cleanup(&last_packed);
-                last_packed.data = nullptr;
-                last_packed.data_size = 0;
-                last_packed.channel_count = 0;
-            }
             has_changed = false;
             change_notified = false;
             last_packed_change_time = 0;  // 타이머 초기화
             is_connected = false;
+            // last_packed은 자동 정리 (RAII)
         }
     };
 
@@ -472,15 +480,15 @@ private:
     mutable volatile bool switcher_changed_;
     mutable switcher_role_t last_switcher_role_;
 
-    // 결합된 Packed 데이터 캐시
-    mutable packed_data_t combined_packed_;
+    // 결합된 Packed 데이터 캐시 (RAII 래퍼)
+    mutable PackedData combined_packed_;
 
     // 네트워크 인터페이스 IP 캐시 (EVT_NETWORK_STATUS_CHANGED 이벤트로 갱신)
     static char s_cached_eth_ip[16];    ///< Ethernet IP 캐시
     static char s_cached_wifi_sta_ip[16]; ///< WiFi STA IP 캐시
 
     StaticTask_t task_buffer_;          ///< 정적 태스크 메모리
-    StackType_t task_stack_[4096];      ///< 태스크 스택 (4KB)
+    StackType_t task_stack_[8192];      ///< 태스크 스택 (8KB, 스택 오버플로우 방지)
 
     /**
      * @brief 태스크 함수 (정적)

@@ -9,7 +9,7 @@
 #include <cmath>
 #include <cstring>
 
-static const char* TAG = "02_WebSvr_JSON";
+static const char* TAG = "02_WS_JSON";
 // 사용하지 않는 변수 경고 방지
 static inline void suppress_unused_tag_warning(void) { (void)TAG; }
 

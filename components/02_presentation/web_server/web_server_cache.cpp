@@ -8,7 +8,7 @@
 #include "freertos/FreeRTOS.h"
 #include "string.h"
 
-static const char* TAG = "02_WebSvr_Cache";
+static const char* TAG = "02_WS_Cache";
 
 // ============================================================================
 // 내부 데이터 캐시
@@ -56,7 +56,8 @@ BaseType_t web_server_cache_lock(void)
     if (s_cache_mutex == nullptr) {
         return pdFALSE;
     }
-    return xSemaphoreTake(s_cache_mutex, pdMS_TO_TICKS(100));
+    // 타임아웃 0: 즉시 획득 가능할 때만 시도 (이벤트 콜백에서 블록 방지)
+    return xSemaphoreTake(s_cache_mutex, 0);
 }
 
 void web_server_cache_unlock(void)

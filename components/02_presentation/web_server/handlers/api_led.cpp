@@ -11,12 +11,13 @@
 #include "freertos/FreeRTOS.h"
 #include "cJSON.h"
 
-static const char* TAG = "02_WebSvr_LED";
+static const char* TAG = "02_WS_LED";
 
 extern "C" {
 
 esp_err_t api_led_colors_get_handler(httpd_req_t* req)
 {
+    T_LOGD(TAG, "GET /api/led/colors");
     web_server_set_cors_headers(req);
 
     // 캐시가 없으면 요청 이벤트 발행 (config_service에서 응답)
@@ -67,7 +68,7 @@ esp_err_t api_led_colors_post_handler(httpd_req_t* req)
     }
 
     // 스택 할당 구조체 (재진입 가능)
-    led_colors_event_t colors = {0};
+    led_colors_event_t colors = {};
 
     // 기본값 (기존 색상 유지)
     cJSON* program = cJSON_GetObjectItem(root, "program");
