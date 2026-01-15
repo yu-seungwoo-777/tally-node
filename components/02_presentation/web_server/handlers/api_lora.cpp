@@ -21,6 +21,9 @@ esp_err_t api_lora_scan_get_handler(httpd_req_t* req)
     const web_server_data_t* cache = web_server_cache_get();
 
     cJSON* root = cJSON_CreateObject();
+    if (!root) {
+        return web_server_send_json_internal_error(req, "Memory allocation failed");
+    }
 
     cJSON_AddBoolToObject(root, "scanning", web_server_cache_is_lora_scanning());
     cJSON_AddNumberToObject(root, "progress", web_server_cache_get_lora_scan_progress());
@@ -41,36 +44,25 @@ esp_err_t api_lora_scan_get_handler(httpd_req_t* req)
     }
     cJSON_AddItemToObject(root, "results", results);
 
-    char* json_str = cJSON_PrintUnformatted(root);
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, json_str, strlen(json_str));
-
-    cJSON_free(json_str);
-    cJSON_Delete(root);
-    return ESP_OK;
+    return web_server_send_json_response(req, root);
 }
 
 esp_err_t api_lora_scan_start_handler(httpd_req_t* req)
 {
     web_server_set_cors_headers(req);
 
-    // 요청 바디 읽기
-    char* buf = new char[256];
-    int ret = httpd_req_recv(req, buf, 255);
+    // 요청 바디 읽기 (스택 할당)
+    char buf[256];
+    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
     if (ret <= 0) {
-        delete[] buf;
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
-        return ESP_FAIL;
+        return web_server_send_json_bad_request(req, "Failed to read body");
     }
     buf[ret] = '\0';
 
     // JSON 파싱
     cJSON* root = cJSON_Parse(buf);
-    delete[] buf;
-
     if (root == nullptr) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
-        return ESP_FAIL;
+        return web_server_send_json_bad_request(req, "Invalid JSON");
     }
 
     // 파라미터 추출 (기본값: 863-870 MHz, 0.1 MHz step)
@@ -102,10 +94,7 @@ esp_err_t api_lora_scan_start_handler(httpd_req_t* req)
     };
     event_bus_publish(EVT_LORA_SCAN_START, &scan_req, sizeof(scan_req));
 
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, "{\"status\":\"started\"}");
-
-    return ESP_OK;
+    return web_server_send_json_ok(req);
 }
 
 esp_err_t api_lora_scan_stop_handler(httpd_req_t* req)
@@ -117,10 +106,7 @@ esp_err_t api_lora_scan_stop_handler(httpd_req_t* req)
 
     web_server_cache_set_lora_scan_stopped();
 
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, "{\"status\":\"stopped\"}");
-
-    return ESP_OK;
+    return web_server_send_json_ok(req);
 }
 
 } // extern "C"

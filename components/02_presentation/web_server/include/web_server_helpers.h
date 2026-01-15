@@ -90,6 +90,46 @@ static inline esp_err_t web_server_send_json_ok(httpd_req_t* req)
 }
 
 // ============================================================================
+// HTTP 에러 응답 헬퍼 (표준화)
+// ============================================================================
+
+/**
+ * @brief 400 Bad Request JSON 응답 전송
+ * @param req HTTP 요청 핸들러
+ * @param message 에러 메시지
+ * @return ESP_OK
+ */
+static inline esp_err_t web_server_send_json_bad_request(httpd_req_t* req, const char* message)
+{
+    httpd_resp_set_status(req, HTTPD_400);
+    return web_server_send_json_error(req, message);
+}
+
+/**
+ * @brief 404 Not Found JSON 응답 전송
+ * @param req HTTP 요청 핸들러
+ * @param message 에러 메시지
+ * @return ESP_OK
+ */
+static inline esp_err_t web_server_send_json_not_found(httpd_req_t* req, const char* message)
+{
+    httpd_resp_set_status(req, HTTPD_404);
+    return web_server_send_json_error(req, message);
+}
+
+/**
+ * @brief 500 Internal Server Error JSON 응답 전송
+ * @param req HTTP 요청 핸들러
+ * @param message 에러 메시지
+ * @return ESP_OK
+ */
+static inline esp_err_t web_server_send_json_internal_error(httpd_req_t* req, const char* message)
+{
+    httpd_resp_set_status(req, HTTPD_500);
+    return web_server_send_json_error(req, message);
+}
+
+// ============================================================================
 // JSON 요청 파싱 헬퍼
 // ============================================================================
 

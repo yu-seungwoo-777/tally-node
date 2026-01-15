@@ -98,7 +98,6 @@ esp_err_t api_reboot_handler(httpd_req_t* req)
 esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
 {
     web_server_set_cors_headers(req);
-    httpd_resp_set_type(req, "application/json");
 
     // 브로드캐스트 ID (0xFF 0xFF)
     uint8_t broadcast_id[LORA_DEVICE_ID_LEN] = {0xFF, 0xFF};
@@ -109,20 +108,23 @@ esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
         ret = event_bus_publish(EVT_DEVICE_REBOOT_REQUEST, broadcast_id, LORA_DEVICE_ID_LEN);
         if (ret != ESP_OK) {
             T_LOGE(TAG, "Broadcast reboot failed (attempt %d): %d", i + 1, ret);
-            httpd_resp_set_status(req, HTTPD_500);
-            httpd_resp_sendstr(req, "{\"error\":\"Failed to send broadcast reboot\"}");
-            return ESP_FAIL;
+            return web_server_send_json_internal_error(req, "Failed to send broadcast reboot");
         }
     }
 
-    if (ret == ESP_OK) {
-        T_LOGI(TAG, "Broadcast reboot command sent 3 times, TX rebooting in 500ms");
-        httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Broadcast reboot sent (3x), TX rebooting...\"}");
+    T_LOGI(TAG, "Broadcast reboot command sent 3 times, TX rebooting in 500ms");
 
-        // 3회 송신 후 500ms 대기 후 TX 재부팅
-        vTaskDelay(pdMS_TO_TICKS(500));
-        esp_restart();
+    // 성공 응답 전송
+    cJSON* json = cJSON_CreateObject();
+    if (json) {
+        cJSON_AddStringToObject(json, "status", "ok");
+        cJSON_AddStringToObject(json, "message", "Broadcast reboot sent (3x), TX rebooting...");
     }
+    web_server_send_json_response(req, json);
+
+    // 3회 송신 후 500ms 대기 후 TX 재부팅
+    vTaskDelay(pdMS_TO_TICKS(500));
+    esp_restart();
 
     return ESP_OK;
 }

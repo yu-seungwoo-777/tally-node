@@ -27,9 +27,7 @@ esp_err_t api_test_start_handler(httpd_req_t* req)
     int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
     if (ret <= 0) {
         T_LOGE(TAG, "httpd_req_recv failed: ret=%d", ret);
-        httpd_resp_set_status(req, HTTPD_400);
-        httpd_resp_sendstr(req, "{\"error\":\"Invalid request\"}");
-        return ESP_FAIL;
+        return web_server_send_json_bad_request(req, "Invalid request");
     }
     buf[ret] = '\0';
     T_LOGD(TAG, "Received JSON: %s", buf);
@@ -37,9 +35,7 @@ esp_err_t api_test_start_handler(httpd_req_t* req)
     cJSON* root = cJSON_Parse(buf);
     if (!root) {
         T_LOGE(TAG, "cJSON_Parse failed");
-        httpd_resp_set_status(req, HTTPD_400);
-        httpd_resp_sendstr(req, "{\"error\":\"Invalid JSON\"}");
-        return ESP_FAIL;
+        return web_server_send_json_bad_request(req, "Invalid JSON");
     }
 
     // 파라미터 추출
@@ -50,9 +46,7 @@ esp_err_t api_test_start_handler(httpd_req_t* req)
         T_LOGE(TAG, "Missing parameters: max_channels=%p, interval_ms=%p",
                max_channels_item, interval_ms_item);
         cJSON_Delete(root);
-        httpd_resp_set_status(req, HTTPD_400);
-        httpd_resp_sendstr(req, "{\"error\":\"Missing parameters\"}");
-        return ESP_FAIL;
+        return web_server_send_json_bad_request(req, "Missing parameters");
     }
 
     uint8_t max_channels = (uint8_t)cJSON_GetNumberValue(max_channels_item);
@@ -64,16 +58,12 @@ esp_err_t api_test_start_handler(httpd_req_t* req)
     // 파라미터 검증
     if (max_channels < 1 || max_channels > 20) {
         T_LOGE(TAG, "Invalid max_channels: %d", max_channels);
-        httpd_resp_set_status(req, HTTPD_400);
-        httpd_resp_sendstr(req, "{\"error\":\"max_channels must be 1-20\"}");
-        return ESP_FAIL;
+        return web_server_send_json_bad_request(req, "max_channels must be 1-20");
     }
 
     if (interval_ms < 100 || interval_ms > 3000) {
         T_LOGE(TAG, "Invalid interval_ms: %d", interval_ms);
-        httpd_resp_set_status(req, HTTPD_400);
-        httpd_resp_sendstr(req, "{\"error\":\"interval_ms must be 100-3000\"}");
-        return ESP_FAIL;
+        return web_server_send_json_bad_request(req, "interval_ms must be 100-3000");
     }
 
     // 이벤트 발행
@@ -83,11 +73,7 @@ esp_err_t api_test_start_handler(httpd_req_t* req)
     };
     event_bus_publish(EVT_TALLY_TEST_MODE_START, &test_config, sizeof(test_config));
 
-    // 응답
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, "{\"status\":\"started\"}");
-
-    return ESP_OK;
+    return web_server_send_json_ok(req);
 }
 
 esp_err_t api_test_stop_handler(httpd_req_t* req)
@@ -97,11 +83,7 @@ esp_err_t api_test_stop_handler(httpd_req_t* req)
     // 이벤트 발행
     event_bus_publish(EVT_TALLY_TEST_MODE_STOP, nullptr, 0);
 
-    // 응답
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, "{\"status\":\"stopped\"}");
-
-    return ESP_OK;
+    return web_server_send_json_ok(req);
 }
 
 esp_err_t api_test_internet_handler(httpd_req_t* req)
@@ -110,8 +92,7 @@ esp_err_t api_test_internet_handler(httpd_req_t* req)
 
     cJSON* root = cJSON_CreateObject();
     if (!root) {
-        httpd_resp_send_500(req);
-        return ESP_FAIL;
+        return web_server_send_json_internal_error(req, "Memory allocation failed");
     }
 
     bool success = false;
@@ -143,18 +124,7 @@ esp_err_t api_test_internet_handler(httpd_req_t* req)
         cJSON_AddNumberToObject(root, "ping", ping_ms);
     }
 
-    char* json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (json_str) {
-        httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, json_str);
-        free(json_str);
-    } else {
-        httpd_resp_send_500(req);
-    }
-
-    return ESP_OK;
+    return web_server_send_json_response(req, root);
 }
 
 esp_err_t api_test_license_server_handler(httpd_req_t* req)
@@ -163,8 +133,7 @@ esp_err_t api_test_license_server_handler(httpd_req_t* req)
 
     cJSON* root = cJSON_CreateObject();
     if (!root) {
-        httpd_resp_send_500(req);
-        return ESP_FAIL;
+        return web_server_send_json_internal_error(req, "Memory allocation failed");
     }
 
     bool success = false;
@@ -208,18 +177,7 @@ esp_err_t api_test_license_server_handler(httpd_req_t* req)
         cJSON_AddNumberToObject(root, "ping", ping_ms);
     }
 
-    char* json_str = cJSON_PrintUnformatted(root);
-    cJSON_Delete(root);
-
-    if (json_str) {
-        httpd_resp_set_type(req, "application/json");
-        httpd_resp_sendstr(req, json_str);
-        free(json_str);
-    } else {
-        httpd_resp_send_500(req);
-    }
-
-    return ESP_OK;
+    return web_server_send_json_response(req, root);
 }
 
 } // extern "C"
