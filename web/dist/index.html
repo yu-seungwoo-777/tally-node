@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tally Node Control</title>
     <style>[x-cloak]{display:none!important;}</style>
-    <!-- 개발용: Tailwind CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="css/styles.css">
     <script defer src="vendor/alpine.js"></script>
 </head>
@@ -121,7 +119,7 @@
         <!-- 메인 컨텐츠 -->
         <div class="flex-1 flex flex-col">
             <!-- 상단바 -->
-            <header class="bg-white border-b border-slate-200 flex items-center px-4 py-3">
+            <header class="lg:static sticky top-0 z-30 bg-white border-b border-slate-200 flex items-center px-4 py-3">
                 <button @click="sidebarOpen = true" class="lg:hidden p-1 mr-2">
                     <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
@@ -1647,7 +1645,7 @@
                     <!-- 카드 그리드 -->
                     <div class="columns-1 md:columns-2 gap-4">
                         <!-- System Actions -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden break-inside-avoid mb-4 inline-block w-full">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden break-inside-avoid mb-4">
                             <div class="px-3 py-2.5 border-b border-slate-100 bg-gradient-to-r from-rose-50 to-transparent">
                                 <div class="flex items-center gap-2">
                                     <div class="w-7 h-7 bg-rose-100 rounded-lg flex items-center justify-center">
@@ -1680,7 +1678,7 @@
                             </div>
                         </div>
                         <!-- Tally Test Mode -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden break-inside-avoid mb-4 inline-block w-full">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden break-inside-avoid mb-4">
                             <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-purple-50 to-transparent flex items-center justify-between">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -1750,7 +1748,7 @@
                         </div>
 
                         <!-- UI Polling Speed -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden break-inside-avoid mb-4 inline-block w-full">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden break-inside-avoid mb-4">
                             <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-transparent">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
@@ -1807,7 +1805,7 @@
                         </div>
 
                         <!-- Notices -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden break-inside-avoid mb-4 inline-block w-full">
+                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden break-inside-avoid mb-4">
                             <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-transparent flex items-center justify-between">
                                 <div class="flex items-center gap-3">
                                     <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
