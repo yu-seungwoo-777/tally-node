@@ -46,12 +46,16 @@ esp_err_t api_led_colors_post_handler(httpd_req_t* req)
 {
     web_server_set_cors_headers(req);
 
+    // 요청 크기 사전 검증
+    if (!web_server_validate_content_length(req, 512)) {
+        return ESP_FAIL;
+    }
+
     // 요청 바디 읽기 (스택 할당)
     char buf[512];
     int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
     if (ret <= 0) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
-        return ESP_FAIL;
+        return web_server_send_json_bad_request(req, "Failed to read body");
     }
     buf[ret] = '\0';
 
@@ -59,8 +63,7 @@ esp_err_t api_led_colors_post_handler(httpd_req_t* req)
     cJSON* root = cJSON_Parse(buf);
     if (root == nullptr) {
         T_LOGE(TAG, "POST /api/led/colors JSON parse failed");
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
-        return ESP_FAIL;
+        return web_server_send_json_bad_request(req, "Invalid JSON");
     }
 
     // 스택 할당 구조체 (재진입 가능)

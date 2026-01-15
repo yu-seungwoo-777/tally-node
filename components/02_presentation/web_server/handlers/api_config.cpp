@@ -32,6 +32,11 @@ esp_err_t api_config_post_handler(httpd_req_t* req)
 
     const char* path = uri + prefix_len;
 
+    // 요청 크기 사전 검증
+    if (!web_server_validate_content_length(req, 512)) {
+        return ESP_FAIL;
+    }
+
     // 요청 바디 읽기 (스택 할당)
     char buf[512];
     int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);

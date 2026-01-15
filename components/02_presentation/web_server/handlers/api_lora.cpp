@@ -51,6 +51,11 @@ esp_err_t api_lora_scan_start_handler(httpd_req_t* req)
 {
     web_server_set_cors_headers(req);
 
+    // 요청 크기 사전 검증
+    if (!web_server_validate_content_length(req, 256)) {
+        return ESP_FAIL;
+    }
+
     // 요청 바디 읽기 (스택 할당)
     char buf[256];
     int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);

@@ -22,6 +22,11 @@ esp_err_t api_test_start_handler(httpd_req_t* req)
 {
     web_server_set_cors_headers(req);
 
+    // 요청 크기 사전 검증
+    if (!web_server_validate_content_length(req, 128)) {
+        return ESP_FAIL;
+    }
+
     // JSON 파싱
     char buf[128];
     int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);

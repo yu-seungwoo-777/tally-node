@@ -129,9 +129,40 @@ static inline esp_err_t web_server_send_json_internal_error(httpd_req_t* req, co
     return web_server_send_json_error(req, message);
 }
 
+/**
+ * @brief 413 Payload Too Large JSON 응답 전송
+ * @param req HTTP 요청 핸들러
+ * @param message 에러 메시지 (생략 가능)
+ * @return ESP_OK
+ */
+static inline esp_err_t web_server_send_json_payload_too_large(httpd_req_t* req, const char* message)
+{
+    httpd_resp_set_status(req, "413 Payload Too Large");
+    if (message && message[0] != '\0') {
+        return web_server_send_json_error(req, message);
+    }
+    return web_server_send_json_error(req, "Payload too large");
+}
+
 // ============================================================================
 // JSON 요청 파싱 헬퍼
 // ============================================================================
+
+/**
+ * @brief 요청 크기 사전 검증
+ * @param req HTTP 요청 핸들러
+ * @param max_len 최대 허용 크기
+ * @return true 크기가 허용 범위 내, false 초과
+ * @details 초과 시 413 에러 응답을 자동으로 전송합니다
+ */
+static inline bool web_server_validate_content_length(httpd_req_t* req, size_t max_len)
+{
+    if (req->content_len > (int)max_len) {
+        web_server_send_json_payload_too_large(req, "Request body too large");
+        return false;
+    }
+    return true;
+}
 
 /**
  * @brief JSON 요청 바디 파싱
@@ -143,23 +174,22 @@ static inline esp_err_t web_server_send_json_internal_error(httpd_req_t* req, co
  */
 static inline cJSON* web_server_parse_json_body(httpd_req_t* req, char* buf, size_t buf_len)
 {
-    int total_len = req->content_len;
-
-    if (total_len >= buf_len) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content too large");
+    // 요청 크기 사전 검증
+    if (req->content_len >= (int)buf_len) {
+        web_server_send_json_payload_too_large(req, nullptr);
         return nullptr;
     }
 
     int ret = httpd_req_recv(req, buf, buf_len - 1);
     if (ret <= 0) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        web_server_send_json_bad_request(req, "Failed to read body");
         return nullptr;
     }
     buf[ret] = '\0';
 
     cJSON* root = cJSON_Parse(buf);
     if (!root) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        web_server_send_json_bad_request(req, "Invalid JSON");
     }
     return root;
 }
