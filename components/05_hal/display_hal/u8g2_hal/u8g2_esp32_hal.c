@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "esp_log.h"
 #include "t_log.h"
 #include "sdkconfig.h"
 
@@ -13,21 +12,17 @@
 static const char* TAG = "05_U8g2";
 static const unsigned int I2C_TIMEOUT_MS = 1000;
 
+// I2C 데이터 hex dump 출력 옵션 (디버깅용)
+// 1: 활성화, 0: 비활성화
+#ifndef U8G2_ENABLE_I2C_HEX_DUMP
+#define U8G2_ENABLE_I2C_HEX_DUMP 0
+#endif
+
 static spi_device_handle_t handle_spi;   // SPI handle.
 static i2c_cmd_handle_t handle_i2c;      // I2C handle.
 static u8g2_esp32_hal_t u8g2_esp32_hal;  // HAL state data.
 
 #define HOST    SPI3_HOST
-
-#undef ESP_ERROR_CHECK
-#define ESP_ERROR_CHECK(x)                   \
-  do {                                       \
-    esp_err_t rc = (x);                      \
-    if (rc != ESP_OK) {                      \
-      ESP_LOGE("err", "esp_err_t = %d", rc); \
-      assert(0 && #x);                       \
-    }                                        \
-  } while (0);
 
 /*
  * Initialze the ESP32 HAL.
@@ -139,7 +134,9 @@ uint8_t u8g2_esp32_i2c_byte_cb(u8x8_t* u8x8,
 
     case U8X8_MSG_BYTE_SEND: {
       uint8_t* data_ptr = (uint8_t*)arg_ptr;
-      ESP_LOG_BUFFER_HEXDUMP(TAG, data_ptr, arg_int, ESP_LOG_VERBOSE);
+#if U8G2_ENABLE_I2C_HEX_DUMP
+      T_LOGI_HEX(TAG, data_ptr, arg_int);
+#endif
 
       while (arg_int > 0) {
         ESP_ERROR_CHECK(

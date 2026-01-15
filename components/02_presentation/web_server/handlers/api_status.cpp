@@ -7,7 +7,6 @@
 #include "web_server_json.h"
 #include "event_bus.h"
 #include "lora_protocol.h"
-#include "esp_log.h"
 #include "esp_system.h"
 #include "t_log.h"
 #include "freertos/FreeRTOS.h"

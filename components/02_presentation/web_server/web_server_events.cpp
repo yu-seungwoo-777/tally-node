@@ -6,7 +6,6 @@
 #include "web_server_events.h"
 #include "web_server_cache.h"
 #include "web_server.h"
-#include "esp_log.h"
 #include "t_log.h"
 #include "string.h"
 

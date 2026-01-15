@@ -6,7 +6,6 @@
 #include "api_lora.h"
 #include "web_server_cache.h"
 #include "event_bus.h"
-#include "esp_log.h"
 #include "cJSON.h"
 #include <cstring>
 

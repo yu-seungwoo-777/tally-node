@@ -6,7 +6,6 @@
 #include "web_server_json.h"
 #include "web_server_cache.h"
 #include "app_types.h"
-#include "esp_log.h"
 #include <cmath>
 #include <cstring>
 

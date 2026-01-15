@@ -5,7 +5,6 @@
 
 #include "web_server_config.h"
 #include "event_bus.h"
-#include "esp_log.h"
 #include "t_log.h"
 #include "string.h"
 

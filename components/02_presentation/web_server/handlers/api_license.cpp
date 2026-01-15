@@ -5,7 +5,6 @@
 
 #include "api_license.h"
 #include "event_bus.h"
-#include "esp_log.h"
 #include "cJSON.h"
 #include <cstring>
 

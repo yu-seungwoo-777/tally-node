@@ -101,6 +101,31 @@ void t_log_output(t_log_level_t level, const char* tag, const char* fmt, ...);
 #define unlikely(x)    __builtin_expect(!!(x), 0)
 #endif
 
+// ============================================================
+// Hex Dump Macros (ESP_LOG_BUFFER_HEXDUMP 대체)
+// ============================================================
+
+#define T_LOG_BUFFER_HEX(level, tag, data, len) do { \
+    if (level <= T_LOG_DEFAULT_LEVEL) { \
+        const uint8_t* _data = (const uint8_t*)(data); \
+        for (int i = 0; i < (len); i += 16) { \
+            char _hex[64]; \
+            int _pos = 0; \
+            for (int j = 0; j < 16 && (i + j) < (len); j++) { \
+                _pos += snprintf(_hex + _pos, sizeof(_hex) - _pos, "%02X ", _data[i + j]); \
+            } \
+            t_log_output(level, tag, "%04X: %s", i, _hex); \
+        } \
+    } \
+} while(0)
+
+// 편의 매크로 (레벨별)
+#define T_LOGE_HEX(tag, data, len) T_LOG_BUFFER_HEX(T_LOG_ERROR, tag, data, len)
+#define T_LOGW_HEX(tag, data, len) T_LOG_BUFFER_HEX(T_LOG_WARN, tag, data, len)
+#define T_LOGI_HEX(tag, data, len) T_LOG_BUFFER_HEX(T_LOG_INFO, tag, data, len)
+#define T_LOGD_HEX(tag, data, len) T_LOG_BUFFER_HEX(T_LOG_DEBUG, tag, data, len)
+#define T_LOGV_HEX(tag, data, len) T_LOG_BUFFER_HEX(T_LOG_VERBOSE, tag, data, len)
+
 #ifdef __cplusplus
 }
 #endif

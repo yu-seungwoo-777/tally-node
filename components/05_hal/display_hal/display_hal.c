@@ -14,7 +14,6 @@
 #include "PinConfig.h"
 #include "driver/i2c.h"
 #include "driver/gpio.h"
-#include "esp_log.h"
 #include "t_log.h"
 
 static const char* TAG = "05_Display";

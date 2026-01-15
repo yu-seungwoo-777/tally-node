@@ -11,7 +11,6 @@
 #include "ws2812_hal.h"
 #include "driver/rmt_tx.h"
 #include "esp_rom_sys.h"
-#include "esp_log.h"
 #include "t_log.h"
 #include "freertos/FreeRTOS.h"
 
