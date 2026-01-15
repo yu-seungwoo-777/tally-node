@@ -8,6 +8,7 @@
  */
 
 #include "temperature_hal.h"
+#include "error_macros.h"
 #include "t_log.h"
 #include "esp_check.h"
 #include "driver/temperature_sensor.h"
@@ -114,17 +115,8 @@ esp_err_t temperature_hal_read_celsius(float* temp_c)
 {
     T_LOGD(TAG, "read_c");
 
-    // 파라미터 유효성 검사
-    if (temp_c == NULL) {
-        T_LOGE(TAG, "fail:null");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    // 초기화 상태 확인
-    if (s_temp_sensor == NULL) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
+    RETURN_ERR_IF_NULL(temp_c);
+    RETURN_ERR_IF_NOT_INIT(s_temp_sensor != NULL);
 
     // 온도 읽기 (ESP-IDF 5.0+ API)
     esp_err_t ret = temperature_sensor_get_celsius(s_temp_sensor, temp_c);
@@ -149,11 +141,7 @@ esp_err_t temperature_hal_read_fahrenheit(float* temp_f)
 {
     T_LOGD(TAG, "read_f");
 
-    // 파라미터 유효성 검사
-    if (temp_f == NULL) {
-        T_LOGE(TAG, "fail:null");
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(temp_f);
 
     // 섭씨로 읽은 후 화씨로 변환
     float temp_c;

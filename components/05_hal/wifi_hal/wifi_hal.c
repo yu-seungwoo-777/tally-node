@@ -13,6 +13,7 @@
  */
 
 #include "wifi_hal.h"
+#include "error_macros.h"
 #include "t_log.h"
 #include "esp_wifi.h"
 #include "esp_event.h"
@@ -233,10 +234,7 @@ esp_err_t wifi_hal_deinit(void)
 {
     T_LOGD(TAG, "deinit");
 
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
 
     // WiFi 정지
     esp_wifi_stop();
@@ -365,10 +363,7 @@ esp_err_t wifi_hal_start(void)
 {
     T_LOGD(TAG, "start");
 
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
 
     esp_err_t ret = esp_wifi_start();
     if (ret == ESP_OK) {
@@ -391,10 +386,7 @@ esp_err_t wifi_hal_stop(void)
 {
     T_LOGD(TAG, "stop");
 
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
 
     esp_err_t ret = esp_wifi_stop();
     if (ret == ESP_OK) {
@@ -417,10 +409,7 @@ esp_err_t wifi_hal_connect(void)
 {
     T_LOGD(TAG, "connect");
 
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
 
     esp_err_t ret = esp_wifi_connect();
     if (ret != ESP_OK) {
@@ -440,10 +429,7 @@ esp_err_t wifi_hal_disconnect(void)
 {
     T_LOGD(TAG, "disconnect");
 
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
 
     esp_err_t ret = esp_wifi_disconnect();
     if (ret != ESP_OK) {
@@ -467,15 +453,8 @@ esp_err_t wifi_hal_disconnect(void)
  */
 esp_err_t wifi_hal_set_config(wifi_interface_t iface, const void* config)
 {
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    if (config == NULL) {
-        T_LOGE(TAG, "fail:null");
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
+    RETURN_ERR_IF_NULL(config);
 
     T_LOGD(TAG, "set_cfg:if=%d", iface);
     esp_err_t ret = esp_wifi_set_config(iface, (wifi_config_t*)config);
@@ -496,15 +475,8 @@ esp_err_t wifi_hal_set_config(wifi_interface_t iface, const void* config)
  */
 esp_err_t wifi_hal_get_config(wifi_interface_t iface, void* config)
 {
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    if (config == NULL) {
-        T_LOGE(TAG, "fail:null");
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
+    RETURN_ERR_IF_NULL(config);
 
     T_LOGD(TAG, "get_cfg:if=%d", iface);
     return esp_wifi_get_config(iface, (wifi_config_t*)config);
@@ -525,10 +497,7 @@ esp_err_t wifi_hal_scan_start(void)
 {
     T_LOGD(TAG, "scan_start");
 
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
 
     // 이벤트 그룹 비트 클리어
     if (s_event_group) {
@@ -565,15 +534,8 @@ esp_err_t wifi_hal_scan_get_results(void* ap_records, uint16_t max_count, uint16
 {
     T_LOGD(TAG, "scan_get");
 
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    if (ap_records == NULL) {
-        T_LOGE(TAG, "fail:null");
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
+    RETURN_ERR_IF_NULL(ap_records);
 
     // ESP-IDF 5.5.0: number 파라미터가 입력/값으로 사용됨
     uint16_t number = max_count;

@@ -9,6 +9,7 @@
  */
 
 #include "ws2812_hal.h"
+#include "error_macros.h"
 #include "driver/rmt_tx.h"
 #include "esp_rom_sys.h"
 #include "t_log.h"
@@ -165,15 +166,8 @@ esp_err_t ws2812_hal_init(int gpio_num, uint32_t num_leds)
  */
 esp_err_t ws2812_hal_transmit(const uint8_t* data, size_t length)
 {
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
-
-    if (data == NULL) {
-        T_LOGE(TAG, "fail:null");
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
+    RETURN_ERR_IF_NULL(data);
 
     if (length == 0) {
         T_LOGE(TAG, "fail:len=0");

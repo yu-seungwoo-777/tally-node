@@ -1,5 +1,5 @@
 idf_component_register(
     SRCS "battery_hal.c"
     INCLUDE_DIRS "include"
-    REQUIRES esp_adc t_log
+    REQUIRES esp_adc t_log app_types
 )

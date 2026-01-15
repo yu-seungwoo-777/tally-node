@@ -4,6 +4,7 @@
  */
 
 #include "ethernet_hal.h"
+#include "error_macros.h"
 #include "PinConfig.h"
 #include "t_log.h"
 #include <string.h>
@@ -194,10 +195,7 @@ esp_err_t ethernet_hal_deinit(void)
 {
     T_LOGD(TAG, "deinit");
 
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
 
     ethernet_hal_stop();
     vEventGroupDelete(s_event_group);
@@ -226,10 +224,7 @@ esp_err_t ethernet_hal_start(void)
 {
     T_LOGD(TAG, "start");
 
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
 
     if (s_started) {
         T_LOGD(TAG, "ok:already");
@@ -511,10 +506,9 @@ esp_err_t ethernet_hal_enable_static(const char* ip, const char* netmask, const 
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (ip == NULL || netmask == NULL || gateway == NULL) {
-        T_LOGE(TAG, "fail:null");
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(ip);
+    RETURN_ERR_IF_NULL(netmask);
+    RETURN_ERR_IF_NULL(gateway);
 
     esp_netif_dhcpc_stop(s_netif);
 
@@ -590,10 +584,7 @@ bool ethernet_hal_has_ip(void)
  */
 esp_err_t ethernet_hal_get_status(ethernet_hal_status_t* status)
 {
-    if (status == NULL) {
-        T_LOGE(TAG, "fail:null");
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(status);
 
     memset(status, 0, sizeof(ethernet_hal_status_t));
 

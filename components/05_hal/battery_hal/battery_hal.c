@@ -10,6 +10,7 @@
  */
 
 #include "battery_hal.h"
+#include "error_macros.h"
 #include "esp_adc/adc_oneshot.h"
 #include "esp_adc/adc_cali.h"
 #include "esp_adc/adc_cali_scheme.h"
@@ -175,17 +176,8 @@ esp_err_t battery_hal_read_voltage(float* voltage)
 {
     T_LOGD(TAG, "read");
 
-    // 파라미터 유효성 검사
-    if (voltage == NULL) {
-        T_LOGE(TAG, "fail:null");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    // 초기화 상태 확인
-    if (!s_initialized) {
-        T_LOGE(TAG, "fail:not_init");
-        return ESP_ERR_INVALID_STATE;
-    }
+    RETURN_ERR_IF_NULL(voltage);
+    RETURN_ERR_IF_NOT_INIT(s_initialized);
 
     if (s_adc_handle == NULL) {
         T_LOGE(TAG, "fail:no_handle");
@@ -234,11 +226,7 @@ esp_err_t battery_hal_read_voltage_mV(int* voltage_mv)
 {
     T_LOGD(TAG, "read_mV");
 
-    // 파라미터 유효성 검사
-    if (voltage_mv == NULL) {
-        T_LOGE(TAG, "fail:null");
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(voltage_mv);
 
     float voltage;
     esp_err_t ret = battery_hal_read_voltage(&voltage);
