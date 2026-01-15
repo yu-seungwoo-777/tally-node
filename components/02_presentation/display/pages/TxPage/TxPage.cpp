@@ -2,12 +2,13 @@
  * @file TxPage.cpp
  * @brief TX 모드 페이지 구현 (스위처 연결 상태)
  *
- * 5개 페이지:
- * - Page 1: 스위처 정보 (S1, S2 듀얼 모드 지원)
- * - Page 2: AP (이름, 비밀번호, IP)
- * - Page 3: WIFI (SSID, 비밀번호, IP)
- * - Page 4: ETHERNET (IP, 게이트웨이)
- * - Page 5: 시스템 정보 (3x2 테이블)
+ * 6개 페이지:
+ * - Page 1: Tally 정보 (PGM/PVW 채널 목록)
+ * - Page 2: 스위처 정보 (S1, S2 듀얼 모드 지원)
+ * - Page 3: AP (이름, 비밀번호, IP)
+ * - Page 4: WIFI (SSID, 비밀번호, IP)
+ * - Page 5: ETHERNET (IP, 게이트웨이)
+ * - Page 6: 시스템 정보 (3x2 테이블)
  */
 
 #include "TxPage.h"
@@ -22,7 +23,20 @@ static const char* TAG = "02_TxPage";
 // 내부 상태
 // ============================================================================
 
-// 스위처 정보 (Page 1)
+// Tally 데이터 (Page 1)
+static struct {
+    uint8_t pgm_channels[20];
+    uint8_t pgm_count;
+    uint8_t pvw_channels[20];
+    uint8_t pvw_count;
+} s_tally_data = {
+    .pgm_channels = {0},
+    .pgm_count = 0,
+    .pvw_channels = {0},
+    .pvw_count = 0,
+};
+
+// 스위처 정보 (Page 2)
 static struct {
     bool dual_mode;
     char s1_type[16];
@@ -45,7 +59,7 @@ static struct {
     .s2_connected = false,
 };
 
-// AP 정보 (Page 2)
+// AP 정보 (Page 3)
 static struct {
     char ap_name[32];       // AP SSID
     char ap_password[64];   // AP 비밀번호
@@ -58,7 +72,7 @@ static struct {
     .ap_enabled = false,    // 기본 비활성화
 };
 
-// WIFI 정보 (Page 3)
+// WIFI 정보 (Page 4)
 static struct {
     char wifi_ssid[32];     // WIFI SSID
     char wifi_password[64]; // WIFI 비밀번호
@@ -71,7 +85,7 @@ static struct {
     .wifi_connected = false,
 };
 
-// ETHERNET 정보 (Page 4)
+// ETHERNET 정보 (Page 5)
 static struct {
     char eth_ip[16];        // Ethernet IP
     bool eth_dhcp_mode;     // true=DHCP, false=Static
@@ -82,7 +96,7 @@ static struct {
     .eth_connected = false,
 };
 
-// 시스템 정보 (Page 5)
+// 시스템 정보 (Page 6)
 static struct {
     uint8_t battery_percent;
     float frequency;
@@ -101,7 +115,7 @@ static struct {
     .uptime_sec = 0,
 };
 
-// 현재 페이지 (1: Switcher, 2: AP, 3: WIFI, 4: ETHERNET, 5: System)
+// 현재 페이지 (1: Tally, 2: Switcher, 3: AP, 4: WIFI, 5: ETHERNET, 6: System)
 static uint8_t s_current_page = 1;
 
 // ============================================================================
@@ -109,6 +123,9 @@ static uint8_t s_current_page = 1;
 // ============================================================================
 
 static void draw_tx_header(u8g2_t* u8g2);
+static void draw_tally_page(u8g2_t* u8g2);
+static void draw_channel_list(u8g2_t* u8g2, const uint8_t* channels, uint8_t count,
+                              int y_pos, int max_width);
 static void draw_switcher_page(u8g2_t* u8g2);
 static void draw_ap_page(u8g2_t* u8g2);
 static void draw_wifi_page(u8g2_t* u8g2);
@@ -128,22 +145,25 @@ static void page_render(u8g2_t* u8g2)
 {
     switch (s_current_page) {
         case 1:
-            draw_switcher_page(u8g2);
+            draw_tally_page(u8g2);
             break;
         case 2:
-            draw_ap_page(u8g2);
+            draw_switcher_page(u8g2);
             break;
         case 3:
-            draw_wifi_page(u8g2);
+            draw_ap_page(u8g2);
             break;
         case 4:
-            draw_ethernet_page(u8g2);
+            draw_wifi_page(u8g2);
             break;
         case 5:
+            draw_ethernet_page(u8g2);
+            break;
+        case 6:
             draw_system_page(u8g2);
             break;
         default:
-            draw_switcher_page(u8g2);
+            draw_tally_page(u8g2);
             break;
     }
 }
@@ -181,12 +201,117 @@ static void draw_tx_header(u8g2_t* u8g2)
 
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
     char page_str[8];
-    snprintf(page_str, sizeof(page_str), "%d/5", s_current_page);
+    snprintf(page_str, sizeof(page_str), "%d/6", s_current_page);
     u8g2_DrawStr(u8g2, 80, 10, page_str);
 }
 
 /**
- * @brief 스위처 페이지 그리기 (Page 1)
+ * @brief 채널 리스트 문자열 생성 (가운데 정렬 + 생략)
+ */
+static void draw_channel_list(u8g2_t* u8g2, const uint8_t* channels, uint8_t count,
+                               int y_pos, int max_width)
+{
+    u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
+
+    if (count == 0) {
+        // 채널 없음
+        const char* empty = "---";
+        int width = u8g2_GetStrWidth(u8g2, empty);
+        u8g2_DrawStr(u8g2, (max_width - width) / 2, y_pos, empty);
+        return;
+    }
+
+    // 전체 문자열 생성 (예: "1,2,3,4,5")
+    char full_str[64];
+    int offset = 0;
+    for (uint8_t i = 0; i < count && i < 20; i++) {
+        if (i > 0) {
+            offset += snprintf(full_str + offset, sizeof(full_str) - offset, ",");
+        }
+        offset += snprintf(full_str + offset, sizeof(full_str) - offset, "%d", channels[i]);
+    }
+
+    // 전체 너비 계산
+    int full_width = u8g2_GetStrWidth(u8g2, full_str);
+
+    if (full_width <= max_width) {
+        // 가운데 정렬로 그리기
+        u8g2_DrawStr(u8g2, (max_width - full_width) / 2, y_pos, full_str);
+    } else {
+        // 너무 길면 생략 (...) 처리
+        const char ellipsis[] = "...";
+        u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+        int ellipsis_width = u8g2_GetStrWidth(u8g2, ellipsis);
+
+        u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
+
+        // 가능한 많이 표시하고 나머지는 ...으로
+        char truncated[64];
+        int trunc_offset = 0;
+        int trunc_width = 0;
+
+        for (uint8_t i = 0; i < count && i < 20; i++) {
+            char num_str[8];
+            int len = snprintf(num_str, sizeof(num_str), "%d%s",
+                              channels[i], (i < count - 1) ? "," : "");
+            int num_width = u8g2_GetStrWidth(u8g2, num_str);
+
+            if (trunc_width + num_width + ellipsis_width > max_width) {
+                break;
+            }
+
+            strncpy(truncated + trunc_offset, num_str, sizeof(truncated) - trunc_offset);
+            trunc_offset += len;
+            trunc_width += num_width;
+        }
+
+        if (trunc_offset > 0) {
+            truncated[trunc_offset] = '\0';
+            int display_width = trunc_width + ellipsis_width;
+            if (display_width > max_width) {
+                display_width = max_width;
+            }
+            u8g2_DrawStr(u8g2, (max_width - display_width) / 2, y_pos, truncated);
+
+            u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+            u8g2_DrawStr(u8g2, (max_width - display_width) / 2 + trunc_width, y_pos, ellipsis);
+        }
+    }
+}
+
+/**
+ * @brief Tally 페이지 그리기 (Page 1)
+ */
+static void draw_tally_page(u8g2_t* u8g2)
+{
+    draw_tx_header(u8g2);
+
+    // 헤더: TALLY
+    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+    u8g2_DrawStr(u8g2, 2, 10, "TALLY");
+
+    // 구분선
+    u8g2_DrawHLine(u8g2, 0, 14, 128);
+
+    // 화면 절반 나누기
+    u8g2_DrawHLine(u8g2, 0, 39, 128);
+
+    // 리스트 영역 너비: 전체 128px - 라벨 영역(약23px) - 여백(5px) = 100px
+    const int list_width = 100;
+
+    // PGM 영역 (위쪽 절반)
+    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+    u8g2_DrawStr(u8g2, 110, 26, "PGM");
+    draw_channel_list(u8g2, s_tally_data.pgm_channels, s_tally_data.pgm_count, 34, list_width);
+
+    // PVW 영역 (아래쪽 절반)
+    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+    u8g2_DrawStr(u8g2, 110, 51, "PVW");
+    draw_channel_list(u8g2, s_tally_data.pvw_channels, s_tally_data.pvw_count, 59, list_width);
+}
+
+/**
+ * @brief 스위처 페이지 그리기 (Page 2)
  */
 static void draw_switcher_page(u8g2_t* u8g2)
 {
@@ -238,7 +363,7 @@ static void draw_switcher_page(u8g2_t* u8g2)
 }
 
 /**
- * @brief AP 페이지 그리기 (Page 2)
+ * @brief AP 페이지 그리기 (Page 3)
  */
 static void draw_ap_page(u8g2_t* u8g2)
 {
@@ -273,7 +398,7 @@ static void draw_ap_page(u8g2_t* u8g2)
 }
 
 /**
- * @brief WIFI 페이지 그리기 (Page 3)
+ * @brief WIFI 페이지 그리기 (Page 4)
  */
 static void draw_wifi_page(u8g2_t* u8g2)
 {
@@ -316,7 +441,7 @@ static void draw_wifi_page(u8g2_t* u8g2)
 }
 
 /**
- * @brief ETHERNET 페이지 그리기 (Page 4)
+ * @brief ETHERNET 페이지 그리기 (Page 5)
  */
 static void draw_ethernet_page(u8g2_t* u8g2)
 {
@@ -349,7 +474,7 @@ static void draw_ethernet_page(u8g2_t* u8g2)
 }
 
 /**
- * @brief 시스템 정보 페이지 그리기 (Page 5)
+ * @brief 시스템 정보 페이지 그리기 (Page 6)
  */
 static void draw_system_page(u8g2_t* u8g2)
 {
@@ -402,7 +527,27 @@ extern "C" bool tx_page_init(void)
     return display_manager_register_page(&s_tx_page_interface);
 }
 
-// ========== 스위처 정보 (Page 1) ==========
+// ========== Tally 정보 (Page 1) ==========
+
+extern "C" void tx_page_set_pgm_channels(const uint8_t* channels, uint8_t count)
+{
+    s_tally_data.pgm_count = (count > 20) ? 20 : count;
+    if (channels != nullptr && s_tally_data.pgm_count > 0) {
+        memcpy(s_tally_data.pgm_channels, channels,
+               s_tally_data.pgm_count * sizeof(uint8_t));
+    }
+}
+
+extern "C" void tx_page_set_pvw_channels(const uint8_t* channels, uint8_t count)
+{
+    s_tally_data.pvw_count = (count > 20) ? 20 : count;
+    if (channels != nullptr && s_tally_data.pvw_count > 0) {
+        memcpy(s_tally_data.pvw_channels, channels,
+               s_tally_data.pvw_count * sizeof(uint8_t));
+    }
+}
+
+// ========== 스위처 정보 (Page 2) ==========
 
 extern "C" void tx_page_set_dual_mode(bool dual_mode)
 {
@@ -437,7 +582,7 @@ extern "C" void tx_page_set_s2(const char* type, const char* ip, uint16_t port, 
     s_switcher_data.s2_connected = connected;
 }
 
-// ========== AP 정보 (Page 2) ==========
+// ========== AP 정보 (Page 3) ==========
 
 extern "C" void tx_page_set_ap_name(const char* name)
 {
@@ -468,7 +613,7 @@ extern "C" void tx_page_set_ap_enabled(bool enabled)
     s_ap_data.ap_enabled = enabled;
 }
 
-// ========== WIFI 정보 (Page 3) ==========
+// ========== WIFI 정보 (Page 4) ==========
 
 extern "C" void tx_page_set_wifi_ssid(const char* ssid)
 {
@@ -499,7 +644,7 @@ extern "C" void tx_page_set_wifi_connected(bool connected)
     s_wifi_data.wifi_connected = connected;
 }
 
-// ========== ETHERNET 정보 (Page 4) ==========
+// ========== ETHERNET 정보 (Page 5) ==========
 
 extern "C" void tx_page_set_eth_ip(const char* ip)
 {
@@ -519,7 +664,7 @@ extern "C" void tx_page_set_eth_connected(bool connected)
     s_eth_data.eth_connected = connected;
 }
 
-// ========== 시스템 정보 (Page 5) ==========
+// ========== 시스템 정보 (Page 6) ==========
 
 extern "C" void tx_page_set_battery(uint8_t percent)
 {
@@ -574,7 +719,7 @@ extern "C" void tx_page_set_snr(float snr)
 
 extern "C" void tx_page_switch_page(uint8_t page)
 {
-    if (page >= 1 && page <= 5) {
+    if (page >= 1 && page <= 6) {
         s_current_page = page;
     }
 }

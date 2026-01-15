@@ -330,6 +330,8 @@ static void process_tally_packet(const uint8_t* data, size_t length, int16_t rss
     }
 
     // Tally 상태 이벤트 발행
+    // TX 모드에서는 중복 송신 방지를 위해 이벤트 발행 스킵
+#ifndef DEVICE_MODE_TX
     static tally_event_data_t s_tally_event;  // 정적 변수 (이벤트 발행 후에도 유효)
     s_tally_event.source = SWITCHER_ROLE_PRIMARY;
     s_tally_event.channel_count = ch_count;
@@ -337,6 +339,7 @@ static void process_tally_packet(const uint8_t* data, size_t length, int16_t rss
     memcpy(s_tally_event.tally_data, payload, payload_len);
 
     event_bus_publish(EVT_TALLY_STATE_CHANGED, &s_tally_event, sizeof(s_tally_event));
+#endif
 
     // 로그 출력
     char hex_str[16];

@@ -391,9 +391,8 @@ static esp_err_t on_lora_rx_status_changed(const event_data_t* event)
 }
 #endif // DEVICE_MODE_RX
 
-#ifdef DEVICE_MODE_RX
 /**
- * @brief EVT_TALLY_STATE_CHANGED 핸들러 (RX 전용)
+ * @brief EVT_TALLY_STATE_CHANGED 핸들러 (RX/TX 공통)
  *
  * Tally 상태 변경 시 PGM/PVW 채널 추출하여 저장
  */
@@ -435,14 +434,23 @@ static esp_err_t on_tally_state_changed(const event_data_t* event)
     memcpy(s_mgr.data.tally.pvw_channels, pvw_channels, sizeof(uint8_t) * pvw_count);
     s_mgr.data.tally.valid = true;
 
-    // RxPage에 PGM/PVW 채널 설정 및 즉시 갱신
+    // Page에 PGM/PVW 채널 설정 및 즉시 갱신
+#ifdef DEVICE_MODE_RX
     rx_page_set_pgm_channels(pgm_channels, pgm_count);
     rx_page_set_pvw_channels(pvw_channels, pvw_count);
+#endif
+
+#ifdef DEVICE_MODE_TX
+    tx_page_set_pgm_channels(pgm_channels, pgm_count);
+    tx_page_set_pvw_channels(pvw_channels, pvw_count);
+#endif
+
     render_current_page();
 
     return ESP_OK;
 }
 
+#ifdef DEVICE_MODE_RX
 /**
  * @brief EVT_CAMERA_ID_CHANGED 핸들러 (RX 전용)
  *
@@ -671,6 +679,7 @@ extern "C" void display_manager_start(void)
         event_bus_subscribe(EVT_LORA_RX_STATUS_CHANGED, on_lora_rx_status_changed);
 #elif defined(DEVICE_MODE_TX)
         // TX 전용 이벤트
+        event_bus_subscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
         event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, on_switcher_status_changed);
         event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, on_network_status_changed);
         event_bus_subscribe(EVT_RF_CHANGED, on_rf_changed);
@@ -1017,33 +1026,43 @@ extern "C" void display_manager_update_rssi(int16_t rssi, float snr)
 #undef PAGE_SET_SNR
 
 // ============================================================================
-// PGM/PVW 채널 업데이트 (RX 모드만)
+// PGM/PVW 채널 업데이트 (RX/TX 공통)
 // ============================================================================
-
-#ifdef DEVICE_MODE_RX
 
 extern "C" void display_manager_update_tally(const uint8_t* pgm_channels, uint8_t pgm_count,
                                               const uint8_t* pvw_channels, uint8_t pvw_count)
 {
+#ifdef DEVICE_MODE_RX
     if (pgm_channels && pgm_count > 0) {
         rx_page_set_pgm_channels(pgm_channels, pgm_count);
     } else {
-        // PGM 채널 없으면 빈 배열로 설정
         rx_page_set_pgm_channels(nullptr, 0);
     }
 
     if (pvw_channels && pvw_count > 0) {
         rx_page_set_pvw_channels(pvw_channels, pvw_count);
     } else {
-        // PVW 채널 없으면 빈 배열로 설정
         rx_page_set_pvw_channels(nullptr, 0);
     }
+#endif
+
+#ifdef DEVICE_MODE_TX
+    if (pgm_channels && pgm_count > 0) {
+        tx_page_set_pgm_channels(pgm_channels, pgm_count);
+    } else {
+        tx_page_set_pgm_channels(nullptr, 0);
+    }
+
+    if (pvw_channels && pvw_count > 0) {
+        tx_page_set_pvw_channels(pvw_channels, pvw_count);
+    } else {
+        tx_page_set_pvw_channels(nullptr, 0);
+    }
+#endif
 
     // PGM/PVW 리스트는 즉시 갱신
     render_current_page();
 }
-
-#endif // DEVICE_MODE_RX
 
 // ============================================================================
 // Ethernet DHCP 모드 업데이트 (TX 전용)

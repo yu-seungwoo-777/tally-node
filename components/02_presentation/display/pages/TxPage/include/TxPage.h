@@ -2,12 +2,13 @@
  * @file TxPage.h
  * @brief TX 모드 페이지 (스위처 연결 상태)
  *
- * 5개 페이지:
- * - Page 1: 스위처 정보 (S1, S2 듀얼 모드 지원)
- * - Page 2: AP (이름, 비밀번호, IP)
- * - Page 3: WIFI (SSID, 비밀번호, IP)
- * - Page 4: ETHERNET (IP, 게이트웨이)
- * - Page 5: 시스템 정보 (3x2 테이블)
+ * 6개 페이지:
+ * - Page 1: Tally 정보 (PGM/PVW 채널 목록)
+ * - Page 2: 스위처 정보 (S1, S2 듀얼 모드 지원)
+ * - Page 3: AP (이름, 비밀번호, IP)
+ * - Page 4: WIFI (SSID, 비밀번호, IP)
+ * - Page 5: ETHERNET (IP, 게이트웨이)
+ * - Page 6: 시스템 정보 (3x2 테이블)
  */
 
 #ifndef TX_PAGE_H
@@ -27,7 +28,23 @@ extern "C" {
  */
 bool tx_page_init(void);
 
-// ========== 스위처 정보 (Page 1) ==========
+// ========== Tally 정보 (Page 1) ==========
+
+/**
+ * @brief PGM 채널 목록 설정
+ * @param channels 채널 배열
+ * @param count 채널 수 (최대 20개)
+ */
+void tx_page_set_pgm_channels(const uint8_t* channels, uint8_t count);
+
+/**
+ * @brief PVW 채널 목록 설정
+ * @param channels 채널 배열
+ * @param count 채널 수 (최대 20개)
+ */
+void tx_page_set_pvw_channels(const uint8_t* channels, uint8_t count);
+
+// ========== 스위처 정보 (Page 2) ==========
 
 /**
  * @brief 듀얼 모드 설정
@@ -53,7 +70,7 @@ void tx_page_set_s1(const char* type, const char* ip, uint16_t port, bool connec
  */
 void tx_page_set_s2(const char* type, const char* ip, uint16_t port, bool connected);
 
-// ========== AP 정보 (Page 2) ==========
+// ========== AP 정보 (Page 3) ==========
 
 /**
  * @brief AP 이름 설정
@@ -79,7 +96,7 @@ void tx_page_set_ap_ip(const char* ip);
  */
 void tx_page_set_ap_enabled(bool enabled);
 
-// ========== WIFI 정보 (Page 3) ==========
+// ========== WIFI 정보 (Page 4) ==========
 
 /**
  * @brief WIFI SSID 설정
@@ -105,7 +122,7 @@ void tx_page_set_wifi_ip(const char* ip);
  */
 void tx_page_set_wifi_connected(bool connected);
 
-// ========== ETHERNET 정보 (Page 4) ==========
+// ========== ETHERNET 정보 (Page 5) ==========
 
 /**
  * @brief Ethernet IP 설정
@@ -125,7 +142,7 @@ void tx_page_set_eth_dhcp_mode(bool dhcp_mode);
  */
 void tx_page_set_eth_connected(bool connected);
 
-// ========== 시스템 정보 (Page 5) ==========
+// ========== 시스템 정보 (Page 6) ==========
 
 /**
  * @brief 배터리 퍼센트 설정
@@ -185,13 +202,13 @@ void tx_page_set_snr(float snr);
 
 /**
  * @brief 페이지 전환
- * @param page 페이지 번호 (1: Switcher, 2: AP, 3: WIFI, 4: ETHERNET, 5: System)
+ * @param page 페이지 번호 (1: Tally, 2: Switcher, 3: AP, 4: WIFI, 5: ETHERNET, 6: System)
  */
 void tx_page_switch_page(uint8_t page);
 
 /**
  * @brief 현재 페이지 가져오기
- * @return 페이지 번호 (1: Switcher, 2: AP, 3: WIFI, 4: ETHERNET, 5: System)
+ * @return 페이지 번호 (1: Tally, 2: Switcher, 3: AP, 4: WIFI, 5: ETHERNET, 6: System)
  */
 uint8_t tx_page_get_current_page(void);
 
