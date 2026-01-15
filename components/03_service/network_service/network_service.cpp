@@ -73,7 +73,7 @@ private:
 
     // 태스크 설정 상수
     static constexpr uint32_t STATUS_PUBLISH_INTERVAL_MS = 1000;  // 1초마다 상태 발행
-    static constexpr uint32_t TASK_STACK_SIZE = 3072;
+    static constexpr uint32_t TASK_STACK_SIZE = 4096;  // 4KB (publishStatus 스택 사용량 증가 대응)
     static constexpr uint32_t TASK_PRIORITY = 4;
 };
 
