@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#if U8G2_ENABLE_I2C_HEX_DUMP
 #include "t_log.h"
+#endif
 #include "sdkconfig.h"
 
 #include "freertos/FreeRTOS.h"
@@ -9,7 +11,9 @@
 
 #include "u8g2_esp32_hal.h"
 
+#if U8G2_ENABLE_I2C_HEX_DUMP
 static const char* TAG = "05_U8g2";
+#endif
 static const unsigned int I2C_TIMEOUT_MS = 1000;
 
 // I2C 데이터 hex dump 출력 옵션 (디버깅용)
