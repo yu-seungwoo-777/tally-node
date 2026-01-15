@@ -1161,6 +1161,10 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
     T_LOGD(TAG, "  raw: [%s] (%d channels, %d bytes)",
              hex_str, combined.channel_count, combined.data_size);
 
+    // ========================================================================
+    // 이벤트 발행 (LoRa 송신은 LoRaService가 이벤트 구독하여 처리)
+    // ========================================================================
+
     // stack 변수 사용 (이벤트 버스가 복사)
     tally_event_data_t tally_event;
     memset(&tally_event, 0, sizeof(tally_event));
@@ -1173,11 +1177,6 @@ void SwitcherService::onSwitcherTallyChange(switcher_role_t role) {
 
     // Tally 변경 시 상태 이벤트도 발행 (웹 서버 등에서 사용)
     publishSwitcherStatus();
-
-    // 사용자 콜백 호출 (Tally 변경 알림)
-    if (tally_callback_) {
-        tally_callback_();
-    }
 }
 
 // ============================================================================

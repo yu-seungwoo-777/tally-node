@@ -55,6 +55,9 @@ static lora_service_receive_callback_t s_user_callback = nullptr;
 static bool s_rf_initialized = false;  // RF 초기화 완료 플래그
 static float s_last_frequency = 0;     // 마지막 주파수
 static uint8_t s_last_sync_word = 0;   // 마지막 sync word
+
+// 라이선스 상태 캐시 (이벤트 기반)
+static bool s_license_valid = false;   ///< 라이선스 유효 상태 캐시
 #endif
 
 // 통계
@@ -202,6 +205,82 @@ static esp_err_t on_rf_changed(const event_data_t* event) {
 
     return ESP_OK;
 }
+
+/**
+ * @brief 라이선스 상태 변경 이벤트 핸들러 (TX 전용)
+ *
+ * license_service에서 EVT_LICENSE_STATE_CHANGED 이벤트를 발행하면
+ * 라이선스 유효 상태를 캐싱합니다.
+ */
+#ifdef DEVICE_MODE_TX
+static esp_err_t on_license_state_changed(const event_data_t* event) {
+    if (event->type != EVT_LICENSE_STATE_CHANGED) {
+        return ESP_OK;
+    }
+
+    const license_state_event_t* license_event = (const license_state_event_t*)event->data;
+    if (license_event == nullptr) {
+        return ESP_OK;
+    }
+
+    // 라이선스 상태 캐싱
+    bool was_valid = s_license_valid;
+    s_license_valid = (license_event->state == LICENSE_STATE_VALID);
+
+    if (was_valid != s_license_valid) {
+        T_LOGI(TAG, "License state changed: %s -> %s (device_limit=%d)",
+                 was_valid ? "valid" : "invalid",
+                 s_license_valid ? "valid" : "invalid",
+                 license_event->device_limit);
+    }
+
+    return ESP_OK;
+}
+#endif
+
+/**
+ * @brief Tally 상태 변경 이벤트 핸들러 (TX 전용)
+ *
+ * SwitcherService에서 Tally 변경 시 EVT_TALLY_STATE_CHANGED 이벤트를 발행하면
+ * LoRaService가 이를 구독하여 LoRa 송신을 수행합니다.
+ */
+#ifdef DEVICE_MODE_TX
+static esp_err_t on_tally_state_changed(const event_data_t* event) {
+    if (event->type != EVT_TALLY_STATE_CHANGED) {
+        return ESP_OK;
+    }
+
+    const tally_event_data_t* tally_event = (const tally_event_data_t*)event->data;
+    if (tally_event == nullptr || tally_event->channel_count == 0) {
+        return ESP_OK;
+    }
+
+    // 라이선스 확인 (캐시된 상태 사용)
+    if (!s_license_valid) {
+        T_LOGW(TAG, "LoRa TX skipped: License not authenticated");
+        return ESP_OK;
+    }
+
+    // packed_data_t 생성
+    packed_data_t tally;
+    tally.channel_count = tally_event->channel_count;
+    tally.data_size = (tally_event->channel_count + 3) / 4;
+    tally.data = (uint8_t*)tally_event->tally_data;
+
+    char hex_str[16];
+    packed_data_to_hex(&tally, hex_str, sizeof(hex_str));
+
+    esp_err_t ret = lora_service_send_tally(&tally);
+    if (ret == ESP_OK) {
+        T_LOGI(TAG, "LoRa TX: [F1][%d][%s] (%d channels, %d bytes)",
+                 tally.channel_count, hex_str, tally.channel_count, tally.data_size);
+    } else {
+        T_LOGE(TAG, "LoRa TX failed: [%s] -> %s", hex_str, esp_err_to_name(ret));
+    }
+
+    return ESP_OK;
+}
+#endif
 
 // ============================================================================
 // 패킷 분류 및 처리
@@ -516,6 +595,13 @@ esp_err_t lora_service_start(void)
     // RF 변경 이벤트 구독 (TX/RX 공용)
     event_bus_subscribe(EVT_RF_CHANGED, on_rf_changed);
 
+#ifdef DEVICE_MODE_TX
+    // Tally 상태 변경 이벤트 구독 (TX 전용 - SwitcherService에서 송신 트리거)
+    event_bus_subscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
+    // 라이선스 상태 변경 이벤트 구독 (TX 전용 - 라이선스 유효 상태 캐싱)
+    event_bus_subscribe(EVT_LICENSE_STATE_CHANGED, on_license_state_changed);
+#endif
+
     // 수신 모드 시작
     ret = lora_driver_start_receive();
     if (ret != ESP_OK) {
@@ -579,6 +665,13 @@ void lora_service_stop(void)
     // 스캔 이벤트 구독 취소
     event_bus_unsubscribe(EVT_LORA_SCAN_START, on_lora_scan_start_request);
     event_bus_unsubscribe(EVT_LORA_SCAN_STOP, on_lora_scan_stop_request);
+
+#ifdef DEVICE_MODE_TX
+    // Tally 상태 변경 이벤트 구독 취소
+    event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, on_tally_state_changed);
+    // 라이선스 상태 변경 이벤트 구독 취소
+    event_bus_unsubscribe(EVT_LICENSE_STATE_CHANGED, on_license_state_changed);
+#endif
 
     // 태스크 종료 대기
     if (s_tx_task) {

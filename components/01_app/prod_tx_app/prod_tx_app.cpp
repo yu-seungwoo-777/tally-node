@@ -108,47 +108,18 @@ static struct {
     switcher_service_handle_t service;
     bool running;
     bool initialized;
-    PackedData last_tally;         // RAII 래퍼 (자동 메모리 관리)
 } s_app = {
     .service = nullptr,
     .running = false,
-    .initialized = false,
-    .last_tally = PackedData(TALLY_MAX_CHANNELS)  // RAII 자동 초기화
+    .initialized = false
 };
 
 // ============================================================================
 // SwitcherService 콜백 핸들러
 // ============================================================================
 
-static void on_tally_change(void)
-{
-    // Tally 데이터 변경 시 즉시 LoRa 송신
-    if (!s_app.initialized || !s_app.service) {
-        return;
-    }
-
-    packed_data_t tally = switcher_service_get_combined_tally(s_app.service);
-
-    // 라이센스 확인
-    if (!license_service_can_send_tally()) {
-        T_LOGW(TAG, "LoRa TX skipped: License not authenticated");
-        return;
-    }
-
-    char hex_str[16];
-    packed_data_to_hex(&tally, hex_str, sizeof(hex_str));
-
-    esp_err_t ret = lora_service_send_tally(&tally);
-    if (ret == ESP_OK) {
-        T_LOGI(TAG, "LoRa TX: [F1][%d][%s] (%d channels, %d bytes)",
-                 tally.channel_count, hex_str, tally.channel_count, tally.data_size);
-    } else {
-        T_LOGE(TAG, "LoRa TX failed: [%s] -> %s", hex_str, esp_err_to_name(ret));
-    }
-
-    // 마지막 Tally 저장 (RAII)
-    packed_data_copy(s_app.last_tally.get(), &tally);
-}
+// LoRa 송신은 SwitcherService에서 직접 처리하므로 콜백 불필요
+// (라이선스 확인, 송신 로직이 Service 레이어로 이동됨)
 
 static void on_connection_change(connection_state_t state)
 {
@@ -173,7 +144,7 @@ static esp_err_t handle_tally_state_changed(const event_data_t* event)
     // 테스트 모드 실행 중인지 확인
     bool test_mode_running = tally_test_service_is_running();
 
-    // 테스트 모드가 실행 중이 아니면 스킵 (스위처 Tally는 on_tally_change에서 처리)
+    // 테스트 모드가 실행 중이 아니면 스킵 (스위처 Tally는 SwitcherService에서 처리)
     if (!test_mode_running) {
         return ESP_OK;
     }
@@ -185,11 +156,6 @@ static esp_err_t handle_tally_state_changed(const event_data_t* event)
 
     const tally_event_data_t* tally_event = (const tally_event_data_t*)event->data;
     if (!tally_event) {
-        return ESP_OK;
-    }
-
-    // 테스트 모드에서는 라이센스 확인 패스
-    if (!test_mode_running && !license_service_can_send_tally()) {
         return ESP_OK;
     }
 
@@ -207,6 +173,7 @@ static esp_err_t handle_tally_state_changed(const event_data_t* event)
     char hex_str[16];
     packed_data_to_hex(&tally, hex_str, sizeof(hex_str));
 
+    // 테스트 모드에서는 라이선스 확인 패스
     esp_err_t ret = lora_service_send_tally(&tally);
     if (ret == ESP_OK) {
         T_LOGI(TAG, "LoRa TX (test mode): [F1][%d][%s] (%d channels, %d bytes)",
@@ -214,9 +181,6 @@ static esp_err_t handle_tally_state_changed(const event_data_t* event)
     } else {
         T_LOGE(TAG, "LoRa TX failed: [%s] -> %s", hex_str, esp_err_to_name(ret));
     }
-
-    // 마지막 Tally 저장 (RAII)
-    packed_data_copy(s_app.last_tally.get(), &tally);
 
     return ESP_OK;
 }
@@ -381,8 +345,8 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         return false;
     }
 
-    // 콜백 설정
-    switcher_service_set_tally_callback(s_app.service, on_tally_change);
+    // 콜백 설정 (LoRa 송신은 Service 레이어에서 직접 처리)
+    // switcher_service_set_tally_callback 불필요 - onSwitcherTallyChange에서 송신
     switcher_service_set_connection_callback(s_app.service, on_connection_change);
     switcher_service_set_switcher_change_callback(s_app.service, on_switcher_change);
 
@@ -602,8 +566,6 @@ void prod_tx_app_deinit(void)
         s_app.service = nullptr;
     }
 
-    // last_tally는 자동 정리 (RAII)
-
     // LoRa 정리
     lora_service_deinit();
 
@@ -646,13 +608,6 @@ void prod_tx_app_print_status(void)
 
         T_LOGI(TAG, "Dual mode: %s",
                  switcher_service_is_dual_mode_enabled(s_app.service) ? "enabled" : "disabled");
-    }
-
-    if (s_app.last_tally.get()->data && s_app.last_tally.get()->data_size > 0) {
-        char hex_str[16];
-        packed_data_to_hex(s_app.last_tally.get(), hex_str, sizeof(hex_str));
-        T_LOGI(TAG, "Last Tally: [%s] (%d channels)",
-                 hex_str, s_app.last_tally.get()->channel_count);
     }
 
     T_LOGI(TAG, "=========================");

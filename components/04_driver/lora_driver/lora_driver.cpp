@@ -218,13 +218,14 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
         return ESP_FAIL;
     }
 
-    // 태스크 생성
+    // 태스크 생성 (우선순위 8로 상향)
+    // 실시간 LoRa 수신/송신 처리를 위해 최고 우선순위 부여
     BaseType_t task_ret = xTaskCreatePinnedToCore(
         lora_isr_task,
         "lora_isr_task",
         4096,
         nullptr,
-        6,  // 우선순위 (중간)
+        8,  // 우선순위 (최고 - 실시간 통신)
         &s_task,
         1
     );
