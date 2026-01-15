@@ -27,7 +27,7 @@ esp_err_t api_status_handler(httpd_req_t* req)
 
     cJSON* root = cJSON_CreateObject();
     if (!root) {
-        return ESP_FAIL;
+        return web_server_send_json_error(req, "Memory allocation failed");
     }
 
     // Network
@@ -81,13 +81,7 @@ esp_err_t api_status_handler(httpd_req_t* req)
         cJSON_AddItemToObject(root, "led", led);
     }
 
-    char* json_str = cJSON_PrintUnformatted(root);
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_send(req, json_str, strlen(json_str));
-
-    cJSON_free(json_str);
-    cJSON_Delete(root);
-    return ESP_OK;
+    return web_server_send_json_response(req, root);
 }
 
 esp_err_t api_reboot_handler(httpd_req_t* req)

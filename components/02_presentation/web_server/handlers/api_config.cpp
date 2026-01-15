@@ -27,19 +27,16 @@ esp_err_t api_config_post_handler(httpd_req_t* req)
     size_t prefix_len = strlen(prefix);
 
     if (strncmp(uri, prefix, prefix_len) != 0) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid URI");
-        return ESP_FAIL;
+        return web_server_send_json_error(req, "Invalid URI");
     }
 
     const char* path = uri + prefix_len;
 
-    // 요청 바디 읽기
-    char* buf = new char[512];
-    int ret = httpd_req_recv(req, buf, 511);
+    // 요청 바디 읽기 (스택 할당)
+    char buf[512];
+    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
     if (ret <= 0) {
-        delete[] buf;
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
-        return ESP_FAIL;
+        return web_server_send_json_error(req, "Failed to read body");
     }
     buf[ret] = '\0';
 
@@ -47,12 +44,8 @@ esp_err_t api_config_post_handler(httpd_req_t* req)
     cJSON* root = cJSON_Parse(buf);
     if (root == nullptr) {
         T_LOGE(TAG, "POST /api/config/%s JSON parse failed", path);
-        delete[] buf;
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
-        return ESP_FAIL;
+        return web_server_send_json_error(req, "Invalid JSON");
     }
-
-    delete[] buf;
 
     // 설정 저장 요청 이벤트 데이터
     config_save_request_t save_req = {};
@@ -73,17 +66,11 @@ esp_err_t api_config_post_handler(httpd_req_t* req)
                      rf_event.frequency, rf_event.sync_word);
 
             cJSON_Delete(root);
-
-            // 응답 (NVS 저장은 broadcast 완료 후 처리됨)
-            httpd_resp_set_type(req, "application/json");
-            httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
-            return ESP_OK;
+            return web_server_send_json_ok(req);
         } else {
             T_LOGE(TAG, "Missing 'frequency' or 'syncWord'");
             cJSON_Delete(root);
-            httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST,
-                               "Missing 'frequency' or 'syncWord'");
-            return ESP_FAIL;
+            return web_server_send_json_error(req, "Missing 'frequency' or 'syncWord'");
         }
     }
     else if (strncmp(path, "switcher/primary", 16) == 0) {
@@ -106,16 +93,13 @@ esp_err_t api_config_post_handler(httpd_req_t* req)
     }
     else {
         cJSON_Delete(root);
-        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "Unknown config path");
-        return ESP_FAIL;
+        return web_server_send_json_error(req, "Unknown config path");
     }
 
     cJSON_Delete(root);
 
     if (parse_result != ESP_OK) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR,
-                           "Failed to parse config");
-        return ESP_FAIL;
+        return web_server_send_json_error(req, "Failed to parse config");
     }
 
     // 설정 저장 이벤트 발행
@@ -127,11 +111,7 @@ esp_err_t api_config_post_handler(httpd_req_t* req)
     // 네트워크 설정인 경우 재시작 이벤트도 발행
     web_server_config_publish_network_restart(&save_req);
 
-    // 응답
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
-
-    return ESP_OK;
+    return web_server_send_json_ok(req);
 }
 
 } // extern "C"

@@ -46,11 +46,10 @@ esp_err_t api_led_colors_post_handler(httpd_req_t* req)
 {
     web_server_set_cors_headers(req);
 
-    // 요청 바디 읽기
-    char* buf = new char[512];
-    int ret = httpd_req_recv(req, buf, 511);
+    // 요청 바디 읽기 (스택 할당)
+    char buf[512];
+    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
     if (ret <= 0) {
-        delete[] buf;
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
         return ESP_FAIL;
     }
@@ -58,16 +57,14 @@ esp_err_t api_led_colors_post_handler(httpd_req_t* req)
 
     // JSON 파싱
     cJSON* root = cJSON_Parse(buf);
-    delete[] buf;
-
     if (root == nullptr) {
         T_LOGE(TAG, "POST /api/led/colors JSON parse failed");
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
         return ESP_FAIL;
     }
 
-    // 정적 구조체로 이벤트 발행
-    static led_colors_event_t colors;
+    // 스택 할당 구조체 (재진입 가능)
+    led_colors_event_t colors = {0};
 
     // 기본값 (기존 색상 유지)
     cJSON* program = cJSON_GetObjectItem(root, "program");
@@ -117,10 +114,7 @@ esp_err_t api_led_colors_post_handler(httpd_req_t* req)
              colors.preview_r, colors.preview_g, colors.preview_b,
              colors.off_r, colors.off_g, colors.off_b);
 
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
-
-    return ESP_OK;
+    return web_server_send_json_ok(req);
 }
 
 } // extern "C"

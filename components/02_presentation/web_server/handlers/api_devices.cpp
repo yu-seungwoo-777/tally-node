@@ -86,7 +86,7 @@ esp_err_t api_devices_handler(httpd_req_t* req)
     if (json_str) {
         httpd_resp_set_type(req, "application/json");
         httpd_resp_sendstr(req, json_str);
-        free(json_str);
+        cJSON_free(json_str);
     } else {
         httpd_resp_send_500(req);
     }
