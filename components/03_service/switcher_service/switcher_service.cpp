@@ -9,6 +9,7 @@
 #include "atem_driver.h"
 #include "vmix_driver.h"
 #include "NVSConfig.h"
+#include "error_macros.h"
 #include <cstring>
 
 // =============================================================================
@@ -121,9 +122,7 @@ const SwitcherService::SwitcherInfo* SwitcherService::getSwitcherInfo(switcher_r
  * 듀얼 모드, 오프셋, 또는 스위처 설정(IP, Port, Interface 등) 변경 시 재연결 트리거
  */
 static esp_err_t onConfigDataEvent(const event_data_t* event) {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     if (!g_switcher_service_instance) {
         return ESP_ERR_INVALID_STATE;
@@ -144,9 +143,7 @@ static esp_err_t onConfigDataEvent(const event_data_t* event) {
  * 네트워크 연결 시 스위처가 미리 생성되어 있으면 재설정
  */
 static esp_err_t onNetworkStatusEvent(const event_data_t* event) {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     const network_status_event_t* net_status = (const network_status_event_t*)event->data;
 

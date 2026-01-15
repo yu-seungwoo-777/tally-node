@@ -7,6 +7,7 @@
 #include "web_server_cache.h"
 #include "web_server.h"
 #include "t_log.h"
+#include "error_macros.h"
 #include "string.h"
 
 static const char* TAG = "02_WebSvr_Events";
@@ -19,9 +20,7 @@ extern "C" {
 
 esp_err_t web_server_on_system_info_event(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(system_info_event_t)) {
@@ -38,9 +37,7 @@ esp_err_t web_server_on_system_info_event(const event_data_t* event)
 
 esp_err_t web_server_on_switcher_status_event(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(switcher_status_event_t)) {
@@ -57,9 +54,7 @@ esp_err_t web_server_on_switcher_status_event(const event_data_t* event)
 
 esp_err_t web_server_on_network_status_event(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(network_status_event_t)) {
@@ -76,9 +71,7 @@ esp_err_t web_server_on_network_status_event(const event_data_t* event)
 
 esp_err_t web_server_on_config_data_event(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(config_data_event_t)) {
@@ -102,9 +95,7 @@ esp_err_t web_server_on_lora_scan_start_event(const event_data_t* event)
 
 esp_err_t web_server_on_lora_scan_progress_event(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(lora_scan_progress_t)) {
@@ -121,9 +112,7 @@ esp_err_t web_server_on_lora_scan_progress_event(const event_data_t* event)
 
 esp_err_t web_server_on_lora_scan_complete_event(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(lora_scan_complete_t)) {
@@ -140,9 +129,7 @@ esp_err_t web_server_on_lora_scan_complete_event(const event_data_t* event)
 
 esp_err_t web_server_on_device_list_event(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(device_list_event_t)) {
@@ -159,9 +146,7 @@ esp_err_t web_server_on_device_list_event(const event_data_t* event)
 
 esp_err_t web_server_on_license_state_event(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     // 데이터 크기 검증
     if (event->data_size < sizeof(license_state_event_t)) {
@@ -193,9 +178,7 @@ esp_err_t web_server_on_network_restarted_event(const event_data_t* event)
 
 esp_err_t web_server_on_led_colors_event(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     if (event->type == EVT_LED_COLORS_CHANGED) {
         if (event->data_size >= sizeof(led_colors_event_t)) {

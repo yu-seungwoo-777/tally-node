@@ -8,4 +8,5 @@ idf_component_register(
         tally_types
         t_log
         board_led_driver
+        app_types
 )

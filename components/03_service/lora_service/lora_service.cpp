@@ -13,6 +13,7 @@
 #include "lora_protocol.h"
 #include "event_bus.h"
 #include "t_log.h"
+#include "error_macros.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -93,10 +94,7 @@ static esp_err_t on_lora_scan_start_request(const event_data_t* event) {
     }
 
     const auto* req = reinterpret_cast<const lora_scan_start_t*>(event->data);
-    if (req == nullptr) {
-        T_LOGW(TAG, "Invalid scan request (null data)");
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(req);
 
     return lora_service_start_scan(req->start_freq, req->end_freq, req->step);
 }
@@ -125,6 +123,8 @@ static esp_err_t on_lora_send_request(const event_data_t* event) {
         T_LOGW(TAG, "Invalid send request (null data)");
         return ESP_ERR_INVALID_ARG;
     }
+
+    RETURN_ERR_IF_NULL(req->data);
 
     return lora_service_send(req->data, req->length);
 }
@@ -451,15 +451,10 @@ esp_err_t lora_service_init(const lora_service_config_t* config)
         return ESP_FAIL;
     }
 
+    RETURN_ERR_IF_NULL(config);
+
     // 드라이버 설정 구성
     lora_config_t driver_config;
-
-    if (config == nullptr) {
-        T_LOGE(TAG, "config cannot be nullptr");
-        vQueueDelete(s_tx_queue);
-        s_tx_queue = nullptr;
-        return ESP_ERR_INVALID_ARG;
-    }
 
     driver_config.frequency = config->frequency;
     driver_config.spreading_factor = config->spreading_factor;
@@ -644,9 +639,7 @@ esp_err_t lora_service_send(const uint8_t* data, size_t length)
 
 esp_err_t lora_service_send_string(const char* str)
 {
-    if (str == nullptr) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(str);
     return lora_service_send((const uint8_t*)str, strlen(str));
 }
 
@@ -661,9 +654,7 @@ esp_err_t lora_service_send_string(const char* str)
 
 esp_err_t lora_service_send_tally(const packed_data_t* tally)
 {
-    if (tally == nullptr) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(tally);
 
     if (!packed_data_is_valid(tally)) {
         return ESP_ERR_INVALID_ARG;

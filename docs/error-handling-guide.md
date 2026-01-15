@@ -217,13 +217,13 @@ T_LOGD(TAG, "Packet received: len=%d, rssi=%d", len, rssi);
 
 ## Implementation Plan
 
-### Phase 1: 매크로 파일 추가 (1일)
+### Phase 1: 매크로 파일 추가 (완료 ✅)
 
-- [ ] `components/00_common/app_types/include/error_macros.h` 생성
-- [ ] `CMakeLists.txt`에 헤더 포함
-- [ ] 기존 `ESP_ERROR_CHECK` 유지
+- [x] `components/00_common/app_types/include/error_macros.h` 생성
+- [x] `CMakeLists.txt`에 헤더 포함
+- [x] 기존 `ESP_ERROR_CHECK` 유지
 
-### Phase 2: Service Layer 정규화 (3일)
+### Phase 2: Service Layer 정규화 (완료 ✅)
 
 대상 파일:
 - `switcher_service.cpp`
@@ -232,18 +232,19 @@ T_LOGD(TAG, "Packet received: len=%d, rssi=%d", len, rssi);
 - `lora_service.cpp`
 
 변경:
-- NULL 체크 매크로 적용
+- NULL 체크 매크로 적용 (`RETURN_ERR_IF_NULL`)
 - `esp_err_t` 반환 통일
+- 각 컴포넌트 CMakeLists.txt에 `app_types` 의존성 추가
 
-### Phase 3: Event Handlers 정규화 (2일)
+### Phase 3: Event Handlers 정규화 (완료 ✅)
 
 대상 파일:
 - `web_server_events.cpp`
-- 각 Service 이벤트 핸들러
+- `device_manager.cpp`
 
 변경:
 - `onNetworkStatusEvent` 패턴 적용
-- NULL 체크 매크로 적용
+- NULL 체크 매크로 적용 (`RETURN_ERR_IF_NULL`)
 
 ---
 

@@ -13,6 +13,7 @@
 #include "lora_protocol.h"
 #include "event_bus.h"
 #include "t_log.h"
+#include "error_macros.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_random.h"
@@ -343,9 +344,7 @@ static void on_status_response(const lora_msg_status_t* status, int16_t rssi, fl
  */
 static esp_err_t on_license_state_changed(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     const license_state_event_t* license = (const license_state_event_t*)event->data;
 
@@ -363,9 +362,7 @@ static esp_err_t on_license_state_changed(const event_data_t* event)
  */
 static esp_err_t on_lora_rx_response(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     const lora_packet_event_t* packet = (const lora_packet_event_t*)event->data;
     const uint8_t* data = packet->data;
@@ -427,9 +424,7 @@ static esp_err_t on_lora_rx_response(const event_data_t* event)
  */
 static esp_err_t on_lora_packet_sent(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     const lora_packet_event_t* packet = (const lora_packet_event_t*)event->data;
 
@@ -808,9 +803,10 @@ static struct {
  */
 static esp_err_t on_info_updated(const event_data_t* event)
 {
-    if (!event || !s_mgr.initialized) {
-        return ESP_ERR_INVALID_ARG;
+    if (!s_mgr.initialized) {
+        return ESP_ERR_INVALID_STATE;
     }
+    RETURN_ERR_IF_NULL(event);
 
     const system_info_event_t* info = (const system_info_event_t*)event->data;
     s_rx.system = *info;
@@ -824,9 +820,7 @@ static esp_err_t on_info_updated(const event_data_t* event)
  */
 static esp_err_t on_lora_rssi_changed(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     const lora_rssi_event_t* rssi = (const lora_rssi_event_t*)event->data;
     s_rx.lora = *rssi;
@@ -840,9 +834,7 @@ static esp_err_t on_lora_rssi_changed(const event_data_t* event)
  */
 static esp_err_t on_brightness_changed(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     const uint8_t* brightness = (const uint8_t*)event->data;
     s_rx.brightness = *brightness;
@@ -859,9 +851,7 @@ static esp_err_t on_brightness_changed(const event_data_t* event)
  */
 static esp_err_t on_camera_id_changed(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     const uint8_t* camera_id = (const uint8_t*)event->data;
     s_rx.camera_id = *camera_id;
@@ -1210,9 +1200,7 @@ static void handle_ping_command(const lora_cmd_ping_t* cmd)
  */
 static esp_err_t on_lora_tx_command(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     const lora_packet_event_t* packet = (const lora_packet_event_t*)event->data;
     const uint8_t* data = packet->data;

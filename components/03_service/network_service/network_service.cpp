@@ -11,6 +11,7 @@
 #include "esp_netif.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "error_macros.h"
 #include <cstring>
 
 static const char* TAG = "03_Network";
@@ -114,10 +115,7 @@ esp_err_t NetworkServiceClass::init(void)
 
 esp_err_t NetworkServiceClass::initWithConfig(const app_network_config_t* config)
 {
-    if (config == nullptr) {
-        T_LOGE(TAG, "config is null");
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(config);
 
     if (s_initialized) {
         T_LOGW(TAG, "already initialized, updating config");
@@ -331,9 +329,7 @@ network_status_t NetworkServiceClass::getStatus(void)
 
 esp_err_t NetworkServiceClass::updateConfig(const app_network_config_t* config)
 {
-    if (config == nullptr) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(config);
 
     memcpy(&s_config, config, sizeof(app_network_config_t));
     return ESP_OK;
@@ -593,9 +589,7 @@ esp_err_t NetworkServiceClass::restartAll(void)
 
 esp_err_t NetworkServiceClass::onRestartRequest(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     auto* req = (network_restart_request_t*) event->data;
 
@@ -632,9 +626,7 @@ esp_err_t NetworkServiceClass::onRestartRequest(const event_data_t* event)
 
 esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     // 이벤트 버스가 복사한 데이터를 직접 참조
     const config_data_event_t* config_event = (const config_data_event_t*)event->data;

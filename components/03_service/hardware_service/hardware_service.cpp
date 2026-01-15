@@ -9,6 +9,7 @@
 #include "event_bus.h"
 #include "battery_driver.h"
 #include "temperature_driver.h"
+#include "error_macros.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -139,9 +140,7 @@ void HardwareService::initDeviceId(void)
 
 esp_err_t HardwareService::onRssiEvent(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     const lora_rssi_event_t* status = (const lora_rssi_event_t*)event->data;
     s_lora_chip_type = status->chip_type;
@@ -151,9 +150,7 @@ esp_err_t HardwareService::onRssiEvent(const event_data_t* event)
 
 esp_err_t HardwareService::onStopEvent(const event_data_t* event)
 {
-    if (!event) {
-        return ESP_ERR_INVALID_ARG;
-    }
+    RETURN_ERR_IF_NULL(event);
 
     bool stopped = *(const bool*)event->data;
 

@@ -5,4 +5,5 @@ idf_component_register(
         lora_protocol
         event_bus
         t_log
+        app_types
 )
