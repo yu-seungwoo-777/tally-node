@@ -3,6 +3,7 @@
 idf_component_register(
     SRCS
         "web_server.cpp"
+        "web_server_routes.cpp"
         "web_server_cache.cpp"
         "web_server_events.cpp"
         "web_server_json.cpp"

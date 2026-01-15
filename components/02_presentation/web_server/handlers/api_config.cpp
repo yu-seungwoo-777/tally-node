@@ -5,6 +5,7 @@
 
 #include "api_config.h"
 #include "web_server_config.h"
+#include "web_server_helpers.h"
 #include "web_server_cache.h"
 #include "event_bus.h"
 #include "lora_protocol.h"
@@ -15,22 +16,11 @@
 static const char* TAG = "02_WebSvr_Config";
 static const char* TAG_RF = "02_RF";
 
-// ============================================================================
-// CORS 헬퍼 함수
-// ============================================================================
-
-static void set_cors_headers(httpd_req_t* req)
-{
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
-}
-
 extern "C" {
 
 esp_err_t api_config_post_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     const char* uri = req->uri;
     const char* prefix = "/api/config/";

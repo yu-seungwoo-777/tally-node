@@ -4,6 +4,7 @@
  */
 
 #include "api_devices.h"
+#include "web_server_helpers.h"
 #include "web_server_cache.h"
 #include "event_bus.h"
 #include "lora_protocol.h"
@@ -13,18 +14,11 @@
 
 static const char* TAG = "02_WebSvr_Devices";
 
-static void set_cors_headers(httpd_req_t* req)
-{
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
-}
-
 extern "C" {
 
 esp_err_t api_devices_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     const web_server_data_t* cache = web_server_cache_get();
 
@@ -102,7 +96,7 @@ esp_err_t api_devices_handler(httpd_req_t* req)
 
 esp_err_t api_delete_device_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
     char* buf = new char[256];
@@ -162,7 +156,7 @@ esp_err_t api_delete_device_handler(httpd_req_t* req)
 
 esp_err_t api_device_brightness_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
     char* buf = new char[256];
@@ -221,7 +215,7 @@ esp_err_t api_device_brightness_handler(httpd_req_t* req)
 
 esp_err_t api_device_camera_id_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
     char* buf = new char[256];
@@ -282,7 +276,7 @@ esp_err_t api_device_camera_id_handler(httpd_req_t* req)
 
 esp_err_t api_brightness_broadcast_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
     char* buf = new char[256];
@@ -344,7 +338,7 @@ esp_err_t api_brightness_broadcast_handler(httpd_req_t* req)
 
 esp_err_t api_device_ping_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
     char* buf = new char[256];
@@ -389,7 +383,7 @@ esp_err_t api_device_ping_handler(httpd_req_t* req)
 
 esp_err_t api_device_stop_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
     char* buf = new char[256];
@@ -434,7 +428,7 @@ esp_err_t api_device_stop_handler(httpd_req_t* req)
 
 esp_err_t api_device_reboot_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
     char* buf = new char[256];
@@ -479,7 +473,7 @@ esp_err_t api_device_reboot_handler(httpd_req_t* req)
 
 esp_err_t api_status_request_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     // 상태 요청 이벤트 발행
     event_bus_publish(EVT_STATUS_REQUEST, nullptr, 0);

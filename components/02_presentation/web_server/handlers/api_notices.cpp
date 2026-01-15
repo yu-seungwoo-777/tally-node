@@ -4,19 +4,13 @@
  */
 
 #include "api_notices.h"
+#include "web_server_helpers.h"
 #include "t_log.h"
 #include "esp_http_client.h"
 #include <cstring>
 #include <malloc.h>
 
 static const char* TAG = "02_WebSvr_Notices";
-
-static void set_cors_headers(httpd_req_t* req)
-{
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
-}
 
 extern "C" {
 
@@ -43,7 +37,7 @@ esp_err_t http_notices_event_handler(esp_http_client_event_t *evt)
 
 esp_err_t api_notices_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     // HTTP 응답 버퍼 (스택 오버플로우 방지: 힙 할당)
     char* response_buffer = (char*)malloc(2048);

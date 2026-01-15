@@ -4,24 +4,18 @@
  */
 
 #include "api_license.h"
+#include "web_server_helpers.h"
 #include "event_bus.h"
 #include "cJSON.h"
 #include <cstring>
 
 static const char* TAG = "02_WebSvr_License";
 
-static void set_cors_headers(httpd_req_t* req)
-{
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
-}
-
 extern "C" {
 
 esp_err_t api_license_validate_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
     char* buf = new char[512];

@@ -53,14 +53,6 @@ esp_err_t alpine_handler(httpd_req_t* req);
  */
 esp_err_t favicon_handler(httpd_req_t* req);
 
-/**
- * @brief CORS Preflight 핸들러
- * @param req HTTP 요청
- * @return ESP_OK 항상 성공
- * @details OPTIONS 요청에 대해 CORS 헤더를 설정하고 204 응답을 반환합니다
- */
-esp_err_t options_handler(httpd_req_t* req);
-
 #ifdef __cplusplus
 }
 #endif

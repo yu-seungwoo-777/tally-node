@@ -6,13 +6,6 @@
 #include "api_static.h"
 #include "static_files.h"
 
-static void set_cors_headers(httpd_req_t* req)
-{
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
-}
-
 static void set_cache_headers(httpd_req_t* req)
 {
     httpd_resp_set_hdr(req, "Cache-Control", "public, max-age=86400");
@@ -53,14 +46,6 @@ esp_err_t alpine_handler(httpd_req_t* req)
 
 esp_err_t favicon_handler(httpd_req_t* req)
 {
-    httpd_resp_set_status(req, "204 No Content");
-    httpd_resp_send(req, NULL, 0);
-    return ESP_OK;
-}
-
-esp_err_t options_handler(httpd_req_t* req)
-{
-    set_cors_headers(req);
     httpd_resp_set_status(req, "204 No Content");
     httpd_resp_send(req, NULL, 0);
     return ESP_OK;

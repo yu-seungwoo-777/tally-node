@@ -5,6 +5,7 @@
 
 #include "api_status.h"
 #include "web_server_json.h"
+#include "web_server_helpers.h"
 #include "event_bus.h"
 #include "lora_protocol.h"
 #include "esp_system.h"
@@ -14,22 +15,6 @@
 
 static const char* TAG = "02_WebSvr_Status";
 
-// ============================================================================
-// CORS 헬퍼 함수
-// ============================================================================
-
-/**
- * @brief CORS 헤더 설정
- * @param req HTTP 요청 핸들러
- * @details Cross-Origin Resource Sharing 헤더를 설정하여 웹 브라우저에서의 API 접근을 허용합니다
- */
-static void set_cors_headers(httpd_req_t* req)
-{
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
-}
-
 extern "C" {
 
 // ============================================================================
@@ -38,7 +23,7 @@ extern "C" {
 
 esp_err_t api_status_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     cJSON* root = cJSON_CreateObject();
     if (!root) {
@@ -107,7 +92,7 @@ esp_err_t api_status_handler(httpd_req_t* req)
 
 esp_err_t api_reboot_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"rebooting\"}");
 
@@ -118,7 +103,7 @@ esp_err_t api_reboot_handler(httpd_req_t* req)
 
 esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
     httpd_resp_set_type(req, "application/json");
 
     // 브로드캐스트 ID (0xFF 0xFF)

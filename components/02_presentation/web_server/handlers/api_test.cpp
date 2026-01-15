@@ -4,6 +4,7 @@
  */
 
 #include "api_test.h"
+#include "web_server_helpers.h"
 #include "event_bus.h"
 #include "t_log.h"
 #include "esp_timer.h"
@@ -15,18 +16,11 @@
 
 static const char* TAG = "02_WebSvr_Test";
 
-static void set_cors_headers(httpd_req_t* req)
-{
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
-}
-
 extern "C" {
 
 esp_err_t api_test_start_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     // JSON 파싱
     char buf[128];
@@ -98,7 +92,7 @@ esp_err_t api_test_start_handler(httpd_req_t* req)
 
 esp_err_t api_test_stop_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     // 이벤트 발행
     event_bus_publish(EVT_TALLY_TEST_MODE_STOP, nullptr, 0);
@@ -112,7 +106,7 @@ esp_err_t api_test_stop_handler(httpd_req_t* req)
 
 esp_err_t api_test_internet_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     cJSON* root = cJSON_CreateObject();
     if (!root) {
@@ -165,7 +159,7 @@ esp_err_t api_test_internet_handler(httpd_req_t* req)
 
 esp_err_t api_test_license_server_handler(httpd_req_t* req)
 {
-    set_cors_headers(req);
+    web_server_set_cors_headers(req);
 
     cJSON* root = cJSON_CreateObject();
     if (!root) {

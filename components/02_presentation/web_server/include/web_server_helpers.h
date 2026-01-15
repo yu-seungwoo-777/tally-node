@@ -1,0 +1,147 @@
+/**
+ * @file web_server_helpers.h
+ * @brief Web Server 공통 헬퍼 함수 (CORS, JSON 파싱/응답)
+ */
+
+#ifndef TALLY_WEB_SERVER_HELPERS_H
+#define TALLY_WEB_SERVER_HELPERS_H
+
+#include "esp_http_server.h"
+#include "esp_err.h"
+#include "cJSON.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// ============================================================================
+// CORS 헤더
+// ============================================================================
+
+/**
+ * @brief CORS 헤더 설정
+ * @param req HTTP 요청 핸들러
+ * @details Cross-Origin Resource Sharing 헤더를 설정하여 웹 브라우저에서의 API 접근을 허용합니다
+ */
+static inline void web_server_set_cors_headers(httpd_req_t* req)
+{
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
+}
+
+// ============================================================================
+// JSON 응답 헬퍼
+// ============================================================================
+
+/**
+ * @brief JSON 응답 전송
+ * @param req HTTP 요청 핸들러
+ * @param json cJSON 객체 (전송 후 자동 해제됨)
+ * @return ESP_OK 성공, ESP_ERR_INVALID_ARG json이 nullptr
+ */
+static inline esp_err_t web_server_send_json_response(httpd_req_t* req, cJSON* json)
+{
+    if (!json) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    char* json_str = cJSON_PrintUnformatted(json);
+    if (!json_str) {
+        cJSON_Delete(json);
+        return ESP_ERR_NO_MEM;
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, json_str, strlen(json_str));
+
+    cJSON_free(json_str);
+    cJSON_Delete(json);
+    return ESP_OK;
+}
+
+/**
+ * @brief JSON 에러 응답 전송
+ * @param req HTTP 요청 핸들러
+ * @param message 에러 메시지
+ * @return ESP_OK
+ */
+static inline esp_err_t web_server_send_json_error(httpd_req_t* req, const char* message)
+{
+    cJSON* json = cJSON_CreateObject();
+    if (json) {
+        cJSON_AddStringToObject(json, "error", message);
+    }
+    return web_server_send_json_response(req, json);
+}
+
+/**
+ * @brief JSON 성공 응답 전송
+ * @param req HTTP 요청 핸들러
+ * @return ESP_OK
+ */
+static inline esp_err_t web_server_send_json_ok(httpd_req_t* req)
+{
+    cJSON* json = cJSON_CreateObject();
+    if (json) {
+        cJSON_AddStringToObject(json, "status", "ok");
+    }
+    return web_server_send_json_response(req, json);
+}
+
+// ============================================================================
+// JSON 요청 파싱 헬퍼
+// ============================================================================
+
+/**
+ * @brief JSON 요청 바디 파싱
+ * @param req HTTP 요청 핸들러
+ * @param buf 읽기 버퍼
+ * @param buf_len 버퍼 크기
+ * @return cJSON 객체 (사용 후 cJSON_Delete로 해제), 실패 시 nullptr
+ * @details 실패 시 HTTP 에러 응답을 자동으로 전송합니다
+ */
+static inline cJSON* web_server_parse_json_body(httpd_req_t* req, char* buf, size_t buf_len)
+{
+    int total_len = req->content_len;
+
+    if (total_len >= buf_len) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content too large");
+        return nullptr;
+    }
+
+    int ret = httpd_req_recv(req, buf, buf_len - 1);
+    if (ret <= 0) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
+        return nullptr;
+    }
+    buf[ret] = '\0';
+
+    cJSON* root = cJSON_Parse(buf);
+    if (!root) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+    }
+    return root;
+}
+
+// ============================================================================
+// OPTIONS 핸들러 (공통)
+// ============================================================================
+
+/**
+ * @brief CORS Preflight OPTIONS 핸들러
+ * @param req HTTP 요청 핸들러
+ * @return ESP_OK
+ */
+static esp_err_t web_server_options_handler(httpd_req_t* req)
+{
+    web_server_set_cors_headers(req);
+    httpd_resp_send(req, nullptr, 0);
+    return ESP_OK;
+}
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // TALLY_WEB_SERVER_HELPERS_H
