@@ -183,6 +183,28 @@ case U8X8_MSG_BYTE_SEND: {
 
 ---
 
+## Coding Standards
+
+### 언어 규칙
+
+| 요소 | 언어 | 예시 |
+|------|------|------|
+| 로그 메시지 | **영문** | `T_LOGE(TAG, "Failed to initialize I2C: %d", err);` |
+| 주석 | **한국어** | `// I2C 버스 초기화` |
+
+**예시:**
+```c
+// I2C 통신으로 디스플레이 초기화 시도
+T_LOGI(TAG, "Initializing display via I2C");
+
+// 초기화 실패 시 에러 로그 출력
+if (ret != ESP_OK) {
+    T_LOGE(TAG, "Display initialization failed: 0x%x", ret);
+}
+```
+
+---
+
 ## References
 
 - `include/LogConfig.h` - 로그 설정
