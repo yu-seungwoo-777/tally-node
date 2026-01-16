@@ -14,7 +14,6 @@
 #include "esp_rom_sys.h"
 #include "t_log.h"
 #include "freertos/FreeRTOS.h"
-#include <string.h>
 
 static const char* TAG = "05_Ws2812";
 
@@ -53,9 +52,9 @@ static const char* TAG = "05_Ws2812";
 #define WS2812_RESET_DURATION_US   50
 
 /**
- * @brief WS2812 LED 데이터 버퍼 크기
+ * @brief RMT 전송 완료 대기 시간 (ms)
  */
-#define WS2812_BUFFER_SIZE    24  // LED 8개 x 3바이트 (GRB)
+#define RMT_TX_WAIT_TIMEOUT_MS     10
 
 // ============================================================================
 // 내부 상태 변수
@@ -72,16 +71,6 @@ static uint32_t s_num_leds = 1;
 
 /** 초기화 완료 여부 */
 static bool s_initialized = false;
-
-/** 전송 중 플래그 (Non-blocking 큐 방식) */
-static volatile bool s_transmitting = false;
-
-/** 대기 중인 데이터 버퍼 (전송 중 새 요청을 저장) */
-static uint8_t s_pending_buffer[WS2812_BUFFER_SIZE];
-static size_t s_pending_length = 0;
-
-/** 대기 중인 데이터 플래그 */
-static volatile bool s_has_pending = false;
 
 // ============================================================================
 // 공개 API 구현
@@ -166,12 +155,10 @@ esp_err_t ws2812_hal_init(int gpio_num, uint32_t num_leds)
 }
 
 /**
- * @brief WS2812 데이터 전송 (Non-blocking + 큐 버퍼)
+ * @brief WS2812 데이터 전송
  *
  * RGB 데이터를 WS2812 LED로 전송합니다.
- * - 전송 중 새 요청이 들어오면 pending 버퍼에 저장 (최신 상태 유지)
- * - 다음 호출 때 pending 데이터를 자동으로 전송
- * - Non-blocking으로 즉시 반환 (약 0.25ms 전송 시간은 백그라운드에서 진행)
+ * 데이터 형식: GRB 순서 (LED당 3바이트)
  *
  * @param data 전송할 데이터 버퍼 (GRB 순서)
  * @param length 데이터 길이 (LED 개수 * 3)
@@ -182,59 +169,41 @@ esp_err_t ws2812_hal_transmit(const uint8_t* data, size_t length)
     RETURN_ERR_IF_NOT_INIT(s_initialized);
     RETURN_ERR_IF_NULL(data);
 
-    if (length == 0 || length > WS2812_BUFFER_SIZE) {
-        T_LOGE(TAG, "fail:len=%zu", length);
+    if (length == 0) {
+        T_LOGE(TAG, "fail:len=0");
         return ESP_ERR_INVALID_ARG;
     }
 
-    // 1. 이전 전송 완료 확인 및 pending 처리
-    if (s_transmitting) {
-        // 전송 중: 현재 전송이 완료되었는지 확인
-        esp_err_t ret = rmt_tx_wait_all_done(s_tx_channel, 0);  // Non-blocking 체크
-        if (ret == ESP_OK) {
-            // 전송 완료: 리셋 신호 후 플래그 해제
-            esp_rom_delay_us(WS2812_RESET_DURATION_US);
-            s_transmitting = false;
-        } else {
-            // 여전히 전송 중: pending 버퍼에 저장 (덮어쓰기 - 최신 상태)
-            memcpy(s_pending_buffer, data, length);
-            s_pending_length = length;
-            s_has_pending = true;
-            T_LOGD(TAG, "pending:%zu", length);
-            return ESP_OK;  // Non-blocking으로 즉시 반환
-        }
+    // 이전 전송이 완료될 때까지 대기 (Non-blocking이 아니지만 최대 10ms만 대기)
+    // 실제 전송은 0.3ms 정도 소요되므로 대부분 즉시 완료됨
+    esp_err_t wait_ret = rmt_tx_wait_all_done(s_tx_channel, pdMS_TO_TICKS(RMT_TX_WAIT_TIMEOUT_MS));
+    if (wait_ret != ESP_OK) {
+        T_LOGE(TAG, "fail:wait:0x%x", wait_ret);
+        return ESP_ERR_TIMEOUT;
     }
 
-    // 2. 전송 완료 상태: pending 데이터 먼저 처리
-    const uint8_t* tx_data;
-    size_t tx_length;
-
-    if (s_has_pending) {
-        // pending 버퍼에 새 데이터 덮어쓰기 (최신 상태)
-        memcpy(s_pending_buffer, data, length);
-        s_pending_length = length;
-        s_has_pending = false;
-        tx_data = s_pending_buffer;
-        tx_length = s_pending_length;
-    } else {
-        tx_data = data;
-        tx_length = length;
-    }
-
-    // 4. RMT 전송 시작 (Non-blocking)
     rmt_transmit_config_t tx_config = {
         .loop_count = 0,
     };
 
-    esp_err_t ret = rmt_transmit(s_tx_channel, s_bytes_encoder, tx_data, tx_length, &tx_config);
+    esp_err_t ret = rmt_transmit(s_tx_channel, s_bytes_encoder, data, length, &tx_config);
     if (ret != ESP_OK) {
         T_LOGE(TAG, "fail:tx:0x%x", ret);
         return ret;
     }
 
-    s_transmitting = true;
-    T_LOGD(TAG, "ok:%zu", tx_length);
-    return ESP_OK;  // Non-blocking으로 즉시 반환
+    // 전송 완료 대기 (약 0.3ms)
+    ret = rmt_tx_wait_all_done(s_tx_channel, pdMS_TO_TICKS(RMT_TX_WAIT_TIMEOUT_MS));
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "fail:wait2:0x%x", ret);
+        return ESP_ERR_TIMEOUT;
+    }
+
+    // WS2812 리셋 신호 (짧은 delay)
+    esp_rom_delay_us(WS2812_RESET_DURATION_US);
+
+    T_LOGD(TAG, "ok:%zu", length);
+    return ESP_OK;
 }
 
 /**
