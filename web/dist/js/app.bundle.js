@@ -930,7 +930,7 @@
             })
           });
           const data = await res.json();
-          if (data.status === "started") {
+          if (data.status === "ok") {
             this.showToast("Scanning 850-930 MHz...", "alert-info");
             this.startChannelScanPolling();
           } else {

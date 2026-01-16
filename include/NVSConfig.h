@@ -21,17 +21,17 @@
 // WiFi STA 기본값
 // ============================================================================
 
-#define NVS_WIFI_STA_SSID             "HOME WIFI"
-#define NVS_WIFI_STA_PASSWORD         "33333333"
+#define NVS_WIFI_STA_SSID             ""
+#define NVS_WIFI_STA_PASSWORD         ""
 
 // ============================================================================
 // Ethernet 기본값
 // ============================================================================
 
 #define NVS_ETHERNET_DHCP_ENABLED     1
-#define NVS_ETHERNET_STATIC_IP        "192.168.0.100"
+#define NVS_ETHERNET_STATIC_IP        "192.168.10.100"
 #define NVS_ETHERNET_STATIC_NETMASK   "255.255.255.0"
-#define NVS_ETHERNET_STATIC_GATEWAY   "192.168.0.1"
+#define NVS_ETHERNET_STATIC_GATEWAY   "192.168.10.1"
 
 // ============================================================================
 // LoRa 기본값
@@ -50,24 +50,24 @@
 
 // Primary Switcher
 #define NVS_SWITCHER_PRI_TYPE         0         // 0=ATEM, 1=OBS, 2=vMix
-#define NVS_SWITCHER_PRI_IP           "192.168.0.240"
+#define NVS_SWITCHER_PRI_IP           "192.168.10.240"
 #define NVS_SWITCHER_PRI_PORT         0         // 0=기본 포트 사용
 #define NVS_SWITCHER_PRI_PASSWORD     ""
-#define NVS_SWITCHER_PRI_INTERFACE    2         // 1=WiFi, 2=Ethernet
+#define NVS_SWITCHER_PRI_INTERFACE    0         // 1=WiFi, 2=Ethernet
 #define NVS_SWITCHER_PRI_CAMERA_LIMIT 0         // 0=무제한
 #define NVS_SWITCHER_PRI_DEBUG_PACKET false     // 패킷 디버그 로그
 
 // Secondary Switcher
 #define NVS_SWITCHER_SEC_TYPE         0         // 0=ATEM
-#define NVS_SWITCHER_SEC_IP           "192.168.0.244"
+#define NVS_SWITCHER_SEC_IP           "192.168.10.244"
 #define NVS_SWITCHER_SEC_PORT         0
 #define NVS_SWITCHER_SEC_PASSWORD     ""
-#define NVS_SWITCHER_SEC_INTERFACE    1         // WiFi
+#define NVS_SWITCHER_SEC_INTERFACE    0         // WiFi
 #define NVS_SWITCHER_SEC_CAMERA_LIMIT 0
 #define NVS_SWITCHER_SEC_DEBUG_PACKET false     // 패킷 디버그 로그
 
 // Dual Mode
-#define NVS_DUAL_ENABLED              true
+#define NVS_DUAL_ENABLED              false
 #define NVS_DUAL_OFFSET               4
 
 // ============================================================================
