@@ -372,6 +372,17 @@ static void process_tally_packet(const uint8_t* data, size_t length, int16_t rss
     s_rx_status_event.historyCount = 0;  // 미사용
 
     event_bus_publish(EVT_LORA_RX_STATUS_CHANGED, &s_rx_status_event, sizeof(s_rx_status_event));
+
+    // RSSI/SNR 이벤트 발행 (헤더 안테나 아이콘용)
+    lora_status_t driver_status = lora_driver_get_status();
+    lora_rssi_event_t rssi_event;
+    rssi_event.is_running = s_running;
+    rssi_event.is_initialized = s_initialized;
+    rssi_event.chip_type = (uint8_t)driver_status.chip_type;
+    rssi_event.frequency = driver_status.frequency;
+    rssi_event.rssi = rssi;
+    rssi_event.snr = (int8_t)snr;
+    event_bus_publish(EVT_LORA_RSSI_CHANGED, &rssi_event, sizeof(rssi_event));
 }
 
 /**

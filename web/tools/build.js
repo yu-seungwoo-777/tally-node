@@ -174,7 +174,7 @@ const indexPath = path.join(DIST_DIR, 'index.html');
 let indexHtml = fs.readFileSync(indexPath, 'utf-8');
 indexHtml = indexHtml.replace(
     '<script type="module" src="js/app.js"></script>',
-    '<script src="js/app.bundle.js"></script>'
+    '<script src="js/app.bundle.js?v=' + Date.now() + '"></script>'
 );
 fs.writeFileSync(indexPath, indexHtml);
 

@@ -90,7 +90,8 @@
       ledColors: {
         program: { r: 255, g: 0, b: 0 },
         preview: { r: 0, g: 255, b: 0 },
-        off: { r: 0, g: 0, b: 0 }
+        off: { r: 0, g: 0, b: 0 },
+        saving: false
       },
       // 폼 입력 임시 데이터
       form: {
