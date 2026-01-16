@@ -19,7 +19,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
-#include "lwip/dns.h"  // LwIP DNS
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 
@@ -38,6 +37,10 @@ static esp_eth_handle_t s_eth_handle = NULL;
 static esp_netif_t* s_netif = NULL;
 static ethernet_hal_event_callback_t s_event_callback = NULL;
 static EventGroupHandle_t s_event_group = NULL;
+
+/** ESP-IDF 5.5.0: 이벤트 핸들러 인스턴스 */
+static esp_event_handler_instance_t s_eth_event_instance = NULL;
+static esp_event_handler_instance_t s_ip_event_instance = NULL;
 
 // 이벤트 비트
 #define ETH_HAL_STARTED_BIT    BIT0
@@ -349,14 +352,14 @@ esp_err_t ethernet_hal_start(void)
     esp_derive_local_mac(local_mac, base_mac);
     esp_eth_ioctl(s_eth_handle, ETH_CMD_S_MAC_ADDR, local_mac);
 
-    // 이벤트 핸들러 등록
-    ret = esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL);
+    // 이벤트 핸들러 등록 (ESP-IDF 5.5.0: instance API 사용)
+    ret = esp_event_handler_instance_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL, &s_eth_event_instance);
     if (ret != ESP_OK) {
         T_LOGE(TAG, "fail:evt_hdlr:0x%x", ret);
         return ret;
     }
 
-    ret = esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &ip_event_handler, NULL);
+    ret = esp_event_handler_instance_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &ip_event_handler, NULL, &s_ip_event_instance);
     if (ret != ESP_OK) {
         T_LOGE(TAG, "fail:ip_hdlr:0x%x", ret);
         return ret;
@@ -366,14 +369,15 @@ esp_err_t ethernet_hal_start(void)
     esp_netif_config_t netif_cfg = ESP_NETIF_DEFAULT_ETH();
     s_netif = esp_netif_new(&netif_cfg);
 
-    // DNS 설정
-    ip_addr_t dns_primary, dns_backup;
-    dns_primary.u_addr.ip4.addr = esp_ip4addr_aton("8.8.8.8");
-    dns_primary.type = IPADDR_TYPE_V4;
-    dns_backup.u_addr.ip4.addr = esp_ip4addr_aton("1.1.1.1");
-    dns_backup.type = IPADDR_TYPE_V4;
-    dns_setserver(0, &dns_primary);
-    dns_setserver(1, &dns_backup);
+    // DNS 설정 (ESP-IDF 5.5.0: esp_netif_set_dns_info 사용)
+    esp_netif_dns_info_t dns_info;
+    dns_info.ip.type = ESP_IPADDR_TYPE_V4;
+    dns_info.ip.u_addr.ip4.addr = esp_ip4addr_aton("8.8.8.8");
+
+    esp_netif_set_dns_info(s_netif, ESP_NETIF_DNS_MAIN, &dns_info);
+
+    dns_info.ip.u_addr.ip4.addr = esp_ip4addr_aton("1.1.1.1");
+    esp_netif_set_dns_info(s_netif, ESP_NETIF_DNS_BACKUP, &dns_info);
 
     // netif 연결
     void* glue = esp_eth_new_netif_glue(s_eth_handle);
@@ -424,7 +428,15 @@ esp_err_t ethernet_hal_stop(void)
         s_netif = NULL;
     }
 
-    esp_event_handler_unregister(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler);
+    // 이벤트 핸들러 등록 해제 (ESP-IDF 5.5.0: instance API 사용)
+    if (s_eth_event_instance) {
+        esp_event_handler_instance_unregister(ETH_EVENT, ESP_EVENT_ANY_ID, s_eth_event_instance);
+        s_eth_event_instance = NULL;
+    }
+    if (s_ip_event_instance) {
+        esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_ETH_GOT_IP, s_ip_event_instance);
+        s_ip_event_instance = NULL;
+    }
 
     s_started = false;
     s_state = ETHERNET_HAL_STATE_STOPPED;

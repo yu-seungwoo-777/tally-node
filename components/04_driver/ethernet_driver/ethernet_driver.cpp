@@ -10,7 +10,6 @@
 #include "esp_eth.h"
 #include "esp_netif.h"
 #include <cstring>
-#include "lwip/dns.h"  // LwIP DNS (dns_setserver)
 
 static const char* TAG = "04_Ethernet";
 
@@ -117,13 +116,9 @@ void EthernetDriver::eventHandler(void* arg, esp_event_base_t event_base,
             snprintf(ip_str, sizeof(ip_str), IPSTR, IP2STR(&event->ip_info.ip));
             T_LOGD(TAG, "evt:got_ip:%s", ip_str);
 
-            ip_addr_t dns_primary, dns_backup;
-            dns_primary.u_addr.ip4.addr = esp_ip4addr_aton("8.8.8.8");
-            dns_primary.type = IPADDR_TYPE_V4;
-            dns_backup.u_addr.ip4.addr = esp_ip4addr_aton("1.1.1.1");
-            dns_backup.type = IPADDR_TYPE_V4;
-            dns_setserver(0, &dns_primary);
-            dns_setserver(1, &dns_backup);
+            // DNS 설정 (ESP-IDF 5.5.0: esp_netif_set_dns_info 사용)
+            // HAL 레벨에서 이미 설정되었으므로 여기서는 생략
+            // 필요하다면 HAL에서 netif 핸들을 가져와서 설정
 
             if (s_network_callback) {
                 s_network_callback(true, ip_str);

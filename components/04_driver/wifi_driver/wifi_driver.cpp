@@ -12,7 +12,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cstring>
-#include "lwip/dns.h"  // LwIP DNS (dns_setserver)
 
 static const char* TAG = "04_WiFi";
 
@@ -238,16 +237,15 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
             T_LOGD(TAG, "  Netmask: " IPSTR, IP2STR(&event->ip_info.netmask));
             T_LOGD(TAG, "  Gateway: " IPSTR, IP2STR(&event->ip_info.gw));
 
-            // DNS 서버 명시적 설정 (Google DNS, Cloudflare) - LwIP 직접 사용
-            ip_addr_t dns_primary, dns_backup;
-            dns_primary.u_addr.ip4.addr = esp_ip4addr_aton("8.8.8.8");
-            dns_primary.type = IPADDR_TYPE_V4;
-            dns_backup.u_addr.ip4.addr = esp_ip4addr_aton("1.1.1.1");
-            dns_backup.type = IPADDR_TYPE_V4;
+            // DNS 서버 명시적 설정 (Google DNS, Cloudflare)
+            // ESP-IDF 5.5.0: esp_netif_set_dns_info 사용
+            esp_netif_dns_info_t dns_info;
+            dns_info.ip.type = ESP_IPADDR_TYPE_V4;
+            dns_info.ip.u_addr.ip4.addr = esp_ip4addr_aton("8.8.8.8");
+            esp_netif_set_dns_info(s_netif_sta, ESP_NETIF_DNS_MAIN, &dns_info);
 
-            // LwIP DNS 서버 직접 설정
-            dns_setserver(0, &dns_primary);   // DNS_INDEX 0 = Primary
-            dns_setserver(1, &dns_backup);    // DNS_INDEX 1 = Backup
+            dns_info.ip.u_addr.ip4.addr = esp_ip4addr_aton("1.1.1.1");
+            esp_netif_set_dns_info(s_netif_sta, ESP_NETIF_DNS_BACKUP, &dns_info);
 
             // 네트워크 상태 변경 콜백 호출 (연결 성공)
             if (s_network_callback) {

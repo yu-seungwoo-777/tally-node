@@ -20,7 +20,6 @@
 #include "esp_netif.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
-#include "lwip/dns.h"  // LwIP DNS 설정
 
 static const char* TAG = "05_WiFi";
 
@@ -67,6 +66,10 @@ static wifi_hal_event_callback_t s_event_callback = NULL;
 
 /** 비동기 이벤트 처리를 위한 이벤트 그룹 */
 static EventGroupHandle_t s_event_group = NULL;
+
+/** ESP-IDF 5.5.0: 이벤트 핸들러 인스턴스 */
+static esp_event_handler_instance_t s_wifi_event_instance = NULL;
+static esp_event_handler_instance_t s_ip_event_instance = NULL;
 
 // ============================================================================
 // 내부 함수
@@ -193,17 +196,17 @@ esp_err_t wifi_hal_init(void)
         return ret;
     }
 
-    // WiFi 이벤트 핸들러 등록
-    ret = esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                                     &wifi_event_handler, NULL);
+    // WiFi 이벤트 핸들러 등록 (ESP-IDF 5.5.0: instance API 사용)
+    ret = esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
+                                     &wifi_event_handler, NULL, &s_wifi_event_instance);
     if (ret != ESP_OK) {
         T_LOGE(TAG, "fail:evt_hdlr:0x%x", ret);
         return ret;
     }
 
-    // IP 이벤트 핸들러 등록
-    ret = esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID,
-                                     &wifi_event_handler, NULL);
+    // IP 이벤트 핸들러 등록 (ESP-IDF 5.5.0: instance API 사용)
+    ret = esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID,
+                                     &wifi_event_handler, NULL, &s_ip_event_instance);
     if (ret != ESP_OK) {
         T_LOGE(TAG, "fail:ip_hdlr:0x%x", ret);
         return ret;
@@ -241,6 +244,16 @@ esp_err_t wifi_hal_deinit(void)
 
     // WiFi 해제
     esp_wifi_deinit();
+
+    // 이벤트 핸들러 등록 해제 (ESP-IDF 5.5.0: instance API 사용)
+    if (s_wifi_event_instance) {
+        esp_event_handler_instance_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, s_wifi_event_instance);
+        s_wifi_event_instance = NULL;
+    }
+    if (s_ip_event_instance) {
+        esp_event_handler_instance_unregister(IP_EVENT, ESP_EVENT_ANY_ID, s_ip_event_instance);
+        s_ip_event_instance = NULL;
+    }
 
     // 이벤트 그룹 해제
     if (s_event_group) {
@@ -315,14 +328,15 @@ void* wifi_hal_create_sta_netif(void)
     }
 
     // DNS 서버 미리 설정 (DHCP 시작 전에 설정해야 클리어되지 않음)
-    ip_addr_t dns_primary, dns_backup;
-    dns_primary.u_addr.ip4.addr = esp_ip4addr_aton(DNS_PRIMARY_ADDR);
-    dns_primary.type = IPADDR_TYPE_V4;
-    dns_backup.u_addr.ip4.addr = esp_ip4addr_aton(DNS_BACKUP_ADDR);
-    dns_backup.type = IPADDR_TYPE_V4;
+    // ESP-IDF 5.5.0: esp_netif_set_dns_info() 사용
+    esp_netif_dns_info_t dns_info;
+    dns_info.ip.type = ESP_IPADDR_TYPE_V4;
+    dns_info.ip.u_addr.ip4.addr = esp_ip4addr_aton(DNS_PRIMARY_ADDR);
 
-    dns_setserver(0, &dns_primary);
-    dns_setserver(1, &dns_backup);
+    esp_netif_set_dns_info(s_netif_sta, ESP_NETIF_DNS_MAIN, &dns_info);
+
+    dns_info.ip.u_addr.ip4.addr = esp_ip4addr_aton(DNS_BACKUP_ADDR);
+    esp_netif_set_dns_info(s_netif_sta, ESP_NETIF_DNS_BACKUP, &dns_info);
 
     T_LOGD(TAG, "ok:%p", (void*)s_netif_sta);
 
