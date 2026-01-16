@@ -42,6 +42,7 @@ typedef struct {
     float frequency;            // MHz
     int16_t rssi;               // dBm
     int8_t snr;                 // dB
+    uint32_t rx_dropped;        // SPI mutex 타임아웃으로 폐기된 RX 패킷 수
 } lora_status_t;
 
 // 수신 콜백 (RSSI, SNR 포함)

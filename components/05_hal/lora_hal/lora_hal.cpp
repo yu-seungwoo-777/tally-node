@@ -76,7 +76,7 @@ public:
         devcfg.clock_speed_hz = 2 * 1000 * 1000;  // 2MHz
         devcfg.mode = 0;
         devcfg.spics_io_num = -1;  // CS는 RadioLib에서 수동 제어
-        devcfg.queue_size = 1;
+        devcfg.queue_size = 4;  // 대기열 크기 증가 (TX/RX 동시 요청 대처)
         devcfg.flags = 0;
 
         ret = spi_bus_add_device(spi_host, &devcfg, &spi_device);

@@ -61,6 +61,9 @@ static volatile int16_t s_last_packet_rssi = -120;
 static volatile int8_t s_last_packet_snr = 0;
 static volatile bool s_has_received_packet = false;  // 패킷 수신 여부 플래그
 
+// 통계
+static uint32_t s_rx_dropped = 0;  // SPI mutex 타임아웃으로 폐기된 RX 패킷
+
 // RTOS 자원
 static SemaphoreHandle_t s_semaphore = nullptr;
 static SemaphoreHandle_t s_spi_mutex = nullptr;  // SPI 작업 보호용 뮤텍스
@@ -319,6 +322,7 @@ lora_status_t lora_driver_get_status(void) {
         .frequency = s_frequency,
         .rssi = -120,
         .snr = 0,
+        .rx_dropped = s_rx_dropped,
     };
 
     // 패킷을 수신한 적이 있으면 마지막 패킷의 RSSI/SNR 반환
@@ -407,8 +411,8 @@ esp_err_t lora_driver_start_receive(void) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    // SPI 뮤텍스 잠금
-    if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+    // SPI 뮤텍스 잠금 (50ms 타임아웃 - 이벤트 지연 최소화)
+    if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(50)) != pdTRUE) {
         T_LOGW(TAG, "fail:mutex");
         return ESP_ERR_TIMEOUT;
     }
@@ -439,9 +443,10 @@ void lora_driver_check_received(void) {
     if (s_received_flag) {
         s_received_flag = false;
 
-        // SPI 뮤텍스 잠금
-        if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
-            T_LOGW(TAG, "fail:mutex");
+        // SPI 뮤텍스 잠금 (50ms 타임아웃 - 이벤트 지연 최소화)
+        if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(50)) != pdTRUE) {
+            s_rx_dropped++;
+            T_LOGW(TAG, "fail:mutex:drop=%lu", s_rx_dropped);
             return;
         }
 
@@ -493,8 +498,8 @@ void lora_driver_check_transmitted(void) {
     if (s_transmitted_flag) {
         s_transmitted_flag = false;
 
-        // SPI 뮤텍스 잠금
-        if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        // SPI 뮤텍스 잠금 (50ms 타임아웃 - 이벤트 지연 최소화)
+        if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(50)) != pdTRUE) {
             T_LOGW(TAG, "fail:mutex");
             return;
         }
@@ -525,7 +530,7 @@ esp_err_t lora_driver_sleep(void) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+    if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(50)) != pdTRUE) {
         return ESP_ERR_TIMEOUT;
     }
 
@@ -566,7 +571,7 @@ esp_err_t lora_driver_set_frequency(float freq_mhz) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+    if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(50)) != pdTRUE) {
         return ESP_ERR_TIMEOUT;
     }
 
@@ -598,7 +603,7 @@ esp_err_t lora_driver_set_sync_word(uint8_t sync_word) {
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+    if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(50)) != pdTRUE) {
         return ESP_ERR_TIMEOUT;
     }
 
