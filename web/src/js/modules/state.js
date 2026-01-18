@@ -41,7 +41,8 @@ export function stateModule() {
                 dualEnabled: false,
                 secondaryOffset: 4,
                 primary: { connected: false, type: 'ATEM', ip: '', port: 0, tally: { pgm: [], pvw: [], raw: '', channels: 0 } },
-                secondary: { connected: false, type: 'ATEM', ip: '', port: 0, tally: { pgm: [], pvw: [], raw: '', channels: 0 } }
+                secondary: { connected: false, type: 'ATEM', ip: '', port: 0, tally: { pgm: [], pvw: [], raw: '', channels: 0 } },
+                combined: { pgm: [], pvw: [], raw: '', channels: 0 }
             },
             system: { deviceId: '0000', battery: 0, voltage: 0, temperature: 0, uptime: 0 }
         },
@@ -311,6 +312,25 @@ export function stateModule() {
                             this.form.switcher.secondary.cameraLimit = data.switcher.secondary.cameraLimit || 0;
                             this.form.switcher.secondary.password = data.switcher.secondary.password || '';
                             this.form.switcher.secondary.portLocked = true;
+                        }
+                    }
+
+                    // Combined Tally 데이터 업데이트 (듀얼 모드 결합 PGM/PVW)
+                    if (data.switcher.combined) {
+                        const combinedData = {
+                            pgm: data.switcher.combined.pgm || [],
+                            pvw: data.switcher.combined.pvw || [],
+                            raw: data.switcher.combined.raw || '',
+                            channels: data.switcher.combined.channels || 0
+                        };
+                        // status에 업데이트 (새 객체 생성 - Alpine.js 반응성)
+                        if (!this.status.switcher) this.status.switcher = {};
+                        this.status.switcher.combined = { ...combinedData };
+                    } else {
+                        // combined 데이터가 없으면 초기값 유지
+                        if (!this.status.switcher) this.status.switcher = {};
+                        if (!this.status.switcher.combined) {
+                            this.status.switcher.combined = { pgm: [], pvw: [], raw: '', channels: 0 };
                         }
                     }
                 }
