@@ -7,9 +7,7 @@
 #include "lora_hal.h"
 #include "PinConfig.h"
 #include "t_log.h"
-#include "system_wdt.h"
 #include "esp_timer.h"
-#include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -72,37 +70,10 @@ static SemaphoreHandle_t s_spi_mutex = nullptr;  // SPI 작업 보호용 뮤텍�
 static TaskHandle_t s_task = nullptr;
 
 // =============================================================================
-// WDT 및 Health Check 관련 정적 변수
-// =============================================================================
-
-// Task WDT 설정 (system_wdt에 전달)
-static esp_task_wdt_config_t s_wdt_config = {
-    .timeout_ms = 5000,        // 5초 타임아웃
-    .idle_core_mask = 0,       // 코어 0, 1 모두 감시
-    .trigger_panic = true      // 패닉 모드 (크리티컬 태스크에서 재시작)
-};
-
-// Health Check 타이머
-static esp_timer_handle_t s_health_check_timer = nullptr;
-static int64_t s_last_isr_time_us = 0;          // 마지막 ISR 활동 시간 (마이크로초)
-static volatile bool s_recovery_pending = false; // 복구 대기 플래그
-
-// Health Check 설정
-#define HEALTH_CHECK_INTERVAL_MS    2000    // 2초 간격 체크
-#define HEALTH_CHECK_THRESHOLD_MS    5000    // 5초간 ISR 활동 없음 = 복구
-
-// 복구를 위한 저장된 설정
-static lora_config_t s_saved_config = {0};
-static bool s_has_saved_config = false;
-
-// =============================================================================
 // ISR 핸들러
 // =============================================================================
 
 static void IRAM_ATTR tx_isr_handler(void) {
-    // 마지막 ISR 활동 시간 업데이트 (행 감지용)
-    s_last_isr_time_us = esp_timer_get_time();
-
     // s_is_transmitting = false;  // 제거: check_transmitted() 완료 후 설정
     s_transmitted_flag = true;
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -111,9 +82,6 @@ static void IRAM_ATTR tx_isr_handler(void) {
 }
 
 static void IRAM_ATTR rx_isr_handler(void) {
-    // 마지막 ISR 활동 시간 업데이트 (행 감지용)
-    s_last_isr_time_us = esp_timer_get_time();
-
     s_received_flag = true;
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     xSemaphoreGiveFromISR(s_semaphore, &xHigherPriorityTaskWoken);
@@ -124,132 +92,10 @@ static void IRAM_ATTR rx_isr_handler(void) {
 // LoRa 전용 태스크
 // =============================================================================
 
-/**
- * @brief Health Check 타이머 콜백
- *
- * ISR 활동을 모니터링하고, 5초 이상 활동이 없으면 복구 플래그 설정.
- * 타이머 콜백에서 직접 deinit/init을 호출하지 않고 플래그만 설정.
- */
-static void health_check_timer_callback(void* arg) {
-    int64_t current_time_us = esp_timer_get_time();
-    int64_t elapsed_ms = (current_time_us - s_last_isr_time_us) / 1000;
-
-    // 초기화 후 첫health check는 건너뜀 (s_last_isr_time_us == 0)
-    if (s_last_isr_time_us == 0) {
-        return;
-    }
-
-    // 5초 이상 ISR 활동이 없으면 복구 필요
-    if (elapsed_ms > HEALTH_CHECK_THRESHOLD_MS) {
-        if (!s_recovery_pending) {
-            s_recovery_pending = true;
-            T_LOGE(TAG, "hang:detected:%lldms", elapsed_ms);
-        }
-    }
-}
-
-/**
- * @brief LoRa 복구 함수
- *
- * 행 상태에서 복구하기 위해 드라이버를 재초기화합니다.
- */
-static void lora_driver_recover(void) {
-    T_LOGW(TAG, "recover:start");
-
-    // 현재 상태 저장
-    bool was_receiving = !s_is_transmitting;
-
-    // Deinit (태스크 제외 - 태스크는 계속 실행)
-    if (s_radio) {
-        delete s_radio;
-        s_radio = nullptr;
-    }
-
-    if (s_module) {
-        delete s_module;
-        s_module = nullptr;
-    }
-
-    // HAL 재초기화
-    lora_hal_deinit();
-    if (lora_hal_init() != ESP_OK) {
-        T_LOGE(TAG, "recover:fail:hal");
-        return;
-    }
-
-    // 저장된 설정으로 재초기화
-    if (!s_has_saved_config) {
-        T_LOGE(TAG, "recover:fail:no_config");
-        return;
-    }
-
-    RadioLibHal* hal = lora_hal_get_instance();
-    if (hal == nullptr) {
-        T_LOGE(TAG, "recover:fail:hal_null");
-        return;
-    }
-
-    // Module 재생성
-    s_module = new Module(hal, EORA_S3_LORA_CS, EORA_S3_LORA_DIO1,
-                         EORA_S3_LORA_RST, EORA_S3_LORA_BUSY);
-
-    const lora_config_t* cfg = &s_saved_config;
-    int16_t state = RADIOLIB_ERR_NONE;
-
-    // 칩 타입에 따라 라디오 재생성
-    if (s_chip_type == LORA_CHIP_SX1262_433M) {
-        SX1262* radio = new SX1262(s_module);
-        state = radio->begin(cfg->frequency, cfg->bandwidth, cfg->spreading_factor,
-                             cfg->coding_rate, cfg->sync_word, cfg->tx_power, 8, 0.0f);
-        s_radio = radio;
-    } else if (s_chip_type == LORA_CHIP_SX1268_868M) {
-        SX1268* radio = new SX1268(s_module);
-        state = radio->begin(cfg->frequency, cfg->bandwidth, cfg->spreading_factor,
-                             cfg->coding_rate, cfg->sync_word, cfg->tx_power, 8, 0.0f);
-        s_radio = radio;
-    } else {
-        T_LOGE(TAG, "recover:fail:unknown_chip");
-        return;
-    }
-
-    if (state != RADIOLIB_ERR_NONE) {
-        T_LOGE(TAG, "recover:fail:begin:0x%x", state);
-        return;
-    }
-
-    // 인터럽트 재등록
-    s_radio->setPacketSentAction(tx_isr_handler);
-    s_radio->setPacketReceivedAction(rx_isr_handler);
-
-    // 수신 모드 재시작
-    state = s_radio->startReceive();
-    if (state != RADIOLIB_ERR_NONE) {
-        T_LOGE(TAG, "recover:fail:rx:0x%x", state);
-        return;
-    }
-
-    // ISR 활동 시간 초기화 (재설정 직후이므로 현재 시간으로)
-    s_last_isr_time_us = esp_timer_get_time();
-    s_recovery_pending = false;
-
-    T_LOGW(TAG, "recover:ok");
-}
-
 static void lora_isr_task(void* param) {
     T_LOGD(TAG, "LoRa ISR task start");
 
-    // WDT에 태스크 등록
-    system_wdt_register_task("lora_isr_task");
-
     while (1) {
-        // WDT 리셋 (루프마다)
-        system_wdt_reset();
-
-        // 복구 플래그 확인
-        if (s_recovery_pending) {
-            lora_driver_recover();
-        }
-
         // 시마포로 깨어나면 모든 플래그 처리 (놓치는 이벤트 없음)
         if (xSemaphoreTake(s_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) {
             // 플래그가 모두 cleared 될 때까지 계속 확인
@@ -421,57 +267,6 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
         return ESP_FAIL;
     }
 
-    // =============================================================================
-    // Task WDT 초기화
-    // =============================================================================
-    // 시스템 WDT 관리자 사용 (이미 초기화되어 있으면 무시)
-    if (!system_wdt_is_initialized()) {
-        ret = system_wdt_init(&s_wdt_config);
-        if (ret != ESP_OK) {
-            T_LOGW(TAG, "wdt:init:0x%x", ret);
-            // WDT 초기화 실패해도 계속 진행 (치명적 오류 아님)
-        } else {
-            T_LOGD(TAG, "wdt:ok");
-        }
-    }
-
-    // =============================================================================
-    // Health Check 타이머 생성 및 시작
-    // =============================================================================
-    const esp_timer_create_args_t timer_args = {
-        .callback = &health_check_timer_callback,
-        .arg = nullptr,
-        .dispatch_method = ESP_TIMER_TASK,
-        .name = "lora_health_check"
-    };
-
-    ret = esp_timer_create(&timer_args, &s_health_check_timer);
-    if (ret != ESP_OK) {
-        T_LOGW(TAG, "health:timer:create:0x%x", ret);
-        // 타이머 생성 실패해도 계속 진행
-    } else {
-        // 2초 간격으로 health check 시작
-        ret = esp_timer_start_periodic(s_health_check_timer,
-                                       HEALTH_CHECK_INTERVAL_MS * 1000);
-        if (ret != ESP_OK) {
-            T_LOGW(TAG, "health:timer:start:0x%x", ret);
-            esp_timer_delete(s_health_check_timer);
-            s_health_check_timer = nullptr;
-        } else {
-            T_LOGD(TAG, "health:timer:ok");
-        }
-    }
-
-    // =============================================================================
-    // 복구를 위한 설정 저장
-    // =============================================================================
-    s_saved_config = *config;
-    s_has_saved_config = true;
-
-    // ISR 활동 시간 초기화
-    s_last_isr_time_us = esp_timer_get_time();
-    s_recovery_pending = false;
-
     s_initialized = true;
 
     T_LOGD(TAG, "ok");
@@ -484,25 +279,6 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
 void lora_driver_deinit(void) {
     T_LOGD(TAG, "deinit");
 
-    // =============================================================================
-    // Health Check 타이머 정리
-    // =============================================================================
-    if (s_health_check_timer) {
-        esp_timer_stop(s_health_check_timer);
-        esp_timer_delete(s_health_check_timer);
-        s_health_check_timer = nullptr;
-        T_LOGD(TAG, "health:timer:stopped");
-    }
-
-    // =============================================================================
-    // Task WDT 정리
-    // =============================================================================
-    // 시스템 WDT 관리자 사용 (태스크에서 자동 제거됨)
-    // lora_isr_task는 무한 루프이므로 명시적 제거 없음
-
-    // =============================================================================
-    // 기존 리소스 정리
-    // =============================================================================
     if (s_task) {
         vTaskDelete(s_task);
         s_task = nullptr;
@@ -531,8 +307,6 @@ void lora_driver_deinit(void) {
     lora_hal_deinit();
 
     s_initialized = false;
-    s_has_saved_config = false;
-    s_recovery_pending = false;
 
     T_LOGD(TAG, "ok");
 }
