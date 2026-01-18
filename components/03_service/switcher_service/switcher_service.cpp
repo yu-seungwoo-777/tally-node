@@ -926,6 +926,13 @@ packed_data_t SwitcherService::combineDualModeTally() const {
     if (primary_.adapter) {
         primary_data = primary_.adapter->getPackedTally();
         has_primary = packed_data_is_valid(&primary_data);
+
+        // Primary 로그 출력
+        if (has_primary) {
+            char tally_str[64];
+            packed_data_format_tally(&primary_data, tally_str, sizeof(tally_str));
+            T_LOGI(TAG, "Primary Tally: %s (ch=%d)", tally_str, primary_data.channel_count);
+        }
     }
 
     // Secondary 데이터 가져오기
@@ -934,6 +941,13 @@ packed_data_t SwitcherService::combineDualModeTally() const {
     if (secondary_.adapter) {
         secondary_data = secondary_.adapter->getPackedTally();
         has_secondary = packed_data_is_valid(&secondary_data);
+
+        // Secondary 로그 출력
+        if (has_secondary) {
+            char tally_str[64];
+            packed_data_format_tally(&secondary_data, tally_str, sizeof(tally_str));
+            T_LOGI(TAG, "Secondary Tally: %s (ch=%d, offset=%d)", tally_str, secondary_data.channel_count, secondary_offset_);
+        }
     }
 
     // 둘 다 없으면 빈 값 반환
@@ -944,13 +958,13 @@ packed_data_t SwitcherService::combineDualModeTally() const {
 
     // Secondary만 있으면 Secondary만 반환
     if (!has_primary && has_secondary) {
-        // Secondary를 offset 위치에 맞춰 반환
-        uint8_t effective_offset = (secondary_offset_ > 0) ? secondary_offset_ : TALLY_MAX_CHANNELS;
+        // offset=0이면 1번부터 매핑
+        uint8_t start_channel = (secondary_offset_ > 0) ? secondary_offset_ : 1;
 
         // Secondary 데이터 중 20채널 내에 들어가는 개수 계산
         uint8_t secondary_fitting = 0;
         for (uint8_t i = 0; i < secondary_data.channel_count; i++) {
-            uint8_t target = i + 1 + effective_offset;
+            uint8_t target = start_channel + i;
             if (target <= TALLY_MAX_CHANNELS) {
                 secondary_fitting = i + 1;
             } else {
@@ -958,44 +972,50 @@ packed_data_t SwitcherService::combineDualModeTally() const {
             }
         }
 
-        // offset이 0이면 Secondary를 1번부터 매핑
-        if (effective_offset >= TALLY_MAX_CHANNELS) {
-            // offset이 크면 Secondary를 1번 채널부터 사용
-            combined_packed_.resize(secondary_data.channel_count);
-            for (uint8_t i = 0; i < secondary_data.channel_count; i++) {
-                uint8_t flags = packed_data_get_channel(&secondary_data, i + 1);
-                combined_packed_.setChannel(i + 1, flags);
-            }
-        } else {
-            // offset만큼 떨어진 위치에 매핑
-            combined_packed_.resize(effective_offset + secondary_fitting);
-            for (uint8_t i = 0; i < secondary_fitting; i++) {
-                uint8_t flags = packed_data_get_channel(&secondary_data, i + 1);
-                uint8_t target_channel = i + 1 + effective_offset;
-                combined_packed_.setChannel(target_channel, flags);
-            }
+        // offset만큼 떨어진 위치에 매핑
+        combined_packed_.resize(start_channel + secondary_fitting - 1);
+        for (uint8_t i = 0; i < secondary_fitting; i++) {
+            uint8_t flags = packed_data_get_channel(&secondary_data, i + 1);
+            uint8_t target_channel = start_channel + i;
+            combined_packed_.setChannel(target_channel, flags);
         }
+
         return *combined_packed_.get();
     }
 
     // 전체 채널 수 계산
-    // - Primary는 offset까지만 사용
-    // - Secondary는 offset부터 시작 (offset 위치부터 Secondary 1번이 매핑)
-    // - 예: offset=4, Primary=4, Secondary=6 → 채널 1-4(P), 5-9(S) = 9채널
-    // - 예: offset=1, Primary=4, Secondary=6 → 채널 1(P), 2-6(S, 1번과 겹침) = 6채널
+    // - offset은 Secondary 1번이 매핑될 채널 번호
+    // - 예: offset=0, Primary=3(실제사용), Secondary=4 → 채널 1-3(P), 4-7(S) = 7채널
+    // - 예: offset=4, Primary=3, Secondary=4 → 채널 1-3(P), 4-7(S) = 7채널
+    // - 예: offset=5, Primary=3, Secondary=4 → 채널 1-3(P), 5-8(S) = 8채널
 
-    // 유효한 offset 계산 (0이면 전체 Primary 사용, 즉 싱글모드와 동일)
-    uint8_t effective_offset = (secondary_offset_ > 0) ? secondary_offset_ : primary_data.channel_count;
+    // 유효한 offset 계산 (offset=0이면 Primary 마지막 ON 채널 다음부터)
+    uint8_t start_channel;
+    if (secondary_offset_ > 0) {
+        // 명시적 offset: 해당 채널부터 Secondary 매핑
+        start_channel = secondary_offset_;
+    } else {
+        // offset=0: Primary의 실제 사용 채널 수 계산 (마지막 ON 채널 다음)
+        start_channel = 1;  // 기본값 1번부터
+        for (uint8_t i = 0; i < primary_data.channel_count; i++) {
+            uint8_t flags = packed_data_get_channel(&primary_data, i + 1);
+            if (flags != 0) {
+                start_channel = i + 2;  // 마지막 ON 채널 다음 번호
+            }
+        }
+        // 모두 OFF면 1 (Secondary는 1번부터 매핑)
+    }
 
-    // Primary가 사용하는 채널 수 (offset으로 제한)
-    uint8_t primary_channels = (primary_data.channel_count < effective_offset)
-                                ? primary_data.channel_count
-                                : effective_offset;
+    // Primary가 사용하는 채널 수
+    uint8_t primary_channels = primary_data.channel_count;
+    if (start_channel < primary_channels) {
+        primary_channels = start_channel;  // start_channel 전까지 Primary 사용
+    }
 
     // Secondary 중 실제로 20채널 내에 들어가는 개수 계산
     uint8_t secondary_fitting = 0;
     for (uint8_t i = 0; i < secondary_data.channel_count; i++) {
-        uint8_t target = i + 1 + effective_offset;
+        uint8_t target = start_channel + i;
         if (target <= TALLY_MAX_CHANNELS) {
             secondary_fitting = i + 1;  // i는 0-based, fitting은 1-based
         } else {
@@ -1006,7 +1026,7 @@ packed_data_t SwitcherService::combineDualModeTally() const {
     // 최대 사용 채널 번호 계산
     uint8_t max_channel_used = primary_channels;  // Primary 최대 채널
     if (secondary_fitting > 0) {
-        uint8_t secondary_max = effective_offset + secondary_fitting;
+        uint8_t secondary_max = start_channel + secondary_fitting - 1;
         if (secondary_max > max_channel_used) {
             max_channel_used = secondary_max;
         }
@@ -1021,10 +1041,10 @@ packed_data_t SwitcherService::combineDualModeTally() const {
         combined_packed_.setChannel(i + 1, flags);
     }
 
-    // Secondary 데이터 복사 (offset 적용, 20채널 제한)
+    // Secondary 데이터 복사 (start_channel부터 매핑)
     for (uint8_t i = 0; i < secondary_fitting; i++) {
         uint8_t flags = packed_data_get_channel(&secondary_data, i + 1);
-        uint8_t target_channel = i + 1 + effective_offset;
+        uint8_t target_channel = start_channel + i;
 
         // 기존 값과 OR 결합
         uint8_t existing = combined_packed_.getChannel(target_channel);
@@ -1103,6 +1123,12 @@ void SwitcherService::setSwitcherChangeCallback(SwitcherChangeCallback callback)
 void SwitcherService::checkSwitcherChange(switcher_role_t role) {
     SwitcherInfo* info = getSwitcherInfo(role);
     if (!info || !info->adapter) {
+        return;
+    }
+
+    // 연결 상태 확인 - 연결되지 않은 경우 스테일 데이터 무시
+    connection_state_t state = info->adapter->getConnectionState();
+    if (state == CONNECTION_STATE_DISCONNECTED) {
         return;
     }
 
@@ -1309,6 +1335,14 @@ void SwitcherService::publishSwitcherStatus() {
         }
     }
     status.s2_camera_limit = secondary_.camera_limit;
+
+    // 결합된 Tally 데이터 (Primary + Secondary)
+    packed_data_t combined = getCombinedTally();
+    if (combined.data && combined.data_size > 0) {
+        status.combined_channel_count = combined.channel_count;
+        memcpy(status.combined_tally_data, combined.data,
+               combined.data_size > 8 ? 8 : combined.data_size);
+    }
 
     event_bus_publish(EVT_SWITCHER_STATUS_CHANGED, &status, sizeof(status));
 }

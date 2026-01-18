@@ -8,6 +8,7 @@
 #include "PinConfig.h"
 #include "t_log.h"
 #include "esp_timer.h"
+#include "esp_task_wdt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -64,6 +65,15 @@ static volatile bool s_has_received_packet = false;  // 패킷 수신 여부 플
 // 통계
 static uint32_t s_rx_dropped = 0;  // SPI mutex 타임아웃으로 폐기된 RX 패킷
 
+// Health Check 설정
+#define HEALTH_CHECK_INTERVAL_MS    2000    // 2초 간격 체크
+#define HEALTH_CHECK_THRESHOLD_MS    35000   // 35초간 ISR 활동 없음 = 복구 (상태 요청 30초 + 마진)
+
+// Health Check 관련
+static esp_timer_handle_t s_health_check_timer = nullptr;
+static int64_t s_last_isr_time_us = 0;          // 마지막 ISR 활동 시간 (마이크로초)
+static volatile bool s_recovery_pending = false; // 복구 대기 플래그
+
 // RTOS 자원
 static SemaphoreHandle_t s_semaphore = nullptr;
 static SemaphoreHandle_t s_spi_mutex = nullptr;  // SPI 작업 보호용 뮤텍스
@@ -74,6 +84,9 @@ static TaskHandle_t s_task = nullptr;
 // =============================================================================
 
 static void IRAM_ATTR tx_isr_handler(void) {
+    // 마지막 ISR 활동 시간 업데이트 (hang 감지용)
+    s_last_isr_time_us = esp_timer_get_time();
+
     // s_is_transmitting = false;  // 제거: check_transmitted() 완료 후 설정
     s_transmitted_flag = true;
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -82,6 +95,9 @@ static void IRAM_ATTR tx_isr_handler(void) {
 }
 
 static void IRAM_ATTR rx_isr_handler(void) {
+    // 마지막 ISR 활동 시간 업데이트 (hang 감지용)
+    s_last_isr_time_us = esp_timer_get_time();
+
     s_received_flag = true;
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     xSemaphoreGiveFromISR(s_semaphore, &xHigherPriorityTaskWoken);
@@ -92,10 +108,39 @@ static void IRAM_ATTR rx_isr_handler(void) {
 // LoRa 전용 태스크
 // =============================================================================
 
+/**
+ * @brief Health Check 타이머 콜백
+ *
+ * ISR 활동을 모니터링하고, 35초 이상 활동이 없으면 복구 플래그 설정.
+ */
+static void health_check_timer_callback(void* arg) {
+    int64_t current_time_us = esp_timer_get_time();
+    int64_t elapsed_ms = (current_time_us - s_last_isr_time_us) / 1000;
+
+    // 초기화 후 첫 health check는 건너뜀 (s_last_isr_time_us == 0)
+    if (s_last_isr_time_us == 0) {
+        return;
+    }
+
+    // 35초 이상 ISR 활동이 없으면 복구 필요
+    if (elapsed_ms > HEALTH_CHECK_THRESHOLD_MS) {
+        if (!s_recovery_pending) {
+            s_recovery_pending = true;
+            T_LOGE(TAG, "hang:detected:%lldms", elapsed_ms);
+        }
+    }
+}
+
 static void lora_isr_task(void* param) {
     T_LOGD(TAG, "LoRa ISR task start");
 
+    // WDT에 태스크 등록
+    esp_task_wdt_add(xTaskGetCurrentTaskHandle());
+
     while (1) {
+        // WDT 리셋 (루프마다)
+        esp_task_wdt_reset();
+
         // 시마포로 깨어나면 모든 플래그 처리 (놓치는 이벤트 없음)
         if (xSemaphoreTake(s_semaphore, pdMS_TO_TICKS(100)) == pdTRUE) {
             // 플래그가 모두 cleared 될 때까지 계속 확인
@@ -267,6 +312,27 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
         return ESP_FAIL;
     }
 
+    // =============================================================================
+    // Health Check 타이머 생성 및 시작
+    // =============================================================================
+    const esp_timer_create_args_t timer_args = {
+        .callback = &health_check_timer_callback,
+        .arg = nullptr,
+        .dispatch_method = ESP_TIMER_TASK,
+        .name = "lora_health_check",
+        .skip_unhandled_events = true
+    };
+
+    ret = esp_timer_create(&timer_args, &s_health_check_timer);
+    if (ret != ESP_OK) {
+        T_LOGW(TAG, "health:timer:create:0x%x", ret);
+        // 타이머 생성 실패해도 계속 진행
+    } else {
+        // 2초 간격으로 health check 시작
+        esp_timer_start_periodic(s_health_check_timer, HEALTH_CHECK_INTERVAL_MS * 1000);
+        T_LOGD(TAG, "health:timer:ok");
+    }
+
     s_initialized = true;
 
     T_LOGD(TAG, "ok");
@@ -278,6 +344,13 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
  */
 void lora_driver_deinit(void) {
     T_LOGD(TAG, "deinit");
+
+    // Health Check 타이머 정리
+    if (s_health_check_timer) {
+        esp_timer_stop(s_health_check_timer);
+        esp_timer_delete(s_health_check_timer);
+        s_health_check_timer = nullptr;
+    }
 
     if (s_task) {
         vTaskDelete(s_task);

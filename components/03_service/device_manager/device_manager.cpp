@@ -1357,7 +1357,7 @@ esp_err_t device_manager_start(void)
     BaseType_t ret = xTaskCreatePinnedToCore(
         status_request_task,
         "status_req",
-        3072,
+        8192,  // 스택 크기 증가 (3072 -> 8192) - stack overflow 방지
         nullptr,
         5,  // 우선순위
         nullptr,

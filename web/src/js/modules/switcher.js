@@ -139,7 +139,7 @@ export function switcherModule() {
         async onDualModeChange() {
             // 듀얼 모드 활성화 시 offset 초기화
             if (this.form.switcher.dualEnabled) {
-                this.form.mappingOffset = this.config.switcher.secondaryOffset + 1;
+                this.form.mappingOffset = this.config.switcher.secondaryOffset || 1;
             }
 
             // 듀얼 모드 설정 저장
@@ -284,7 +284,7 @@ export function switcherModule() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         dualEnabled: this.form.switcher.dualEnabled,
-                        secondaryOffset: this.form.mappingOffset - 1  // 0-based로 변환
+                        secondaryOffset: this.form.mappingOffset  // 1-based 그대로 사용
                     })
                 });
                 const data = await res.json();

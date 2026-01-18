@@ -176,14 +176,14 @@ public:
     uint8_t channelCount() const { return data_.channel_count; }
 
     /**
-     * @brief 채널 수 변경 (재초기화)
+     * @brief 채널 수 변경 (항상 재초기화)
      * @param new_count 새 채널 수
+     *
+     * @note 항상 재초기화하여 이전 데이터를 제거 (버그 방지)
      */
     void resize(uint8_t new_count) {
-        if (data_.channel_count != new_count) {
-            packed_data_cleanup(&data_);
-            packed_data_init(&data_, new_count);
-        }
+        packed_data_cleanup(&data_);
+        packed_data_init(&data_, new_count);
     }
 
     /**

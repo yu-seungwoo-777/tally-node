@@ -205,7 +205,7 @@
             if (!this._initialized) {
               this.form.switcher.dualEnabled = data.switcher.dualEnabled || false;
               this.form.switcher.secondaryOffset = data.switcher.secondaryOffset || 4;
-              this.form.mappingOffset = (data.switcher.secondaryOffset || 4) + 1;
+              this.form.mappingOffset = data.switcher.secondaryOffset || 4;
             }
             if (data.switcher.primary) {
               const primaryData = {
@@ -735,7 +735,7 @@
        */
       async onDualModeChange() {
         if (this.form.switcher.dualEnabled) {
-          this.form.mappingOffset = this.config.switcher.secondaryOffset + 1;
+          this.form.mappingOffset = this.config.switcher.secondaryOffset || 1;
         }
         try {
           const res = await fetch("/api/config/switcher/dual", {
@@ -840,8 +840,8 @@
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               dualEnabled: this.form.switcher.dualEnabled,
-              secondaryOffset: this.form.mappingOffset - 1
-              // 0-based로 변환
+              secondaryOffset: this.form.mappingOffset
+              // 1-based 그대로 사용
             })
           });
           const data = await res.json();

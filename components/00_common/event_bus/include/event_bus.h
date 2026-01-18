@@ -235,6 +235,10 @@ typedef struct __attribute__((packed)) {
     uint8_t s2_channel_count; ///< Secondary 채널 수
     uint8_t s2_tally_data[8]; ///< Secondary packed 데이터
     uint8_t s2_camera_limit; ///< Secondary 카메라 제한 (0=무제한)
+
+    // 결합된 Tally 데이터 (Primary + Secondary)
+    uint8_t combined_channel_count; ///< 결합 채널 수
+    uint8_t combined_tally_data[8]; ///< 결합 packed 데이터
 } switcher_status_event_t;
 
 /**

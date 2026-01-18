@@ -323,6 +323,15 @@ cJSON* web_server_json_create_switcher(void)
         cJSON_AddNumberToObject(switcher, "secondaryOffset", 4);
     }
 
+    // 결합된 Tally 데이터 (Primary + Secondary)
+    if (web_server_cache_is_switcher_valid() && cache->switcher.combined_channel_count > 0) {
+        cJSON* combined = web_server_json_create_tally(cache->switcher.combined_tally_data,
+                                                       cache->switcher.combined_channel_count);
+        if (combined) {
+            cJSON_AddItemToObject(switcher, "combined", combined);
+        }
+    }
+
     return switcher;
 }
 

@@ -250,11 +250,11 @@ export function stateModule() {
                     this.config.switcher.dualEnabled = data.switcher.dualEnabled || false;
                     this.config.switcher.secondaryOffset = data.switcher.secondaryOffset || 4;
 
-                    // 폼은 초기화 시에만 업데이트 (폴링 시 폼 입력 방해 방지)
+                    // 폼은 초기화 시에만 업데이트 (폴링 시 폼 입력 방지 방지)
                     if (!this._initialized) {
                         this.form.switcher.dualEnabled = data.switcher.dualEnabled || false;
                         this.form.switcher.secondaryOffset = data.switcher.secondaryOffset || 4;
-                        this.form.mappingOffset = (data.switcher.secondaryOffset || 4) + 1; // 1-based
+                        this.form.mappingOffset = data.switcher.secondaryOffset || 4; // 1-based 그대로 사용
                     }
 
                     if (data.switcher.primary) {
