@@ -8,6 +8,7 @@
 #include "ethernet_driver.h"
 #include "t_log.h"
 #include "event_bus.h"
+#include "system_wdt.h"
 #include "esp_netif.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -214,7 +215,13 @@ void NetworkServiceClass::status_publish_task(void* arg)
     (void)arg;
     T_LOGI(TAG, "Network status publish task start");
 
+    // WDT에 태스크 등록
+    system_wdt_register_task("network_status_task");
+
     while (s_running) {
+        // WDT 리셋 (루프마다)
+        system_wdt_reset();
+
         // 1초마다 상태 이벤트 발행
         if (s_initialized) {
             publishStatus();
@@ -222,6 +229,9 @@ void NetworkServiceClass::status_publish_task(void* arg)
 
         vTaskDelay(pdMS_TO_TICKS(STATUS_PUBLISH_INTERVAL_MS));
     }
+
+    // WDT에서 태스크 제거
+    system_wdt_unregister_task();
 
     T_LOGI(TAG, "Network status publish task end");
     vTaskDelete(nullptr);

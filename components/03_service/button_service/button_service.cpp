@@ -13,6 +13,7 @@
 #include "PinConfig.h"
 #include "event_bus.h"
 #include "t_log.h"
+#include "system_wdt.h"
 
 static const char* TAG = "03_Button";
 
@@ -114,7 +115,13 @@ void ButtonService::button_task(void* arg)
 
     T_LOGI(TAG, "button task start");
 
+    // WDT에 태스크 등록
+    system_wdt_register_task("button_task");
+
     while (s_running) {
+        // WDT 리셋 (루프마다)
+        system_wdt_reset();
+
         uint64_t current_time = esp_timer_get_time();
 
         // GPIO 상태 읽기 (Active Low: 누르면 0)
@@ -195,6 +202,9 @@ void ButtonService::button_task(void* arg)
 
         vTaskDelay(pdMS_TO_TICKS(POLL_INTERVAL_MS));
     }
+
+    // WDT에서 태스크 제거
+    system_wdt_unregister_task();
 
     T_LOGI(TAG, "button task end");
     vTaskDelete(nullptr);

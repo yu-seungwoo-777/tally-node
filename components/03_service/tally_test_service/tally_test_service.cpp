@@ -14,6 +14,7 @@
 #include "tally_test_service.h"
 #include "event_bus.h"
 #include "t_log.h"
+#include "system_wdt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cstring>
@@ -126,7 +127,13 @@ static void test_mode_task(void* arg)
     T_LOGI(TAG, "Test mode started: channels=%d, interval=%dms",
              s_test.max_channels, s_test.interval_ms);
 
+    // WDT에 태스크 등록
+    system_wdt_register_task("tally_test_task");
+
     while (s_test.running) {
+        // WDT 리셋 (루프마다)
+        system_wdt_reset();
+
         publish_tally_event(step);
 
         step++;
@@ -136,6 +143,9 @@ static void test_mode_task(void* arg)
 
         vTaskDelay(pdMS_TO_TICKS(s_test.interval_ms));
     }
+
+    // WDT에서 태스크 제거
+    system_wdt_unregister_task();
 
     T_LOGI(TAG, "Test mode stopped");
     vTaskDelete(nullptr);

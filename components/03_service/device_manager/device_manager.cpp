@@ -13,6 +13,7 @@
 #include "lora_protocol.h"
 #include "event_bus.h"
 #include "t_log.h"
+#include "system_wdt.h"
 #include "error_macros.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -741,9 +742,16 @@ static void check_offline_devices(void)
  */
 static void status_request_task(void* arg)
 {
+    (void)arg;
     T_LOGI(TAG, "status request task start (%d ms after last Tally)", s_tx.request_interval_ms);
 
+    // WDT에 태스크 등록
+    system_wdt_register_task("status_req_task");
+
     while (s_mgr.running) {
+        // WDT 리셋 (루프마다)
+        system_wdt_reset();
+
         uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
         // 오프라인 디바이스 체크
@@ -766,6 +774,9 @@ static void status_request_task(void* arg)
         // 1초마다 체크
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
+
+    // WDT에서 태스크 제거
+    system_wdt_unregister_task();
 
     T_LOGI(TAG, "status request task end");
     vTaskDelete(nullptr);
@@ -1357,7 +1368,7 @@ esp_err_t device_manager_start(void)
     BaseType_t ret = xTaskCreatePinnedToCore(
         status_request_task,
         "status_req",
-        3072,
+        8192,  // 스택 크기 증가 (3072 -> 8192) - stack overflow 방지
         nullptr,
         5,  // 우선순위
         nullptr,
