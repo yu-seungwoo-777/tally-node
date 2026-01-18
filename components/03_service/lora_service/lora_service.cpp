@@ -14,7 +14,6 @@
 #include "event_bus.h"
 #include "t_log.h"
 #include "error_macros.h"
-#include "system_wdt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -477,15 +476,9 @@ static void lora_txq_task(void* arg)
 {
     T_LOGI(TAG, "LoRa tx queue task start");
 
-    // WDT에 태스크 등록
-    system_wdt_register_task("lora_txq_task");
-
     lora_tx_packet_t packet;
 
     while (s_running) {
-        // WDT 리셋 (루프마다)
-        system_wdt_reset();
-
         // 비블로킹으로 큐 체크 (패킷 있으면 즉시 송신)
         if (xQueueReceive(s_tx_queue, &packet, 0) == pdTRUE) {
             // 디버그: 수신된 패킷 크기
@@ -521,9 +514,6 @@ static void lora_txq_task(void* arg)
         // 큐가 비어있으면 짧게 대기 후 다시 체크 (수신 모드 유지)
         vTaskDelay(pdMS_TO_TICKS(10));  // 원래대로 10ms
     }
-
-    // WDT에서 태스크 제거
-    system_wdt_unregister_task();
 
     T_LOGI(TAG, "tx task end");
     vTaskDelete(nullptr);
@@ -862,9 +852,6 @@ static void lora_scan_task(void* arg)
     T_LOGI(TAG, "scan task start: %.1f ~ %.1f MHz (step=%.1f)",
            s_scan_start_freq, s_scan_end_freq, s_scan_step);
 
-    // WDT에 태스크 등록
-    system_wdt_register_task("lora_scan_task");
-
     // 예상 채널 수 계산
     int total_channels = (int)((s_scan_end_freq - s_scan_start_freq) / s_scan_step) + 1;
     if (total_channels > MAX_SCAN_CHANNELS) {
@@ -880,9 +867,6 @@ static void lora_scan_task(void* arg)
 
     // 채널별 스캔 (진행도 발행을 위해)
     for (float freq = s_scan_start_freq; freq <= s_scan_end_freq && result_count < MAX_SCAN_CHANNELS; freq += s_scan_step) {
-        // WDT 리셋 (채널 스캔마다)
-        system_wdt_reset();
-
         // 중지 요청 확인
         if (s_scan_stop_requested) {
             T_LOGI(TAG, "scan stop requested");
@@ -960,9 +944,6 @@ static void lora_scan_task(void* arg)
 
     // 수신 모드 복귀
     lora_driver_start_receive();
-
-    // WDT에서 태스크 제거
-    system_wdt_unregister_task();
 
     vTaskDelete(nullptr);
 }
