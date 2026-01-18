@@ -148,7 +148,8 @@ export function switcherModule() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        dualEnabled: this.form.switcher.dualEnabled
+                        dualEnabled: this.form.switcher.dualEnabled,
+                        secondaryOffset: this.form.mappingOffset  // offset 값도 함께 전송
                     })
                 });
                 const data = await res.json();

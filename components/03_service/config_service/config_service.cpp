@@ -753,6 +753,34 @@ static esp_err_t on_license_data_request(const event_data_t* event)
 }
 
 /**
+ * @brief 공장 초기화 요청 이벤트 핸들러
+ * @note 웹 API에서 발행
+ */
+static esp_err_t on_factory_reset_request(const event_data_t* event)
+{
+    if (event->type != EVT_FACTORY_RESET_REQUEST) {
+        return ESP_OK;
+    }
+
+    T_LOGI(TAG, "Factory reset request received via event bus");
+
+    // Factory reset 실행
+    esp_err_t ret = ConfigServiceClass::factoryReset();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "Factory reset failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    T_LOGI(TAG, "Factory reset successful, rebooting in 1 second...");
+
+    // 1초 대기 후 재부팅
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    esp_restart();
+
+    return ESP_OK;
+}
+
+/**
  * @brief 디바이스 카메라 매핑 수신 이벤트 핸들러
  * @note 상태 응답 수신 시 device_manager에서 발행
  */
@@ -1199,6 +1227,8 @@ esp_err_t ConfigServiceClass::init(void)
     event_bus_subscribe(EVT_DEVICE_CAM_MAP_RECEIVE, on_device_cam_map_receive);
     // 디바이스 카메라 매핑 로드 요청 이벤트 구독 (TX 시작 시 NVS 매핑 로드)
     event_bus_subscribe(EVT_DEVICE_CAM_MAP_LOAD, on_device_cam_map_load);
+    // 공장 초기화 요청 이벤트 구독
+    event_bus_subscribe(EVT_FACTORY_RESET_REQUEST, on_factory_reset_request);
     T_LOGD(TAG, "event bus subscribe complete");
 
     s_initialized = true;
@@ -1727,6 +1757,34 @@ esp_err_t ConfigServiceClass::factoryReset(void)
 {
     T_LOGI(TAG, "factory reset in progress...");
 
+    // NVS 파티션 전체 초기화 (이전 펌웨어 데이터 포함)
+    esp_err_t ret = nvs_flash_erase();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "NVS flash erase failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    T_LOGI(TAG, "NVS flash erased completely");
+
+    // NVS 재초기화
+    ret = nvs_flash_init();
+    if (ret != ESP_OK) {
+        // NVS가 이미 초기화된 경우 (ESP_ERR_NVS_NO_FREE_PAGES 등)
+        if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+            ret = nvs_flash_erase();
+            if (ret == ESP_OK) {
+                ret = nvs_flash_init();
+            }
+        }
+        if (ret != ESP_OK) {
+            T_LOGE(TAG, "NVS flash re-init failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
+    }
+
+    T_LOGI(TAG, "NVS flash re-initialized");
+
+    // 기본값 저장
     config_all_t defaultConfig;
     loadDefaults(&defaultConfig);
 

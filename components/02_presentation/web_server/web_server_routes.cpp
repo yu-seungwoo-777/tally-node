@@ -34,6 +34,7 @@ const httpd_uri_t g_routes[] = {
     { .uri = "/api/status",         .method = HTTP_GET,    .handler = api_status_handler,   .user_ctx = nullptr },
     { .uri = "/api/reboot",         .method = HTTP_POST,   .handler = api_reboot_handler,   .user_ctx = nullptr },
     { .uri = "/api/reboot/broadcast", .method = HTTP_POST, .handler = api_reboot_broadcast_handler, .user_ctx = nullptr },
+    { .uri = "/api/factory-reset",  .method = HTTP_POST,   .handler = api_factory_reset_handler, .user_ctx = nullptr },
 
     // API - Config
     { .uri = "/api/config/network/ap",      .method = HTTP_POST, .handler = api_config_post_handler, .user_ctx = nullptr },
@@ -84,6 +85,7 @@ const httpd_uri_t g_routes[] = {
     { .uri = "/api/status",         .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
     { .uri = "/api/reboot",         .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
     { .uri = "/api/reboot/broadcast", .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
+    { .uri = "/api/factory-reset",  .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
     { .uri = "/api/config/*",       .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
     { .uri = "/api/lora/*",         .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },
     { .uri = "/api/devices",        .method = HTTP_OPTIONS, .handler = web_server_options_handler, .user_ctx = nullptr },

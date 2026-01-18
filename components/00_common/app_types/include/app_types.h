@@ -16,11 +16,12 @@ extern "C" {
 #endif
 
 // ============================================================================
-// 펌웨어 버전 (PlatformIO build_flags에서 정의, 기본값 제공)
+// 펌웨어 버전 (PlatformIO build_flags에서 정의: -DFIRMWARE_VERSION=\"x.y.z\")
+// app_types.h에서는 PlatformIO 정의가 없을 때만 기본값 제공
 // ============================================================================
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "2.0.1"
+#define FIRMWARE_VERSION "2.0.1"  // platformio.ini에서 관리하는 것이 권장됨
 #endif
 
 // ============================================================================

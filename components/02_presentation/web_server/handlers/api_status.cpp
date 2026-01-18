@@ -132,4 +132,30 @@ esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
     return ESP_OK;
 }
 
+esp_err_t api_factory_reset_handler(httpd_req_t* req)
+{
+    T_LOGI(TAG, "POST /api/factory-reset");
+    web_server_set_cors_headers(req);
+
+    // 이벤트 버스로 factory reset 요청 발행
+    esp_err_t ret = event_bus_publish(EVT_FACTORY_RESET_REQUEST, NULL, 0);
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "Factory reset event publish failed: %s", esp_err_to_name(ret));
+        return web_server_send_json_internal_error(req, "Failed to publish factory reset event");
+    }
+
+    T_LOGI(TAG, "Factory reset event published");
+
+    // 성공 응답 전송
+    cJSON* json = cJSON_CreateObject();
+    if (json) {
+        cJSON_AddStringToObject(json, "status", "ok");
+        cJSON_AddStringToObject(json, "message", "Factory reset in progress...");
+    }
+    web_server_send_json_response(req, json);
+
+    // ConfigService가 이벤트를 처리하고 재부팅함
+    return ESP_OK;
+}
+
 } // extern "C"

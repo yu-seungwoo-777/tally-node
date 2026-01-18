@@ -537,6 +537,7 @@ typedef enum {
     EVT_DEVICE_PING_REQUEST,     ///< 디바이스 PING 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
     EVT_DEVICE_STOP_REQUEST,     ///< 디바이스 기능 정지 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
     EVT_DEVICE_REBOOT_REQUEST,   ///< 디바이스 재부팅 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
+    EVT_FACTORY_RESET_REQUEST,   ///< 공장 초기화 요청 (data: none)
     EVT_DEVICE_LED_COLORS_REQUEST, ///< 디바이스 LED 색상 브로드캐스트 요청 (data: lora_cmd_led_colors_t)
     EVT_STATUS_REQUEST,          ///< 상태 요청 (Broadcast, data: none)
     EVT_DEVICE_CAM_MAP_RECEIVE,  ///< 디바이스 카메라 ID 수신 (data: uint8_t[3] = {device_id[0], device_id[1], camera_id})

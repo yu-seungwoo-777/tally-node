@@ -14,7 +14,7 @@ Provides feedback to Claude about code quality issues:
 
 Exit Codes:
 - 0: Success (linting completed, issues reported as context)
-- 2: Critical lint errors (Claude should address immediately)
+- 2: Critical lint errors (Claude should adddess immediately)
 
 Output:
 - JSON with additionalContext containing lint issues
@@ -37,6 +37,7 @@ if str(LIB_DIR) not in sys.path:
 # Try importing tool_registry, with fallback
 try:
     import tool_registry  # noqa: F401
+    from tool_registry import ToolType  # noqa: F401
 
     TOOL_REGISTRY_AVAILABLE = True
 except ImportError:

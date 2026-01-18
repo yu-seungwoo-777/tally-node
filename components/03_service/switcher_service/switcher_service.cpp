@@ -612,10 +612,16 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
                         config->primary_camera_limit);
                 break;
         }
-        // 어댑터 초기화 및 연결
+        // 어댑터 초기화 및 연결 (네트워크 준비 확인)
         if (primary_.adapter) {
             primary_.adapter->initialize();
-            primary_.adapter->connect();
+            bool interface_connected = isInterfaceConnected(config->primary_interface);
+            if (interface_connected) {
+                primary_.adapter->connect();
+                T_LOGD(TAG, "Primary connect started after adapter init (interface ready)");
+            } else {
+                T_LOGD(TAG, "Primary waiting for network interface after adapter init (if=%d)", config->primary_interface);
+            }
         }
     }
 
@@ -636,10 +642,16 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
                         config->secondary_camera_limit);
                 break;
         }
-        // 어댑터 초기화 및 연결
+        // 어댑터 초기화 및 연결 (네트워크 준비 확인)
         if (secondary_.adapter) {
             secondary_.adapter->initialize();
-            secondary_.adapter->connect();
+            bool interface_connected = isInterfaceConnected(config->secondary_interface);
+            if (interface_connected) {
+                secondary_.adapter->connect();
+                T_LOGD(TAG, "Secondary connect started after adapter init (interface ready)");
+            } else {
+                T_LOGD(TAG, "Secondary waiting for network interface after adapter init (if=%d)", config->secondary_interface);
+            }
         }
     }
 
@@ -709,9 +721,15 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
                     break;
             }
 
-            // 새 어댑터 연결 시작
+            // 새 어댑터 연결 시작 (네트워크 준비 확인)
             if (primary_.adapter) {
-                primary_.adapter->connect();
+                bool interface_connected = isInterfaceConnected(config->primary_interface);
+                if (interface_connected) {
+                    primary_.adapter->connect();
+                    T_LOGD(TAG, "Primary connect started (interface ready)");
+                } else {
+                    T_LOGD(TAG, "Primary waiting for network interface before connect (if=%d)", config->primary_interface);
+                }
             }
         }
     }
@@ -756,9 +774,15 @@ void SwitcherService::checkConfigAndReconnect(const config_data_event_t* config)
                     break;
             }
 
-            // 새 어댑터 연결 시작
+            // 새 어댑터 연결 시작 (네트워크 준비 확인)
             if (secondary_.adapter) {
-                secondary_.adapter->connect();
+                bool interface_connected = isInterfaceConnected(config->secondary_interface);
+                if (interface_connected) {
+                    secondary_.adapter->connect();
+                    T_LOGD(TAG, "Secondary connect started (interface ready)");
+                } else {
+                    T_LOGD(TAG, "Secondary waiting for network interface before connect (if=%d)", config->secondary_interface);
+                }
             }
         }
     }
@@ -784,11 +808,21 @@ void SwitcherService::taskLoop() {
         uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
         if (state == CONNECTION_STATE_DISCONNECTED) {
-            // 비정상 연결 끊김 → 5초마다 재연결 시도
-            if (now - primary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
-                T_LOGD(TAG, "Primary reconnect attempt");
-                primary_.adapter->connect();
-                primary_.last_reconnect_attempt = now;
+            // 비정상 연결 끊김 → 네트워크 연결 상태 확인 후 5초마다 재연결 시도
+            bool interface_connected = isInterfaceConnected(primary_.network_interface);
+            if (interface_connected) {
+                if (now - primary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
+                    T_LOGD(TAG, "Primary reconnect attempt (interface connected)");
+                    primary_.adapter->connect();
+                    primary_.last_reconnect_attempt = now;
+                }
+            } else {
+                // 네트워크 미연결 상태 로그 (디버깅용)
+                static uint32_t s_last_log_time = 0;
+                if (now - s_last_log_time > 5000) {
+                    T_LOGD(TAG, "Primary waiting for network interface (if=%d)", primary_.network_interface);
+                    s_last_log_time = now;
+                }
             }
         }
         else if (state == CONNECTION_STATE_CONNECTED || state == CONNECTION_STATE_READY) {
@@ -834,11 +868,21 @@ void SwitcherService::taskLoop() {
         uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
         if (state == CONNECTION_STATE_DISCONNECTED) {
-            // 비정상 연결 끊김 → 5초마다 재연결 시도
-            if (now - secondary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
-                T_LOGD(TAG, "Secondary reconnect attempt");
-                secondary_.adapter->connect();
-                secondary_.last_reconnect_attempt = now;
+            // 비정상 연결 끊김 → 네트워크 연결 상태 확인 후 5초마다 재연결 시도
+            bool interface_connected = isInterfaceConnected(secondary_.network_interface);
+            if (interface_connected) {
+                if (now - secondary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
+                    T_LOGD(TAG, "Secondary reconnect attempt (interface connected)");
+                    secondary_.adapter->connect();
+                    secondary_.last_reconnect_attempt = now;
+                }
+            } else {
+                // 네트워크 미연결 상태 로그 (디버깅용)
+                static uint32_t s_last_log_time_sec = 0;
+                if (now - s_last_log_time_sec > 5000) {
+                    T_LOGD(TAG, "Secondary waiting for network interface (if=%d)", secondary_.network_interface);
+                    s_last_log_time_sec = now;
+                }
             }
         }
         else if (state == CONNECTION_STATE_CONNECTED || state == CONNECTION_STATE_READY) {
@@ -1256,28 +1300,50 @@ bool SwitcherService::updateNetworkIPCache(const char* eth_ip, const char* wifi_
 }
 
 void SwitcherService::reconfigureSwitchersForNetwork() {
-    // Primary 스위처가 ATEM이고 설정된 인터페이스가 있으면 재설정
-    if (primary_.adapter && primary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
+    // Primary 스위처 네트워크 재설정 (ATEM, vMix 공통)
+    if (primary_.adapter) {
         tally_network_if_t iface = static_cast<tally_network_if_t>(primary_.network_interface);
         if (iface != TALLY_NET_AUTO) {
-            T_LOGD(TAG, "Primary switcher network reconfigure (if=%d)", iface);
-            setAtem(SWITCHER_ROLE_PRIMARY, "Primary",
-                    primary_.ip, primary_.port, primary_.camera_limit, iface, NVS_SWITCHER_PRI_DEBUG_PACKET);
-            if (primary_.adapter) {
-                primary_.adapter->connect();
+            T_LOGD(TAG, "Primary switcher network reconfigure (if=%d, type=%s)", iface, primary_.type);
+            // ATEM은 재설정 후 연결, vMix는 대기 중이면 연결 시작
+            if (primary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
+                setAtem(SWITCHER_ROLE_PRIMARY, "Primary",
+                        primary_.ip, primary_.port, primary_.camera_limit, iface, NVS_SWITCHER_PRI_DEBUG_PACKET);
+                if (primary_.adapter) {
+                    primary_.adapter->connect();
+                }
+            } else if (primary_.adapter->getType() == SWITCHER_TYPE_VMIX) {
+                // vMix: 네트워크 준비되었고 연결 대기 중이면 연결 시작
+                if (primary_.adapter->getConnectionState() == CONNECTION_STATE_DISCONNECTED) {
+                    if (isInterfaceConnected(primary_.network_interface)) {
+                        T_LOGD(TAG, "Primary vMix connect triggered by network ready event");
+                        primary_.adapter->connect();
+                    }
+                }
             }
         }
     }
 
-    // Secondary 스위처가 ATEM이고 설정된 인터페이스가 있으면 재설정
-    if (secondary_.adapter && secondary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
+    // Secondary 스위처 네트워크 재설정 (ATEM, vMix 공통)
+    if (secondary_.adapter) {
         tally_network_if_t iface = static_cast<tally_network_if_t>(secondary_.network_interface);
         if (iface != TALLY_NET_AUTO) {
-            T_LOGD(TAG, "Secondary switcher network reconfigure (if=%d)", iface);
-            setAtem(SWITCHER_ROLE_SECONDARY, "Secondary",
-                    secondary_.ip, secondary_.port, secondary_.camera_limit, iface, NVS_SWITCHER_SEC_DEBUG_PACKET);
-            if (secondary_.adapter) {
-                secondary_.adapter->connect();
+            T_LOGD(TAG, "Secondary switcher network reconfigure (if=%d, type=%s)", iface, secondary_.type);
+            // ATEM은 재설정 후 연결, vMix는 대기 중이면 연결 시작
+            if (secondary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
+                setAtem(SWITCHER_ROLE_SECONDARY, "Secondary",
+                        secondary_.ip, secondary_.port, secondary_.camera_limit, iface, NVS_SWITCHER_SEC_DEBUG_PACKET);
+                if (secondary_.adapter) {
+                    secondary_.adapter->connect();
+                }
+            } else if (secondary_.adapter->getType() == SWITCHER_TYPE_VMIX) {
+                // vMix: 네트워크 준비되었고 연결 대기 중이면 연결 시작
+                if (secondary_.adapter->getConnectionState() == CONNECTION_STATE_DISCONNECTED) {
+                    if (isInterfaceConnected(secondary_.network_interface)) {
+                        T_LOGD(TAG, "Secondary vMix connect triggered by network ready event");
+                        secondary_.adapter->connect();
+                    }
+                }
             }
         }
     }

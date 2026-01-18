@@ -165,7 +165,7 @@ def save_loop_state(state: LoopState) -> None:
         fd, temp_path = tempfile.mkstemp(dir=state_path.parent, prefix=".tmp_", suffix=".json")
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(state.to_dict(), f, indent=2)
+                json.dump(state.to_dict(), f, indent=2, ensure_ascii=False)
             # Atomic rename (on POSIX systems)
             os.replace(temp_path, state_path)
         except Exception:
@@ -591,7 +591,7 @@ def main() -> None:
             if status.details.get("errors", 0) > 0:
                 issues.append(f"Fix {status.details['errors']} error(s)")
             if not status.zero_warnings and status.details.get("warnings", 0) > 0:
-                issues.append(f"Address {status.details['warnings']} warning(s)")
+                issues.append(f"Adddess {status.details['warnings']} warning(s)")
             if not status.tests_pass:
                 issues.append("Fix failing tests")
             if not status.coverage_met and status.details.get("coverage", -1) >= 0:
