@@ -10,6 +10,7 @@
 #include "battery_driver.h"
 #include "temperature_driver.h"
 #include "error_macros.h"
+#include "system_wdt.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -241,12 +242,18 @@ void HardwareService::hw_monitor_task(void* arg)
     (void)arg;
     T_LOGI(TAG, "hw monitor task start (1s interval)");
 
+    // WDT에 태스크 등록
+    system_wdt_register_task("hw_monitor_task");
+
 #if T_LOG_RAM_INFO_INTERVAL_MS > 0
     uint32_t ram_info_counter = 0;
     const uint32_t ram_info_interval = T_LOG_RAM_INFO_INTERVAL_MS / MONITOR_INTERVAL_MS;
 #endif
 
     while (s_running) {
+        // WDT 리셋 (루프마다)
+        system_wdt_reset();
+
         // 배터리 업데이트 (ADC 읽기)
         updateBattery();
 
@@ -282,6 +289,9 @@ void HardwareService::hw_monitor_task(void* arg)
 
         vTaskDelay(pdMS_TO_TICKS(MONITOR_INTERVAL_MS));
     }
+
+    // WDT에서 태스크 제거
+    system_wdt_unregister_task();
 
     T_LOGI(TAG, "hw monitor task end");
     vTaskDelete(nullptr);

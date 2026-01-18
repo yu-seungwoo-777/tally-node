@@ -5,6 +5,7 @@
 
 #include "event_bus.h"
 #include "t_log.h"
+#include "system_wdt.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -106,7 +107,13 @@ static void event_handler_task(void* arg) {
 
     T_LOGI(TAG, "Event handler task started (stack size: 16384)");
 
+    // WDT에 태스크 등록
+    system_wdt_register_task("event_bus");
+
     while (1) {
+        // WDT 리셋 (루프마다)
+        system_wdt_reset();
+
         if (xQueueReceive(g_event_bus.queue, &event, portMAX_DELAY) == pdTRUE) {
             // 구독자들에게 이벤트 전달
             if (event.type < _EVT_MAX) {

@@ -6,6 +6,7 @@
 #include "switcher_service.h"
 #include "t_log.h"
 #include "event_bus.h"
+#include "system_wdt.h"
 #include "atem_driver.h"
 #include "vmix_driver.h"
 #include "NVSConfig.h"
@@ -505,7 +506,13 @@ void SwitcherService::switcher_task(void* param) {
 
     T_LOGI(TAG, "task loop start (stack size: 8192)");
 
+    // WDT에 태스크 등록
+    system_wdt_register_task("switcher_task");
+
     while (service->task_running_) {
+        // WDT 리셋 (루프마다)
+        system_wdt_reset();
+
         service->taskLoop();
         vTaskDelay(pdMS_TO_TICKS(10));  // 10ms 주기
 
@@ -519,6 +526,9 @@ void SwitcherService::switcher_task(void* param) {
             loop_count = 0;
         }
     }
+
+    // WDT에서 태스크 제거
+    system_wdt_unregister_task();
 
     T_LOGI(TAG, "task loop end");
     vTaskDelete(NULL);

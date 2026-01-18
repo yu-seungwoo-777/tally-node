@@ -11,6 +11,7 @@
 #include "t_log.h"
 #include "event_bus.h"
 #include "TallyTypes.h"
+#include "system_wdt.h"
 #include <string.h>
 
 // ============================================================================
@@ -274,7 +275,13 @@ static void display_task(void* arg)
     (void)arg;
     T_LOGI(TAG, "Display task start");
 
+    // WDT에 태스크 등록
+    system_wdt_register_task("display_task");
+
     while (s_mgr.running) {
+        // WDT 리셋 (루프마다)
+        system_wdt_reset();
+
         // 디스플레이 갱신
         if (s_mgr.initialized && s_mgr.power_on) {
             uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
@@ -294,6 +301,9 @@ static void display_task(void* arg)
 
         vTaskDelay(pdMS_TO_TICKS(DISPLAY_TASK_INTERVAL_MS));
     }
+
+    // WDT에서 태스크 제거
+    system_wdt_unregister_task();
 
     T_LOGI(TAG, "Display task end");
     vTaskDelete(nullptr);
