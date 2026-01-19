@@ -1124,3 +1124,8 @@ extern "C" uint8_t display_manager_get_deep_sleep_countdown(void)
 {
     return s_mgr.deep_sleep_countdown;
 }
+
+extern "C" float display_manager_get_voltage(void)
+{
+    return s_mgr.data.system.voltage;
+}

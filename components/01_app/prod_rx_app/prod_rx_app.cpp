@@ -15,6 +15,7 @@
 #include "device_manager.h"
 #include "led_service.h"
 #include "battery_driver.h"
+#include "BatteryEmptyPage.h"
 #include "esp_sleep.h"
 
 #include "freertos/FreeRTOS.h"
@@ -42,8 +43,14 @@ static void battery_empty_timer_callback(TimerHandle_t xTimer)
         display_manager_force_refresh();
 
         if (s_deep_sleep_countdown == 0) {
-            // 카운트다운 종료, 딥슬립 진입
-            T_LOGW(TAG, "Battery empty - Entering deep sleep");
+            // 카운트다운 종료, 전압 표시 후 딥슬립 진입
+            T_LOGW(TAG, "Battery empty - Showing voltage, then deep sleep");
+            battery_empty_page_set_timer_completed(true);
+            display_manager_set_deep_sleep_countdown(0);
+            display_manager_force_refresh();
+
+            // 짧은 지연 후 딥슬립 진입 (전압 표시 확인용)
+            vTaskDelay(pdMS_TO_TICKS(2000));
             xTimerStop(s_battery_empty_timer, 0);
             esp_deep_sleep_start();
         } else {
@@ -83,8 +90,8 @@ static void check_battery_empty(void)
     // 배터리 상태 체크
     battery_status_t status;
     if (battery_driver_update_status(&status) == ESP_OK) {
-        if (status.voltage < 3.8f) {
-            T_LOGW(TAG, "Battery empty detected (%.2fV < 3.8V) - Showing empty page, deep sleep in 10s", status.voltage);
+        if (status.voltage < 3.2f) {
+            T_LOGW(TAG, "Battery empty detected (%.2fV < 3.2V) - Showing empty page, deep sleep in 10s", status.voltage);
             display_manager_set_battery_empty(true);
             start_battery_empty_timer();
         }
@@ -438,8 +445,8 @@ void prod_rx_app_start(void)
     if (battery_driver_update_status(&battery_status) == ESP_OK) {
         battery_check_ok = true;
         T_LOGI(TAG, "Boot battery check: %d%% (%.2fV)", battery_status.percent, battery_status.voltage);
-        if (battery_status.voltage < 3.8f) {
-            T_LOGW(TAG, "Battery empty (%.2fV < 3.8V) - Showing empty page, deep sleep in 10s", battery_status.voltage);
+        if (battery_status.voltage < 3.2f) {
+            T_LOGW(TAG, "Battery empty (%.2fV < 3.2V) - Showing empty page, deep sleep in 10s", battery_status.voltage);
             display_manager_set_battery_empty(true);
             start_battery_empty_timer();
         }
@@ -448,7 +455,7 @@ void prod_rx_app_start(void)
     }
 
     // 배터리 정상이면 RX 페이지로 전환
-    if (!battery_check_ok || battery_status.voltage >= 3.8f) {
+    if (!battery_check_ok || battery_status.voltage >= 3.2f) {
         display_manager_boot_complete();
     }
 

@@ -277,6 +277,12 @@ void display_manager_set_deep_sleep_countdown(uint8_t seconds);
  */
 uint8_t display_manager_get_deep_sleep_countdown(void);
 
+/**
+ * @brief 현재 배터리 전압 확인
+ * @return 전압 (V)
+ */
+float display_manager_get_voltage(void);
+
 // ============================================================================
 // 디스플레이 갱신
 // ============================================================================

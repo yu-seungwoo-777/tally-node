@@ -28,10 +28,12 @@ static struct {
     bool is_empty;           // 배터리 비움 상태 플래그
     display_page_t prev_page; // 이전 페이지 (복귀용)
     uint8_t blink_counter;    // 깜빡임 카운터 (0~1)
+    bool timer_completed;     // 카운트다운 완료 플래그
 } s_battery_empty = {
     .is_empty = false,
     .prev_page = PAGE_NONE,
     .blink_counter = 0,
+    .timer_completed = false,
 };
 
 // ============================================================================
@@ -70,7 +72,27 @@ static void draw_empty_battery_icon(u8g2_t* u8g2, int cx, int cy, int w, int h)
 }
 
 /**
- * @brief 카운트다운 표시 (배터리 안쪽)
+ * @brief 전압 표시 (배터리 안쪽)
+ * @param u8g2 u8g2 핸들
+ * @param x 중앙 X 좌표
+ * @param y Y 좌표
+ */
+static void draw_voltage_center(u8g2_t* u8g2, int x, int y)
+{
+    float voltage = display_manager_get_voltage();
+
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%.1fV", voltage);
+
+    // 큰 폰트
+    u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
+    int width = u8g2_GetStrWidth(u8g2, buf);
+
+    u8g2_DrawStr(u8g2, x - width / 2, y, buf);
+}
+
+/**
+ * @brief 카운트다운 표시 (배터리 안쪽, 전압 위)
  * @param u8g2 u8g2 핸들
  * @param seconds 남은 시간
  * @param x 중앙 X 좌표
@@ -140,10 +162,16 @@ static void draw_battery_empty_screen(u8g2_t* u8g2)
 
     draw_empty_battery_icon(u8g2, bat_cx, bat_cy, bat_w, bat_h);
 
-    // 카운트다운 표시 (배터리 중앙)
+    // 3-state 로직:
+    // 1. 초기 상태 (timer_completed=false, countdown=0): 아무것도 표시 안함
+    // 2. 카운트다운 중 (countdown>0): 숫자 표시
+    // 3. 카운트다운 완료 (timer_completed=true, countdown=0): 전압 표시
     if (has_countdown) {
         draw_countdown_center(u8g2, countdown, bat_cx, bat_cy + 10);
+    } else if (s_battery_empty.timer_completed) {
+        draw_voltage_center(u8g2, bat_cx, bat_cy + 7);
     }
+    // 초기 상태에서는 아무것도 표시하지 않음 (빈 배터리 아이콘만)
 
     // =====================================================
     // 하단: 메시지
@@ -207,6 +235,7 @@ static void page_on_enter(void)
 {
     T_LOGW(TAG, "BatteryEmptyPage entered - Battery is empty!");
     s_battery_empty.blink_counter = 0;
+    s_battery_empty.timer_completed = false;  // 카운트다운 완료 플래그 리셋
 }
 
 /**
@@ -290,4 +319,9 @@ extern "C" void battery_empty_page_hide(void)
         display_manager_set_page(PAGE_RX);
 #endif
     }
+}
+
+extern "C" void battery_empty_page_set_timer_completed(bool completed)
+{
+    s_battery_empty.timer_completed = completed;
 }

@@ -44,6 +44,14 @@ void battery_empty_page_show(void);
  */
 void battery_empty_page_hide(void);
 
+/**
+ * @brief 카운트다운 완료 상태 설정
+ * @param completed true: 카운트다운 완료, false: 카운트다운 전/중
+ *
+ * 카운트다운이 완료된 후 전압을 표시하기 위해 사용합니다.
+ */
+void battery_empty_page_set_timer_completed(bool completed);
+
 #ifdef __cplusplus
 }
 #endif
