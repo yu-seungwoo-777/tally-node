@@ -55,6 +55,7 @@ private:
     // 이벤트 핸들러
     static esp_err_t onRestartRequest(const event_data_t* event);
     static esp_err_t onConfigDataEvent(const event_data_t* event);
+    static esp_err_t onBatteryEmptyChanged(const event_data_t* event);
 
     // 드라이버 콜백 핸들러
     static void onEthernetStatusChange(bool connected, const char* ip);

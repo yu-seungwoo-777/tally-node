@@ -484,6 +484,7 @@ typedef enum {
     EVT_RF_CHANGED,             ///< RF 설정 변경 (data: lora_rf_event_t) - 드라이버 적용 + broadcast
     EVT_RF_SAVED,               ///< RF NVS 저장 요청 (data: lora_rf_event_t) - broadcast 완료 후
     EVT_STOP_CHANGED,           ///< 기능 정지 상태 변경 (data: bool, true=정지)
+    EVT_BATTERY_EMPTY_CHANGED,  ///< 배터리 empty 상태 변경 (data: bool, true=empty)
 
     // 버튼 이벤트 (03_service → 01_app)
     EVT_BUTTON_SINGLE_CLICK,    ///< 버튼 단일 클릭 (짧게 눌름)

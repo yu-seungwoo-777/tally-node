@@ -138,6 +138,7 @@ static const display_page_interface_t s_boot_page_interface = {
     .render = page_render,
     .on_enter = page_on_enter,
     .on_exit = page_on_exit,
+    .timer_tick = nullptr,
 };
 
 // ============================================================================

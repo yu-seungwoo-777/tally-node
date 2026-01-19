@@ -4,8 +4,23 @@
  *
  * 배터리 전압을 측정하고 백분율로 변환합니다.
  * - HAL 계층에서 ADC 원시값을 읽어옴
- * - 18650 리튬이온 배터리 기준 전압-백분율 변환
- * - 전압 범위: 4.0V (100%) ~ 3.0V (0%)
+ * - 18650 리튬이온 배터리 기준 비선형 방전 곡선 보정
+ *
+ * @section battery_curve 배터리 방전 곡선 (18650 리튬이온)
+ *
+ * | 전압   | 퍼센트 | 구간   |
+ * |--------|--------|-------|
+ * | ≥ 4.1V | 100%   | -     |
+ * | 4.0V   | 80%    | 20%   |
+ * | 3.9V   | 65%    | 15%   |
+ * | 3.8V   | 50%    | 15%   |
+ * | 3.7V   | 35%    | 15%   |
+ * | 3.6V   | 20%    | 15%   |
+ * | 3.5V   | 10%    | 10%   |
+ * | 3.4V   | 5%     | 5%    |
+ * | 3.3V   | 2%     | 3%    |
+ * | 3.2V   | 0%     | 2%    |
+ * | < 3.2V | 0%     | -     |
  */
 
 #include "battery_driver.h"
@@ -21,13 +36,10 @@ static const char* TAG = "04_BatteryDrv";
 /**
  * @brief 배터리 전압 임계값 (V)
  *
- * 18650 리튬이온 배터리 방전 곡선 기준
- * 전압 0.1V당 약 10% 변환
+ * 18650 리튬이온 배터리 비선형 방전 곡선 기준
  */
-#define BATTERY_VOLTAGE_FULL    4.0f   // 100%
-#define BATTERY_VOLTAGE_HIGH    3.9f   // 90%
-#define BATTERY_VOLTAGE_NOMINAL 3.5f   // 50%
-#define BATTERY_VOLTAGE_LOW     3.0f   // 0%
+#define BATTERY_VOLTAGE_FULL    4.1f   // 100% (완전충전)
+#define BATTERY_VOLTAGE_LOW     3.2f   // 0%  (방전완료)
 
 /**
  * @brief 최소 측정 가능 전압 (V)
@@ -74,13 +86,23 @@ public:
     static uint8_t updatePercent(void);
 
     /**
+     * @brief 배터리 상태 업데이트 (전압 + 백분율, ADC 1회만 읽기)
+     *
+     * 중복 ADC 읽기를 방지하기 위해 전압과 퍼센트를 한 번의 ADC 읽기로 가져옵니다.
+     *
+     * @param status 상태를 저장할 구조체 포인터
+     * @return ESP_OK 성공, 에러 코드 실패
+     */
+    static esp_err_t updateStatus(battery_status_t* status);
+
+    /**
      * @brief 전압을 백분율로 변환
      *
      * 18650 리튬이온 배터리 기준 변환 표
      * - 4.0V 이상: 100%
      * - 3.9V ~ 4.0V: 90% ~ 100%
-     * - 3.0V ~ 3.9V: 선형 보간
-     * - 3.0V 미만: 0%
+     * - 3.2V ~ 3.9V: 선형 보간
+     * - 3.2V 미만: 0%
      *
      * @param voltage 배터리 전압 (V)
      * @return 백분율 (0~100%)
@@ -168,29 +190,74 @@ uint8_t BatteryDriver::updatePercent(void)
     return 100;  // 기본값
 }
 
+esp_err_t BatteryDriver::updateStatus(battery_status_t* status)
+{
+    if (status == nullptr) {
+        T_LOGE(TAG, "fail:null");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!s_initialized) {
+        T_LOGE(TAG, "fail:not_init");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    // 전압 읽기 (ADC 1회)
+    float voltage;
+    esp_err_t ret = getVoltage(&voltage);
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
+    // 전압과 퍼센트 한 번에 설정
+    status->voltage = voltage;
+    if (voltage >= BATTERY_VOLTAGE_MIN_VALID) {
+        status->percent = voltageToPercent(voltage);
+    } else {
+        status->percent = 100;  // 기본값 (전압 측정 실패 시)
+    }
+
+    T_LOGD(TAG, "ok:%.2fV %d%%", status->voltage, status->percent);
+    return ESP_OK;
+}
+
 uint8_t BatteryDriver::voltageToPercent(float voltage)
 {
-    // 18650 배터리: 0.1V당 10% (4.0V = 100%, 3.0V = 0%)
+    // 18650 리튬이온 비선형 방전 곡선 보정
+    // 방전 곡선: 4.2V(100%) ~ 3.2V(0%)
+
     if (voltage >= BATTERY_VOLTAGE_FULL) {
         return 100;
-    } else if (voltage >= BATTERY_VOLTAGE_HIGH) {
-        // 3.9V ~ 4.0V: 90% ~ 100%
-        return (uint8_t)(90.0f + (voltage - BATTERY_VOLTAGE_HIGH) / 0.1f * 10.0f);
+    } else if (voltage >= 4.1f) {
+        // 4.1V ~ 4.2V: 90% ~ 100%
+        return (uint8_t)(90.0f + (voltage - 4.1f) / 0.1f * 10.0f);
+    } else if (voltage >= 4.0f) {
+        // 4.0V ~ 4.1V: 80% ~ 90%
+        return (uint8_t)(80.0f + (voltage - 4.0f) / 0.1f * 10.0f);
+    } else if (voltage >= 3.9f) {
+        // 3.9V ~ 4.0V: 65% ~ 80% (15% 구간)
+        return (uint8_t)(65.0f + (voltage - 3.9f) / 0.1f * 15.0f);
     } else if (voltage >= 3.8f) {
-        return (uint8_t)(80.0f + (voltage - 3.8f) / 0.1f * 10.0f);
+        // 3.8V ~ 3.9V: 50% ~ 65% (15% 구간)
+        return (uint8_t)(50.0f + (voltage - 3.8f) / 0.1f * 15.0f);
     } else if (voltage >= 3.7f) {
-        return (uint8_t)(70.0f + (voltage - 3.7f) / 0.1f * 10.0f);
+        // 3.7V ~ 3.8V: 35% ~ 50% (15% 구간)
+        return (uint8_t)(35.0f + (voltage - 3.7f) / 0.1f * 15.0f);
     } else if (voltage >= 3.6f) {
-        return (uint8_t)(60.0f + (voltage - 3.6f) / 0.1f * 10.0f);
-    } else if (voltage >= BATTERY_VOLTAGE_NOMINAL) {
-        return (uint8_t)(50.0f + (voltage - BATTERY_VOLTAGE_NOMINAL) / 0.1f * 10.0f);
+        // 3.6V ~ 3.7V: 20% ~ 35% (15% 구간)
+        return (uint8_t)(20.0f + (voltage - 3.6f) / 0.1f * 15.0f);
+    } else if (voltage >= 3.5f) {
+        // 3.5V ~ 3.6V: 10% ~ 20% (10% 구간)
+        return (uint8_t)(10.0f + (voltage - 3.5f) / 0.1f * 10.0f);
     } else if (voltage >= 3.4f) {
-        return (uint8_t)(40.0f + (voltage - 3.4f) / 0.1f * 10.0f);
+        // 3.4V ~ 3.5V: 5% ~ 10% (5% 구간)
+        return (uint8_t)(5.0f + (voltage - 3.4f) / 0.1f * 5.0f);
     } else if (voltage >= 3.3f) {
-        return (uint8_t)(30.0f + (voltage - 3.3f) / 0.1f * 10.0f);
+        // 3.3V ~ 3.4V: 2% ~ 5% (3% 구간)
+        return (uint8_t)(2.0f + (voltage - 3.3f) / 0.1f * 3.0f);
     } else if (voltage >= BATTERY_VOLTAGE_LOW) {
-        // 3.0V ~ 3.3V: 0% ~ 30%
-        return (uint8_t)((voltage - BATTERY_VOLTAGE_LOW) / 0.3f * 30.0f);
+        // 3.2V ~ 3.3V: 0% ~ 2% (2% 구간)
+        return (uint8_t)((voltage - BATTERY_VOLTAGE_LOW) / 0.1f * 2.0f);
     }
     return 0;
 }
@@ -219,6 +286,11 @@ uint8_t battery_driver_get_percent(void)
 uint8_t battery_driver_update_percent(void)
 {
     return BatteryDriver::updatePercent();
+}
+
+esp_err_t battery_driver_update_status(battery_status_t* status)
+{
+    return BatteryDriver::updateStatus(status);
 }
 
 uint8_t battery_driver_voltage_to_percent(float voltage)

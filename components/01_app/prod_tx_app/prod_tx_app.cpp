@@ -21,14 +21,84 @@
 #include "web_server.h"
 #include "tally_test_service.h"
 #include "TallyTypes.h"
+#include "battery_driver.h"
+#include "esp_sleep.h"
 #include "esp_netif.h"
 #include "esp_event.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/timers.h"
 #include <cstring>
 
 static const char* TAG = "01_TxApp";
+
+// ============================================================================
+// 배터리 Empty 타이머 (공통)
+// ============================================================================
+
+// 배터리 empty 상태에서 10초 후 딥슬립 진입
+static TimerHandle_t s_battery_empty_timer = NULL;
+static uint8_t s_deep_sleep_countdown = 0;  // 카운트다운 값 (초)
+
+static void battery_empty_timer_callback(TimerHandle_t xTimer)
+{
+    (void)xTimer;
+
+    if (s_deep_sleep_countdown > 0) {
+        s_deep_sleep_countdown--;
+        display_manager_set_deep_sleep_countdown(s_deep_sleep_countdown);
+        display_manager_force_refresh();
+
+        if (s_deep_sleep_countdown == 0) {
+            // 카운트다운 종료, 딥슬립 진입
+            T_LOGW(TAG, "Battery empty - Entering deep sleep");
+            xTimerStop(s_battery_empty_timer, 0);
+            esp_deep_sleep_start();
+        } else {
+            T_LOGD(TAG, "Deep sleep countdown: %d", s_deep_sleep_countdown);
+        }
+    }
+}
+
+static void start_battery_empty_timer(void)
+{
+    if (s_battery_empty_timer == NULL) {
+        s_battery_empty_timer = xTimerCreate(
+            "batt_empty_timer",
+            pdMS_TO_TICKS(1000),   // 1초 간격
+            pdTRUE,                // 반복
+            NULL,
+            battery_empty_timer_callback
+        );
+    }
+    if (s_battery_empty_timer != NULL && xTimerStart(s_battery_empty_timer, 0) == pdPASS) {
+        s_deep_sleep_countdown = 10;  // 10초 카운트다운 시작
+        display_manager_set_deep_sleep_countdown(s_deep_sleep_countdown);
+        T_LOGW(TAG, "Battery empty timer started - Deep sleep in 10 seconds");
+    }
+}
+
+/**
+ * @brief 배터리 엤티 체크 (1초마다 EVT_INFO_UPDATED로 호출)
+ */
+static void check_battery_empty(void)
+{
+    // 이미 배터리 엠티 상태면 타이머가 실행 중이므로 체크 생략
+    if (s_battery_empty_timer != NULL && xTimerIsTimerActive(s_battery_empty_timer)) {
+        return;
+    }
+
+    // 배터리 상태 체크
+    battery_status_t status;
+    if (battery_driver_update_status(&status) == ESP_OK) {
+        if (status.voltage < 3.8f) {
+            T_LOGW(TAG, "Battery empty detected (%.2fV < 3.8V) - Showing empty page, deep sleep in 10s", status.voltage);
+            display_manager_set_battery_empty(true);
+            start_battery_empty_timer();
+        }
+    }
+}
 
 // ============================================================================
 // 버튼 이벤트 핸들러 (TX 전용)
@@ -289,6 +359,12 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     event_bus_subscribe(EVT_TALLY_TEST_MODE_STOP, handle_test_mode_stop);
     // Tally 상태 변경 이벤트 (테스트 모드 포함)
     event_bus_subscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
+    // 배터리 엠티 체크 (1초마다 HardwareService에서 EVT_INFO_UPDATED 발행)
+    event_bus_subscribe(EVT_INFO_UPDATED, [](const event_data_t* event) -> esp_err_t {
+        (void)event;
+        check_battery_empty();
+        return ESP_OK;
+    });
     T_LOGD(TAG, "Event subscription completed");
 
     // ConfigService 초기화
@@ -495,8 +571,27 @@ void prod_tx_app_start(void)
         vTaskDelay(pdMS_TO_TICKS(500));
     }
 
-    // TX 페이지로 전환
-    display_manager_boot_complete();
+    // 부팅 시 배터리 체크 (app 레이어에서 직접 확인)
+    // 상태응답 → 배터리 체크 → 배터리 empty 페이지 → 10초 후 딥슬립
+    battery_status_t battery_status = { .voltage = 4.0f, .percent = 100 };  // 기본값
+    bool battery_check_ok = false;
+
+    if (battery_driver_update_status(&battery_status) == ESP_OK) {
+        battery_check_ok = true;
+        T_LOGI(TAG, "Boot battery check: %d%% (%.2fV)", battery_status.percent, battery_status.voltage);
+        if (battery_status.voltage < 3.8f) {
+            T_LOGW(TAG, "Battery empty (%.2fV < 3.8V) - Showing empty page, deep sleep in 10s", battery_status.voltage);
+            display_manager_set_battery_empty(true);
+            start_battery_empty_timer();
+        }
+    } else {
+        T_LOGW(TAG, "Battery status read failed at boot - assuming normal");
+    }
+
+    // 배터리 정상이면 TX 페이지로 전환
+    if (!battery_check_ok || battery_status.voltage >= 3.8f) {
+        display_manager_boot_complete();
+    }
 
     // WebServer 시작 (HTTP 서버)
     if (web_server_start() == ESP_OK) {
@@ -583,6 +678,7 @@ void prod_tx_app_loop(void)
     // - NetworkService: 내부 태스크에서 상태 발행
     // - SwitcherService: 내부 태스크에서 루프 처리
     // - HardwareService: 내부 태스크에서 모니터링
+    // - 배터리 엠티 체크: EVT_INFO_UPDATED 이벤트로 처리
     (void)s_app.running;
 }
 

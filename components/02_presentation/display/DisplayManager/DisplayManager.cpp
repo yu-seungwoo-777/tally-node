@@ -8,6 +8,7 @@
 #include "BootPage.h"
 #include "TxPage.h"
 #include "RxPage.h"
+#include "BatteryEmptyPage.h"
 #include "t_log.h"
 #include "event_bus.h"
 #include "TallyTypes.h"
@@ -98,6 +99,10 @@ static struct {
 
     // 태스크 핸들
     TaskHandle_t task_handle;
+
+    // 딥슬립 카운트다운 (배터리 Empty 페이지용)
+    uint8_t deep_sleep_countdown;  // 남은 시간 (초), 0 = 카운트다운 없음
+    uint32_t last_timer_tick_ms;   // 마지막 타이머 틱 시간 (1초 간격)
 } s_mgr = {
     .initialized = false,
     .running = false,
@@ -111,7 +116,9 @@ static struct {
     .pages = {nullptr},
     .page_count = 0,
     .data = {},
-    .task_handle = nullptr
+    .task_handle = nullptr,
+    .deep_sleep_countdown = 0,
+    .last_timer_tick_ms = 0
 };
 
 // ============================================================================
@@ -289,6 +296,20 @@ static void display_task(void* arg)
             if (now - s_mgr.last_status_log_ms >= STATUS_LOG_INTERVAL_MS) {
                 s_mgr.last_status_log_ms = now;
                 print_status_log();
+            }
+
+            // 1초 타이머 틱 (페이지 갱신용)
+            if (now - s_mgr.last_timer_tick_ms >= 1000) {
+                s_mgr.last_timer_tick_ms = now;
+                // 현재 페이지의 timer_tick 호출
+                for (int i = 0; i < s_mgr.page_count; i++) {
+                    if (s_mgr.pages[i]->id == s_mgr.current_page) {
+                        if (s_mgr.pages[i]->timer_tick != nullptr) {
+                            s_mgr.pages[i]->timer_tick();
+                        }
+                        break;
+                    }
+                }
             }
         }
 
@@ -635,6 +656,9 @@ extern "C" bool display_manager_init(void)
 
     // BootPage 자동 등록
     boot_page_init();
+
+    // BatteryEmptyPage 자동 등록 (TX/RX 공통)
+    battery_empty_page_init();
 
     // 빌드 환경에 따라 TxPage 또는 RxPage 등록
 #ifdef DEVICE_MODE_TX
@@ -1076,3 +1100,27 @@ extern "C" void display_manager_update_ethernet_dhcp_mode(bool dhcp_mode)
 }
 
 #endif // DEVICE_MODE_TX
+
+// ============================================================================
+// 배터리 비움 페이지 API 구현 (TX/RX 공통)
+// ============================================================================
+
+extern "C" void display_manager_set_battery_empty(bool empty)
+{
+    battery_empty_page_set_empty(empty);
+}
+
+extern "C" bool display_manager_is_battery_empty(void)
+{
+    return battery_empty_page_is_empty();
+}
+
+extern "C" void display_manager_set_deep_sleep_countdown(uint8_t seconds)
+{
+    s_mgr.deep_sleep_countdown = seconds;
+}
+
+extern "C" uint8_t display_manager_get_deep_sleep_countdown(void)
+{
+    return s_mgr.deep_sleep_countdown;
+}

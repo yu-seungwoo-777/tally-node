@@ -28,6 +28,7 @@ typedef enum {
     PAGE_BOOT,        // 부팅 화면 (공용)
     PAGE_TX,          // TX 모드 페이지
     PAGE_RX,          // RX 모드 페이지
+    PAGE_BATTERY_EMPTY, // 배터리 비움 화면 (TX/RX 공용)
     PAGE_COUNT        // 페이지 수
 } display_page_t;
 
@@ -43,6 +44,7 @@ typedef struct {
     void (*render)(u8g2_t* u8g2);    // 렌더링
     void (*on_enter)(void);          // 페이지 진입 시 호출
     void (*on_exit)(void);           // 페이지 퇴장 시 호출
+    void (*timer_tick)(void);        // 1초 간격 타이머 틱 (NULL 가능)
 } display_page_interface_t;
 
 // ============================================================================
@@ -242,6 +244,38 @@ void display_manager_update_tally(const uint8_t* pgm_channels, uint8_t pgm_count
  * @param dhcp_mode true=DHCP, false=Static
  */
 void display_manager_update_ethernet_dhcp_mode(bool dhcp_mode);
+
+// ============================================================================
+// 배터리 비움 페이지 API (TX/RX 공통)
+// ============================================================================
+
+/**
+ * @brief 배터리 비움 상태 설정
+ * @param empty true: 배터리 비움 상태, false: 정상 상태
+ *
+ * 배터리 잔량이 0%일 때 자동으로 배터리 비움 페이지로 전환합니다.
+ */
+void display_manager_set_battery_empty(bool empty);
+
+/**
+ * @brief 배터리 비움 상태 확인
+ * @return true: 배터리 비움 상태, false: 정상 상태
+ */
+bool display_manager_is_battery_empty(void);
+
+/**
+ * @brief 딥슬립 카운트다운 설정 (초)
+ * @param seconds 남은 시간 (초 단위, 0 = 카운트다운 없음)
+ *
+ * 배터리 Empty 페이지에서 카운트다운을 표시합니다.
+ */
+void display_manager_set_deep_sleep_countdown(uint8_t seconds);
+
+/**
+ * @brief 딥슬립 카운트다운 확인
+ * @return 남은 시간 (초 단위, 0 = 카운트다운 없음)
+ */
+uint8_t display_manager_get_deep_sleep_countdown(void);
 
 // ============================================================================
 // 디스플레이 갱신
