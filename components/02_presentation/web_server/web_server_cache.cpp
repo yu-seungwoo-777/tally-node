@@ -56,8 +56,8 @@ BaseType_t web_server_cache_lock(void)
     if (s_cache_mutex == nullptr) {
         return pdFALSE;
     }
-    // 타임아웃 0: 즉시 획득 가능할 때만 시도 (이벤트 콜백에서 블록 방지)
-    return xSemaphoreTake(s_cache_mutex, 0);
+    // 타임아웃 100ms: 이벤트 콜백에서 블록 방지 + 캐시 업데이트 보장
+    return xSemaphoreTake(s_cache_mutex, pdMS_TO_TICKS(100));
 }
 
 void web_server_cache_unlock(void)

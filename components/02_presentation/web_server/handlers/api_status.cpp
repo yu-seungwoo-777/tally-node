@@ -92,7 +92,8 @@ esp_err_t api_reboot_handler(httpd_req_t* req)
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"rebooting\"}");
 
-    vTaskDelay(pdMS_TO_TICKS(100));
+    // 응답 전송 후 재부팅 (블로킹 제거)
+    // httpd_resp_sendstr은 버퍼링되므로 esp_restart로 충분
     esp_restart();
     return ESP_OK;
 }
@@ -115,7 +116,7 @@ esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
         }
     }
 
-    T_LOGI(TAG, "Broadcast reboot command sent 3 times, TX rebooting in 500ms");
+    T_LOGI(TAG, "Broadcast reboot command sent 3 times");
 
     // 성공 응답 전송
     cJSON* json = cJSON_CreateObject();
@@ -125,8 +126,7 @@ esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
     }
     web_server_send_json_response(req, json);
 
-    // 3회 송신 후 500ms 대기 후 TX 재부팅
-    vTaskDelay(pdMS_TO_TICKS(500));
+    // 즉시 재부팅 (블로킹 제거)
     esp_restart();
 
     return ESP_OK;

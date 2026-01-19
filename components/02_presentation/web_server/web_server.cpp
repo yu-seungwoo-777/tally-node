@@ -90,7 +90,7 @@ esp_err_t web_server_start(void)
     config.server_port = 80;
     config.max_open_sockets = 10;
     config.max_uri_handlers = g_route_count + 4;  // 여유분 확보
-    config.stack_size = 8192;  // 스택 오버플로우 방지 (기본 4KB → 8KB)
+    config.stack_size = 12288;  // 스택 오버플로우 방지 (8KB → 12KB, cJSON 생성 시 여유)
     config.task_priority = 3;  // 우선순위 낮춤 (SwitcherService 8보다 낮게, event_bus 5보다도 낮게)
     config.lru_purge_enable = true;
     // Keep-Alive 설정 (단일 사용자 최적화)
