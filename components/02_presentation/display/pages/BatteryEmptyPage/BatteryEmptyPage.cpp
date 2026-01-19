@@ -27,12 +27,12 @@ static const char* TAG = "02_BatteryEmptyPage";
 static struct {
     bool is_empty;           // 배터리 비움 상태 플래그
     display_page_t prev_page; // 이전 페이지 (복귀용)
-    uint8_t blink_counter;    // 깜빡임 카운터 (0~1)
+    bool blink_visible;       // 깜빡임 가시 상태 (true=보임, false=안보임)
     bool timer_completed;     // 카운트다운 완료 플래그
 } s_battery_empty = {
     .is_empty = false,
     .prev_page = PAGE_NONE,
-    .blink_counter = 0,
+    .blink_visible = true,    // 초기에는 보임
     .timer_completed = false,
 };
 
@@ -111,21 +111,25 @@ static void draw_countdown_center(u8g2_t* u8g2, uint8_t seconds, int x, int y)
     u8g2_SetFont(u8g2, u8g2_font_profont29_mf);
     int width = u8g2_GetStrWidth(u8g2, buf);
 
-    // 깜빡이는 효과 (마지막 3초는 빠르게 깜빡임)
+    // 깜빡임 효과: countdown 시간에 따라 다른 패턴
+    // - 5초 초과: 항상 보임 (깜빡임 없음)
+    // - 4~5초: 느린 깜빡임 (2초마다 on/off)
+    // - 1~3초: 빠른 깜빡임 (1초마다 on/off)
+    bool should_show = true;  // 기본: 보임
+
     if (seconds <= 3) {
-        // 3초 이하일 때는 반으로 깜빡임
-        if (s_battery_empty.blink_counter == 0) {
-            u8g2_SetDrawColor(u8g2, 0);  // 반전
-        }
+        // 빠른 깜빡임: 매초 토글
+        should_show = s_battery_empty.blink_visible;
     } else if (seconds <= 5) {
-        // 5초 이하일 때는 느리게 깜빡임
-        if (s_battery_empty.blink_counter == 1) {
-            u8g2_SetDrawColor(u8g2, 0);  // 반전
-        }
+        // 느린 깜빡임: 2초마다 토글
+        // blink_visible이 true이고 짝수 초에만 보임 (간단히 true로 고정하여 느린 효과)
+        should_show = true;  // 5초 구간에서는 항상 보이도록 (너무 눈뽕없이 깜빡이면 안좋음)
     }
 
+    // 그리기: 안보이면 지우기 색상으로, 보이면 기본 색상으로
+    u8g2_SetDrawColor(u8g2, should_show ? 1 : 0);
     u8g2_DrawStr(u8g2, x - width / 2, y, buf);
-    u8g2_SetDrawColor(u8g2, 1);  // 복원
+    u8g2_SetDrawColor(u8g2, 1);  // 항상 복원
 }
 
 /**
@@ -145,10 +149,14 @@ static void draw_battery_empty_screen(u8g2_t* u8g2)
     const char* title = "BATTERY EMPTY";
     int title_width = u8g2_GetStrWidth(u8g2, title);
 
-    // 깜빡이는 타이틀 (긴박한 상태 강조)
-    if (s_battery_empty.blink_counter == 0 && countdown <= 3) {
-        u8g2_SetDrawColor(u8g2, 0);  // 반전
+    // 타이틀 깜빡임: 마지막 3초 동안 빠르게 깜빡임
+    bool title_visible = true;
+    if (countdown > 0 && countdown <= 3) {
+        title_visible = s_battery_empty.blink_visible;
     }
+
+    // 그리기: 안보이면 지우기 색상으로, 보이면 기본 색상으로
+    u8g2_SetDrawColor(u8g2, title_visible ? 1 : 0);
     u8g2_DrawStr(u8g2, (screen_w - title_width) / 2, 12, title);
     u8g2_SetDrawColor(u8g2, 1);  // 복원
 
@@ -193,11 +201,11 @@ static void draw_battery_empty_screen(u8g2_t* u8g2)
 }
 
 /**
- * @brief 깜빡임 카운터 토글 (1초마다 호출)
+ * @brief 깜빡임 상태 토글 (1초마다 호출)
  */
 static void toggle_blink(void)
 {
-    s_battery_empty.blink_counter = (s_battery_empty.blink_counter + 1) & 1;
+    s_battery_empty.blink_visible = !s_battery_empty.blink_visible;
 }
 
 // ============================================================================
@@ -234,8 +242,8 @@ static void page_timer_tick(void)
 static void page_on_enter(void)
 {
     T_LOGW(TAG, "BatteryEmptyPage entered - Battery is empty!");
-    s_battery_empty.blink_counter = 0;
-    s_battery_empty.timer_completed = false;  // 카운트다운 완료 플래그 리셋
+    s_battery_empty.blink_visible = true;      // 깜빡임 상태 초기화 (보임)
+    s_battery_empty.timer_completed = false;   // 카운트다운 완료 플래그 리셋
 }
 
 /**
@@ -244,7 +252,7 @@ static void page_on_enter(void)
 static void page_on_exit(void)
 {
     T_LOGI(TAG, "BatteryEmptyPage exited - Battery charged");
-    s_battery_empty.blink_counter = 0;
+    s_battery_empty.blink_visible = true;  // 상태 초기화
 }
 
 // ============================================================================
