@@ -2,7 +2,7 @@
  * @file lora_hal.h
  * @brief LoRa 전용 HAL - RadioLib를 위한 ESP-IDF SPI/GPIO 추상화
  *
- * LoRa(SX1262/SX1268)를 위한 하드웨어 추상화 계층
+ * LoRa(SX1262)를 위한 하드웨어 추상화 계층
  * - SPI2: MOSI=6, MISO=3, SCK=5, CS=7
  * - GPIO: DIO1=33, BUSY=34, RST=8
  */

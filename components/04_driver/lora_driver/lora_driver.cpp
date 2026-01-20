@@ -37,7 +37,6 @@ static const char* TAG __attribute__((unused)) = "04_LoRa";
 #define LORA_DEFAULT_SYNC_WORD  0x12
 
 // 칩 타입 이름 (표시용)
-#define LORA_CHIP_400_NAME      "SX1268 (433MHz)"
 #define LORA_CHIP_900_NAME      "SX1262 (868MHz)"
 
 // =============================================================================
@@ -215,24 +214,11 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
         s_chip_type = LORA_CHIP_SX1262_433M;
         T_LOGD(TAG, "ok:sx1262");
     } else {
-        T_LOGD(TAG, "sx1262:0x%x", state);
+        T_LOGE(TAG, "fail:detect:0x%x", state);
         delete radio_1262;
-
-        T_LOGD(TAG, "detect:sx1268");
-        SX1268* radio_1268 = new SX1268(s_module);
-        state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
-
-        if (state == RADIOLIB_ERR_NONE) {
-            s_radio = radio_1268;
-            s_chip_type = LORA_CHIP_SX1268_868M;
-            T_LOGD(TAG, "ok:sx1268");
-        } else {
-            T_LOGE(TAG, "fail:detect:0x%x", state);
-            delete radio_1268;
-            delete s_module;
-            s_module = nullptr;
-            return ESP_FAIL;
-        }
+        delete s_module;
+        s_module = nullptr;
+        return ESP_FAIL;
     }
 
     // NVS 주파수로 설정
@@ -409,14 +395,12 @@ lora_status_t lora_driver_get_status(void) {
 
 /**
  * @brief LoRa 칩의 모델명을 반환합니다
- * @return 칩 모델명 문자열 (예: "SX1262 (868MHz)", "SX1268 (433MHz)", "Unknown")
+ * @return 칩 모델명 문자열 (예: "SX1262 (868MHz)", "Unknown")
  */
 const char* lora_driver_get_chip_name(void) {
     switch (s_chip_type) {
         case LORA_CHIP_SX1262_433M:
             return LORA_CHIP_900_NAME;   // SX1262 (868MHz)
-        case LORA_CHIP_SX1268_868M:
-            return LORA_CHIP_400_NAME;   // SX1268 (433MHz)
         default:
             return "Unknown";
     }
@@ -614,7 +598,7 @@ esp_err_t lora_driver_sleep(void) {
 
 /**
  * @brief LoRa 주파수를 설정합니다
- * @param freq_mhz 주파수 (MHz) - SX1262: 850-930MHz, SX1268: 410-493MHz
+ * @param freq_mhz 주파수 (MHz) - SX1262: 850-930MHz
  * @return ESP_OK 성공, ESP_ERR_INVALID_STATE 초기화되지 않음,
  *         ESP_ERR_INVALID_ARG 주파수 범위 벗어남, ESP_ERR_TIMEOUT SPI 뮤텍스 획득 실패,
  *         ESP_FAIL 주파수 설정 실패
@@ -626,14 +610,10 @@ esp_err_t lora_driver_set_frequency(float freq_mhz) {
 
     // 모듈별 주파수 범위 검사
     // SX1262 (900TB): 850-930 MHz
-    // SX1268 (400TB): 410-493 MHz
     bool valid = false;
     switch (s_chip_type) {
         case LORA_CHIP_SX1262_433M:  // 900TB
             valid = (freq_mhz >= 850.0f && freq_mhz <= 930.0f);
-            break;
-        case LORA_CHIP_SX1268_868M:  // 400TB
-            valid = (freq_mhz >= 410.0f && freq_mhz <= 493.0f);
             break;
         default:
             break;

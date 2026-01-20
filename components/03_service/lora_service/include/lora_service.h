@@ -25,8 +25,7 @@ extern "C" {
 // LoRa 칩 타입 (내부용, event_bus.h의 lora_chip_type_t와 동일한 값)
 typedef enum {
     LORA_SERVICE_CHIP_UNKNOWN = 0,
-    LORA_SERVICE_CHIP_SX1262 = 1,   // 868/915MHz
-    LORA_SERVICE_CHIP_SX1268 = 2    // 433MHz
+    LORA_SERVICE_CHIP_SX1262 = 1    // 868/915MHz
 } lora_service_chip_type_t;
 
 // LoRa Service 설정

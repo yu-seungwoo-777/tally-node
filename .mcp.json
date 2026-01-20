@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/.mcp.schema.json",
   "mcpServers": {
     "context7": {
       "$comment": "Cross-platform MCP configuration - see .mcp.windows.json for Windows",

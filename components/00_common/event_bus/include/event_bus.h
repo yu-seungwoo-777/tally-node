@@ -55,7 +55,7 @@ extern "C" {
 typedef struct __attribute__((packed)) {
     bool is_running;
     bool is_initialized;
-    uint8_t chip_type;       // 0=Unknown, 1=SX1262, 2=SX1268
+    uint8_t chip_type;       // 0=Unknown, 1=SX1262
     float frequency;         // MHz
     int16_t rssi;            // dBm
     int8_t snr;              // dB
@@ -207,7 +207,7 @@ typedef struct __attribute__((packed)) {
     uint8_t battery;         ///< 배터리 % (0-100)
     float voltage;           ///< 전압 (V)
     float temperature;       ///< 온도 (°C)
-    uint8_t lora_chip_type;  ///< LoRa 칩 타입 (0=Unknown, 1=SX1262, 2=SX1268)
+    uint8_t lora_chip_type;  ///< LoRa 칩 타입 (0=Unknown, 1=SX1262)
     uint32_t uptime;         ///< 업타임 (초)
     bool stopped;            ///< 기능 정지 상태
 } system_info_event_t;

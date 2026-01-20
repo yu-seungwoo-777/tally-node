@@ -57,7 +57,6 @@ htmlcov/
 .idea/
 .turbo/
 .aws/config
-.uv-cache/
 # OS Files
 # Certificate files
 .ruff_cache/
@@ -139,7 +138,6 @@ venv/
 *_backup_*/
 *-key.*
 # Linux
-.uv_cache/
 out/
 __pycache__/
 dist/
@@ -148,3 +146,5 @@ dist/
 .venv/
 *-secret.*
 # Updated: 2026-01-10
+.uv-cache/
+.uv_cache/
