@@ -272,13 +272,7 @@ Fixing...
 
 ## Cancellation
 
-```bash
-# Cancel (save snapshot)
-/moai:cancel-loop --snapshot
-
-# Force cancel
-/moai:cancel-loop --force
-```
+Simply send any message to interrupt the loop. The loop state is automatically saved when the session ends via the `session_end` hook.
 
 ## Quick Reference
 
@@ -342,7 +336,20 @@ Fixing...
 
    5e. [HARD] Before each fix, call TodoWrite to change item to in_progress
 
-   5f. Execute fixes based on --auto level (Level 1-3)
+   5f. [HARD] AGENT DELEGATION MANDATE for Fix Execution:
+       - ALL fix tasks MUST be delegated to specialized agents
+       - NEVER execute fixes directly, even after auto compact
+       - WHY: Specialized agents have domain expertise; direct execution violates orchestrator role
+       - This rule applies regardless of session state or context recovery
+
+       Agent Selection by Issue Type:
+       - Type errors, logic bugs: Use expert-debug subagent
+       - Import/module issues: Use expert-backend or expert-frontend subagent
+       - Test failures: Use expert-testing subagent
+       - Security issues: Use expert-security subagent
+       - Performance issues: Use expert-performance subagent
+
+       Execute fixes via agent delegation based on --auto level (Level 1-3)
 
    5g. [HARD] After each fix completion, call TodoWrite to change item to completed
 

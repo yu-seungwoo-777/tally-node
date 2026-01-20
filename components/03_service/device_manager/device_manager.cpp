@@ -323,6 +323,15 @@ static void on_status_response(const lora_msg_status_t* status, int16_t rssi, fl
     s_tx.devices[found_idx].frequency = (float)status->frequency;
     s_tx.devices[found_idx].sync_word = status->sync_word;
     s_tx.devices[found_idx].is_stopped = (status->stopped == 1);
+
+    // 기능정지 상태 감지 시 로깅
+    if (status->stopped == 1) {
+        char device_id_str[5];
+        lora_device_id_to_str(status->device_id, device_id_str);
+        T_LOGI(TAG, "device in stopped state: ID=%s (will auto-recover on next status request)",
+                device_id_str);
+    }
+
     s_tx.devices[found_idx].is_online = true;  // 상태 응답 수신 = 온라인
 
     // 디바이스-카메라 매핑 이벤트 발행 (ConfigService에서 NVS 저장)
@@ -788,6 +797,9 @@ static struct {
     bool stopped;                    // 기능 정지 상태
     bool system_valid;
     bool lora_valid;
+    float rf_frequency;              // RF 주파수 (MHz) - EVT_RF_CHANGED
+    uint8_t rf_sync_word;            // RF Sync Word - EVT_RF_CHANGED
+    bool rf_valid;                   // RF 설정 유효성
 } s_rx = {
     .system = {},
     .lora = {},
@@ -795,7 +807,10 @@ static struct {
     .camera_id = 1,      // 기본값
     .stopped = false,    // 기본값: 정상
     .system_valid = false,
-    .lora_valid = false
+    .lora_valid = false,
+    .rf_frequency = 0.0f,
+    .rf_sync_word = 0,
+    .rf_valid = false
 };
 
 /**
@@ -864,6 +879,24 @@ static esp_err_t on_camera_id_changed(const event_data_t* event)
 }
 
 /**
+ * @brief RF 설정 변경 이벤트 핸들러 (RX)
+ */
+static esp_err_t on_rf_changed_rx(const event_data_t* event)
+{
+    RETURN_ERR_IF_NULL(event);
+
+    const lora_rf_event_t* rf = (const lora_rf_event_t*)event->data;
+    s_rx.rf_frequency = rf->frequency;
+    s_rx.rf_sync_word = rf->sync_word;
+    s_rx.rf_valid = true;
+
+    T_LOGI(TAG, "RF config updated: %.1f MHz, Sync 0x%02X",
+            s_rx.rf_frequency, s_rx.rf_sync_word);
+
+    return ESP_OK;
+}
+
+/**
  * @brief 상태 응답 송신 (이벤트 기반)
  */
 static esp_err_t send_status_response(void)
@@ -908,9 +941,14 @@ static esp_err_t send_status_response(void)
     // 밝기 (EVT_BRIGHTNESS_CHANGED 이벤트로 수집)
     s_status.brightness = s_rx.brightness;
 
-    // 주파수/SyncWord
-    s_status.frequency = (uint16_t)s_rx.lora.frequency;
-    s_status.sync_word = 0x12;  // TODO: lora_service에서 가져오기
+    // 주파수/SyncWord (EVT_RF_CHANGED 이벤트로 수집, fallback으로 lora.frequency)
+    if (s_rx.rf_valid) {
+        s_status.frequency = (uint16_t)s_rx.rf_frequency;
+        s_status.sync_word = s_rx.rf_sync_word;
+    } else {
+        s_status.frequency = (uint16_t)s_rx.lora.frequency;
+        s_status.sync_word = 0x12;  // fallback
+    }
 
     // 기능 정지 상태
     s_status.stopped = s_rx.stopped ? 1 : 0;
@@ -1014,6 +1052,15 @@ static bool is_my_device(const uint8_t* target_device_id)
  */
 static void handle_status_request(const lora_packet_event_t* packet)
 {
+    // 자동 복구: 기능정지 상태에서 상태 요청 수신 시 정상 상태로 복귀
+    if (s_rx.stopped) {
+        s_rx.stopped = false;
+        T_LOGI(TAG, "auto-recovering from stopped state (display/LED restore)");
+
+        bool stopped_val = false;
+        event_bus_publish(EVT_STOP_CHANGED, &stopped_val, sizeof(stopped_val));
+    }
+
     T_LOGI(TAG, "status request received (RSSI:%d)", packet->rssi);
 
     // 충돌 방지를 위한 랜덤 지연 (0-1000ms)
@@ -1377,6 +1424,7 @@ esp_err_t device_manager_start(void)
     event_bus_subscribe(EVT_LORA_RSSI_CHANGED, on_lora_rssi_changed);
     event_bus_subscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
     event_bus_subscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
+    event_bus_subscribe(EVT_RF_CHANGED, on_rf_changed_rx);
 
     // TX 명령 이벤트 구독 (0xE0~0xEF)
     event_bus_subscribe(EVT_LORA_TX_COMMAND, on_lora_tx_command);
@@ -1423,6 +1471,7 @@ void device_manager_stop(void)
     event_bus_unsubscribe(EVT_LORA_RSSI_CHANGED, on_lora_rssi_changed);
     event_bus_unsubscribe(EVT_BRIGHTNESS_CHANGED, on_brightness_changed);
     event_bus_unsubscribe(EVT_CAMERA_ID_CHANGED, on_camera_id_changed);
+    event_bus_unsubscribe(EVT_RF_CHANGED, on_rf_changed_rx);
     event_bus_unsubscribe(EVT_LORA_TX_COMMAND, on_lora_tx_command);
 #endif
 

@@ -11,6 +11,19 @@ tags: ['workflow', 'spec', 'ears', 'requirements', 'moai-adk', 'planning']
 updated: 2026-01-08
 status: "active"
 author: "MoAI-ADK Team"
+
+# Progressive Disclosure Configuration
+progressive_disclosure:
+  enabled: true
+  level1_tokens: 100
+  level2_tokens: 5000
+
+# Trigger Conditions for Level 2 Loading
+triggers:
+  keywords: ["SPEC", "requirement", "EARS", "acceptance criteria", "user story", "planning", "specification", "requirements gathering"]
+  phases: ["plan"]
+  agents: ["manager-spec", "manager-strategy", "Plan"]
+
 allowed-tools:
   - Read
   - Write
@@ -65,7 +78,7 @@ SPEC-First Development Philosophy:
 - EARS format ensures unambiguous requirements
 - Requirement clarification prevents scope creep
 - Systematic validation through test scenarios
-- Integration with TDD workflow for implementation
+- Integration with DDD workflow for implementation
 - Quality gates enforce completion criteria
 - Constitution reference ensures project-wide consistency
 
@@ -152,7 +165,7 @@ For feature requests or problem-driven SPECs, apply Five Whys:
 - First Why: What immediate need drives this request?
 - Second Why: What underlying problem creates that need?
 - Third Why: What systemic factor contributes?
-- Root Cause: What fundamental issue must the solution address?
+- Root Cause: What fundamental issue must the solution adddess?
 
 Step 1 - Scope Definition:
 - Identify supported authentication methods
@@ -189,8 +202,8 @@ PLAN Phase (/moai:1-plan):
 - Git Worktree setup (optional --worktree flag)
 
 RUN Phase (/moai:2-run):
-- manager-tdd agent loads SPEC document
-- RED-GREEN-REFACTOR TDD cycle execution
+- manager-ddd agent loads SPEC document
+- ANALYZE-PRESERVE-IMPROVE DDD cycle execution
 - moai-workflow-testing skill reference for test patterns
 - Domain Expert agent delegation (expert-backend, expert-frontend, etc.)
 - Quality validation through manager-quality agent
@@ -296,12 +309,12 @@ Validation Checklist:
 
 ### Works Well With
 
-- moai-foundation-core: SPEC-First TDD methodology and TRUST 5 framework
-- moai-workflow-testing: TDD implementation and test automation
+- moai-foundation-core: SPEC-First DDD methodology and TRUST 5 framework
+- moai-workflow-testing: DDD implementation and test automation
 - moai-workflow-project: Project initialization and configuration
-- moai-worktree: Git Worktree management for parallel development
+- moai-workflow-worktree: Git Worktree management for parallel development
 - manager-spec: SPEC creation and requirement analysis agent
-- manager-tdd: TDD implementation based on SPEC requirements
+- manager-ddd: DDD implementation based on SPEC requirements
 - manager-quality: TRUST 5 quality validation and gate enforcement
 
 ### Integration Examples

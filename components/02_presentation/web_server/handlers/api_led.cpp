@@ -21,10 +21,10 @@ esp_err_t api_led_colors_get_handler(httpd_req_t* req)
     web_server_set_cors_headers(req);
 
     // 캐시가 없으면 요청 이벤트 발행 (config_service에서 응답)
+    // 주의: 비동기 처리이므로 첫 요청 시 기본값이 반환될 수 있음
     if (!web_server_cache_is_led_colors_initialized()) {
         event_bus_publish(EVT_LED_COLORS_REQUEST, NULL, 0);
-        // 응답 대기 (간단 구현을 위해 짧은 지연)
-        vTaskDelay(pdMS_TO_TICKS(50));
+        // 블로킹 제거: 다음 폴링 시점에 업데이트됨
     }
 
     const web_server_led_colors_t* colors = web_server_cache_get_led_colors();

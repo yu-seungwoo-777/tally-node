@@ -68,7 +68,7 @@
 
 // Dual Mode
 #define NVS_DUAL_ENABLED              false
-#define NVS_DUAL_OFFSET               4
+#define NVS_DUAL_OFFSET               5
 
 // ============================================================================
 // Device 기본값

@@ -8,6 +8,8 @@ export function utilsModule() {
         // 다이얼로그 표시 상태
         showPrimaryConfig: false,
         showSecondaryConfig: false,
+        showFactoryResetModal: false,
+        factoryResetting: false,
 
         // 토스트 알림 상태
         toastState: {
@@ -114,6 +116,60 @@ export function utilsModule() {
                 this.showToast('Rebooting device...', 'alert-info');
             } catch (e) {
                 this.showToast('Failed to reboot', 'alert-error');
+            }
+        },
+
+        /**
+         * TX 재부팅
+         */
+        async rebootTx() {
+            try {
+                await fetch('/api/reboot', { method: 'POST' });
+                this.showToast('Rebooting TX...', 'alert-info');
+            } catch (e) {
+                this.showToast('Failed to reboot', 'alert-error');
+            }
+        },
+
+        /**
+         * 전체 재부팅 (Broadcast + TX)
+         */
+        async rebootAll() {
+            if (!confirm('Broadcast reboot command to all devices and reboot TX?')) return;
+
+            try {
+                await fetch('/api/reboot/broadcast', { method: 'POST' });
+                this.showToast('Broadcasting reboot command...', 'alert-info');
+            } catch (e) {
+                this.showToast('Failed to send reboot command', 'alert-error');
+            }
+        },
+
+        /**
+         * 공장 초기화
+         */
+        async factoryReset() {
+            this.factoryResetting = true;
+
+            try {
+                const response = await fetch('/api/factory-reset', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.status === 'ok') {
+                    this.showFactoryResetModal = false;
+                    this.showToast('Factory reset in progress... System will reboot.', 'alert-info');
+
+                    // 3초 후 리로드 (재부팅 후 연결 대기)
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                } else {
+                    this.showToast('Factory reset failed: ' + (data.message || 'Unknown error'), 'alert-error');
+                }
+            } catch (e) {
+                this.showToast('Factory reset failed: ' + e.message, 'alert-error');
+            } finally {
+                this.factoryResetting = false;
             }
         }
     };

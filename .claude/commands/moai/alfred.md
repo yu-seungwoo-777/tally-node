@@ -42,7 +42,7 @@ Autonomously execute the full MoAI workflow:
 
 1. **Parallel Exploration** (Explore + Research simultaneously)
 2. **SPEC Generation** (after user approval)
-3. **TDD Implementation** (auto iterative fixing)
+3. **DDD Implementation** (auto iterative fixing)
 4. **Documentation Sync**
 5. **Completion Marker Detection** (`<moai>DONE</moai>`)
 
@@ -107,7 +107,7 @@ PHASE 1: SPEC Generation
   ↓
 User Approval
   ↓
-PHASE 2: TDD Implementation (autonomous loop)
+PHASE 2: DDD Implementation (autonomous loop)
   │
   └── WHILE (issues_exist AND iteration < max):
        ├── Diagnostics (LSP + Tests + Coverage)
@@ -315,14 +315,28 @@ Single domain tasks are delegated directly to expert agents:
 8. Execute Phase 1 - SPEC Generation:
    - Use manager-spec subagent to create EARS-format SPEC document
 
-9. Execute Phase 2 - TDD Implementation Loop:
+9. Execute Phase 2 - DDD Implementation Loop:
+
+   [HARD] AGENT DELEGATION MANDATE:
+   - ALL implementation tasks MUST be delegated to specialized agents
+   - NEVER execute implementation directly, even after auto compact
+   - WHY: Specialized agents have domain expertise; direct execution violates orchestrator role
+   - This rule applies regardless of session state or context recovery
+
+   Agent Selection for Implementation:
+   - Backend logic: Use expert-backend subagent
+   - Frontend components: Use expert-frontend subagent
+   - Test creation: Use expert-testing subagent
+   - Bug fixing: Use expert-debug subagent
+   - Refactoring: Use expert-refactoring subagent
+   - Security fixes: Use expert-security subagent
 
    IF --loop flag OR ralph.yaml loop.enabled is true:
 
    9a. WHILE (issues exist AND iteration less than max):
        - [HARD] Before each task, call TodoWrite to change item to in_progress
        - Execute diagnostics (parallel if enabled)
-       - Fix discovered issues
+       - [HARD] Delegate fix execution to appropriate expert agent (NEVER fix directly)
        - [HARD] After each fix, call TodoWrite to change item to completed
        - Check for completion marker
        - IF marker found: Break loop

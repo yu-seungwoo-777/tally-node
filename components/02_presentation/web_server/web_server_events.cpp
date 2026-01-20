@@ -129,16 +129,19 @@ esp_err_t web_server_on_license_state_event(const event_data_t* event)
 esp_err_t web_server_on_network_restarted_event(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "Network restart complete - restarting web server");
+    T_LOGI(TAG, "Network restart complete - web server continues running");
 
-    // 웹서버가 실행 중이면 재시작
-    if (web_server_is_running()) {
-        web_server_stop();
-        vTaskDelay(pdMS_TO_TICKS(100));  // 100ms 대기
-    }
+    // 네트워크 재시작 후에도 웹 서버는 계속 실행 상태 유지
+    // ESP-IDF httpd는 네트워크 변경 시 자동으로 연결을 재설정함
+    // 명시적인 재시작 제거: 진행 중인 요청이 중단되는 문제 방지
 
-    // 웹서버 재시작
-    return web_server_start();
+    // 캐시 무효화하여 새 네트워크 상태로 갱신 유도
+    web_server_cache_invalidate();
+
+    // 설정 데이터 재요청하여 캐시 갱신
+    event_bus_publish(EVT_CONFIG_DATA_REQUEST, nullptr, 0);
+
+    return ESP_OK;
 }
 
 esp_err_t web_server_on_led_colors_event(const event_data_t* event)

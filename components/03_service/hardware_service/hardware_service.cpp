@@ -358,16 +358,17 @@ void HardwareService::setBattery(uint8_t battery)
 
 uint8_t HardwareService::updateBattery(void)
 {
-    uint8_t percent = battery_driver_update_percent();
-    s_battery = percent;
-
-    // 전압도 함께 업데이트
-    float voltage = 3.7f;  // 기본값
-    if (battery_driver_get_voltage(&voltage) == ESP_OK) {
-        s_voltage = voltage;
+    // ADC 중복 읽기 방지: 전압과 퍼센트를 한 번의 읽기로 가져옴
+    battery_status_t status;
+    if (battery_driver_update_status(&status) == ESP_OK) {
+        s_battery = status.percent;
+        s_voltage = status.voltage;
+        return status.percent;
     }
 
-    return percent;
+    // 실패 시 기존 방식으로 fallback
+    s_battery = battery_driver_update_percent();
+    return s_battery;
 }
 
 uint8_t HardwareService::getBattery(void)

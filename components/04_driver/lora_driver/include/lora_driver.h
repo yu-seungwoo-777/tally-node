@@ -1,6 +1,6 @@
 /**
  * @file lora_driver.h
- * @brief LoRa 드라이버 - SX1262/SX1268 제어
+ * @brief LoRa 드라이버 - SX1262 제어
  *
  * 04_driver 계층 - 하드웨어 드라이버
  * 05_hal/lora_hal을 사용하여 SPI/GPIO 제어
@@ -21,8 +21,7 @@ extern "C" {
 // LoRa 칩 타입
 typedef enum {
     LORA_CHIP_UNKNOWN = 0,
-    LORA_CHIP_SX1262_433M = 1,  // SX1262 (868MHz) - 900TB
-    LORA_CHIP_SX1268_868M = 2    // SX1268 (433MHz) - 400TB
+    LORA_CHIP_SX1262_433M = 1   // SX1262 (868MHz) - 900TB
 } lora_chip_type_t;
 
 // LoRa 설정

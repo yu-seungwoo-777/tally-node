@@ -92,7 +92,8 @@ esp_err_t api_reboot_handler(httpd_req_t* req)
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, "{\"status\":\"rebooting\"}");
 
-    vTaskDelay(pdMS_TO_TICKS(100));
+    // 응답 전송 후 재부팅 (블로킹 제거)
+    // httpd_resp_sendstr은 버퍼링되므로 esp_restart로 충분
     esp_restart();
     return ESP_OK;
 }
@@ -115,7 +116,7 @@ esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
         }
     }
 
-    T_LOGI(TAG, "Broadcast reboot command sent 3 times, TX rebooting in 500ms");
+    T_LOGI(TAG, "Broadcast reboot command sent 3 times");
 
     // 성공 응답 전송
     cJSON* json = cJSON_CreateObject();
@@ -125,10 +126,35 @@ esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
     }
     web_server_send_json_response(req, json);
 
-    // 3회 송신 후 500ms 대기 후 TX 재부팅
-    vTaskDelay(pdMS_TO_TICKS(500));
+    // 즉시 재부팅 (블로킹 제거)
     esp_restart();
 
+    return ESP_OK;
+}
+
+esp_err_t api_factory_reset_handler(httpd_req_t* req)
+{
+    T_LOGI(TAG, "POST /api/factory-reset");
+    web_server_set_cors_headers(req);
+
+    // 이벤트 버스로 factory reset 요청 발행
+    esp_err_t ret = event_bus_publish(EVT_FACTORY_RESET_REQUEST, NULL, 0);
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "Factory reset event publish failed: %s", esp_err_to_name(ret));
+        return web_server_send_json_internal_error(req, "Failed to publish factory reset event");
+    }
+
+    T_LOGI(TAG, "Factory reset event published");
+
+    // 성공 응답 전송
+    cJSON* json = cJSON_CreateObject();
+    if (json) {
+        cJSON_AddStringToObject(json, "status", "ok");
+        cJSON_AddStringToObject(json, "message", "Factory reset in progress...");
+    }
+    web_server_send_json_response(req, json);
+
+    // ConfigService가 이벤트를 처리하고 재부팅함
     return ESP_OK;
 }
 

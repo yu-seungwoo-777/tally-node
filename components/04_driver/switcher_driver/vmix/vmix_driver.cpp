@@ -8,6 +8,7 @@
 #include "vmix_driver.h"
 #include "t_log.h"
 #include <sys/socket.h>
+#include <sys/poll.h>
 
 // ============================================================================
 // 태그
@@ -39,6 +40,11 @@ VmixDriver::VmixDriver(const VmixConfig& config)
     , tally_callback_()
     , connection_callback_()
     , connect_attempt_time_(0)
+    , reconnect_retry_count_(0)
+    , reconnect_backoff_ms_(0)
+    , needs_reconnect_delay_(false)
+    , last_disconnect_time_(0)
+    , version_requested_(false)
 {
     rx_buffer_.fill(0);
 }
@@ -65,6 +71,34 @@ bool VmixDriver::initialize() {
         return false;
     }
 
+    // P1: TCP Keepalive 활성화
+    int keepalive = 1;
+    if (setsockopt(sock_fd_, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive)) < 0) {
+        T_LOGW(TAG, "fail:keepalive:%d", errno);
+        // 계속 진행 (치명적 오류 아님)
+    }
+
+#ifdef TCP_KEEPIDLE
+    int keepidle = VMIX_KEEPALIVE_IDLE_SEC;
+    if (setsockopt(sock_fd_, IPPROTO_TCP, TCP_KEEPIDLE, &keepidle, sizeof(keepidle)) < 0) {
+        T_LOGW(TAG, "fail:keepidle:%d", errno);
+    }
+#endif
+
+#ifdef TCP_KEEPINTVL
+    int keepintvl = VMIX_KEEPALIVE_INTERVAL_SEC;
+    if (setsockopt(sock_fd_, IPPROTO_TCP, TCP_KEEPINTVL, &keepintvl, sizeof(keepintvl)) < 0) {
+        T_LOGW(TAG, "fail:keepintvl:%d", errno);
+    }
+#endif
+
+#ifdef TCP_KEEPCNT
+    int keepcnt = VMIX_KEEPALIVE_COUNT;
+    if (setsockopt(sock_fd_, IPPROTO_TCP, TCP_KEEPCNT, &keepcnt, sizeof(keepcnt)) < 0) {
+        T_LOGW(TAG, "fail:keepcnt:%d", errno);
+    }
+#endif
+
     // 논블로킹 모드 설정
     int flags = fcntl(sock_fd_, F_GETFL, 0);
     fcntl(sock_fd_, F_SETFL, flags | O_NONBLOCK);
@@ -79,29 +113,45 @@ void VmixDriver::connect() {
         return;
     }
 
-    // 소켓이 유효하지 않으면 다시 초기화
-    if (sock_fd_ < 0) {
-        if (!initialize()) {
-            T_LOGE(TAG, "fail:reinit");
-            return;
-        }
+    // P3: 재연결 백오프 체크
+    if (!shouldAllowReconnect()) {
+        return;  // 아직 백오프 대기 시간 중
     }
 
-    T_LOGD(TAG, "connect:%s:%d", config_.ip.c_str(), config_.port);
+    // 소켓이 유효하지 않으면 다시 초기화
+    // 이전 소켓이 남아있으면 먼저 정리 (LwIP 안정성 확보)
+    if (sock_fd_ >= 0) {
+        T_LOGW(TAG, "connect:cleaning_old_socket fd=%d", sock_fd_);
+        close(sock_fd_);
+        sock_fd_ = -1;
+    }
+
+    if (!initialize()) {
+        T_LOGE(TAG, "fail:reinit");
+        updateBackoffOnDisconnect(false);
+        return;
+    }
+
+    T_LOGD(TAG, "connect:%s:%d fd=%d", config_.ip.c_str(), config_.port, sock_fd_);
+
+    // 연결 시도 시작 시간 기록 (상태 초기화 전에 설정)
+    connect_attempt_time_ = getMillis();
 
     // 상태 초기화
     state_ = VmixState();
+    version_requested_ = false;  // 연결 시 VERSION 요청 상태 초기화
     setConnectionState(CONNECTION_STATE_CONNECTING);
-
-    // 연결 시도 시작 시간 기록
-    connect_attempt_time_ = getMillis();
 
     // 서버 주소 설정
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(config_.port);
-    inet_pton(AF_INET, config_.ip.c_str(), &server_addr.sin_addr);
+    if (inet_pton(AF_INET, config_.ip.c_str(), &server_addr.sin_addr) <= 0) {
+        T_LOGE(TAG, "fail:invalid_ip:%s", config_.ip.c_str());
+        disconnect();
+        return;
+    }
 
     // 비블로킹 연결 시도
     int result = ::connect(sock_fd_, (struct sockaddr*)&server_addr, sizeof(server_addr));
@@ -110,8 +160,9 @@ void VmixDriver::connect() {
         if (errno == EINPROGRESS) {
             T_LOGD(TAG, "connecting...");
         } else {
-            T_LOGE(TAG, "fail:connect:%d", errno);
-            setConnectionState(CONNECTION_STATE_DISCONNECTED);
+            // 상세 오류 로그
+            T_LOGE(TAG, "fail:connect:%d fd=%d", errno, sock_fd_);
+            disconnect();
         }
     } else {
         // 즉시 연결 성공
@@ -119,6 +170,11 @@ void VmixDriver::connect() {
         state_.connected = true;
         state_.last_update_ms = getMillis();
         setConnectionState(CONNECTION_STATE_READY);
+
+        // 첫 요청은 다음 폴링 사이클로 미룸 (TCP 안정화 대기)
+
+        // P3: 연결 성공 시 백오프 초기화
+        resetBackoff();
     }
 }
 
@@ -131,11 +187,19 @@ void VmixDriver::disconnect() {
     bool was_connected = state_.connected;
     state_.connected = false;
     state_.initialized = false;
-    setConnectionState(CONNECTION_STATE_DISCONNECTED);
+    state_.last_update_ms = 0;  // 타임아웃 계산을 위해 초기화
 
+    // 연결 시도 시간 초기화 (타임아웃 계산 오류 방지)
+    connect_attempt_time_ = 0;
+
+    // P3: 연결이 있었으면 백오프 상태 갱신 (의도적인 종료가 아닌 경우)
     if (was_connected) {
         T_LOGD(TAG, "disconnect");
+        last_disconnect_time_ = getMillis();
+        needs_reconnect_delay_ = true;
     }
+
+    setConnectionState(CONNECTION_STATE_DISCONNECTED);
 }
 
 // ============================================================================
@@ -143,8 +207,12 @@ void VmixDriver::disconnect() {
 // ============================================================================
 
 int VmixDriver::loop() {
+    // P3: 백오프 대기 중이면 시간 체크
     if (conn_state_ == CONNECTION_STATE_DISCONNECTED) {
-        return -1;
+        if (needs_reconnect_delay_ && !shouldAllowReconnect()) {
+            return -1;  // 아직 백오프 대기 시간 중
+        }
+        return -1;  // 완전히 유휴 상태
     }
 
     int processed = 0;
@@ -159,19 +227,29 @@ int VmixDriver::loop() {
             return -1;
         }
 
-        // 연결 완료 확인 (select/poll 또는 getsockopt)
+        // 연결 완료 확인 (getsockopt + poll로 쓰기 가능 여부 확인)
         int error = 0;
         socklen_t len = sizeof(error);
         if (getsockopt(sock_fd_, SOL_SOCKET, SO_ERROR, &error, &len) == 0) {
             if (error == 0) {
-                // 연결 성공
-                state_.connected = true;
-                state_.last_update_ms = now;
-                setConnectionState(CONNECTION_STATE_READY);
-                T_LOGD(TAG, "ok");
+                // TCP 3-way-handshake 완료, 추가로 쓰기 가능 여부 확인
+                struct pollfd pfd;
+                pfd.fd = sock_fd_;
+                pfd.events = POLLOUT;
+                pfd.revents = 0;
 
-                // 초기 Tally 요청
-                sendCommand(VMIX_CMD_TALLY);
+                int poll_ret = poll(&pfd, 1, 0);  // 비블로킹 확인
+                if (poll_ret > 0 && (pfd.revents & POLLOUT)) {
+                    // 소켓이 쓰기 가능한 상태
+                    state_.connected = true;
+                    state_.last_update_ms = now;
+                    setConnectionState(CONNECTION_STATE_READY);
+                    T_LOGD(TAG, "ok");
+
+                    // P3: 연결 성공 시 백오프 초기화
+                    resetBackoff();
+                }
+                // 아직 쓰기 가능하지 않으면 다음 루프에서 다시 확인
             } else if (error != EINPROGRESS) {
                 // 연결 실패
                 T_LOGE(TAG, "fail:connect:%d", error);
@@ -189,16 +267,60 @@ int VmixDriver::loop() {
         }
 
         // 타임아웃 체크
-        if (now - state_.last_update_ms > VMIX_MAX_SILENCE_TIME_MS) {
-            T_LOGW(TAG, "timeout:%dms", (int)(now - state_.last_update_ms));
-            disconnect();
-            return -1;
+        // last_update_ms가 0이면 연결 직후이므로 connect_attempt_time_ 기준으로 체크
+        uint32_t last_activity = state_.last_update_ms;
+        if (last_activity == 0) {
+            last_activity = connect_attempt_time_;
+        }
+
+        // connect_attempt_time_이 0이면 아직 연결 시도 전, 타임아웃 체크 스킵
+        if (last_activity == 0) {
+            // 아직 연결 시도 전, 타임아웃 체크하지 않음
+        } else {
+            // uint32_t wrap-around 방어: last_activity > now이면 wrap 발생
+            uint32_t elapsed;
+            if (last_activity > now) {
+                // 타이머 wrap-around 발생 (약 49.7일마다)
+                // now + (UINT32_MAX - last_activity + 1) 계산
+                elapsed = now + (0xFFFFFFFF - last_activity + 1);
+            } else {
+                elapsed = now - last_activity;
+            }
+
+            // 최대 타임아웃 60초으로 제한 (이상치 방어)
+            if (elapsed > VMIX_MAX_SILENCE_TIME_MS && elapsed < 60000) {
+                T_LOGW(TAG, "timeout:%ums", elapsed);
+                disconnect();
+                return -1;
+            }
         }
 
         // 주기적 폴링
+        // 연결 완료 후 안정화 시간 확보를 위해 connect_attempt_time_ 사용
         static uint32_t last_poll = 0;
+
+        // 연결 직후에는 첫 폴링을 지연 (TCP 안정화 대기)
+        uint32_t time_since_ready = now - connect_attempt_time_;
+        if (time_since_ready < VMIX_POLLING_INTERVAL_MS) {
+            // 아직 안정화 시간이 지나지 않음
+            return 0;
+        }
+
+        // 연결 직후 첫 폴링 타임스탬프 설정 (이후 정상 폴링)
+        if (last_poll == 0 || last_poll < connect_attempt_time_) {
+            last_poll = connect_attempt_time_;
+        }
+
         if (now - last_poll > VMIX_POLLING_INTERVAL_MS) {
+            // P2: 첫 폴링에서 VERSION 요청 (Tally 전에)
+            if (!version_requested_ && !state_.version_received) {
+                sendCommand(VMIX_CMD_VERSION);
+                T_LOGD(TAG, "version:requested");
+                version_requested_ = true;
+            }
+
             sendCommand(VMIX_CMD_TALLY);
+            // 폴링 로그 제거 (너무 자주 출력됨)
             last_poll = now;
         }
     }
@@ -339,7 +461,16 @@ int VmixDriver::receiveData() {
 
     if (received <= 0) {
         if (received < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
-            T_LOGE(TAG, "receive error (errno=%d)", errno);
+            // P1: 네트워크 장애 감지
+            if (errno == ECONNRESET) {
+                T_LOGE(TAG, "err:conn_reset");
+            } else if (errno == EPIPE) {
+                T_LOGE(TAG, "err:broken_pipe");
+            } else if (errno == ECONNABORTED) {
+                T_LOGE(TAG, "err:conn_aborted");
+            } else {
+                T_LOGE(TAG, "receive error (errno=%d)", errno);
+            }
             disconnect();
         }
         return 0;
@@ -347,75 +478,147 @@ int VmixDriver::receiveData() {
 
     rx_buffer_[received] = '\0';
 
-    // XML 데이터 파싱
-    std::string xml_data(reinterpret_cast<char*>(rx_buffer_.data()), received);
-    int parsed = parseTallyData(xml_data.c_str());
+    // 수신 로그 제거 (너무 자주 출력됨)
 
-    if (parsed > 0) {
-        state_.last_update_ms = getMillis();
+    // 데이터를 수신했으면 항상 last_update_ms 갱신 (타임아웃 방지)
+    state_.last_update_ms = getMillis();
+
+    // 데이터 파싱 (TALLY 또는 VERSION)
+    std::string response(reinterpret_cast<char*>(rx_buffer_.data()), received);
+    int parsed = 0;
+
+    // P2: VERSION 응답 확인
+    if (response.find("VERSION OK") != std::string::npos) {
+        parsed += parseVersionData(response.c_str());
     }
+
+    // TALLY 데이터 파싱
+    parsed += parseTallyData(response.c_str());
 
     return parsed;
 }
 
-int VmixDriver::parseTallyData(const char* xml_data) {
-    // vMix XML 형식:
-    // <vmix><tally><number>1</number><type>Program</type>...</tally></vmix>
+int VmixDriver::parseTallyData(const char* data) {
+    // vMix TCP API TALLY 응답 형식:
+    // TALLY OK 0121...\r\n
+    // 각 숫자: 0 = off, 1 = program, 2 = preview
 
-    // 간단한 파싱 (실제로는 XML 파서 사용 권장)
-    std::string data(xml_data);
+    std::string response(data);
     int updates = 0;
 
-    // Program 상태 찾기
-    size_t pos = 0;
-    while ((pos = data.find("<type>Program</type>", pos)) != std::string::npos) {
-        // 이전에 number 태그 찾기
-        size_t num_start = data.rfind("<number>", pos);
-        if (num_start != std::string::npos) {
-            num_start += 8;  // "<number>" 길이
-            size_t num_end = data.find("</number>", num_start);
-            if (num_end != std::string::npos) {
-                std::string num_str = data.substr(num_start, num_end - num_start);
-                int channel = atoi(num_str.c_str());
-                if (channel > 0 && channel <= TALLY_MAX_CHANNELS) {
-                    uint8_t idx = channel - 1;
-                    state_.tally_packed |= (1ULL << (idx * 2));  // Program 비트 설정
-                    updates++;
-                }
-            }
-        }
-        pos++;
+    // "TALLY OK " 접두사 찾기
+    const char* prefix = "TALLY OK ";
+    size_t prefix_len = strlen(prefix);
+
+    size_t tally_pos = response.find(prefix);
+    if (tally_pos == std::string::npos) {
+        // 다른 형식의 응답 (VERSION OK 등)은 무시
+        return 0;
     }
 
-    // Preview 상태 찾기
-    pos = 0;
-    while ((pos = data.find("<type>Preview</type>", pos)) != std::string::npos) {
-        size_t num_start = data.rfind("<number>", pos);
-        if (num_start != std::string::npos) {
-            num_start += 8;
-            size_t num_end = data.find("</number>", num_start);
-            if (num_end != std::string::npos) {
-                std::string num_str = data.substr(num_start, num_end - num_start);
-                int channel = atoi(num_str.c_str());
-                if (channel > 0 && channel <= TALLY_MAX_CHANNELS) {
-                    uint8_t idx = channel - 1;
-                    state_.tally_packed |= (2ULL << (idx * 2));  // Preview 비트 설정
-                    updates++;
-                }
-            }
-        }
-        pos++;
+    // 숫자 부분 시작 위치
+    size_t data_start = tally_pos + prefix_len;
+
+    // 숫자 부분 추출 (CRLF 또는 끝까지)
+    size_t data_end = response.find("\r", data_start);
+    if (data_end == std::string::npos) {
+        data_end = response.find("\n", data_start);
+    }
+    if (data_end == std::string::npos) {
+        data_end = response.length();
     }
 
-    if (updates > 0) {
-        state_.num_cameras = TALLY_MAX_CHANNELS;  // 기본값 (실제로는 XML에서 추출)
+    // 이전 상태와 비교를 위해 저장
+    uint64_t old_tally_packed = state_.tally_packed;
+    state_.tally_packed = 0;  // 상태 초기화
+
+    // 각 숫자 파싱
+    for (size_t i = data_start; i < data_end && (i - data_start) < TALLY_MAX_CHANNELS; i++) {
+        char c = response[i];
+        uint8_t channel = i - data_start;
+
+        if (c >= '0' && c <= '2') {
+            uint8_t tally_value = c - '0';  // 0 = off, 1 = program, 2 = preview
+
+            // tally_packed에 상태 저장 (각 채널 2비트 사용)
+            if (tally_value == 1) {
+                // Program (비트 0 설정)
+                state_.tally_packed |= (1ULL << (channel * 2));
+            } else if (tally_value == 2) {
+                // Preview (비트 1 설정)
+                state_.tally_packed |= (2ULL << (channel * 2));
+            }
+            // 0인 경우는 이미 초기화됨
+        }
+    }
+
+    // 채널 수 업데이트
+    state_.num_cameras = data_end - data_start;
+    if (state_.num_cameras > TALLY_MAX_CHANNELS) {
+        state_.num_cameras = TALLY_MAX_CHANNELS;
+    }
+
+    // 상태가 변경되었는지 확인
+    if (state_.tally_packed != old_tally_packed) {
+        updates = 1;
 
         // Tally 콜백 호출
         if (tally_callback_) {
             tally_callback_();
         }
 
-        T_LOGD(TAG, "tally:%d", updates);
+        T_LOGD(TAG, "tally:%d", state_.num_cameras);
+    }
+
+    return updates;
+}
+
+// ============================================================================
+// P2: VERSION 응답 파싱
+// ============================================================================
+
+int VmixDriver::parseVersionData(const char* data) {
+    // vMix TCP API VERSION 응답 형식:
+    // VERSION OK <version_string>\r\n
+    // 예: VERSION OK vMix 26.0.0.23\r\n
+
+    std::string response(data);
+    int updates = 0;
+
+    // "VERSION OK " 접두사 찾기
+    const char* prefix = "VERSION OK ";
+    size_t prefix_len = strlen(prefix);
+
+    size_t version_pos = response.find(prefix);
+    if (version_pos == std::string::npos) {
+        return 0;
+    }
+
+    // 버전 문자열 추출
+    size_t data_start = version_pos + prefix_len;
+    size_t data_end = response.find("\r", data_start);
+    if (data_end == std::string::npos) {
+        data_end = response.find("\n", data_start);
+    }
+    if (data_end == std::string::npos) {
+        data_end = response.length();
+    }
+
+    std::string version_str = response.substr(data_start, data_end - data_start);
+
+    // 버전 문자열 저장
+    if (!version_str.empty()) {
+        strncpy(state_.version_string, version_str.c_str(), sizeof(state_.version_string) - 1);
+        state_.version_string[sizeof(state_.version_string) - 1] = '\0';
+        state_.version_received = true;
+
+        // 초기화 완료 표시
+        if (!state_.initialized) {
+            state_.initialized = true;
+        }
+
+        T_LOGI(TAG, "vmix:%s", state_.version_string);
+        updates = 1;
     }
 
     return updates;
@@ -440,4 +643,55 @@ void VmixDriver::setConnectionState(connection_state_t new_state) {
             connection_callback_(new_state);
         }
     }
+}
+
+// ============================================================================
+// P3: 재연결 백오프 헬퍼 함수
+// ============================================================================
+
+void VmixDriver::resetBackoff() {
+    reconnect_retry_count_ = 0;
+    reconnect_backoff_ms_ = 0;
+    needs_reconnect_delay_ = false;
+}
+
+void VmixDriver::updateBackoffOnDisconnect(bool success) {
+    if (success) {
+        // 연결 성공 후 정상 종료
+        resetBackoff();
+    } else {
+        // 연결 실패 또는 비정상 종료
+        reconnect_retry_count_++;
+
+        // 지수 백오프 계산: 1s, 2s, 4s, 8s, 16s, 최대 30s
+        if (reconnect_retry_count_ == 1) {
+            reconnect_backoff_ms_ = 1000;   // 첫 실패: 1초
+        } else {
+            uint32_t next_backoff = reconnect_backoff_ms_ * 2;
+            if (next_backoff > 30000) {
+                next_backoff = 30000;  // 최대 30초
+            }
+            reconnect_backoff_ms_ = next_backoff;
+        }
+
+        last_disconnect_time_ = getMillis();
+        needs_reconnect_delay_ = true;
+
+        T_LOGD(TAG, "backoff:%dms (retry:%d)", (int)reconnect_backoff_ms_, reconnect_retry_count_);
+    }
+}
+
+bool VmixDriver::shouldAllowReconnect() const {
+    if (!needs_reconnect_delay_) {
+        return true;  // 대기 필요 없음
+    }
+
+    uint32_t now = getMillis();
+    uint32_t elapsed = now - last_disconnect_time_;
+
+    if (elapsed >= reconnect_backoff_ms_) {
+        return true;  // 대기 시간 경과
+    }
+
+    return false;  // 아직 대기 중
 }

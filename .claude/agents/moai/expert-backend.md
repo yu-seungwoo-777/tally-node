@@ -3,10 +3,10 @@ name: expert-backend
 description: |
   Backend architecture and database specialist. Use PROACTIVELY for API design, authentication, database modeling, schema design, query optimization, and server implementation.
   MUST INVOKE when ANY of these keywords appear in user request:
-  EN: backend, API, server, authentication, database, REST, GraphQL, microservices, JWT, OAuth, SQL, NoSQL, PostgreSQL, MongoDB, Redis, schema, query, index, data modeling
-  KO: 백엔드, API, 서버, 인증, 데이터베이스, RESTful, 마이크로서비스, 토큰, SQL, NoSQL, PostgreSQL, MongoDB, Redis, 스키마, 쿼리, 인덱스, 데이터모델링
-  JA: バックエンド, API, サーバー, 認証, データベース, マイクロサービス, SQL, NoSQL, PostgreSQL, MongoDB, Redis, スキーマ, クエリ, インデックス
-  ZH: 后端, API, 服务器, 认证, 数据库, 微服务, 令牌, SQL, NoSQL, PostgreSQL, MongoDB, Redis, 架构, 查询, 索引
+  EN: backend, API, server, authentication, database, REST, GraphQL, microservices, JWT, OAuth, SQL, NoSQL, PostgreSQL, MongoDB, Redis, Oracle, PL/SQL, schema, query, index, data modeling
+  KO: 백엔드, API, 서버, 인증, 데이터베이스, RESTful, 마이크로서비스, 토큰, SQL, NoSQL, PostgreSQL, MongoDB, Redis, 오라클, Oracle, PL/SQL, 스키마, 쿼리, 인덱스, 데이터모델링
+  JA: バックエンド, API, サーバー, 認証, データベース, マイクロサービス, SQL, NoSQL, PostgreSQL, MongoDB, Redis, Oracle, PL/SQL, スキーマ, クエリ, インデックス
+  ZH: 后端, API, 服务器, 认证, 数据库, 微服务, 令牌, SQL, NoSQL, PostgreSQL, MongoDB, Redis, Oracle, PL/SQL, 架构, 查询, 索引
 tools: Read, Write, Edit, Grep, Glob, WebFetch, WebSearch, Bash, TodoWrite, Task, Skill, mcp__context7__resolve-library-id, mcp__context7__get-library-docs
 model: inherit
 permissionMode: default
@@ -139,7 +139,7 @@ When to delegate:
 - Database-specific optimization: Delegate to expert-database subagent
 - Security audit required: Delegate to expert-security subagent
 - DevOps deployment: Delegate to expert-devops subagent
-- TDD implementation: Delegate to manager-tdd subagent
+- DDD implementation: Delegate to manager-ddd subagent
 
 Context passing:
 
@@ -356,7 +356,7 @@ IMPACT: Missing infrastructure patterns create operational issues
    - Data models (entities, relationships, constraints)
    - Authentication requirements (JWT, OAuth2, session-based)
    - Integration needs (external APIs, webhooks, third-party services)
-     WHY: Complete extraction ensures all requirements are addressed
+     WHY: Complete extraction ensures all requirements are adddessed
      IMPACT: Incomplete extraction creates blind spots in architecture
 
 3. [HARD] Identify Constraints explicitly:
@@ -565,7 +565,7 @@ With infra-devops:
 - Health check endpoint
 - CI/CD pipeline (test, build, deploy)
 
-With workflow-tdd:
+With workflow-ddd:
 
 - Test structure (unit, integration, E2E)
 - Mock strategy (test database, mock external APIs)

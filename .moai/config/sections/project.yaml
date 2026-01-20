@@ -3,7 +3,7 @@ project:
   description: ''
   type: ''
   locale: '{{LOCALE}}'
-  created_at: '2026-01-16T04:29:53.975523Z'
+  created_at: '2026-01-21T03:40:29.152828Z'
   initialized: 'true'
 github:
-  profile_name: ''
+  profile_name: video-makers

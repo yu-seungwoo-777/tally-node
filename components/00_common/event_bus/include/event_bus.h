@@ -55,7 +55,7 @@ extern "C" {
 typedef struct __attribute__((packed)) {
     bool is_running;
     bool is_initialized;
-    uint8_t chip_type;       // 0=Unknown, 1=SX1262, 2=SX1268
+    uint8_t chip_type;       // 0=Unknown, 1=SX1262
     float frequency;         // MHz
     int16_t rssi;            // dBm
     int8_t snr;              // dB
@@ -207,7 +207,7 @@ typedef struct __attribute__((packed)) {
     uint8_t battery;         ///< 배터리 % (0-100)
     float voltage;           ///< 전압 (V)
     float temperature;       ///< 온도 (°C)
-    uint8_t lora_chip_type;  ///< LoRa 칩 타입 (0=Unknown, 1=SX1262, 2=SX1268)
+    uint8_t lora_chip_type;  ///< LoRa 칩 타입 (0=Unknown, 1=SX1262)
     uint32_t uptime;         ///< 업타임 (초)
     bool stopped;            ///< 기능 정지 상태
 } system_info_event_t;
@@ -484,6 +484,7 @@ typedef enum {
     EVT_RF_CHANGED,             ///< RF 설정 변경 (data: lora_rf_event_t) - 드라이버 적용 + broadcast
     EVT_RF_SAVED,               ///< RF NVS 저장 요청 (data: lora_rf_event_t) - broadcast 완료 후
     EVT_STOP_CHANGED,           ///< 기능 정지 상태 변경 (data: bool, true=정지)
+    EVT_BATTERY_EMPTY_CHANGED,  ///< 배터리 empty 상태 변경 (data: bool, true=empty)
 
     // 버튼 이벤트 (03_service → 01_app)
     EVT_BUTTON_SINGLE_CLICK,    ///< 버튼 단일 클릭 (짧게 눌름)
@@ -537,6 +538,7 @@ typedef enum {
     EVT_DEVICE_PING_REQUEST,     ///< 디바이스 PING 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
     EVT_DEVICE_STOP_REQUEST,     ///< 디바이스 기능 정지 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
     EVT_DEVICE_REBOOT_REQUEST,   ///< 디바이스 재부팅 요청 (data: uint8_t[2] = {device_id[0], device_id[1]})
+    EVT_FACTORY_RESET_REQUEST,   ///< 공장 초기화 요청 (data: none)
     EVT_DEVICE_LED_COLORS_REQUEST, ///< 디바이스 LED 색상 브로드캐스트 요청 (data: lora_cmd_led_colors_t)
     EVT_STATUS_REQUEST,          ///< 상태 요청 (Broadcast, data: none)
     EVT_DEVICE_CAM_MAP_RECEIVE,  ///< 디바이스 카메라 ID 수신 (data: uint8_t[3] = {device_id[0], device_id[1], camera_id})

@@ -1011,7 +1011,7 @@ Quality assurance procedure:
    WHY: Appropriate result handling ensures correct workflow continuation
    IMPACT: Ignoring validation results bypasses quality gates
 5. [HARD] Terminate process immediately if CRITICAL issues are identified
-   WHY: Critical issues must be addressed before proceeding
+   WHY: Critical issues must be adddessed before proceeding
    IMPACT: Proceeding with critical issues causes production failures
 
 ### Step 6.6: Present to User for Approval
@@ -1063,7 +1063,6 @@ description: "Generate usage documentation"
 - builder-agent - Create new agents for commands
 - builder-skill - Create new skills for commands
 - manager-quality - Validate command quality
-- manager-claude-code - Settings and configuration validation
 
 ### Downstream Agents (builder-command calls)
 

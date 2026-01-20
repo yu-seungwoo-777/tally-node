@@ -191,6 +191,44 @@
                         </div>
                     </div>
 
+                    <!-- Tally Data Card -->
+                    <div x-show="status.switcher.combined"
+                         class="bg-white rounded-xl shadow-sm border border-indigo-200 p-4 mb-4"
+                         x-cloak>
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h3 class="font-semibold text-slate-900">Tally Data</h3>
+                                <p class="text-xs text-slate-500 mt-0.5">Program/Preview channels</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <!-- PGM -->
+                            <div class="flex-1 p-3 bg-red-50 rounded-lg">
+                                <div class="text-xs text-red-600 font-medium mb-1">PGM (Program)</div>
+                                <div class="text-lg font-semibold text-red-700">
+                                    <template x-if="status.switcher.combined.pgm && status.switcher.combined.pgm.length > 0">
+                                        <span x-text="status.switcher.combined.pgm.join(', ')"></span>
+                                    </template>
+                                    <template x-if="!status.switcher.combined.pgm || status.switcher.combined.pgm.length === 0">
+                                        <span class="text-red-400">-</span>
+                                    </template>
+                                </div>
+                            </div>
+                            <!-- PVW -->
+                            <div class="flex-1 p-3 bg-emerald-50 rounded-lg">
+                                <div class="text-xs text-emerald-600 font-medium mb-1">PVW (Preview)</div>
+                                <div class="text-lg font-semibold text-emerald-700">
+                                    <template x-if="status.switcher.combined.pvw && status.switcher.combined.pvw.length > 0">
+                                        <span x-text="status.switcher.combined.pvw.join(', ')"></span>
+                                    </template>
+                                    <template x-if="!status.switcher.combined.pvw || status.switcher.combined.pvw.length === 0">
+                                        <span class="text-emerald-400">-</span>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Camera Mapping Visualization -->
                     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4"
                          x-transition:enter="transition ease-out duration-200"

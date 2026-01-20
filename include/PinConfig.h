@@ -14,7 +14,7 @@
 // ============================================================================
 
 // LoRa - SPI2_HOST
-// E22-400MM22S (SX1268, 433MHz) 또는 E22-900MM22S (SX1262, 868MHz) 모듈 지원
+// E22-900MM22S (SX1262, 868MHz) 모듈 지원
 #define EORA_S3_LORA_MISO       GPIO_NUM_3 
 #define EORA_S3_LORA_MOSI       GPIO_NUM_6
 #define EORA_S3_LORA_SCK        GPIO_NUM_5

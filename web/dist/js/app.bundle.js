@@ -32,7 +32,8 @@
           dualEnabled: false,
           secondaryOffset: 4,
           primary: { connected: false, type: "ATEM", ip: "", port: 0, tally: { pgm: [], pvw: [], raw: "", channels: 0 } },
-          secondary: { connected: false, type: "ATEM", ip: "", port: 0, tally: { pgm: [], pvw: [], raw: "", channels: 0 } }
+          secondary: { connected: false, type: "ATEM", ip: "", port: 0, tally: { pgm: [], pvw: [], raw: "", channels: 0 } },
+          combined: { pgm: [], pvw: [], raw: "", channels: 0 }
         },
         system: { deviceId: "0000", battery: 0, voltage: 0, temperature: 0, uptime: 0 }
       },
@@ -253,6 +254,23 @@
                 this.form.switcher.secondary.cameraLimit = data.switcher.secondary.cameraLimit || 0;
                 this.form.switcher.secondary.password = data.switcher.secondary.password || "";
                 this.form.switcher.secondary.portLocked = true;
+              }
+            }
+            if (data.switcher.combined) {
+              const combinedData = {
+                pgm: data.switcher.combined.pgm || [],
+                pvw: data.switcher.combined.pvw || [],
+                raw: data.switcher.combined.raw || "",
+                channels: data.switcher.combined.channels || 0
+              };
+              if (!this.status.switcher)
+                this.status.switcher = {};
+              this.status.switcher.combined = { ...combinedData };
+            } else {
+              if (!this.status.switcher)
+                this.status.switcher = {};
+              if (!this.status.switcher.combined) {
+                this.status.switcher.combined = { pgm: [], pvw: [], raw: "", channels: 0 };
               }
             }
           }
@@ -742,7 +760,9 @@
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              dualEnabled: this.form.switcher.dualEnabled
+              dualEnabled: this.form.switcher.dualEnabled,
+              secondaryOffset: this.form.mappingOffset
+              // offset 값도 함께 전송
             })
           });
           const data = await res.json();
@@ -1993,6 +2013,8 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
       // 다이얼로그 표시 상태
       showPrimaryConfig: false,
       showSecondaryConfig: false,
+      showFactoryResetModal: false,
+      factoryResetting: false,
       // 토스트 알림 상태
       toastState: {
         show: false,
@@ -2097,6 +2119,53 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
           this.showToast("Rebooting device...", "alert-info");
         } catch (e) {
           this.showToast("Failed to reboot", "alert-error");
+        }
+      },
+      /**
+       * TX 재부팅
+       */
+      async rebootTx() {
+        try {
+          await fetch("/api/reboot", { method: "POST" });
+          this.showToast("Rebooting TX...", "alert-info");
+        } catch (e) {
+          this.showToast("Failed to reboot", "alert-error");
+        }
+      },
+      /**
+       * 전체 재부팅 (Broadcast + TX)
+       */
+      async rebootAll() {
+        if (!confirm("Broadcast reboot command to all devices and reboot TX?"))
+          return;
+        try {
+          await fetch("/api/reboot/broadcast", { method: "POST" });
+          this.showToast("Broadcasting reboot command...", "alert-info");
+        } catch (e) {
+          this.showToast("Failed to send reboot command", "alert-error");
+        }
+      },
+      /**
+       * 공장 초기화
+       */
+      async factoryReset() {
+        this.factoryResetting = true;
+        try {
+          const response = await fetch("/api/factory-reset", { method: "POST" });
+          const data = await response.json();
+          if (data.status === "ok") {
+            this.showFactoryResetModal = false;
+            this.showToast("Factory reset in progress... System will reboot.", "alert-info");
+            setTimeout(() => {
+              window.location.reload();
+            }, 3e3);
+          } else {
+            this.showToast("Factory reset failed: " + (data.message || "Unknown error"), "alert-error");
+          }
+        } catch (e) {
+          this.showToast("Factory reset failed: " + e.message, "alert-error");
+        } finally {
+          this.factoryResetting = false;
         }
       }
     };

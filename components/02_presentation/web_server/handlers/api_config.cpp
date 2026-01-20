@@ -110,12 +110,11 @@ esp_err_t api_config_post_handler(httpd_req_t* req)
     // 설정 저장 이벤트 발행
     event_bus_publish(EVT_CONFIG_CHANGED, &save_req, sizeof(save_req));
 
-    // EVT_CONFIG_DATA_CHANGED 이벤트가 network_service에 전달될 때까지 대기
-    vTaskDelay(pdMS_TO_TICKS(100));
-
-    // 네트워크 설정인 경우 재시작 이벤트도 발행
+    // 비동기 처리: 네트워크 설정인 경우 재시작 이벤트도 발행
+    // (이벤트는 event_bus 태스크에서 비동기로 처리됨)
     web_server_config_publish_network_restart(&save_req);
 
+    // 즉시 응답 전송 (블로킹 제거)
     return web_server_send_json_ok(req);
 }
 

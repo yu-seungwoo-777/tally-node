@@ -2,7 +2,7 @@
  * @file lora_hal.cpp
  * @brief LoRa HAL - RadioLib를 위한 ESP-IDF SPI/GPIO 추상화
  *
- * ESP32-S3에서 RadioLib SX1262/SX1268을 사용하기 위한 HAL 구현
+ * ESP32-S3에서 RadioLib SX1262을 사용하기 위한 HAL 구현
  */
 
 #include "lora_hal.h"

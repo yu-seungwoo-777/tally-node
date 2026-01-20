@@ -26,9 +26,13 @@
 #define VMIX_CONNECT_TIMEOUT_MS     5000     ///< 연결 타임아웃
 #define VMIX_MAX_SILENCE_TIME_MS    5000     ///< 최대 무응답 시간
 #define VMIX_POLLING_INTERVAL_MS    100      ///< 폴링 간격
+#define VMIX_KEEPALIVE_IDLE_SEC     30       ///< Keepalive 유휴 시간
+#define VMIX_KEEPALIVE_INTERVAL_SEC 5        ///< Keepalive 전송 간격
+#define VMIX_KEEPALIVE_COUNT        3        ///< Keepalive 재시도 횟수
 
 // vMix XML 명령
 #define VMIX_CMD_TALLY              "TALLY"
+#define VMIX_CMD_VERSION            "VERSION"
 #define VMIX_CMD_ACTIVATE           "ACTIVE"
 #define VMIX_CMD_PREVIEW            "PREVIEW"
 #define VMIX_CMD_CUT                "Cut"
@@ -71,6 +75,10 @@ struct VmixState {
     uint16_t program_input;
     uint16_t preview_input;
 
+    // 장치 정보
+    char version_string[64];       ///< vMix 버전 정보
+    bool version_received;         ///< 버전 정보 수신 여부
+
     VmixState()
         : connected(false)
         , initialized(false)
@@ -79,7 +87,10 @@ struct VmixState {
         , num_cameras(0)
         , program_input(0)
         , preview_input(0)
-    {}
+        , version_received(false)
+    {
+        version_string[0] = '\0';
+    }
 };
 
 // ============================================================================
@@ -144,16 +155,29 @@ private:
     // 연결 타임아웃 추적
     uint32_t connect_attempt_time_;
 
+    // 재연결 백오프 (P3: 지수 백오프)
+    uint8_t reconnect_retry_count_;   ///< 재연결 재시도 횟수
+    uint32_t reconnect_backoff_ms_;   ///< 현재 백오프 시간
+    bool needs_reconnect_delay_;      ///< 재연결 지연 필요 플래그
+    uint32_t last_disconnect_time_;   ///< 마지막 연결 해제 시간
+
+    // VERSION 요청 추적
+    bool version_requested_;          ///< VERSION 요청 여부 (연결 시 초기화)
+
     // ========================================================================
     // 내부 메서드
     // ========================================================================
 
     int sendCommand(const char* cmd);
-    int parseTallyData(const char* xml_data);
+    int parseTallyData(const char* data);
+    int parseVersionData(const char* data);
     void updateTallyPacked();
     int receiveData();
     uint32_t getMillis() const;
     void setConnectionState(connection_state_t new_state);
+    void resetBackoff();                      ///< 백오프 상태 초기화
+    void updateBackoffOnDisconnect(bool success); ///< 연결 결과에 따른 백오프 갱신
+    bool shouldAllowReconnect() const;        ///< 재연결 가능 여부 확인
 };
 
 #endif // __cplusplus

@@ -5,6 +5,7 @@
 
 #include "BootPage.h"
 #include "DisplayManager.h"
+#include "app_types.h"
 #include "t_log.h"
 #include <string.h>
 #include <stdio.h>
@@ -52,7 +53,8 @@ static void draw_professional_box(u8g2_t* u8g2)
 
     // 타이틀과 버전 (1줄, 중앙 정렬)
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-    const char* title_version = "TALLY-NODE v2.0.0";
+    char title_version[32];
+    snprintf(title_version, sizeof(title_version), "TALLY-NODE v%s", FIRMWARE_VERSION);
     int title_width = u8g2_GetStrWidth(u8g2, title_version);
     int title_x = box_x + (box_width - title_width) / 2;
     u8g2_DrawStr(u8g2, title_x, box_y + 14, title_version);
@@ -136,6 +138,7 @@ static const display_page_interface_t s_boot_page_interface = {
     .render = page_render,
     .on_enter = page_on_enter,
     .on_exit = page_on_exit,
+    .timer_tick = nullptr,
 };
 
 // ============================================================================
