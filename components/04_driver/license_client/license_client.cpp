@@ -7,6 +7,7 @@
 #include "t_log.h"
 #include "esp_http_client.h"
 #include "esp_netif.h"
+#include "esp_crt_bundle.h"
 #include "cJSON.h"
 #include <cstring>
 
@@ -68,7 +69,7 @@ static esp_err_t http_post(const char* url, const char* request_body,
     esp_http_client_config_t config = {};
     config.url = url;
     config.method = HTTP_METHOD_POST;
-    config.timeout_ms = LICENSE_TIMEOUT_MS;
+    config.timeout_ms = LICENSE_HTTPS_TIMEOUT_MS;
     config.buffer_size = 4096;
     config.buffer_size_tx = 4096;
     config.user_agent = "ESP32-Tally-Node/1.0";
@@ -76,6 +77,11 @@ static esp_err_t http_post(const char* url, const char* request_body,
     config.is_async = false;
     config.event_handler = http_event_handler;
     config.user_data = &response_ctx;
+    // HTTPS/TLS 설정
+    config.transport_type = HTTP_TRANSPORT_OVER_SSL;
+    config.crt_bundle_attach = esp_crt_bundle_attach;
+    config.skip_cert_common_name_check = false;
+    config.use_global_ca_store = false;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
@@ -104,7 +110,27 @@ static esp_err_t http_post(const char* url, const char* request_body,
             err = ESP_FAIL;
         }
     } else {
-        T_LOGE(TAG, "fail:0x%x", err);
+        // SSL/TLS 오류 상세 분류
+        switch (err) {
+            case ESP_ERR_ESP_TLS_CANNOT_RESOLVE_HOSTNAME:
+                T_LOGE(TAG, "fail:dns_resolve");
+                break;
+            case ESP_ERR_ESP_TLS_FAILED_CONNECT_TO_HOST:
+                T_LOGE(TAG, "fail:connect_host");
+                break;
+            case ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED:
+                T_LOGE(TAG, "fail:ssl_handshake");
+                break;
+            case ESP_ERR_MBEDTLS_X509_CERT_VERIFY_FAILED:
+                T_LOGE(TAG, "fail:cert_verify");
+                break;
+            case ESP_ERR_MBEDTLS_CERTIFICATE_FAILED:
+                T_LOGE(TAG, "fail:cert_invalid");
+                break;
+            default:
+                T_LOGE(TAG, "fail:0x%x", err);
+                break;
+        }
     }
 
     esp_http_client_cleanup(client);
@@ -161,7 +187,27 @@ esp_err_t license_client_validate(const char* key, const char* mac_address,
     free(request_body);
 
     if (err != ESP_OK) {
-        strncpy(out_response->error, "Server connection failed", sizeof(out_response->error) - 1);
+        // SSL/TLS 오류에 따른 적절한 에러 메시지 제공
+        switch (err) {
+            case ESP_ERR_ESP_TLS_CANNOT_RESOLVE_HOSTNAME:
+                strncpy(out_response->error, "DNS resolution failed", sizeof(out_response->error) - 1);
+                break;
+            case ESP_ERR_ESP_TLS_FAILED_CONNECT_TO_HOST:
+                strncpy(out_response->error, "Failed to connect to server", sizeof(out_response->error) - 1);
+                break;
+            case ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED:
+                strncpy(out_response->error, "SSL handshake failed", sizeof(out_response->error) - 1);
+                break;
+            case ESP_ERR_MBEDTLS_X509_CERT_VERIFY_FAILED:
+                strncpy(out_response->error, "Certificate verification failed", sizeof(out_response->error) - 1);
+                break;
+            case ESP_ERR_MBEDTLS_CERTIFICATE_FAILED:
+                strncpy(out_response->error, "Invalid certificate", sizeof(out_response->error) - 1);
+                break;
+            default:
+                strncpy(out_response->error, "Server connection failed", sizeof(out_response->error) - 1);
+                break;
+        }
         return err;
     }
 
@@ -213,8 +259,13 @@ bool license_client_connection_test(void)
     esp_http_client_config_t config = {};
     config.url = url;
     config.method = HTTP_METHOD_GET;
-    config.timeout_ms = LICENSE_TIMEOUT_MS;
+    config.timeout_ms = LICENSE_HTTPS_TIMEOUT_MS;
     config.user_agent = "ESP32-Tally-Node/1.0";
+    // HTTPS/TLS 설정
+    config.transport_type = HTTP_TRANSPORT_OVER_SSL;
+    config.crt_bundle_attach = esp_crt_bundle_attach;
+    config.skip_cert_common_name_check = false;
+    config.use_global_ca_store = false;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     esp_http_client_set_header(client, "X-API-Key", LICENSE_API_KEY);
