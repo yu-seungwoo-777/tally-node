@@ -3837,8 +3837,8 @@ video {
     padding: 1.5rem;
   }
 
-  .lg\:pl-32 {
-    padding-left: 8rem;
+  .lg\:pl-0 {
+    padding-left: 0px;
   }
 }
 .peer:checked ~ .rtl\:peer-checked\:after\:-translate-x-full:where([dir="rtl"], [dir="rtl"] *)::after {

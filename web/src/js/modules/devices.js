@@ -201,7 +201,7 @@ export function devicesModule() {
             } catch (e) {
                 console.error('Set brightness error:', e);
                 // 사용자 피드백 (간단한 alert 또는 toast)
-                alert(`밝기 설정 실패: ${e.message}`);
+                alert(e.message);
             } finally {
                 // 전송 중 표시 해제
                 this.brightnessControl.sending = null;
@@ -259,7 +259,7 @@ export function devicesModule() {
                 }
             } catch (e) {
                 console.error('Set camera ID error:', e);
-                alert(`카메라 ID 설정 실패: ${e.message}`);
+                alert(e.message);
             } finally {
                 // 전송 중 표시 해제
                 this.cameraIdControl.sending = null;
@@ -318,7 +318,7 @@ export function devicesModule() {
             } catch (e) {
                 console.error('PING error:', e);
                 // 사용자 피드백
-                alert(`PING 실패: ${e.message}`);
+                alert(e.message);
             } finally {
                 // 전송 중 표시 해제
                 this.pingControl.sending = null;
@@ -352,7 +352,7 @@ export function devicesModule() {
                 }
             } catch (e) {
                 console.error('Status request error:', e);
-                alert(`상태 요청 실패: ${e.message}`);
+                alert(e.message);
             } finally {
                 // 전송 중 표시 해제
                 this.statusControl.sending = false;
@@ -396,7 +396,7 @@ export function devicesModule() {
                 }
             } catch (e) {
                 console.error('Stop command error:', e);
-                alert(`기능 정지 실패: ${e.message}`);
+                alert(e.message);
             } finally {
                 // 전송 중 표시 해제
                 this.stopControl.sending = null;
@@ -410,7 +410,7 @@ export function devicesModule() {
         async rebootDevice(deviceId) {
             try {
                 // 확인 대화상자
-                if (!confirm(`${deviceId} 디바이스를 재부팅하시겠습니까?`)) {
+                if (!confirm(`Reboot device ${deviceId}?`)) {
                     return;
                 }
 
@@ -438,14 +438,14 @@ export function devicesModule() {
                 const data = await res.json();
                 if (data.status === 'ok') {
                     console.log(`Reboot command sent to ${deviceId}`);
-                    alert(`${deviceId} 디바이스에 재부팅 명령을 전송했습니다.`);
+                    alert(`Reboot command sent to device ${deviceId}`);
                 } else {
                     throw new Error(data.message || 'Failed to send reboot command');
                 }
             } catch (e) {
                 console.error('Reboot command error:', e);
                 if (e.message !== 'User canceled') {
-                    alert(`재부팅 실패: ${e.message}`);
+                    alert(e.message);
                 }
             } finally {
                 // 전송 중 표시 해제
@@ -497,7 +497,7 @@ export function devicesModule() {
             } catch (e) {
                 console.error('Delete device error:', e);
                 if (e.message !== 'User canceled') {
-                    alert(`Failed to delete device: ${e.message}`);
+                    alert(e.message);
                 }
             } finally {
                 // 전송 중 표시 해제
