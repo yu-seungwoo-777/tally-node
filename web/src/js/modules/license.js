@@ -71,14 +71,15 @@ export function licenseModule() {
                 // 검증 완료 후 결과 토스트 표시
                 if (showResult && this.validating) {
                     this.validating = false;
-                    if (this.license.isValid) {
+                    // 에러 메시지가 있으면 우선 표시 (검증 실패)
+                    if (lic.error) {
+                        this.showToast(lic.error, 'alert-error');
+                    } else if (this.license.isValid) {
                         this.showToast('License validated successfully!', 'alert-success');
                     } else if (this.license.stateStr === 'checking') {
                         this.showToast('License validation in progress...', 'alert-info');
                     } else if (this.license.stateStr === 'invalid') {
-                        // 에러 메시지가 있으면 표시
-                        const errorMsg = lic.error || 'License validation failed';
-                        this.showToast(errorMsg, 'alert-error');
+                        this.showToast('License validation failed', 'alert-error');
                     }
                 }
             } catch (e) {
