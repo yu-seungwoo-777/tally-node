@@ -120,32 +120,6 @@ export function utilsModule() {
         },
 
         /**
-         * TX 재부팅
-         */
-        async rebootTx() {
-            try {
-                await fetch('/api/reboot', { method: 'POST' });
-                this.showToast('Rebooting TX...', 'alert-info');
-            } catch (e) {
-                this.showToast('Failed to reboot', 'alert-error');
-            }
-        },
-
-        /**
-         * 전체 재부팅 (Broadcast + TX)
-         */
-        async rebootAll() {
-            if (!confirm('Broadcast reboot command to all devices and reboot TX?')) return;
-
-            try {
-                await fetch('/api/reboot/broadcast', { method: 'POST' });
-                this.showToast('Broadcasting reboot command...', 'alert-info');
-            } catch (e) {
-                this.showToast('Failed to send reboot command', 'alert-error');
-            }
-        },
-
-        /**
          * 공장 초기화
          */
         async factoryReset() {

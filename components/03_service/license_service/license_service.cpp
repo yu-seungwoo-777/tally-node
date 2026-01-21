@@ -282,7 +282,7 @@ void LicenseService::validateInTask(const char* key)
         save_data.key[16] = '\0';
         event_bus_publish(EVT_LICENSE_DATA_SAVE, &save_data, sizeof(save_data));
 
-        T_LOGI(TAG, "license validation success: device_limit = %d", s_device_limit);
+        T_LOGD(TAG, "license validation success: device_limit = %d", s_device_limit);
     } else {
         T_LOGE(TAG, "license validation failed: %s", response.error);
 

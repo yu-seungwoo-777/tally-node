@@ -21,20 +21,6 @@ extern "C" {
 esp_err_t api_status_handler(httpd_req_t* req);
 
 /**
- * @brief POST /api/reboot - 시스템 재부팅
- * @param req HTTP 요청
- * @return ESP_OK 성공
- */
-esp_err_t api_reboot_handler(httpd_req_t* req);
-
-/**
- * @brief POST /api/reboot/broadcast - 전체 디바이스 재부팅 (브로드캐스트 + TX 재부팅)
- * @param req HTTP 요청
- * @return ESP_OK 성공
- */
-esp_err_t api_reboot_broadcast_handler(httpd_req_t* req);
-
-/**
  * @brief POST /api/factory-reset - 공장 초기화 (NVS 초기화 후 재부팅)
  * @param req HTTP 요청
  * @return ESP_OK 성공

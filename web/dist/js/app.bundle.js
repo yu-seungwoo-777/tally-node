@@ -1767,7 +1767,9 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
           }
           if (showResult && this.validating) {
             this.validating = false;
-            if (this.license.isValid) {
+            if (lic.error) {
+              this.showToast(lic.error, "alert-error");
+            } else if (this.license.isValid) {
               this.showToast("License validated successfully!", "alert-success");
             } else if (this.license.stateStr === "checking") {
               this.showToast("License validation in progress...", "alert-info");
@@ -1824,13 +1826,21 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
           if (serverRes.ok) {
             const serverData = await serverRes.json();
             this.internetTest.serverStatus = serverData.success ? "success" : "fail";
+            if (!serverData.success) {
+              const errorMsg = serverData.error || "License server connection failed";
+              this.showToast(errorMsg, "alert-error");
+            } else {
+              this.showToast("License server connection successful", "alert-success");
+            }
           } else {
             this.internetTest.serverStatus = "fail";
+            this.showToast("License server connection failed", "alert-error");
           }
         } catch (e) {
           console.error("Internet test error:", e);
           this.internetTest.status = "fail";
           this.internetTest.serverStatus = "fail";
+          this.showToast("Connection test failed: " + e.message, "alert-error");
         } finally {
           this.internetTest.testing = false;
         }
@@ -2119,30 +2129,6 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
           this.showToast("Rebooting device...", "alert-info");
         } catch (e) {
           this.showToast("Failed to reboot", "alert-error");
-        }
-      },
-      /**
-       * TX 재부팅
-       */
-      async rebootTx() {
-        try {
-          await fetch("/api/reboot", { method: "POST" });
-          this.showToast("Rebooting TX...", "alert-info");
-        } catch (e) {
-          this.showToast("Failed to reboot", "alert-error");
-        }
-      },
-      /**
-       * 전체 재부팅 (Broadcast + TX)
-       */
-      async rebootAll() {
-        if (!confirm("Broadcast reboot command to all devices and reboot TX?"))
-          return;
-        try {
-          await fetch("/api/reboot/broadcast", { method: "POST" });
-          this.showToast("Broadcasting reboot command...", "alert-info");
-        } catch (e) {
-          this.showToast("Failed to send reboot command", "alert-error");
         }
       },
       /**

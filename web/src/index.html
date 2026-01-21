@@ -13,9 +13,9 @@
 
         <!-- 사이드바 -->
         <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
-               class="fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transition-transform duration-300">
+               class="fixed lg:sticky lg:top-0 inset-y-0 left-0 z-50 w-64 h-screen bg-white border-r border-slate-200 transition-transform duration-300 flex flex-col">
             <!-- 로고 -->
-            <div class="flex items-center justify-between px-8 py-5 border-b border-slate-200">
+            <div class="flex items-center justify-between px-8 py-5 border-b border-slate-200 shrink-0">
                 <div>
                     <h1 class="font-bold text-slate-900 text-lg">TALLY-NODE</h1>
                     <p class="text-xs text-slate-500">Wireless Tally System</p>
@@ -28,7 +28,7 @@
             </div>
 
             <!-- 네비게이션 -->
-            <nav class="px-4 py-2 space-y-1">
+            <nav class="px-4 py-2 space-y-1 flex-1 overflow-y-auto">
                 <a href="#dashboard"
                    :class="currentView === 'dashboard' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'"
                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all">
@@ -101,11 +101,21 @@
             </nav>
 
             <!-- 사이드바 푸터 -->
-            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200 bg-slate-50">
+            <div class="shrink-0 p-4 border-t border-slate-200 bg-slate-50 space-y-3" x-cloak>
+                <!-- Factory Reset 버튼 -->
+                <button @click="showFactoryResetModal = true"
+                        class="w-full px-4 py-2.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <span class="whitespace-nowrap">Factory Reset</span>
+                </button>
+
+                <!-- Connection 상태 -->
                 <div class="flex items-center justify-between">
                     <span class="text-sm text-slate-600">Connection</span>
                     <span class="flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full" :class="wsConnected ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+                        <span class="w-2 h-2 rounded-full shrink-0" :class="wsConnected ? 'bg-emerald-500' : 'bg-rose-500'"></span>
                         <span class="text-sm font-medium" :class="wsConnected ? 'text-emerald-600' : 'text-rose-600'" x-text="wsConnected ? 'Online' : 'Offline'"></span>
                     </span>
                 </div>
@@ -117,7 +127,7 @@
              class="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 lg:hidden" x-cloak></div>
 
         <!-- 메인 컨텐츠 -->
-        <div class="flex-1 flex flex-col">
+        <div class="flex-1 flex flex-col lg:pl-32">
             <!-- 상단바 -->
             <header class="lg:static sticky top-0 z-30 bg-white border-b border-slate-200 flex items-center justify-between px-4 py-3">
                 <div class="flex items-center">
@@ -460,6 +470,43 @@
                                 class="flex-1 px-4 py-2.5 text-sm font-medium text-white
                                        bg-purple-600 rounded-xl hover:bg-purple-700">
                             Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Factory Reset Modal -->
+        <div x-show="showFactoryResetModal" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 flex items-center justify-center p-4" x-cloak>
+            <div class="absolute inset-0 bg-black/50" @click="showFactoryResetModal = false"></div>
+            <div x-show="showFactoryResetModal" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden flex flex-col">
+                <div class="px-4 py-3 bg-red-600 border-b border-red-700 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <h3 class="font-semibold text-white text-base">Factory Reset</h3>
+                    </div>
+                    <button @click="showFactoryResetModal = false" class="text-red-200 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="p-4 space-y-4">
+                    <p class="text-sm text-slate-600">This will reset all settings to factory defaults. The device will reboot automatically.</p>
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                        <p class="text-xs text-red-700 font-medium">Warning: This action cannot be undone!</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="showFactoryResetModal = false" :disabled="factoryResetting" class="flex-1 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50">
+                            Cancel
+                        </button>
+                        <button @click="factoryReset()" :disabled="factoryResetting" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                            <svg x-show="factoryResetting" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            <span x-text="factoryResetting ? 'Resetting...' : 'Confirm Reset'"></span>
                         </button>
                     </div>
                 </div>

@@ -85,53 +85,6 @@ esp_err_t api_status_handler(httpd_req_t* req)
     return web_server_send_json_response(req, root);
 }
 
-esp_err_t api_reboot_handler(httpd_req_t* req)
-{
-    T_LOGI(TAG, "POST /api/reboot");
-    web_server_set_cors_headers(req);
-    httpd_resp_set_type(req, "application/json");
-    httpd_resp_sendstr(req, "{\"status\":\"rebooting\"}");
-
-    // 응답 전송 후 재부팅 (블로킹 제거)
-    // httpd_resp_sendstr은 버퍼링되므로 esp_restart로 충분
-    esp_restart();
-    return ESP_OK;
-}
-
-esp_err_t api_reboot_broadcast_handler(httpd_req_t* req)
-{
-    T_LOGI(TAG, "POST /api/reboot/broadcast");
-    web_server_set_cors_headers(req);
-
-    // 브로드캐스트 ID (0xFF 0xFF)
-    uint8_t broadcast_id[LORA_DEVICE_ID_LEN] = {0xFF, 0xFF};
-
-    // 이벤트 발행 (3회 송신)
-    esp_err_t ret = ESP_OK;
-    for (int i = 0; i < 3; i++) {
-        ret = event_bus_publish(EVT_DEVICE_REBOOT_REQUEST, broadcast_id, LORA_DEVICE_ID_LEN);
-        if (ret != ESP_OK) {
-            T_LOGE(TAG, "Broadcast reboot failed (attempt %d): %d", i + 1, ret);
-            return web_server_send_json_internal_error(req, "Failed to send broadcast reboot");
-        }
-    }
-
-    T_LOGI(TAG, "Broadcast reboot command sent 3 times");
-
-    // 성공 응답 전송
-    cJSON* json = cJSON_CreateObject();
-    if (json) {
-        cJSON_AddStringToObject(json, "status", "ok");
-        cJSON_AddStringToObject(json, "message", "Broadcast reboot sent (3x), TX rebooting...");
-    }
-    web_server_send_json_response(req, json);
-
-    // 즉시 재부팅 (블로킹 제거)
-    esp_restart();
-
-    return ESP_OK;
-}
-
 esp_err_t api_factory_reset_handler(httpd_req_t* req)
 {
     T_LOGI(TAG, "POST /api/factory-reset");

@@ -716,7 +716,7 @@ static esp_err_t on_license_data_save(const event_data_t* event)
     // NVS 저장 (내부 함수 호출로 무한 루프 방지)
     esp_err_t ret = ConfigServiceClass::setLicenseDataInternal(data);
     if (ret == ESP_OK) {
-        T_LOGI(TAG, "license data saved: limit=%d, key=%.16s", data->device_limit, data->key);
+        T_LOGD(TAG, "license data saved: limit=%d, key=%.16s", data->device_limit, data->key);
     } else {
         T_LOGE(TAG, "license data NVS save failed: %s", esp_err_to_name(ret));
     }

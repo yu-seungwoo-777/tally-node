@@ -22,6 +22,7 @@
 #include "tally_test_service.h"
 #include "TallyTypes.h"
 #include "battery_driver.h"
+#include "app_types.h"
 #include "BatteryEmptyPage.h"
 #include "esp_sleep.h"
 #include "esp_netif.h"
@@ -326,6 +327,7 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     }
 
     T_LOGI(TAG, "TX app init...");
+    T_LOGI(TAG, "Firmware Version: %s", FIRMWARE_VERSION);
 
     esp_err_t ret;
 

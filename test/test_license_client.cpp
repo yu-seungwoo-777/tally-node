@@ -115,7 +115,7 @@ TEST_CASE("license_validate_response_init_characterize", "[license_client]")
 TEST_CASE("license_client_https_url_characterize", "[license_client]")
 {
     // Characterization: 상수가 올바르게 정의되었는지 확인
-    TEST_ASSERT_EQUAL_STRING("https://tally-node.duckdns.org", LICENSE_SERVER_BASE);
+    TEST_ASSERT_EQUAL_STRING("https://tally-node.com", LICENSE_SERVER_BASE);
     TEST_ASSERT_EQUAL_STRING("/api/validate-license", LICENSE_VALIDATE_PATH);
 
     // HTTPS 타임아웃이 기존 타임아웃보다 크거나 같은지 확인

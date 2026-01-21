@@ -13,9 +13,9 @@
 
         <!-- 사이드바 -->
         <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
-               class="fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transition-transform duration-300">
+               class="fixed lg:sticky lg:top-0 inset-y-0 left-0 z-50 w-64 h-screen bg-white border-r border-slate-200 transition-transform duration-300 flex flex-col">
             <!-- 로고 -->
-            <div class="flex items-center justify-between px-8 py-5 border-b border-slate-200">
+            <div class="flex items-center justify-between px-8 py-5 border-b border-slate-200 shrink-0">
                 <div>
                     <h1 class="font-bold text-slate-900 text-lg">TALLY-NODE</h1>
                     <p class="text-xs text-slate-500">Wireless Tally System</p>
@@ -28,7 +28,7 @@
             </div>
 
             <!-- 네비게이션 -->
-            <nav class="px-4 py-2 space-y-1">
+            <nav class="px-4 py-2 space-y-1 flex-1 overflow-y-auto">
                 <a href="#dashboard"
                    :class="currentView === 'dashboard' ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-50'"
                    class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all">
@@ -101,11 +101,21 @@
             </nav>
 
             <!-- 사이드바 푸터 -->
-            <div class="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200 bg-slate-50">
+            <div class="shrink-0 p-4 border-t border-slate-200 bg-slate-50 space-y-3" x-cloak>
+                <!-- Factory Reset 버튼 -->
+                <button @click="showFactoryResetModal = true"
+                        class="w-full px-4 py-2.5 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 transition-colors flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <span class="whitespace-nowrap">Factory Reset</span>
+                </button>
+
+                <!-- Connection 상태 -->
                 <div class="flex items-center justify-between">
                     <span class="text-sm text-slate-600">Connection</span>
                     <span class="flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full" :class="wsConnected ? 'bg-emerald-500' : 'bg-rose-500'"></span>
+                        <span class="w-2 h-2 rounded-full shrink-0" :class="wsConnected ? 'bg-emerald-500' : 'bg-rose-500'"></span>
                         <span class="text-sm font-medium" :class="wsConnected ? 'text-emerald-600' : 'text-rose-600'" x-text="wsConnected ? 'Online' : 'Offline'"></span>
                     </span>
                 </div>
@@ -117,7 +127,7 @@
              class="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-40 lg:hidden" x-cloak></div>
 
         <!-- 메인 컨텐츠 -->
-        <div class="flex-1 flex flex-col">
+        <div class="flex-1 flex flex-col lg:pl-32">
             <!-- 상단바 -->
             <header class="lg:static sticky top-0 z-30 bg-white border-b border-slate-200 flex items-center justify-between px-4 py-3">
                 <div class="flex items-center">
@@ -1701,55 +1711,6 @@
 
                     <!-- 카드 그리드 -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- System Actions -->
-                        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                            <div class="px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-rose-50 to-transparent">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 bg-rose-100 rounded-lg flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <h3 class="font-semibold text-slate-900 text-base">System Actions</h3>
-                                        <p class="text-xs text-slate-500">Reboot & Reset</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="p-3 space-y-2">
-                                <!-- Reboot TX -->
-                                <button @click="rebootTx()" class="w-full px-4 py-3 text-sm font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 active:scale-[0.98] transition-all flex items-center justify-center gap-3">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                    </svg>
-                                    <div class="text-left">
-                                        <div class="font-semibold">Reboot TX</div>
-                                        <div class="text-xs opacity-70">Restart this device</div>
-                                    </div>
-                                </button>
-                                <!-- Reboot All -->
-                                <button @click="rebootAll()" class="w-full px-4 py-3 text-sm font-medium text-rose-700 bg-rose-50 border border-rose-200 rounded-xl hover:bg-rose-100 active:scale-[0.98] transition-all flex items-center justify-center gap-3">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                    </svg>
-                                    <div class="text-left">
-                                        <div class="font-semibold">Reboot All</div>
-                                        <div class="text-xs opacity-70">Broadcast + TX restart</div>
-                                    </div>
-                                </button>
-                                <!-- Factory Reset -->
-                                <button @click="showFactoryResetModal = true" class="w-full px-4 py-3 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100 active:scale-[0.98] transition-all flex items-center justify-center gap-3">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"></path>
-                                    </svg>
-                                    <div class="text-left">
-                                        <div class="font-semibold">Factory Reset</div>
-                                        <div class="text-xs opacity-70">Clear all NVS data</div>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
-
                         <!-- Update Speed -->
                         <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                             <div class="px-4 py-3.5 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-transparent">
@@ -1946,87 +1907,11 @@
                         </div>
                         <div class="p-4 overflow-y-auto flex-1">
                             <div class="text-xs text-slate-500 mb-2" x-text="formatDate(noticeModal.notice?.created_at || '')"></div>
-                            <p class="text-sm text-slate-700 whitespace-pre-wrap" x-text="noticeModal.notice?.content || ''"></p>
+                            <p class="text-sm text-slate-700 whitespace-pre-wrap break-words" x-text="noticeModal.notice?.content || ''"></p>
                         </div>
                         <div class="px-4 py-3 border-t border-slate-100 flex justify-end">
                             <button @click="closeNoticeModal()" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200">
                                 Close
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Factory Reset Modal -->
-                <div x-show="showFactoryResetModal" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 flex items-center justify-center p-4" x-cloak>
-                    <div class="absolute inset-0 bg-black/50" @click="showFactoryResetModal = false"></div>
-                    <div x-show="showFactoryResetModal" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden flex flex-col">
-                        <!-- 헤더 -->
-                        <div class="px-4 py-3 bg-gradient-to-r from-red-600 to-red-500">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"></path>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <h3 class="font-semibold text-white text-base">Factory Reset</h3>
-                                    <p class="text-red-100 text-xs">Warning: This action cannot be undone</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 본문 -->
-                        <div class="p-4 space-y-4">
-                            <!-- 실행 내용 -->
-                            <div>
-                                <p class="text-sm font-medium text-slate-700 mb-2">This will:</p>
-                                <ul class="space-y-1.5 text-xs text-slate-600">
-                                    <li class="flex items-start gap-2">
-                                        <svg class="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                        </svg>
-                                        <span>Delete all registered devices from NVS</span>
-                                    </li>
-                                    <li class="flex items-start gap-2">
-                                        <svg class="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                        </svg>
-                                        <span>Clear all device-camera mappings</span>
-                                    </li>
-                                    <li class="flex items-start gap-2">
-                                        <svg class="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                        </svg>
-                                        <span>Reset all settings to factory defaults</span>
-                                    </li>
-                                    <li class="flex items-start gap-2">
-                                        <svg class="w-4 h-4 text-red-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                        </svg>
-                                        <span>Reboot the system immediately</span>
-                                    </li>
-                                </ul>
-                            </div>
-
-                            <!-- 경고 박스 -->
-                            <div class="flex gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                                <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                                </svg>
-                                <p class="text-xs text-amber-700">After reboot, all devices will need to be re-registered and reconfigured.</p>
-                            </div>
-                        </div>
-
-                        <!-- 버튼 -->
-                        <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex gap-2">
-                            <button @click="showFactoryResetModal = false" :disabled="factoryResetting" class="flex-1 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50">
-                                Cancel
-                            </button>
-                            <button @click="factoryReset()" :disabled="factoryResetting" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                                <svg x-show="factoryResetting" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                </svg>
-                                <span x-text="factoryResetting ? 'Resetting...' : 'Confirm Reset'"></span>
                             </button>
                         </div>
                     </div>
@@ -2073,12 +1958,8 @@
                                             </svg>
                                             <span class="text-sm text-slate-600">License Key</span>
                                         </div>
-                                        <div class="flex items-center gap-2" x-data="{ showLicenseKey: false }">
-                                            <span class="text-sm font-mono text-slate-900" x-text="showLicenseKey ? (license.key || 'Not registered') : maskLicenseKey(license.key)"></span>
-                                            <button @click="showLicenseKey = !showLicenseKey" type="button" class="text-slate-400 hover:text-slate-600">
-                                                <svg x-show="!showLicenseKey" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                                <svg x-show="showLicenseKey" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                            </button>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-sm font-mono text-slate-900" x-text="license.key ? formatLicenseKeyString(license.key) : 'Not registered'"></span>
                                         </div>
                                     </div>
 
@@ -2114,18 +1995,14 @@
                             <div class="p-4 space-y-4">
                                 <p class="text-sm text-slate-600">Enter license key to activate the product.</p>
 
-                                <div class="flex gap-3" x-data="{ showLicenseInput: false }">
+                                <div class="flex gap-3">
                                     <div class="relative flex-1">
-                                        <input :type="showLicenseInput ? 'text' : 'password'" x-model="licenseForm.key"
-                                               class="w-full px-4 py-2.5 pr-10 border border-slate-300 rounded-xl text-sm uppercase"
+                                        <input type="text" x-model="licenseForm.key"
+                                               class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm uppercase"
                                                placeholder="XXXX-XXXX-XXXX-XXXX"
                                                maxlength="19"
                                                @input="formatLicenseKey"
                                                @keyup.enter="validateLicense()">
-                                        <button @click="showLicenseInput = !showLicenseInput" type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                                            <svg x-show="!showLicenseInput" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                                            <svg x-show="showLicenseInput" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                        </button>
                                     </div>
                                     <button @click="validateLicense()"
                                             :disabled="license.loading || !licenseForm.key"
@@ -2517,8 +2394,45 @@
             </div>
         </div>
 
+        <!-- Factory Reset Modal -->
+        <div x-show="showFactoryResetModal" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 z-50 flex items-center justify-center p-4" x-cloak>
+            <div class="absolute inset-0 bg-black/50" @click="showFactoryResetModal = false"></div>
+            <div x-show="showFactoryResetModal" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95" class="relative bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden flex flex-col">
+                <div class="px-4 py-3 bg-red-600 border-b border-red-700 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <h3 class="font-semibold text-white text-base">Factory Reset</h3>
+                    </div>
+                    <button @click="showFactoryResetModal = false" class="text-red-200 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div class="p-4 space-y-4">
+                    <p class="text-sm text-slate-600">This will reset all settings to factory defaults. The device will reboot automatically.</p>
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+                        <p class="text-xs text-red-700 font-medium">Warning: This action cannot be undone!</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="showFactoryResetModal = false" :disabled="factoryResetting" class="flex-1 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50">
+                            Cancel
+                        </button>
+                        <button @click="factoryReset()" :disabled="factoryResetting" class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                            <svg x-show="factoryResetting" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            <span x-text="factoryResetting ? 'Resetting...' : 'Confirm Reset'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
-    <script src="js/app.bundle.js?v=1768935150882"></script>
+    <script src="js/app.bundle.js?v=1769005278751"></script>
 </body>
 </html>

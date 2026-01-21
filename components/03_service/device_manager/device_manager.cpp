@@ -360,7 +360,7 @@ static esp_err_t on_license_state_changed(const event_data_t* event)
     s_tx.device_limit = license->device_limit;
     s_tx.limit_valid = true;
 
-    T_LOGI(TAG, "license state changed: limit=%d, state=%d",
+    T_LOGD(TAG, "license state changed: limit=%d, state=%d",
             license->device_limit, license->state);
 
     return ESP_OK;
@@ -1196,23 +1196,22 @@ static void handle_stop_command(const lora_cmd_stop_t* cmd)
 /**
  * @brief 재부팅 명령 처리 (0xE5)
  * @param cmd 재부팅 명령 구조체 (device_id)
- * @note Broadcast 또는 자신의 Device ID인 경우 1초 대기 후 재부팅
+ * @note 자신의 Device ID인 경우 1초 대기 후 재부팅 (브로드캐스트는 제거됨)
  */
 static void handle_reboot_command(const lora_cmd_reboot_t* cmd)
 {
-    bool is_broadcast = (cmd->device_id[0] == 0xFF && cmd->device_id[1] == 0xFF);
+    // 브로드캐스트는 처리하지 않음 (Reboot ALL 기능 제거)
+    if (cmd->device_id[0] == 0xFF && cmd->device_id[1] == 0xFF) {
+        return;
+    }
 
-    if (!is_broadcast && !is_my_device(cmd->device_id)) {
+    if (!is_my_device(cmd->device_id)) {
         return;
     }
 
     char device_id_str[5];
     lora_device_id_to_str(cmd->device_id, device_id_str);
-    if (is_broadcast) {
-        T_LOGW(TAG, "broadcast reboot command received, rebooting in 1 sec...");
-    } else {
-        T_LOGW(TAG, "reboot command received: ID=%s, rebooting in 1 sec...", device_id_str);
-    }
+    T_LOGW(TAG, "reboot command received: ID=%s, rebooting in 1 sec...", device_id_str);
 
     // 1초 대기 후 재부팅
     vTaskDelay(pdMS_TO_TICKS(1000));
