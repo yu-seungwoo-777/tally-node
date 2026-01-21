@@ -417,6 +417,7 @@ typedef struct __attribute__((packed)) {
     uint8_t device_limit;      ///< 0 = 미등록, 1~255 = 제한
     uint8_t state;             ///< 라이센스 상태 (license_state_t)
     char key[17];              ///< 라이센스 키 (16자 + null)
+    char error[128];           ///< 에러 메시지 (실패 시, 성공 시 비어있음)
 } license_state_event_t;
 
 /**
@@ -427,6 +428,16 @@ typedef struct __attribute__((packed)) {
 typedef struct {
     char key[17];              ///< 라이센스 키 (16자 + null)
 } license_validate_event_t;
+
+/**
+ * @brief 라이센스 서버 연결 테스트 결과 이벤트 데이터
+ *
+ * license_service에서 발행하는 연결 테스트 결과
+ */
+typedef struct __attribute__((packed)) {
+    bool success;              ///< 연결 성공 여부
+    char error[128];           ///< 실패 이유 (성공 시 비어있음)
+} license_connection_test_result_t;
 
 /**
  * @brief 라이센스 데이터 (EVT_LICENSE_DATA_REQUEST/SAVE용)
@@ -547,6 +558,8 @@ typedef enum {
     // 라이센스 이벤트 (03_service → 03_service)
     EVT_LICENSE_STATE_CHANGED,   ///< 라이센스 상태 변경 (data: license_state_event_t)
     EVT_LICENSE_VALIDATE,        ///< 라이센스 검증 요청 (data: license_validate_event_t)
+    EVT_LICENSE_CONNECTION_TEST, ///< 라이센스 서버 연결 테스트 요청 (data: none)
+    EVT_LICENSE_CONNECTION_TEST_RESULT, ///< 연결 테스트 결과 (data: license_connection_test_result_t)
     EVT_LICENSE_DATA_REQUEST,    ///< 라이센스 데이터 조회 요청 (data: none, ConfigService가 저장된 데이터 발행)
     EVT_LICENSE_DATA_SAVE,       ///< 라이센스 데이터 저장 요청 (data: license_data_event_t)
 

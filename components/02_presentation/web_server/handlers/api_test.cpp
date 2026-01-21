@@ -16,6 +16,11 @@
 
 static const char* TAG = "02_WS_Test";
 
+// 연결 테스트 결과 저장 (이벤트 핸들러에서 설정)
+static bool s_connection_test_result = false;
+static bool s_connection_test_done = false;
+static char s_connection_test_error[128] = {0};  // 에러 메시지 저장
+
 extern "C" {
 
 esp_err_t api_test_start_handler(httpd_req_t* req)
@@ -132,54 +137,66 @@ esp_err_t api_test_internet_handler(httpd_req_t* req)
     return web_server_send_json_response(req, root);
 }
 
+// 연결 테스트 결과 이벤트 핸들러
+static esp_err_t on_connection_test_result(const event_data_t* event)
+{
+    if (event->type != EVT_LICENSE_CONNECTION_TEST_RESULT) {
+        return ESP_OK;
+    }
+
+    const license_connection_test_result_t* result =
+        (const license_connection_test_result_t*)event->data;
+
+    s_connection_test_result = result->success;
+    s_connection_test_done = true;
+
+    // 에러 메시지 캡처
+    if (!result->success && result->error[0] != '\0') {
+        strncpy(s_connection_test_error, result->error, sizeof(s_connection_test_error) - 1);
+        s_connection_test_error[sizeof(s_connection_test_error) - 1] = '\0';
+    } else {
+        s_connection_test_error[0] = '\0';
+    }
+
+    T_LOGD(TAG, "connection test result: success=%d, error=%s",
+           s_connection_test_result, s_connection_test_error);
+
+    return ESP_OK;
+}
+
 esp_err_t api_test_license_server_handler(httpd_req_t* req)
 {
     web_server_set_cors_headers(req);
 
+    // 결과 플래그 초기화
+    s_connection_test_done = false;
+    s_connection_test_result = false;
+    s_connection_test_error[0] = '\0';
+
+    // 결과 이벤트 임시 구독
+    event_bus_subscribe(EVT_LICENSE_CONNECTION_TEST_RESULT, on_connection_test_result);
+
+    // 연결 테스트 요청 이벤트 발행
+    event_bus_publish(EVT_LICENSE_CONNECTION_TEST, NULL, 0);
+
+    // 결과 대기 (최대 10초)
+    int retry = 100;  // 100ms * 100 = 10초
+    while (!s_connection_test_done && retry-- > 0) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    // 구독 해제
+    event_bus_unsubscribe(EVT_LICENSE_CONNECTION_TEST_RESULT, on_connection_test_result);
+
+    // JSON 응답 생성
     cJSON* root = cJSON_CreateObject();
     if (!root) {
         return web_server_send_json_internal_error(req, "Memory allocation failed");
     }
 
-    bool success = false;
-    int ping_ms = 0;
-
-    // 프록시 서버 연결 테스트 (tally-node.duckdns.org:80)
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock >= 0) {
-        // 소켓 타임아웃 설정 (5초)
-        struct timeval tv;
-        tv.tv_sec = 5;
-        tv.tv_usec = 0;
-        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-        setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-
-        struct sockaddr_in addr;
-        memset(&addr, 0, sizeof(addr));
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(80);
-
-        // DNS 해결 (gethostbyname)
-        struct hostent* host = gethostbyname("tally-node.duckdns.org");
-        if (host) {
-            addr.sin_addr.s_addr = *((uint32_t*)host->h_addr_list[0]);
-
-            // 타이머 시작
-            int64_t start = esp_timer_get_time();
-
-            if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
-                int64_t end = esp_timer_get_time();
-                ping_ms = (end - start) / 1000;
-                success = true;
-            }
-        }
-
-        close(sock);
-    }
-
-    cJSON_AddBoolToObject(root, "success", success);
-    if (success) {
-        cJSON_AddNumberToObject(root, "ping", ping_ms);
+    cJSON_AddBoolToObject(root, "success", s_connection_test_result);
+    if (!s_connection_test_result && s_connection_test_error[0] != '\0') {
+        cJSON_AddStringToObject(root, "error", s_connection_test_error);
     }
 
     return web_server_send_json_response(req, root);

@@ -481,6 +481,7 @@ cJSON* web_server_json_create_license(void)
     uint8_t device_limit = 0;
     uint8_t state_val = 0;
     char key[17] = {0};
+    char error[128] = {0};
 
     if (web_server_cache_lock() == pdTRUE) {
         if (web_server_cache_is_license_valid()) {
@@ -489,6 +490,11 @@ cJSON* web_server_json_create_license(void)
             state_val = cache->license.state;
             strncpy(key, cache->license.key, 16);
             key[16] = '\0';
+            // 에러 메시지 복사
+            if (cache->license.error[0] != '\0') {
+                strncpy(error, cache->license.error, sizeof(error) - 1);
+                error[sizeof(error) - 1] = '\0';
+            }
         }
         web_server_cache_unlock();
     }
@@ -513,6 +519,11 @@ cJSON* web_server_json_create_license(void)
     bool is_valid = (state_val == LICENSE_STATE_VALID);
     cJSON_AddBoolToObject(license, "isValid", is_valid);
     cJSON_AddStringToObject(license, "key", key);
+
+    // 에러 메시지 추가 (있는 경우)
+    if (error[0] != '\0') {
+        cJSON_AddStringToObject(license, "error", error);
+    }
 
     return license;
 }

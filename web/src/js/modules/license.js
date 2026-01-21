@@ -76,7 +76,9 @@ export function licenseModule() {
                     } else if (this.license.stateStr === 'checking') {
                         this.showToast('License validation in progress...', 'alert-info');
                     } else if (this.license.stateStr === 'invalid') {
-                        this.showToast('License validation failed', 'alert-error');
+                        // 에러 메시지가 있으면 표시
+                        const errorMsg = lic.error || 'License validation failed';
+                        this.showToast(errorMsg, 'alert-error');
                     }
                 }
             } catch (e) {
@@ -142,13 +144,23 @@ export function licenseModule() {
                 if (serverRes.ok) {
                     const serverData = await serverRes.json();
                     this.internetTest.serverStatus = serverData.success ? 'success' : 'fail';
+
+                    // 연결 실패 시 에러 메시지 토스트 표시
+                    if (!serverData.success) {
+                        const errorMsg = serverData.error || 'License server connection failed';
+                        this.showToast(errorMsg, 'alert-error');
+                    } else {
+                        this.showToast('License server connection successful', 'alert-success');
+                    }
                 } else {
                     this.internetTest.serverStatus = 'fail';
+                    this.showToast('License server connection failed', 'alert-error');
                 }
             } catch (e) {
                 console.error('Internet test error:', e);
                 this.internetTest.status = 'fail';
                 this.internetTest.serverStatus = 'fail';
+                this.showToast('Connection test failed: ' + e.message, 'alert-error');
             } finally {
                 this.internetTest.testing = false;
             }

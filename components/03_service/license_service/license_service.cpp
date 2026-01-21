@@ -23,6 +23,7 @@ extern "C" {
     esp_err_t license_on_validate_request(const event_data_t* event);
     esp_err_t license_on_network_status_changed(const event_data_t* event);
     esp_err_t license_on_license_data_save(const event_data_t* event);
+    esp_err_t license_on_connection_test_request(const event_data_t* event);
 }
 
 // ============================================================================
@@ -45,11 +46,13 @@ public:
     static license_state_t getState(void);
     static bool canSendTally(void);
     static esp_err_t getKey(char* out_key);
+    static bool connectionTest(void);
 
     // 이벤트 핸들러 (C 래퍼에서 호출)
     static esp_err_t onValidateRequest(const event_data_t* event);
     static esp_err_t onNetworkStatusChanged(const event_data_t* event);
     static esp_err_t onLicenseDataSave(const event_data_t* event);
+    static esp_err_t onConnectionTestRequest(const event_data_t* event);
 
 private:
     LicenseService() = delete;
@@ -68,6 +71,7 @@ private:
     static bool s_sta_connected;
     static bool s_eth_connected;
     static bool s_data_loaded;  // NVS 데이터 로드 완료 여부
+    static char s_last_error[128];  // 마지막 에러 메시지
 };
 
 // ============================================================================
@@ -82,6 +86,7 @@ char LicenseService::s_license_key[17] = {0};
 bool LicenseService::s_sta_connected = false;
 bool LicenseService::s_eth_connected = false;
 bool LicenseService::s_data_loaded = false;
+char LicenseService::s_last_error[128] = {0};
 
 // ============================================================================
 // 이벤트 발행 헬퍼
@@ -99,9 +104,14 @@ void LicenseService::publishStateEvent(void)
         strncpy(event.key, s_license_key, 16);
         event.key[16] = '\0';
     }
+    // 에러 메시지 복사
+    if (s_last_error[0] != '\0') {
+        strncpy(event.error, s_last_error, sizeof(event.error) - 1);
+        event.error[sizeof(event.error) - 1] = '\0';
+    }
 
-    T_LOGD(TAG, "license state event published: limit=%d, state=%d, key=%.16s",
-           event.device_limit, event.state, event.key);
+    T_LOGD(TAG, "license state event published: limit=%d, state=%d, key=%.16s, error=%s",
+           event.device_limit, event.state, event.key, event.error);
 
     event_bus_publish(EVT_LICENSE_STATE_CHANGED, &event, sizeof(event));
 }
@@ -182,6 +192,34 @@ esp_err_t LicenseService::onLicenseDataSave(const event_data_t* event)
     return ESP_OK;
 }
 
+/**
+ * @brief 라이센스 서버 연결 테스트 이벤트 핸들러
+ */
+esp_err_t LicenseService::onConnectionTestRequest(const event_data_t* event)
+{
+    if (!event || event->type != EVT_LICENSE_CONNECTION_TEST) {
+        return ESP_OK;
+    }
+
+    T_LOGI(TAG, "connection test request");
+
+    // 연결 테스트 수행
+    bool success = license_client_connection_test();
+
+    // 결과 이벤트 발행 (에러 메시지 포함)
+    license_connection_test_result_t result = {};
+    result.success = success;
+    if (!success) {
+        strncpy(result.error, "Connection timeout or TLS error", sizeof(result.error) - 1);
+    }
+
+    event_bus_publish(EVT_LICENSE_CONNECTION_TEST_RESULT, &result, sizeof(result));
+
+    T_LOGI(TAG, "connection test result: %s", success ? "ok" : result.error);
+
+    return ESP_OK;
+}
+
 // ============================================================================
 // 검증 함수
 // ============================================================================
@@ -193,6 +231,9 @@ void LicenseService::validateInTask(const char* key)
     }
 
     T_LOGI(TAG, "license validation start: %.16s", key);
+
+    // 에러 메시지 초기화
+    s_last_error[0] = '\0';
 
     s_state = LICENSE_STATE_CHECKING;
     publishStateEvent();
@@ -216,6 +257,7 @@ void LicenseService::validateInTask(const char* key)
         } else {
             T_LOGE(TAG, "offline: new license validation failed (network required)");
             s_state = LICENSE_STATE_INVALID;
+            strncpy(s_last_error, "네트워크 연결 없음", sizeof(s_last_error) - 1);
         }
         publishStateEvent();
         return;
@@ -230,6 +272,9 @@ void LicenseService::validateInTask(const char* key)
         strncpy(s_license_key, key, 16);
         s_license_key[16] = '\0';
 
+        // 성공 시 에러 메시지 클리어
+        s_last_error[0] = '\0';
+
         // NVS 저장은 이벤트로 요청 (config_service가 처리)
         license_data_event_t save_data;
         save_data.device_limit = s_device_limit;
@@ -240,6 +285,17 @@ void LicenseService::validateInTask(const char* key)
         T_LOGI(TAG, "license validation success: device_limit = %d", s_device_limit);
     } else {
         T_LOGE(TAG, "license validation failed: %s", response.error);
+
+        // 에러 메시지 저장 (기존 라이센스는 유지됨)
+        if (response.error[0] != '\0') {
+            strncpy(s_last_error, response.error, sizeof(s_last_error) - 1);
+            s_last_error[sizeof(s_last_error) - 1] = '\0';
+        } else {
+            strncpy(s_last_error, "인증 실패", sizeof(s_last_error) - 1);
+        }
+
+        // 기존 라이센스는 유지하고 에러 메시지만 표시
+        // NVS 업데이트 없음 (기존 라이센스 유지)
     }
 
     updateState();
@@ -295,6 +351,7 @@ esp_err_t LicenseService::start(void)
     // 이벤트 구독 (최초 1회)
     if (!s_started) {
         event_bus_subscribe(EVT_LICENSE_VALIDATE, license_on_validate_request);
+        event_bus_subscribe(EVT_LICENSE_CONNECTION_TEST, license_on_connection_test_request);
         event_bus_subscribe(EVT_NETWORK_STATUS_CHANGED, license_on_network_status_changed);
         event_bus_subscribe(EVT_LICENSE_DATA_SAVE, license_on_license_data_save);
         s_started = true;
@@ -332,6 +389,7 @@ void LicenseService::stop(void)
     }
 
     event_bus_unsubscribe(EVT_LICENSE_VALIDATE, license_on_validate_request);
+    event_bus_unsubscribe(EVT_LICENSE_CONNECTION_TEST, license_on_connection_test_request);
     event_bus_unsubscribe(EVT_NETWORK_STATUS_CHANGED, license_on_network_status_changed);
     event_bus_unsubscribe(EVT_LICENSE_DATA_SAVE, license_on_license_data_save);
 
@@ -382,6 +440,11 @@ esp_err_t LicenseService::getKey(char* out_key)
     return ESP_OK;
 }
 
+bool LicenseService::connectionTest(void)
+{
+    return license_client_connection_test();
+}
+
 // ============================================================================
 // C 인터페이스
 // ============================================================================
@@ -402,6 +465,11 @@ esp_err_t license_on_network_status_changed(const event_data_t* event)
 esp_err_t license_on_license_data_save(const event_data_t* event)
 {
     return LicenseService::onLicenseDataSave(event);
+}
+
+esp_err_t license_on_connection_test_request(const event_data_t* event)
+{
+    return LicenseService::onConnectionTestRequest(event);
 }
 
 } // extern "C" for event handlers
@@ -455,6 +523,11 @@ bool license_service_can_send_tally(void)
 esp_err_t license_service_get_key(char* out_key)
 {
     return LicenseService::getKey(out_key);
+}
+
+bool license_service_connection_test(void)
+{
+    return LicenseService::connectionTest();
 }
 
 }  // extern "C"

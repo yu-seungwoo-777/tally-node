@@ -257,7 +257,7 @@ esp_err_t ethernet_hal_start(void)
         .sclk_io_num = EORA_S3_W5500_SCK,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
-        .max_transfer_sz = 0,
+        .max_transfer_sz = 4096,  // HTTPS 대용량 전송을 위한 버퍼 크기
     };
 
     ret = spi_bus_initialize(EORA_S3_W5500_SPI_HOST, &buscfg, SPI_DMA_CH_AUTO);
@@ -271,7 +271,7 @@ esp_err_t ethernet_hal_start(void)
         .command_bits = 16,
         .address_bits = 8,
         .mode = 0,
-        .clock_speed_hz = 10 * 1000 * 1000,  // 10MHz (안정성과 속도 균형)
+        .clock_speed_hz = 8 * 1000 * 1000,  // 8MHz (HTTPS 안정성을 위해 낮춤)
         .queue_size = 32,
         .spics_io_num = EORA_S3_W5500_CS,
     };

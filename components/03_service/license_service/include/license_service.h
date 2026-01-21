@@ -86,6 +86,12 @@ bool license_service_can_send_tally(void);
  */
 esp_err_t license_service_get_key(char* out_key);
 
+/**
+ * @brief 라이센스 서버 연결 테스트
+ * @return true 연결 성공, false 연결 실패
+ */
+bool license_service_connection_test(void);
+
 #ifdef __cplusplus
 }
 #endif

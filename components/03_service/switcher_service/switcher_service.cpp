@@ -1146,6 +1146,11 @@ void SwitcherService::setSecondaryOffset(uint8_t offset) {
         secondary_offset_ = 19;
     }
     T_LOGI(TAG, "Secondary offset: %d", secondary_offset_);
+
+    // Offset 변경 시 콤바인 재계산 및 송신
+    if (dual_mode_enabled_) {
+        onSwitcherTallyChange(SWITCHER_ROLE_SECONDARY);
+    }
 }
 
 void SwitcherService::setTallyCallback(tally_callback_t callback) {
