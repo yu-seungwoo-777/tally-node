@@ -30,8 +30,9 @@ static const char* TAG = "05_Ethernet";
 
 static bool s_initialized = false;
 static bool s_started = false;
-static bool s_detected = false;      // W5500 칩 감지 여부
-static bool s_link_up = false;      // 링크 상태 추적
+static bool s_detected = false;          // W5500 칩 감지 여부
+static bool s_link_up = false;           // 링크 상태 추적
+static bool s_recovering = false;        // 링크 복구 중 플래그
 static ethernet_hal_state_t s_state = ETHERNET_HAL_STATE_IDLE;
 static esp_eth_handle_t s_eth_handle = NULL;
 static esp_netif_t* s_netif = NULL;
@@ -47,6 +48,10 @@ static esp_event_handler_instance_t s_ip_event_instance = NULL;
 #define ETH_HAL_STOPPED_BIT    BIT1
 #define ETH_HAL_GOT_IP_BIT     BIT2
 
+// 링크 복구 설정
+#define ETH_HAL_LINK_RECOVERY_DELAY_MS    5000  // 링크 다운 후 복구 대기 시간 (ms)
+#define ETH_HAL_LINK_RECOVERY_STACK_SIZE  4096  // 복구 태스크 스택 크기
+
 // ============================================================================
 // 정적 함수 선언
 // ============================================================================
@@ -55,6 +60,40 @@ static void eth_event_handler(void* arg, esp_event_base_t event_base,
                               int32_t event_id, void* event_data);
 static void ip_event_handler(void* arg, esp_event_base_t event_base,
                               int32_t event_id, void* event_data);
+static void link_recovery_task(void* arg);
+
+// ============================================================================
+// 링크 복구 태스크
+// ============================================================================
+
+/**
+ * @brief 링크 복구 태스크
+ *
+ * 링크 다운 후 지정된 시간 동안 대기한 후 이더넷을 재시작합니다.
+ *
+ * @param arg 사용자 데이터 (미사용)
+ */
+static void link_recovery_task(void* arg)
+{
+    T_LOGW(TAG, "recovery:start:wait_ms:%d", ETH_HAL_LINK_RECOVERY_DELAY_MS);
+
+    // 지정된 시간 동안 대기 (링크가 자연적으로 복구될 수 있도록)
+    vTaskDelay(pdMS_TO_TICKS(ETH_HAL_LINK_RECOVERY_DELAY_MS));
+
+    // 대기 후에도 링크가 다운인 경우 재시작
+    if (!s_link_up && s_started) {
+        T_LOGW(TAG, "recovery:restart");
+        ethernet_hal_restart();
+    } else {
+        T_LOGD(TAG, "recovery:cancel:link_up");
+    }
+
+    // 복구 플래그 해제
+    s_recovering = false;
+
+    // 태스크 자가 삭제
+    vTaskDelete(NULL);
+}
 
 // ============================================================================
 // 이벤트 핸들러
@@ -94,11 +133,29 @@ static void eth_event_handler(void* arg, esp_event_base_t event_base,
             case ETHERNET_EVENT_CONNECTED:
                 T_LOGD(TAG, "evt:link_up");
                 s_link_up = true;
+                s_recovering = false;  // 링크 복구 완료, 플래그 해제
                 break;
 
             case ETHERNET_EVENT_DISCONNECTED:
                 T_LOGE(TAG, "evt:link_down");
                 s_link_up = false;
+
+                // 링크 복구 태스크 시작 (이미 복구 중이 아닐 때만)
+                if (!s_recovering && s_started) {
+                    s_recovering = true;
+                    BaseType_t ret = xTaskCreate(
+                        link_recovery_task,
+                        "link_rec",
+                        ETH_HAL_LINK_RECOVERY_STACK_SIZE,
+                        NULL,
+                        5,  // 우선순위
+                        NULL
+                    );
+                    if (ret != pdPASS) {
+                        T_LOGE(TAG, "fail:recovery_task");
+                        s_recovering = false;
+                    }
+                }
                 break;
 
             default:
@@ -385,6 +442,35 @@ esp_err_t ethernet_hal_start(void)
     if (ret != ESP_OK) {
         T_LOGE(TAG, "fail:attach:0x%x", ret);
         return ret;
+    }
+
+    // PHY 설정: 10Mbps Full Duplex 고정 (특정 공유기 호환성)
+    // 드라이버 시작 전에 설정해야 함 (esp_eth_ioctl은 정지 상태에서만 동작)
+    // Auto-negotiation 비활성화
+    bool autoneg = false;
+    ret = esp_eth_ioctl(s_eth_handle, ETH_CMD_S_AUTONEGO, &autoneg);
+    if (ret != ESP_OK) {
+        T_LOGW(TAG, "warn:autoneg:0x%x", ret);
+    } else {
+        T_LOGD(TAG, "phy:autoneg_off");
+    }
+
+    // Speed 10Mbps 설정 (Auto-negotiation 비활성화 후에 설정 가능)
+    eth_speed_t speed = ETH_SPEED_10M;
+    ret = esp_eth_ioctl(s_eth_handle, ETH_CMD_S_SPEED, &speed);
+    if (ret != ESP_OK) {
+        T_LOGW(TAG, "warn:speed:0x%x", ret);
+    } else {
+        T_LOGD(TAG, "phy:10mbps");
+    }
+
+    // Duplex Full 설정
+    eth_duplex_t duplex = ETH_DUPLEX_FULL;
+    ret = esp_eth_ioctl(s_eth_handle, ETH_CMD_S_DUPLEX_MODE, &duplex);
+    if (ret != ESP_OK) {
+        T_LOGW(TAG, "warn:duplex:0x%x", ret);
+    } else {
+        T_LOGD(TAG, "phy:full_duplex");
     }
 
     // 시작

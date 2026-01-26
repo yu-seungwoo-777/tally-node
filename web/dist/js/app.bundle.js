@@ -1276,7 +1276,7 @@
           }
         } catch (e) {
           console.error("Set brightness error:", e);
-          alert(`\uBC1D\uAE30 \uC124\uC815 \uC2E4\uD328: ${e.message}`);
+          alert(e.message);
         } finally {
           this.brightnessControl.sending = null;
         }
@@ -1323,7 +1323,7 @@
           }
         } catch (e) {
           console.error("Set camera ID error:", e);
-          alert(`\uCE74\uBA54\uB77C ID \uC124\uC815 \uC2E4\uD328: ${e.message}`);
+          alert(e.message);
         } finally {
           this.cameraIdControl.sending = null;
         }
@@ -1371,7 +1371,7 @@
           }
         } catch (e) {
           console.error("PING error:", e);
-          alert(`PING \uC2E4\uD328: ${e.message}`);
+          alert(e.message);
         } finally {
           this.pingControl.sending = null;
         }
@@ -1398,7 +1398,7 @@
           }
         } catch (e) {
           console.error("Status request error:", e);
-          alert(`\uC0C1\uD0DC \uC694\uCCAD \uC2E4\uD328: ${e.message}`);
+          alert(e.message);
         } finally {
           this.statusControl.sending = false;
         }
@@ -1433,7 +1433,7 @@
           }
         } catch (e) {
           console.error("Stop command error:", e);
-          alert(`\uAE30\uB2A5 \uC815\uC9C0 \uC2E4\uD328: ${e.message}`);
+          alert(e.message);
         } finally {
           this.stopControl.sending = null;
         }
@@ -1444,7 +1444,7 @@
        */
       async rebootDevice(deviceId) {
         try {
-          if (!confirm(`${deviceId} \uB514\uBC14\uC774\uC2A4\uB97C \uC7AC\uBD80\uD305\uD558\uC2DC\uACA0\uC2B5\uB2C8\uAE4C?`)) {
+          if (!confirm(`Reboot device ${deviceId}?`)) {
             return;
           }
           this.rebootControl.sending = deviceId;
@@ -1465,14 +1465,14 @@
           const data = await res.json();
           if (data.status === "ok") {
             console.log(`Reboot command sent to ${deviceId}`);
-            alert(`${deviceId} \uB514\uBC14\uC774\uC2A4\uC5D0 \uC7AC\uBD80\uD305 \uBA85\uB839\uC744 \uC804\uC1A1\uD588\uC2B5\uB2C8\uB2E4.`);
+            alert(`Reboot command sent to device ${deviceId}`);
           } else {
             throw new Error(data.message || "Failed to send reboot command");
           }
         } catch (e) {
           console.error("Reboot command error:", e);
           if (e.message !== "User canceled") {
-            alert(`\uC7AC\uBD80\uD305 \uC2E4\uD328: ${e.message}`);
+            alert(e.message);
           }
         } finally {
           this.rebootControl.sending = null;
@@ -1515,7 +1515,7 @@ This will remove the device from the list and clear its camera ID mapping.`)) {
         } catch (e) {
           console.error("Delete device error:", e);
           if (e.message !== "User canceled") {
-            alert(`Failed to delete device: ${e.message}`);
+            alert(e.message);
           }
         } finally {
           this.deleteControl.sending = null;
