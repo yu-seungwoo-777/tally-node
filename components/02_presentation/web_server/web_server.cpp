@@ -88,10 +88,10 @@ esp_err_t web_server_start(void)
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
-    config.max_open_sockets = 10;
+    config.max_open_sockets = 16;  // 10→16 (병렬 요청 처리 향상)
     config.max_uri_handlers = g_route_count + 4;  // 여유분 확보
     config.stack_size = 12288;  // 스택 오버플로우 방지 (8KB → 12KB, cJSON 생성 시 여유)
-    config.task_priority = 3;  // 우선순위 낮춤 (SwitcherService 8보다 낮게, event_bus 5보다도 낮게)
+    config.task_priority = 5;  // 3→5 (event_bus와 동일, CPU 시간 확보)
     config.lru_purge_enable = true;
     // Keep-Alive 설정 (단일 사용자 최적화)
     config.keep_alive_enable = true;
