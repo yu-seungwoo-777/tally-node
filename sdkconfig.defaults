@@ -146,7 +146,7 @@ CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 # ============================================================
 # lwIP 네트워크 설정
 # ============================================================
-CONFIG_LWIP_MAX_SOCKETS=16
+CONFIG_LWIP_MAX_SOCKETS=24  # 16→24 (max_open_sockets=16 허용)
 CONFIG_LWIP_SO_REUSE=y  # 소켓 즉시 재사용
 CONFIG_LWIP_SO_RCVBUF=y
 CONFIG_LWIP_SO_SNDRCVTIMEO=y  # 송수신 타임아웃 활성화
