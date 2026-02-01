@@ -89,9 +89,11 @@ bool AtemDriver::initialize() {
     int opt = 1;
     setsockopt(sock_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    // 소켓 수신 버퍼 크기 증가 (64KB) - 고속 패킷 수신용
+    // 소켓 버퍼 크기 증가 (64KB) - 고속 패킷 송수신용
     int rcvbuf_size = 64 * 1024;
     setsockopt(sock_fd_, SOL_SOCKET, SO_RCVBUF, &rcvbuf_size, sizeof(rcvbuf_size));
+    int sndbuf_size = 64 * 1024;
+    setsockopt(sock_fd_, SOL_SOCKET, SO_SNDBUF, &sndbuf_size, sizeof(sndbuf_size));
 
     // 논블로킹 모드 설정
     int flags = fcntl(sock_fd_, F_GETFL, 0);
@@ -848,7 +850,7 @@ int AtemDriver::sendPacket(const uint8_t* data, uint16_t length) {
                           (struct sockaddr*)&remote_addr, sizeof(remote_addr));
 
     if (sent != length) {
-        T_LOGE(TAG, "fail:tx:%d/%d", (int)sent, length);
+        T_LOGE(TAG, "fail:tx:%d/%d errno=%d", (int)sent, length, errno);
         return -1;
     }
 
