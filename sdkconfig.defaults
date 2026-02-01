@@ -173,7 +173,8 @@ CONFIG_LWIP_TCP_RECVMBOX_SIZE=32   # TCP 받기 메일박스
 # UDP/PBUF 버퍼 (ATEM UDP 통신 안정화)
 CONFIG_LWIP_UDP_RECVMBOX_SIZE=32  # UDP 받기 메일박스
 CONFIG_MEMP_NUM_UDP_PCB=16        # UDP PCB 개수 (기본값 4→16)
-CONFIG_PBUF_POOL_SIZE=32          # PBUF 풀 크기 (기본값 16→32)
+CONFIG_PBUF_POOL_SIZE=64          # PBUF 풀 크기 (32→64, errno=-1 해결)
+CONFIG_LWIP_PBUF_POOL_BUFSIZE=2048  # PBUF 버퍼 크기 (기본값 1536→2048)
 
 # ============================================================
 # HTTP 서버 설정
