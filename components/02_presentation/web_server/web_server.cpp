@@ -42,6 +42,10 @@ esp_err_t web_server_init(void)
     // 캐시 초기화
     web_server_cache_init();
 
+    // 정적 파일 PSRAM 캐싱 (420KB)
+    extern void web_server_static_cache_init(void);
+    web_server_static_cache_init();
+
     // 이벤트 구독 (이벤트 핸들러 모듈 사용)
     event_bus_subscribe(EVT_INFO_UPDATED, web_server_on_system_info_event);
     event_bus_subscribe(EVT_SWITCHER_STATUS_CHANGED, web_server_on_switcher_status_event);
