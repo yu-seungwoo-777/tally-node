@@ -17,8 +17,8 @@
 
 # --- 설정 변수 (Configuration Variables) ---
 # 원격 서버 정보
-REMOTE_IP="whatumong-server.gobongs.com"
-REMOTE_PORT="17140"
+REMOTE_IP="192.168.0.171"
+REMOTE_PORT="22"
 REMOTE_USER="root"
 REMOTE_PASSWORD="Tjsfyddl1**!@"  # ⚠️ 비밀번호 하드코딩 - 보안을 위해 사용 후 변경하세요
 # 스크립트가 있는 현재 폴더를 프로젝트 폴더로 사용

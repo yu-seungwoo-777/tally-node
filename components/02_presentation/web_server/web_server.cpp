@@ -88,7 +88,7 @@ esp_err_t web_server_start(void)
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
-    config.max_open_sockets = 16;  // 10→16 (병렬 요청 처리 향상)
+    config.max_open_sockets = 7;  // LWIP_MAX_SOCKETS=10일 때 최대값 (10-3=7)
     config.max_uri_handlers = g_route_count + 4;  // 여유분 확보
     config.stack_size = 12288;  // 스택 오버플로우 방지 (8KB → 12KB, cJSON 생성 시 여유)
     config.task_priority = 5;  // 3→5 (event_bus와 동일, CPU 시간 확보)
