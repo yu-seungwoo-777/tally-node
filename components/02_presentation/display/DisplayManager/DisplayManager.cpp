@@ -12,6 +12,7 @@
 #include "t_log.h"
 #include "event_bus.h"
 #include "TallyTypes.h"
+#include "esp_heap_caps.h"
 #include <string.h>
 
 // ============================================================================
@@ -721,7 +722,8 @@ extern "C" void display_manager_start(void)
 
     s_mgr.running = true;
 
-    // 태스크 생성
+    // 태스크 생성 (내부 RAM 스택 사용)
+    // 주의: PSRAM 스택은 SPI flash 작업 중 접근 불가하므로 내부 RAM 사용
     BaseType_t ret = xTaskCreate(
         display_task,
         "display_task",

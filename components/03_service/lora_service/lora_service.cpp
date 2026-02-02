@@ -624,14 +624,14 @@ esp_err_t lora_service_start(void)
         return ret;
     }
 
-    // 송신 큐 태스크 생성 (우선순위 8로 상향)
-    // SwitcherService와 동일하게 하여 LoRa 전송이 지연되지 않도록 함
+    // 송신 큐 태스크 생성 (우선순위 9 - Tally 송신 지연 최소화)
+    // lora_isr_task(10)보다는 낮지만, 다른 태스크들보다는 높게 설정
     BaseType_t task_ret = xTaskCreatePinnedToCore(
         lora_txq_task,
         "lora_txq_task",
         4096,
         nullptr,
-        8,  // 우선순위 (SwitcherService와 동일)
+        9,  // 우선순위 (Tally 송신 지연 최소화, ISR 처리보다는 낮음)
         &s_tx_task,
         1
     );

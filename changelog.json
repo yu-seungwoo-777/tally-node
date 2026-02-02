@@ -1,0 +1,26 @@
+{
+  "versions": [
+    {
+      "version": "2.2.0",
+      "date": "2026-02-02",
+      "tx": {
+        "ko": {
+          "title": "외부램 기능 활성화",
+          "changes": [
+            "외부 PSRAM 메모리 지원 추가",
+            "웹 리소스 캐싱으로 로딩 속도 향상",
+            "정적 파일 메모리 매핑 지원"
+          ]
+        },
+        "en": {
+          "title": "External RAM Support Enabled",
+          "changes": [
+            "Added external PSRAM memory support",
+            "Improved web loading speed with resource caching",
+            "Enabled memory mapping for static files"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -267,14 +267,14 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
         return ESP_FAIL;
     }
 
-    // 태스크 생성 (우선순위 8로 상향)
-    // 실시간 LoRa 수신/송신 처리를 위해 최고 우선순위 부여
+    // 태스크 생성 (우선순위 10 - ISR 처리 최우선)
+    // ISR 플래그 처리를 최우선으로 하여 패킷 유실 방지
     BaseType_t task_ret = xTaskCreatePinnedToCore(
         lora_isr_task,
         "lora_isr_task",
         4096,
         nullptr,
-        8,  // 우선순위 (최고 - 실시간 통신)
+        10,  // 우선순위 (최고 - ISR 처리 최우선, 패킷 유실 방지)
         &s_task,
         1
     );
@@ -439,8 +439,9 @@ esp_err_t lora_driver_transmit(const uint8_t* data, size_t length) {
         return ESP_ERR_NOT_SUPPORTED;
     }
 
-    // SPI 뮤텍스 잠금 (최대 1초 대기)
-    if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+    // SPI 뮤텍스 잠금 (최대 100ms 대기)
+    // lora_isr_task(우선순위 10)가 선점 가능하도록 대기 시간 단축
+    if (xSemaphoreTake(s_spi_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
         T_LOGE(TAG, "fail:mutex");
         return ESP_ERR_TIMEOUT;
     }

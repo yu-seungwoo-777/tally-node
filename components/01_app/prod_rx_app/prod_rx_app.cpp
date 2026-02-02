@@ -16,6 +16,7 @@
 #include "led_service.h"
 #include "battery_driver.h"
 #include "BatteryEmptyPage.h"
+#include "RxPage.h"
 #include "esp_sleep.h"
 
 #include "freertos/FreeRTOS.h"

@@ -9,12 +9,13 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
+#include "esp_heap_caps.h"
 #include <string.h>
 
 static const char* TAG = "00_EventBus";
 
-// 최대 대기열 크기
-#define EVENT_QUEUE_SIZE 12  // 32→12 (약 25KB 절약)
+// 최대 대기열 크기 (PSRAM 사용으로 원래 크기 복원)
+#define EVENT_QUEUE_SIZE 32  // PSRAM에 할당되므로 내부 RAM 영향 없음
 #define MAX_SUBSCRIBERS_PER_EVENT 8
 
 // 구독자 정보
@@ -30,6 +31,9 @@ typedef struct {
     TaskHandle_t handler_task;
     subscriber_t subscribers[_EVT_MAX][MAX_SUBSCRIBERS_PER_EVENT];
     bool initialized;
+    // PSRAM 버퍼 (큐만 PSRAM 사용, 태스크는 내부 RAM)
+    uint8_t *queue_storage;
+    StaticQueue_t *queue_buffer;
 } event_bus_t;
 
 static event_bus_t g_event_bus = {0};
@@ -142,12 +146,41 @@ esp_err_t event_bus_init(void) {
         return ESP_OK;
     }
 
-    // 큐 생성
-    g_event_bus.queue = xQueueCreate(EVENT_QUEUE_SIZE, sizeof(event_data_t));
-    if (g_event_bus.queue == NULL) {
-        T_LOGE(TAG, "Failed to create event queue");
+    // PSRAM에 큐 스토리지 할당 (24KB 절약)
+    g_event_bus.queue_storage = (uint8_t*)heap_caps_malloc(
+        EVENT_QUEUE_SIZE * sizeof(event_data_t),
+        MALLOC_CAP_SPIRAM
+    );
+    if (g_event_bus.queue_storage == NULL) {
+        T_LOGE(TAG, "Failed to allocate PSRAM for queue storage");
         return ESP_FAIL;
     }
+
+    g_event_bus.queue_buffer = (StaticQueue_t*)heap_caps_malloc(
+        sizeof(StaticQueue_t),
+        MALLOC_CAP_SPIRAM
+    );
+    if (g_event_bus.queue_buffer == NULL) {
+        T_LOGE(TAG, "Failed to allocate PSRAM for queue buffer");
+        heap_caps_free(g_event_bus.queue_storage);
+        return ESP_FAIL;
+    }
+
+    // 정적 큐 생성 (PSRAM 사용)
+    g_event_bus.queue = xQueueCreateStatic(
+        EVENT_QUEUE_SIZE,
+        sizeof(event_data_t),
+        g_event_bus.queue_storage,
+        g_event_bus.queue_buffer
+    );
+    if (g_event_bus.queue == NULL) {
+        T_LOGE(TAG, "Failed to create event queue");
+        heap_caps_free(g_event_bus.queue_buffer);
+        heap_caps_free(g_event_bus.queue_storage);
+        return ESP_FAIL;
+    }
+    T_LOGI(TAG, "Event queue created in PSRAM (%zu bytes)",
+           EVENT_QUEUE_SIZE * sizeof(event_data_t));
 
     // 뮤텍스 생성
     g_event_bus.mutex = xSemaphoreCreateMutex();
@@ -160,9 +193,10 @@ esp_err_t event_bus_init(void) {
     // 구독자 테이블 초기화
     memset(g_event_bus.subscribers, 0, sizeof(g_event_bus.subscribers));
 
-    // 이벤트 처리 태스크 생성 (스택 크기 증가: 4096 → 12288 → 16384)
-    // 콜백 체인이 깊어 스택 부족 현상 발생으로 증가
+    // 이벤트 처리 태스크 생성 (내부 RAM 스택 사용)
+    // 콜백 체인이 깊어 스택 부족 현상 발생으로 16KB로 증가
     // 우선순위: Tally 이벤트 지연 방지를 위해 SwitcherService와 동일하게 유지
+    // 주의: PSRAM 스택은 SPI flash 작업 중 접근 불가하므로 내부 RAM 사용
 #ifdef DEVICE_MODE_RX
     #define EVENT_BUS_PRIORITY 8  // RX: LED 업데이트 실시간 반응 최우선
 #else
@@ -181,9 +215,11 @@ esp_err_t event_bus_init(void) {
     if (ret != pdPASS) {
         T_LOGE(TAG, "Failed to create event handler task");
         vSemaphoreDelete(g_event_bus.mutex);
-        vQueueDelete(g_event_bus.queue);
+        heap_caps_free(g_event_bus.queue_buffer);
+        heap_caps_free(g_event_bus.queue_storage);
         return ESP_FAIL;
     }
+    T_LOGI(TAG, "Event handler task created (internal RAM stack)");
 
     g_event_bus.initialized = true;
     return ESP_OK;
