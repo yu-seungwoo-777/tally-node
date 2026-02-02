@@ -12,6 +12,7 @@
 #include "hardware_service.h"
 #include "license_service.h"
 #include "DisplayManager.h"
+#include "BootPage.h"
 #include "TxPage.h"
 #include "button_service.h"
 #include "switcher_service.h"
@@ -450,6 +451,9 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     config_device_t device_config;
     // 칩 감지 후 기본값 결정
     lora_chip_type_t chip = lora_driver_detect_chip();
+
+    // BootPage에 칩 타입 전달 (주파수 표시용)
+    boot_page_set_chip_type((uint8_t)chip);
 
     if (config_service_get_device(&device_config, chip) == ESP_OK) {
         T_LOGI(TAG, "RF config loaded: %.1f MHz, Sync 0x%02X, SF%d, CR%d, BW%.0f, TXP%ddBm",
