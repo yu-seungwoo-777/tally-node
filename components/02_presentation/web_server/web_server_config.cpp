@@ -10,6 +10,61 @@
 
 static const char* TAG = "02_WS_Config";
 
+// ============================================================================
+// IP 주소 검증 함수
+// ============================================================================
+
+/**
+ * @brief IPv4 주소 형식 검증
+ * @param ip IP 주소 문자열
+ * @return true 유효한 IPv4 주소, false 잘못된 주소
+ */
+static bool is_valid_ipv4(const char* ip)
+{
+    if (!ip || ip[0] == '\0') {
+        return true;  // 빈 문자열 허용 (미설정)
+    }
+
+    // 길이 체크 (최소 7자: "0.0.0.0", 최대 15자: "255.255.255.255")
+    size_t len = strlen(ip);
+    if (len < 7 || len > 15) {
+        return false;
+    }
+
+    // 옥텟 분리 및 검증
+    int octet_count = 0;
+    int dot_count = 0;
+    int current_value = 0;
+    bool has_digit = false;
+
+    for (size_t i = 0; i <= len; i++) {
+        if (i == len || ip[i] == '.') {
+            // 옥텟 끝 또는 점을 만남
+            if (!has_digit) {
+                return false;  // 점 연속 또는 숫자 없음
+            }
+            if (current_value > 255) {
+                return false;  // 옥텟 값 초과
+            }
+            octet_count++;
+            current_value = 0;
+            has_digit = false;
+
+            if (i < len && ip[i] == '.') {
+                dot_count++;
+            }
+        } else if (ip[i] >= '0' && ip[i] <= '9') {
+            current_value = current_value * 10 + (ip[i] - '0');
+            has_digit = true;
+        } else {
+            return false;  // 잘못된 문자
+        }
+    }
+
+    // 4개 옥텟, 3개 점
+    return (octet_count == 4 && dot_count == 3);
+}
+
 extern "C" {
 
 // ============================================================================
@@ -174,21 +229,58 @@ esp_err_t web_server_config_parse_network_ethernet(cJSON* root, config_save_requ
     cJSON* dhcp = cJSON_GetObjectItem(root, "dhcp");
     cJSON* enabled = cJSON_GetObjectItem(root, "enabled");
 
+    // DHCP가 아닌 경우에만 IP 검증
+    bool use_dhcp = true;  // 기본값
     if (dhcp && cJSON_IsBool(dhcp)) {
-        save_req->eth_dhcp = cJSON_IsTrue(dhcp);
+        use_dhcp = cJSON_IsTrue(dhcp);
+        save_req->eth_dhcp = use_dhcp;
     }
-    if (ip && cJSON_IsString(ip)) {
-        strncpy(save_req->eth_static_ip, ip->valuestring,
-               sizeof(save_req->eth_static_ip) - 1);
+
+    if (!use_dhcp) {
+        // Static IP 모드: IP, gateway, netmask 모두 필수검증
+        if (ip && cJSON_IsString(ip)) {
+            if (!is_valid_ipv4(ip->valuestring)) {
+                T_LOGW(TAG, "Invalid static IP: %s", ip->valuestring);
+                return ESP_ERR_INVALID_ARG;
+            }
+            strncpy(save_req->eth_static_ip, ip->valuestring,
+                   sizeof(save_req->eth_static_ip) - 1);
+        } else {
+            // 필수값 누락
+            T_LOGW(TAG, "Static IP required but not provided");
+            return ESP_ERR_INVALID_ARG;
+        }
+
+        if (gateway && cJSON_IsString(gateway)) {
+            if (!is_valid_ipv4(gateway->valuestring)) {
+                T_LOGW(TAG, "Invalid gateway: %s", gateway->valuestring);
+                return ESP_ERR_INVALID_ARG;
+            }
+            strncpy(save_req->eth_gateway, gateway->valuestring,
+                   sizeof(save_req->eth_gateway) - 1);
+        } else {
+            T_LOGW(TAG, "Gateway required but not provided");
+            return ESP_ERR_INVALID_ARG;
+        }
+
+        if (netmask && cJSON_IsString(netmask)) {
+            if (!is_valid_ipv4(netmask->valuestring)) {
+                T_LOGW(TAG, "Invalid netmask: %s", netmask->valuestring);
+                return ESP_ERR_INVALID_ARG;
+            }
+            strncpy(save_req->eth_netmask, netmask->valuestring,
+                   sizeof(save_req->eth_netmask) - 1);
+        } else {
+            T_LOGW(TAG, "Netmask required but not provided");
+            return ESP_ERR_INVALID_ARG;
+        }
+    } else {
+        // DHCP 모드: IP 필드가 있어도 무시
+        save_req->eth_static_ip[0] = '\0';
+        save_req->eth_gateway[0] = '\0';
+        save_req->eth_netmask[0] = '\0';
     }
-    if (gateway && cJSON_IsString(gateway)) {
-        strncpy(save_req->eth_gateway, gateway->valuestring,
-               sizeof(save_req->eth_gateway) - 1);
-    }
-    if (netmask && cJSON_IsString(netmask)) {
-        strncpy(save_req->eth_netmask, netmask->valuestring,
-               sizeof(save_req->eth_netmask) - 1);
-    }
+
     if (enabled && cJSON_IsBool(enabled)) {
         save_req->eth_enabled = cJSON_IsTrue(enabled);
     }
