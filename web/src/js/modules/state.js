@@ -70,7 +70,8 @@ export function stateModule() {
             temperature: 0,
             uptime: 0,
             freeHeap: 0,
-            version: '2.0.1'
+            version: '2.0.1',
+            loraChipType: 1  // 1=SX1262_868M, 2=SX1268_433M
         },
 
         // 설정 데이터
@@ -152,6 +153,14 @@ export function stateModule() {
             });
 
             await this.fetchStatus();
+
+            // 브로드캐스트 모듈 초기화 (칩 타입별 주파수 설정)
+            // DOM 업데이트를 위해 nextTick 사용
+            this.$nextTick(() => {
+                if (this.initBroadcastModule) {
+                    this.initBroadcastModule();
+                }
+            });
 
             // 디바이스 모듈 초기화
             await this.initDevices();
@@ -241,6 +250,7 @@ export function stateModule() {
                     this.system.voltage = data.system.voltage || 0;
                     this.system.temperature = data.system.temperature || 0;
                     this.system.uptime = data.system.uptime || 0;
+                    this.system.loraChipType = data.system.loraChipType || 1;
                     // 펌웨어 버전 (API에서 가져옴)
                     this.system.version = data.system.version || '2.0.1';
                 }

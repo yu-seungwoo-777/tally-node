@@ -5,17 +5,28 @@
 
 export function broadcastModule() {
     return {
-        // Broadcast 주파수 프리셋 (EoRa-S3-900TB: 850-930MHz)
-        channelPresets: {
-            frequencies: [850.0, 860.0, 868.0, 870.0, 880.0, 900.0, 915.0, 925.0, 930.0]
+        // Broadcast 주파수 프리셋 (함수로 변경 - 반응형)
+        getChannelPresets() {
+            const is433 = this.system?.loraChipType === 2;
+            return {
+                frequencies: is433
+                    ? [410.0, 433.0, 450.0, 470.0, 490.0]
+                    : [850.0, 860.0, 868.0, 870.0, 880.0, 900.0, 915.0, 925, 930.0]
+            };
+        },
+
+        // 채널 스캔 범위 (함수로 변경 - 반응형)
+        getScanRange() {
+            const is433 = this.system?.loraChipType === 2;
+            return is433
+                ? { start: 410.0, end: 493.0, name: '433MHz' }
+                : { start: 850.0, end: 930.0, name: '868MHz' };
         },
 
         // 채널 스캔 상태
         channelScan: {
             scanning: false,
             progress: 0,
-            startFreq: 850.0,
-            endFreq: 930.0,
             step: 1.0,
             results: [],
             recommendation: null,
@@ -64,7 +75,7 @@ export function broadcastModule() {
         },
 
         /**
-         * 채널 주파수 스캔 시작 (850-930 MHz, 1MHz step)
+         * 채널 주파수 스캔 시작 (칩 타입에 따라 동적 범위)
          */
         async startChannelScan() {
             try {
@@ -73,18 +84,19 @@ export function broadcastModule() {
                 this.channelScan.results = [];
                 this.channelScan.recommendation = null;
 
+                const range = this.getScanRange();
                 const res = await fetch('/api/lora/scan/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        startFreq: 850.0,
-                        endFreq: 930.0,
+                        startFreq: range.start,
+                        endFreq: range.end,
                         step: 1.0
                     })
                 });
                 const data = await res.json();
                 if (data.status === 'ok') {
-                    this.showToast('Scanning 850-930 MHz...', 'alert-info');
+                    this.showToast(`Scanning ${range.start}-${range.end} MHz (${range.name})...`, 'alert-info');
                     this.startChannelScanPolling();
                 } else {
                     this.channelScan.scanning = false;
@@ -192,7 +204,6 @@ export function broadcastModule() {
             // 가장 조용한 채널 찾기
             const sortedByRssi = [...this.channelScan.results].sort((a, b) => a.rssi - b.rssi);
             const quietest = sortedByRssi[0];
-            const quietestRssi = quietest.rssi;
 
             // 현재 채널 상태 확인
             if (currentResult) {

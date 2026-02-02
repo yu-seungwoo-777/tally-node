@@ -59,7 +59,9 @@
         temperature: 0,
         uptime: 0,
         freeHeap: 0,
-        version: "2.0.1"
+        version: "2.0.1",
+        loraChipType: 1
+        // 1=SX1262_868M, 2=SX1268_433M
       },
       // 설정 데이터
       config: {
@@ -131,6 +133,11 @@
           }
         });
         await this.fetchStatus();
+        this.$nextTick(() => {
+          if (this.initBroadcastModule) {
+            this.initBroadcastModule();
+          }
+        });
         await this.initDevices();
         await this.initLicense();
         this.startStatusPolling();
@@ -198,6 +205,7 @@
             this.system.voltage = data.system.voltage || 0;
             this.system.temperature = data.system.temperature || 0;
             this.system.uptime = data.system.uptime || 0;
+            this.system.loraChipType = data.system.loraChipType || 1;
             this.system.version = data.system.version || "2.0.1";
           }
           if (data.switcher) {
@@ -881,16 +889,22 @@
   // src/js/modules/broadcast.js
   function broadcastModule() {
     return {
-      // Broadcast 주파수 프리셋 (EoRa-S3-900TB: 850-930MHz)
-      channelPresets: {
-        frequencies: [850, 860, 868, 870, 880, 900, 915, 925, 930]
+      // Broadcast 주파수 프리셋 (함수로 변경 - 반응형)
+      getChannelPresets() {
+        const is433 = this.system?.loraChipType === 2;
+        return {
+          frequencies: is433 ? [410, 433, 450, 470, 490] : [850, 860, 868, 870, 880, 900, 915, 925, 930]
+        };
+      },
+      // 채널 스캔 범위 (함수로 변경 - 반응형)
+      getScanRange() {
+        const is433 = this.system?.loraChipType === 2;
+        return is433 ? { start: 410, end: 493, name: "433MHz" } : { start: 850, end: 930, name: "868MHz" };
       },
       // 채널 스캔 상태
       channelScan: {
         scanning: false,
         progress: 0,
-        startFreq: 850,
-        endFreq: 930,
         step: 1,
         results: [],
         recommendation: null,
@@ -933,7 +947,7 @@
         }
       },
       /**
-       * 채널 주파수 스캔 시작 (850-930 MHz, 1MHz step)
+       * 채널 주파수 스캔 시작 (칩 타입에 따라 동적 범위)
        */
       async startChannelScan() {
         try {
@@ -941,18 +955,19 @@
           this.channelScan.progress = 0;
           this.channelScan.results = [];
           this.channelScan.recommendation = null;
+          const range = this.getScanRange();
           const res = await fetch("/api/lora/scan/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              startFreq: 850,
-              endFreq: 930,
+              startFreq: range.start,
+              endFreq: range.end,
               step: 1
             })
           });
           const data = await res.json();
           if (data.status === "ok") {
-            this.showToast("Scanning 850-930 MHz...", "alert-info");
+            this.showToast(`Scanning ${range.start}-${range.end} MHz (${range.name})...`, "alert-info");
             this.startChannelScanPolling();
           } else {
             this.channelScan.scanning = false;
@@ -1045,7 +1060,6 @@
         }
         const sortedByRssi = [...this.channelScan.results].sort((a, b) => a.rssi - b.rssi);
         const quietest = sortedByRssi[0];
-        const quietestRssi = quietest.rssi;
         if (currentResult) {
           if (currentResult.clearChannel) {
           } else {

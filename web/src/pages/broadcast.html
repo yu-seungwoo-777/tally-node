@@ -55,7 +55,7 @@
 
                                 <!-- Scan Button -->
                                 <button @click="startChannelScan()" :disabled="channelScan.scanning" class="w-full px-4 py-3 text-sm font-medium text-white bg-amber-600 rounded-xl hover:bg-amber-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                    <span x-show="!channelScan.scanning">Start Scan (850-930 MHz)</span>
+                                    <span x-show="!channelScan.scanning" x-text="'Start Scan (' + getScanRange().start + '-' + getScanRange().end + ' MHz)'"></span>
                                     <span x-show="channelScan.scanning">Scanning...</span>
                                 </button>
 
@@ -184,11 +184,11 @@
                                 <!-- Frequency Slider -->
                                 <div>
                                     <label class="block text-sm font-medium text-slate-700 mb-2">Frequency (MHz)</label>
-                                    <input type="range" x-model="form.broadcast.frequency" min="850" max="930" step="1"
+                                    <input type="range" x-model="form.broadcast.frequency" :min="getScanRange().start" :max="getScanRange().end" step="1"
                                            @input="form.broadcast.frequency = Math.round(form.broadcast.frequency)"
                                            class="w-full h-2 bg-slate-200 rounded-full appearance-none cursor-pointer accent-blue-600">
                                     <div class="flex justify-between text-xs text-slate-500 mt-1">
-                                        <template x-for="freq in [850, 860, 868, 870, 880, 900, 915, 925, 930]">
+                                        <template x-for="freq in getChannelPresets().frequencies">
                                             <span :class="{'font-semibold text-blue-600': form.broadcast.frequency === freq}" x-text="freq"></span>
                                         </template>
                                     </div>
