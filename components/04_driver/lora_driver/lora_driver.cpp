@@ -729,9 +729,15 @@ float lora_driver_get_default_frequency(void) {
  * @brief 장착된 LoRa 칩 타입 감지 (초기화 없이)
  *
  * 드라이버 초기화 전에 칩 타입만 확인하여 기본값 설정에 사용
+ * 감지된 module는 s_module에 저장하여 lora_driver_init()에서 재사용
  */
 lora_chip_type_t lora_driver_detect_chip(void) {
     T_LOGD(TAG, "detect:chip");
+
+    // 이미 초기화된 경우 감지 생략
+    if (s_initialized) {
+        return s_chip_type;
+    }
 
     // HAL 초기화
     esp_err_t ret = lora_hal_init();
@@ -746,9 +752,9 @@ lora_chip_type_t lora_driver_detect_chip(void) {
         return LORA_CHIP_UNKNOWN;
     }
 
-    // Module 생성 (감지 전용)
-    Module* module = new Module(hal, EORA_S3_LORA_CS, EORA_S3_LORA_DIO1,
-                               EORA_S3_LORA_RST, EORA_S3_LORA_BUSY);
+    // Module 생성 (s_module에 저장하여 재사용)
+    s_module = new Module(hal, EORA_S3_LORA_CS, EORA_S3_LORA_DIO1,
+                         EORA_S3_LORA_RST, EORA_S3_LORA_BUSY);
 
     // 기본 RF 파라미터
     uint8_t sf = 7, cr = 7, sw = 0x12;
@@ -759,11 +765,12 @@ lora_chip_type_t lora_driver_detect_chip(void) {
 
     // SX1262 시도
     T_LOGD(TAG, "detect:sx1262");
-    SX1262* radio_1262 = new SX1262(module);
+    SX1262* radio_1262 = new SX1262(s_module);
     int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
 
     if (state == RADIOLIB_ERR_NONE) {
         detected = LORA_CHIP_SX1262_868M;
+        s_chip_type = LORA_CHIP_SX1262_868M;
         T_LOGI(TAG, "detected: SX1262 (868MHz)");
         delete radio_1262;
     } else {
@@ -771,19 +778,22 @@ lora_chip_type_t lora_driver_detect_chip(void) {
         delete radio_1262;
 
         // SX1268 시도
-        SX1268* radio_1268 = new SX1268(module);
+        SX1268* radio_1268 = new SX1268(s_module);
         state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
 
         if (state == RADIOLIB_ERR_NONE) {
             detected = LORA_CHIP_SX1268_433M;
+            s_chip_type = LORA_CHIP_SX1268_433M;
             T_LOGI(TAG, "detected: SX1268 (433MHz)");
             delete radio_1268;
+        } else {
+            // 감지 실패 시 module 정리
+            delete s_module;
+            s_module = nullptr;
         }
     }
 
-    // 정리 (module만 삭제, HAL은 유지)
-    delete module;
-    // HAL은 초기화 상태로 유지 (lora_driver_init()에서 재사용)
+    // HAL과 module는 유지 (lora_driver_init()에서 재사용)
 
     return detected;
 }
