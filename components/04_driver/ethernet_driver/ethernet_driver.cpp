@@ -168,17 +168,10 @@ esp_err_t EthernetDriver::init(bool dhcp_enabled,
     // Ethernet 시작
     ret = ethernet_hal_start();
     if (ret != ESP_OK) {
-        if (ret == ESP_ERR_NOT_FOUND) {
-            // W5500 칩 없음 - WiFi 전용 모드
-            T_LOGI(TAG, "w5500:not_found:wifi_only_mode");
-            s_initialized = true;
-            return ESP_OK;
-        }
         T_LOGD(TAG, "start:0x%x", ret);
-        return ret;
     }
 
-    // IP 모드 설정 (W5500이 있는 경우만)
+    // IP 모드 설정
     if (s_dhcp_mode) {
         ethernet_hal_enable_dhcp();
     } else {
