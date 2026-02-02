@@ -37,7 +37,11 @@
 // LoRa 기본값
 // ============================================================================
 
-#define NVS_LORA_DEFAULT_FREQ         868.0f
+// 주파수 대역별 기본값 (SX1262: 868MHz, SX1268: 433MHz)
+#define NVS_LORA_DEFAULT_FREQ_868     868.0f
+#define NVS_LORA_DEFAULT_FREQ_433     433.0f
+
+// 공통 RF 설정
 #define NVS_LORA_DEFAULT_SYNC_WORD    0x12
 #define NVS_LORA_DEFAULT_SF           7         // SF7
 #define NVS_LORA_DEFAULT_CR           7         // CR 4/7
