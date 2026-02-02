@@ -1,6 +1,28 @@
 {
   "versions": [
     {
+      "version": "2.3.0",
+      "date": "2026-02-02",
+      "tx": {
+        "ko": {
+          "title": "LoRa 칩 타입별 주파수 대역 지원",
+          "changes": [
+            "433MHz/868MHz LoRa 모듈 자동 감지",
+            "칩 타입별 주파수 대역 동적 설정",
+            "Ethernet Static IP 검증 강화"
+          ]
+        },
+        "en": {
+          "title": "LoRa Chip Type Specific Frequency Band Support",
+          "changes": [
+            "Auto-detection of 433MHz/868MHz LoRa modules",
+            "Dynamic frequency range setting by chip type",
+            "Enhanced Ethernet Static IP validation"
+          ]
+        }
+      }
+    },
+    {
       "version": "2.2.0",
       "date": "2026-02-02",
       "tx": {
