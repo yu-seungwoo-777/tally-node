@@ -1286,7 +1286,7 @@ esp_err_t ConfigServiceClass::loadAll(config_all_t* config)
 
     getWiFiSTA(&config->wifi_sta);
     getEthernet(&config->ethernet);
-    getDevice(&config->device);
+    getDevice(&config->device, LORA_CHIP_UNKNOWN);  // 내부 호출: 기본값 868MHz
     getPrimary(&config->primary);
     getSecondary(&config->secondary);
     config->dual_enabled = getDualEnabled();
@@ -1915,7 +1915,7 @@ esp_err_t ConfigServiceClass::setBrightness(uint8_t brightness)
 esp_err_t ConfigServiceClass::setBrightnessInternal(uint8_t brightness)
 {
     config_device_t dev;
-    esp_err_t ret = getDevice(&dev);
+    esp_err_t ret = getDevice(&dev, LORA_CHIP_UNKNOWN);
     if (ret != ESP_OK && ret != 0x105) {
         return ret;
     }
@@ -1928,7 +1928,7 @@ esp_err_t ConfigServiceClass::setBrightnessInternal(uint8_t brightness)
 esp_err_t ConfigServiceClass::setCameraIdInternal(uint8_t camera_id)
 {
     config_device_t dev;
-    esp_err_t ret = getDevice(&dev);
+    esp_err_t ret = getDevice(&dev, LORA_CHIP_UNKNOWN);
     if (ret != ESP_OK && ret != 0x105) {
         return ret;
     }
@@ -1954,7 +1954,7 @@ esp_err_t ConfigServiceClass::setCameraId(uint8_t camera_id)
 uint8_t ConfigServiceClass::getCameraId(void)
 {
     config_device_t dev;
-    esp_err_t ret = getDevice(&dev);
+    esp_err_t ret = getDevice(&dev, LORA_CHIP_UNKNOWN);
     if (ret != ESP_OK) {
         return 1;  // 기본값
     }
@@ -1964,7 +1964,7 @@ uint8_t ConfigServiceClass::getCameraId(void)
 esp_err_t ConfigServiceClass::setRf(float frequency, uint8_t sync_word)
 {
     config_device_t dev;
-    esp_err_t ret = getDevice(&dev);
+    esp_err_t ret = getDevice(&dev, LORA_CHIP_UNKNOWN);
     if (ret != ESP_OK && ret != 0x105) {
         return ret;
     }
