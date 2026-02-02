@@ -781,9 +781,9 @@ lora_chip_type_t lora_driver_detect_chip(void) {
         }
     }
 
-    // 정리
+    // 정리 (module만 삭제, HAL은 유지)
     delete module;
-    lora_hal_deinit();
+    // HAL은 초기화 상태로 유지 (lora_driver_init()에서 재사용)
 
     return detected;
 }
