@@ -37,7 +37,8 @@ static const char* TAG __attribute__((unused)) = "04_LoRa";
 #define LORA_DEFAULT_SYNC_WORD  0x12
 
 // 칩 타입 이름 (표시용)
-#define LORA_CHIP_900_NAME      "SX1262 (868MHz)"
+#define LORA_CHIP_1262_NAME     "SX1262 (868MHz)"
+#define LORA_CHIP_1268_NAME     "SX1268 (433MHz)"
 
 // =============================================================================
 // 정적 변수
@@ -218,22 +219,35 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     s_module = new Module(hal, EORA_S3_LORA_CS, EORA_S3_LORA_DIO1,
                          EORA_S3_LORA_RST, EORA_S3_LORA_BUSY);
 
-    // 칩 자동 감지: SX1262 먼저 시도 (900TB 모듈)
+    // 칩 자동 감지: SX1262 → SX1268 순차 시도
     T_LOGD(TAG, "detect:sx1262");
     SX1262* radio_1262 = new SX1262(s_module);
-    // begin()은 임시 주파수로 초기화 (나중에 setFrequency()로 NVS 값 적용)
+    // begin()은 칩에 맞는 임시 주파수로 초기화
     int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
 
     if (state == RADIOLIB_ERR_NONE) {
         s_radio = radio_1262;
-        s_chip_type = LORA_CHIP_SX1262_433M;
-        T_LOGD(TAG, "ok:sx1262");
+        s_chip_type = LORA_CHIP_SX1262_868M;
+        T_LOGI(TAG, "chip: SX1262 (868MHz)");
     } else {
-        T_LOGE(TAG, "fail:detect:0x%x", state);
+        T_LOGD(TAG, "detect:sx1268");
         delete radio_1262;
-        delete s_module;
-        s_module = nullptr;
-        return ESP_FAIL;
+
+        // SX1268 시도
+        SX1268* radio_1268 = new SX1268(s_module);
+        state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+
+        if (state == RADIOLIB_ERR_NONE) {
+            s_radio = radio_1268;
+            s_chip_type = LORA_CHIP_SX1268_433M;
+            T_LOGI(TAG, "chip: SX1268 (433MHz)");
+        } else {
+            T_LOGE(TAG, "fail:detect:both_chips");
+            delete radio_1268;
+            delete s_module;
+            s_module = nullptr;
+            return ESP_FAIL;
+        }
     }
 
     // NVS 주파수로 설정
@@ -414,8 +428,10 @@ lora_status_t lora_driver_get_status(void) {
  */
 const char* lora_driver_get_chip_name(void) {
     switch (s_chip_type) {
-        case LORA_CHIP_SX1262_433M:
-            return LORA_CHIP_900_NAME;   // SX1262 (868MHz)
+        case LORA_CHIP_SX1262_868M:
+            return LORA_CHIP_1262_NAME;   // SX1262 (868MHz)
+        case LORA_CHIP_SX1268_433M:
+            return LORA_CHIP_1268_NAME;   // SX1268 (433MHz)
         default:
             return "Unknown";
     }
@@ -691,6 +707,83 @@ esp_err_t lora_driver_set_sync_word(uint8_t sync_word) {
         return ESP_OK;
     }
     return ESP_FAIL;
+}
+
+/**
+ * @brief 감지된 칩 타입에 따른 기본 주파수 반환
+ */
+float lora_driver_get_default_frequency(void) {
+    switch (s_chip_type) {
+        case LORA_CHIP_SX1262_868M:
+            return 868.0f;
+        case LORA_CHIP_SX1268_433M:
+            return 433.0f;
+        default:
+            return 868.0f;  // 폴백
+    }
+}
+
+/**
+ * @brief 장착된 LoRa 칩 타입 감지 (초기화 없이)
+ *
+ * 드라이버 초기화 전에 칩 타입만 확인하여 기본값 설정에 사용
+ */
+lora_chip_type_t lora_driver_detect_chip(void) {
+    T_LOGD(TAG, "detect:chip");
+
+    // HAL 초기화
+    esp_err_t ret = lora_hal_init();
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "detect:fail:hal:0x%x", ret);
+        return LORA_CHIP_UNKNOWN;
+    }
+
+    RadioLibHal* hal = lora_hal_get_instance();
+    if (hal == nullptr) {
+        T_LOGE(TAG, "detect:fail:hal_null");
+        return LORA_CHIP_UNKNOWN;
+    }
+
+    // Module 생성 (감지 전용)
+    Module* module = new Module(hal, EORA_S3_LORA_CS, EORA_S3_LORA_DIO1,
+                               EORA_S3_LORA_RST, EORA_S3_LORA_BUSY);
+
+    // 기본 RF 파라미터
+    uint8_t sf = 7, cr = 7, sw = 0x12;
+    float bw = 250.0f;
+    int8_t txp = 22;
+
+    lora_chip_type_t detected = LORA_CHIP_UNKNOWN;
+
+    // SX1262 시도
+    T_LOGD(TAG, "detect:sx1262");
+    SX1262* radio_1262 = new SX1262(module);
+    int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+
+    if (state == RADIOLIB_ERR_NONE) {
+        detected = LORA_CHIP_SX1262_868M;
+        T_LOGI(TAG, "detected: SX1262 (868MHz)");
+        delete radio_1262;
+    } else {
+        T_LOGD(TAG, "detect:sx1268");
+        delete radio_1262;
+
+        // SX1268 시도
+        SX1268* radio_1268 = new SX1268(module);
+        state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+
+        if (state == RADIOLIB_ERR_NONE) {
+            detected = LORA_CHIP_SX1268_433M;
+            T_LOGI(TAG, "detected: SX1268 (433MHz)");
+            delete radio_1268;
+        }
+    }
+
+    // 정리
+    delete module;
+    lora_hal_deinit();
+
+    return detected;
 }
 
 /**

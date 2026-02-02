@@ -21,7 +21,8 @@ extern "C" {
 // LoRa 칩 타입
 typedef enum {
     LORA_CHIP_UNKNOWN = 0,
-    LORA_CHIP_SX1262_433M = 1   // SX1262 (868MHz) - 900TB
+    LORA_CHIP_SX1262_868M = 1,  // SX1262 (868MHz)
+    LORA_CHIP_SX1268_433M = 2,  // SX1268 (433MHz)
 } lora_chip_type_t;
 
 // LoRa 설정
@@ -128,6 +129,22 @@ esp_err_t lora_driver_set_frequency(float freq_mhz);
  * @brief Sync Word 변경
  */
 esp_err_t lora_driver_set_sync_word(uint8_t sync_word);
+
+/**
+ * @brief 감지된 칩 타입에 따른 기본 주파수 반환
+ * @return MHz (SX1262: 868, SX1268: 433, UNKNOWN: 868)
+ */
+float lora_driver_get_default_frequency(void);
+
+/**
+ * @brief 장착된 LoRa 칩 타입 감지 (초기화 없이)
+ *
+ * 드라이버 초기화 전에 칩 타입만 확인하여 기본값 설정에 사용
+ * 내부적으로 HAL 초기화 및 칩 감지 후 정리
+ *
+ * @return lora_chip_type_t 감지된 칩 타입
+ */
+lora_chip_type_t lora_driver_detect_chip(void);
 
 // 채널 정보 (스캔 결과)
 typedef struct {

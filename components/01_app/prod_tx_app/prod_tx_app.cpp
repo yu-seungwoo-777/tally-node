@@ -17,6 +17,7 @@
 #include "switcher_service.h"
 #include "network_service.h"
 #include "lora_service.h"
+#include "lora_driver.h"
 #include "device_manager.h"
 #include "web_server.h"
 #include "tally_test_service.h"
@@ -447,8 +448,11 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
 
     // LoRa 초기화 (NVS에 저장된 RF 설정 사용)
     config_device_t device_config;
-    // 기본값 (NVSConfig.h)
-    float saved_freq = NVS_LORA_DEFAULT_FREQ;
+    // 칩 감지 후 기본값 결정
+    lora_chip_type_t chip = lora_driver_detect_chip();
+    float default_freq = (chip == LORA_CHIP_SX1268_433M) ? NVS_LORA_DEFAULT_FREQ_433 : NVS_LORA_DEFAULT_FREQ_868;
+
+    float saved_freq = default_freq;
     uint8_t saved_sync = NVS_LORA_DEFAULT_SYNC_WORD;
     uint8_t saved_sf = NVS_LORA_DEFAULT_SF;
     uint8_t saved_cr = NVS_LORA_DEFAULT_CR;
@@ -465,7 +469,7 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
         T_LOGI(TAG, "RF config loaded: %.1f MHz, Sync 0x%02X, SF%d, CR%d, BW%.0f, TXP%ddBm",
                  saved_freq, saved_sync, saved_sf, saved_cr, saved_bw, saved_txp);
     } else {
-        T_LOGW(TAG, "RF config load failed, using defaults");
+        T_LOGI(TAG, "RF config using chip defaults: %.1f MHz", default_freq);
     }
 
     lora_service_config_t lora_config = {
