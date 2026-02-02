@@ -152,6 +152,21 @@ static void lora_isr_task(void* param) {
                 }
             }
         }
+
+        // Recovery 로직: ISR hang 감지 시 자동 복구
+        if (s_recovery_pending) {
+            T_LOGW(TAG, "ISR hang detected - attempting recovery");
+            s_recovery_pending = false;
+
+            // 수신 모드 재시작
+            int state = s_radio->startReceive();
+            if (state == RADIOLIB_ERR_NONE) {
+                s_last_isr_time_us = esp_timer_get_time();
+                T_LOGI(TAG, "Recovery successful - receive mode restarted");
+            } else {
+                T_LOGE(TAG, "Recovery failed: 0x%x", state);
+            }
+        }
     }
 }
 
