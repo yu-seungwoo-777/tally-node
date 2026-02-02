@@ -60,7 +60,7 @@ public:
     static esp_err_t setEthernetInternal(const config_ethernet_t* config);  // 내부용 (이벤트 미발행)
 
     // Device 설정
-    static esp_err_t getDevice(config_device_t* config);
+    static esp_err_t getDevice(config_device_t* config, lora_chip_type_t chip_type);
     static esp_err_t setDevice(const config_device_t* config);
     static esp_err_t setBrightness(uint8_t brightness);
     static esp_err_t setBrightnessInternal(uint8_t brightness);  // 이벤트 핸들러용 (이벤트 미발행)
@@ -2933,9 +2933,9 @@ esp_err_t config_service_factory_reset(void)
 // Device 설정 API
 // ============================================================================
 
-esp_err_t config_service_get_device(config_device_t* config)
+esp_err_t config_service_get_device(config_device_t* config, lora_chip_type_t chip_type)
 {
-    return ConfigServiceClass::getDevice(config);
+    return ConfigServiceClass::getDevice(config, chip_type);
 }
 
 esp_err_t config_service_set_device(const config_device_t* config)
