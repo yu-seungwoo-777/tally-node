@@ -1720,7 +1720,7 @@ esp_err_t ConfigServiceClass::loadDefaults(config_all_t* config)
     // Device 기본값
     config->device.brightness = NVS_DEVICE_BRIGHTNESS;
     config->device.camera_id = NVS_DEVICE_CAMERA_ID;
-    config->device.rf.frequency = NVS_LORA_DEFAULT_FREQ;
+    config->device.rf.frequency = NVS_LORA_DEFAULT_FREQ_868;
     config->device.rf.sync_word = NVS_LORA_DEFAULT_SYNC_WORD;
     config->device.rf.sf = NVS_LORA_DEFAULT_SF;
     config->device.rf.cr = NVS_LORA_DEFAULT_CR;
@@ -1806,7 +1806,7 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config)
     // 기본값 설정 (NVSConfig)
     config->brightness = NVS_DEVICE_BRIGHTNESS;
     config->camera_id = NVS_DEVICE_CAMERA_ID;
-    config->rf.frequency = NVS_LORA_DEFAULT_FREQ;
+    config->rf.frequency = NVS_LORA_DEFAULT_FREQ_868;
     config->rf.sync_word = NVS_LORA_DEFAULT_SYNC_WORD;
     config->rf.sf = NVS_LORA_DEFAULT_SF;
     config->rf.cr = NVS_LORA_DEFAULT_CR;

@@ -641,11 +641,13 @@ esp_err_t lora_driver_set_frequency(float freq_mhz) {
     }
 
     // 모듈별 주파수 범위 검사
-    // SX1262 (900TB): 850-930 MHz
     bool valid = false;
     switch (s_chip_type) {
-        case LORA_CHIP_SX1262_433M:  // 900TB
+        case LORA_CHIP_SX1262_868M:  // 868MHz 모듈
             valid = (freq_mhz >= 850.0f && freq_mhz <= 930.0f);
+            break;
+        case LORA_CHIP_SX1268_433M:  // 433MHz 모듈
+            valid = (freq_mhz >= 410.0f && freq_mhz <= 525.0f);
             break;
         default:
             break;
