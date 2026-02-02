@@ -22,6 +22,13 @@
 extern "C" {
 #endif
 
+// ========== 페이지 상수 ==========
+
+/**
+ * @brief TX 모드 페이지 수
+ */
+#define TX_PAGE_COUNT 6
+
 /**
  * @brief TxPage 초기화 및 등록
  * @return true 성공, false 실패
@@ -211,6 +218,12 @@ void tx_page_switch_page(uint8_t page);
  * @return 페이지 번호 (1: Tally, 2: Switcher, 3: AP, 4: WIFI, 5: ETHERNET, 6: System)
  */
 uint8_t tx_page_get_current_page(void);
+
+/**
+ * @brief 전체 페이지 수 가져오기
+ * @return 페이지 수 (TX_PAGE_COUNT)
+ */
+uint8_t tx_page_get_page_count(void);
 
 #ifdef __cplusplus
 }

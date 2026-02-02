@@ -148,3 +148,4 @@ dist/
 # Updated: 2026-01-10
 .uv-cache/
 .uv_cache/
+.claude/plans/

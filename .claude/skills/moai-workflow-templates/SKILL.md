@@ -1,44 +1,33 @@
 ---
 name: moai-workflow-templates
-aliases: [moai-workflow-templates]
-description: Enterprise template management with code boilerplates, feedback templates, and project optimization workflows
-version: 3.1.0
-category: workflow
-modularized: true
+description: >
+  Enterprise template management with code boilerplates, feedback templates,
+  and project optimization workflows
+license: Apache-2.0
+compatibility: Designed for Claude Code
+allowed-tools: Read Write Edit Grep Glob mcp__context7__resolve-library-id mcp__context7__get-library-docs
 user-invocable: false
-tags:
-  [
-    "workflow",
-    "templates",
-    "boilerplate",
-    "scaffolding",
-    "optimization",
-    "feedback",
-  ]
-status: "active"
-replaces: moai-core-code-templates, moai-core-feedback-templates, moai-project-template-optimizer
-updated: 2026-01-11
+metadata:
+  version: "3.1.0"
+  category: "workflow"
+  status: "active"
+  updated: "2026-01-11"
+  modularized: "true"
+  tags: "workflow, templates, boilerplate, scaffolding, optimization, feedback"
+  aliases: "moai-workflow-templates"
+  replaces: "moai-core-code-templates, moai-core-feedback-templates, moai-project-template-optimizer"
 
-# Progressive Disclosure Configuration
+# MoAI Extension: Progressive Disclosure
 progressive_disclosure:
   enabled: true
   level1_tokens: 100
   level2_tokens: 5000
 
-# Trigger Conditions for Level 2 Loading
+# MoAI Extension: Triggers
 triggers:
   keywords: ["template", "boilerplate", "scaffolding", "code template", "project template", "feedback template", "GitHub issue", "template optimization"]
   phases: ["plan"]
   agents: ["manager-project", "builder-command", "builder-skill"]
-
-allowed-tools:
-  - Read
-  - Write
-  - Edit
-  - Grep
-  - Glob
-  - mcp__context7__resolve-library-id
-  - mcp__context7__get-library-docs
 ---
 
 # Enterprise Template Management

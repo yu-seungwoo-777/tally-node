@@ -18,9 +18,18 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+
+# Ensure UTF-8 output on Windows (cp949/cp1252 cannot encode emoji)
+if sys.platform == "win32":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 from typing import Any
 
 # =============================================================================
@@ -75,13 +84,15 @@ from lib.path_utils import find_project_root  # noqa: E402
 # Import unified timeout manager and Git operations manager
 try:
     from lib.git_operations_manager import GitOperationType, get_git_manager
-    from lib.timeout import TimeoutError as PlatformTimeoutError
     from lib.unified_timeout_manager import (
         HookTimeoutConfig,
         HookTimeoutError,
         TimeoutPolicy,
         get_timeout_manager,
         hook_timeout_context,
+    )
+    from lib.unified_timeout_manager import (
+        TimeoutError as PlatformTimeoutError,
     )
 except ImportError:
     # Fallback implementations if new modules not available
@@ -261,7 +272,7 @@ except ImportError:
             return {}
 
         try:
-            content = file_path.read_text(encoding="utf-8")
+            content = file_path.read_text(encoding="utf-8", errors="replace")
             if HAS_YAML_FALLBACK:
                 return yaml_fallback.safe_load(content) or {}
             else:
@@ -294,7 +305,7 @@ except ImportError:
                 is_safe, _ = check_file_size(json_config_path)
                 if is_safe:
                     try:
-                        config = json.loads(json_config_path.read_text(encoding="utf-8"))
+                        config = json.loads(json_config_path.read_text(encoding="utf-8", errors="replace"))
                     except (json.JSONDecodeError, OSError):
                         config = {}
                 else:
@@ -343,7 +354,7 @@ except ImportError:
 
                 try:
                     # Read spec.md content
-                    content = spec_file.read_text(encoding="utf-8")
+                    content = spec_file.read_text(encoding="utf-8", errors="replace")
 
                     # Parse YAML frontmatter (between --- delimiters)
                     if content.startswith("---"):
@@ -666,7 +677,7 @@ def check_version_update() -> tuple[str, bool]:
 
         if version_cache_file.exists():
             try:
-                cache_data = json.loads(version_cache_file.read_text(encoding="utf-8"))
+                cache_data = json.loads(version_cache_file.read_text(encoding="utf-8", errors="replace"))
                 latest_version = cache_data.get("latest")
             except (json.JSONDecodeError, OSError, UnicodeDecodeError):
                 # Cache file read or JSON parsing errors
@@ -841,7 +852,9 @@ def load_user_personalization() -> dict:
                 "resolved_at": datetime.now().isoformat(),
                 "config_source": config.get("config_source", "default"),
             }
-            personalization_cache_file.write_text(json.dumps(cache_data, ensure_ascii=False, indent=2))
+            personalization_cache_file.write_text(
+                json.dumps(cache_data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
 
         except (OSError, PermissionError):
             # Cache write errors are non-critical
@@ -871,15 +884,13 @@ def load_user_personalization() -> dict:
         has_valid_name = user_name and not user_name.startswith("{{") and not user_name.endswith("}}")
 
         # Get language name
+        # System provides 4 languages: ko, en, ja, zh
+        # Language names are defined in .moai/config/sections/language.yaml
         lang_name_map = {
             "ko": "Korean",
             "en": "English",
             "ja": "Japanese",
             "zh": "Chinese",
-            "es": "Spanish",
-            "fr": "French",
-            "de": "German",
-            "ru": "Russian",
         }
         lang_name = lang_name_map.get(conversation_lang, "Unknown")
 
@@ -905,7 +916,10 @@ def load_user_personalization() -> dict:
         personalization_cache_file = find_project_root() / ".moai" / "cache" / "personalization.json"
         try:
             personalization_cache_file.parent.mkdir(parents=True, exist_ok=True)
-            personalization_cache_file.write_text(json.dumps(personalization, ensure_ascii=False, indent=2))
+            personalization_cache_file.write_text(
+                json.dumps(personalization, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
         except (OSError, PermissionError):
             # Cache write errors are non-critical
             pass
@@ -928,13 +942,17 @@ def format_session_output() -> str:
     # Load user personalization settings
     personalization = load_user_personalization()
 
-    # Get MoAI version from installed package (not config.json)
+    # Get MoAI version from CLI (works with uv tool installations)
     try:
-        from moai_adk import __version__ as installed_version
-
-        moai_version = installed_version
-    except ImportError:
-        # Fallback to config version if package import fails
+        result = subprocess.run(["moai", "--version"], capture_output=True, text=True, check=True, timeout=5)
+        # Extract version number from output (e.g., "MoAI version X.Y.Z" or "X.Y.Z")
+        version_match = re.search(r"(\d+\.\d+\.\d+)", result.stdout)
+        if version_match:
+            moai_version = version_match.group(1)
+        else:
+            moai_version = "unknown"
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
+        # Fallback to config version if CLI fails
         moai_version = "unknown"
         if config:
             moai_version = config.get("moai", {}).get("version", "unknown")
@@ -966,12 +984,12 @@ def format_session_output() -> str:
 
     if personalization.get("needs_setup", False):
         # Show setup guidance (based on conversation_language)
-        # Guide user to generate project documentation with /moai:0-project
+        # Guide user to generate project documentation with /moai project
         setup_messages = {
-            "ko": "   👋 환영합니다! '/moai:0-project' 명령어로 프로젝트 문서를 생성해주세요",
-            "ja": "   👋 ようこそ！'/moai:0-project' コマンドでプロジェクトドキュメントを生成してください",
-            "zh": "   👋 欢迎！请运行 '/moai:0-project' 命令生成项目文档",
-            "en": "   👋 Welcome! Please run '/moai:0-project' to generate project documentation",
+            "ko": "   👋 환영합니다! '/moai project' 명령어로 프로젝트 문서를 생성해주세요",
+            "ja": "   👋 ようこそ！'/moai project' コマンドでプロジェクトドキュメントを生成してください",
+            "zh": "   👋 欢迎！请运行 '/moai project' 命令生成项目文档",
+            "en": "   👋 Welcome! Please run '/moai project' to generate project documentation",
         }
         output.append(setup_messages.get(conv_lang, setup_messages["en"]))
     elif personalization["has_personalization"]:
@@ -1030,12 +1048,6 @@ def main() -> None:
 
     def execute_session_start():
         """Execute session start logic with proper error handling"""
-        # Read JSON payload from stdin (for compatibility)
-        # Handle Docker/non-interactive environments by checking TTY
-        # Note: SessionStart hook receives session info but we don't need it currently
-        input_data = sys.stdin.read() if not sys.stdin.isatty() else "{}"
-        _ = json.loads(input_data) if input_data.strip() else {}  # Explicitly ignore
-
         # Check if setup messages should be shown
         show_messages = should_show_setup_messages()
 
@@ -1096,73 +1108,6 @@ def main() -> None:
             }
             print(json.dumps(error_response, ensure_ascii=False))
             print(f"SessionStart error: {e}", file=sys.stderr)
-            sys.exit(1)
-
-    else:
-        # Fallback to legacy timeout handling
-        try:
-            from lib.timeout import CrossPlatformTimeout
-            from lib.timeout import TimeoutError as PlatformTimeoutError
-
-            # Set 5-second timeout
-            timeout = CrossPlatformTimeout(5)
-            timeout.start()
-
-            try:
-                result = execute_session_start()
-                print(json.dumps(result))
-                sys.exit(0)
-
-            except PlatformTimeoutError:
-                # Timeout - return minimal valid response
-                timeout_response_legacy: dict[str, Any] = {
-                    "continue": True,
-                    "systemMessage": "⚠️ Session start timeout - continuing without project info",
-                }
-                print(json.dumps(timeout_response_legacy))
-                print("SessionStart hook timeout after 5 seconds", file=sys.stderr)
-                sys.exit(1)
-
-            finally:
-                # Always cancel timeout
-                timeout.cancel()
-
-        except ImportError:
-            # No timeout handling available
-            try:
-                result = execute_session_start()
-                print(json.dumps(result))
-                sys.exit(0)
-            except Exception as e:
-                print(
-                    json.dumps(
-                        {
-                            "continue": True,
-                            "systemMessage": "⚠️ Session start completed with errors",
-                            "error": str(e),
-                        }
-                    )
-                )
-                sys.exit(0)
-
-        except json.JSONDecodeError as e:
-            # JSON parse error
-            json_error_response: dict[str, Any] = {
-                "continue": True,
-                "hookSpecificOutput": {"error": f"JSON parse error: {e}"},
-            }
-            print(json.dumps(json_error_response))
-            print(f"SessionStart JSON parse error: {e}", file=sys.stderr)
-            sys.exit(1)
-
-        except Exception as e:
-            # Unexpected error
-            general_error_response: dict[str, Any] = {
-                "continue": True,
-                "hookSpecificOutput": {"error": f"SessionStart error: {e}"},
-            }
-            print(json.dumps(general_error_response))
-            print(f"SessionStart unexpected error: {e}", file=sys.stderr)
             sys.exit(1)
 
 

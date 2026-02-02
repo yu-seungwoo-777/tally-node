@@ -19,6 +19,13 @@
 #include <stdbool.h>
 #include "DisplayManager.h"
 
+// ========== 페이지 상수 ==========
+
+/**
+ * @brief RX 모드 페이지 수
+ */
+#define RX_PAGE_COUNT 3
+
 // Tally 타입 전방 선언 (나중에 tally_types.h로 교체)
 typedef enum {
     TALLY_STATE_OFF = 0,
@@ -144,6 +151,12 @@ void rx_page_switch_page(uint8_t page);
  * @return 페이지 번호 (1: Tally, 2: System, 3: RX Stats)
  */
 uint8_t rx_page_get_current_page(void);
+
+/**
+ * @brief 전체 페이지 수 가져오기
+ * @return 페이지 수 (RX_PAGE_COUNT)
+ */
+uint8_t rx_page_get_page_count(void);
 
 // ========== 카메라 ID 변경 팝업 제어 ==========
 

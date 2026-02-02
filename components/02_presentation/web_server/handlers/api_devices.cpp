@@ -9,6 +9,7 @@
 #include "event_bus.h"
 #include "lora_protocol.h"
 #include "t_log.h"
+#include "esp_heap_caps.h"
 #include "cJSON.h"
 #include <cstring>
 
@@ -100,10 +101,11 @@ esp_err_t api_delete_device_handler(httpd_req_t* req)
     web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
-    char* buf = new char[256];
+    char* buf = (char*)heap_caps_malloc(256, MALLOC_CAP_SPIRAM);
+    if (!buf) buf = new char[256];  // Fallback to internal RAM
     int ret = httpd_req_recv(req, buf, 255);
     if (ret <= 0) {
-        delete[] buf;
+        heap_caps_free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
         return ESP_FAIL;
     }
@@ -160,10 +162,11 @@ esp_err_t api_device_brightness_handler(httpd_req_t* req)
     web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
-    char* buf = new char[256];
+    char* buf = (char*)heap_caps_malloc(256, MALLOC_CAP_SPIRAM);
+    if (!buf) buf = new char[256];  // Fallback to internal RAM
     int ret = httpd_req_recv(req, buf, 255);
     if (ret <= 0) {
-        delete[] buf;
+        heap_caps_free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
         return ESP_FAIL;
     }
@@ -219,10 +222,11 @@ esp_err_t api_device_camera_id_handler(httpd_req_t* req)
     web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
-    char* buf = new char[256];
+    char* buf = (char*)heap_caps_malloc(256, MALLOC_CAP_SPIRAM);
+    if (!buf) buf = new char[256];  // Fallback to internal RAM
     int ret = httpd_req_recv(req, buf, 255);
     if (ret <= 0) {
-        delete[] buf;
+        heap_caps_free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
         return ESP_FAIL;
     }
@@ -280,10 +284,11 @@ esp_err_t api_brightness_broadcast_handler(httpd_req_t* req)
     web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
-    char* buf = new char[256];
+    char* buf = (char*)heap_caps_malloc(256, MALLOC_CAP_SPIRAM);
+    if (!buf) buf = new char[256];  // Fallback to internal RAM
     int ret = httpd_req_recv(req, buf, 255);
     if (ret <= 0) {
-        delete[] buf;
+        heap_caps_free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
         return ESP_FAIL;
     }
@@ -342,10 +347,11 @@ esp_err_t api_device_ping_handler(httpd_req_t* req)
     web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
-    char* buf = new char[256];
+    char* buf = (char*)heap_caps_malloc(256, MALLOC_CAP_SPIRAM);
+    if (!buf) buf = new char[256];  // Fallback to internal RAM
     int ret = httpd_req_recv(req, buf, 255);
     if (ret <= 0) {
-        delete[] buf;
+        heap_caps_free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
         return ESP_FAIL;
     }
@@ -387,10 +393,11 @@ esp_err_t api_device_stop_handler(httpd_req_t* req)
     web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
-    char* buf = new char[256];
+    char* buf = (char*)heap_caps_malloc(256, MALLOC_CAP_SPIRAM);
+    if (!buf) buf = new char[256];  // Fallback to internal RAM
     int ret = httpd_req_recv(req, buf, 255);
     if (ret <= 0) {
-        delete[] buf;
+        heap_caps_free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
         return ESP_FAIL;
     }
@@ -432,10 +439,11 @@ esp_err_t api_device_reboot_handler(httpd_req_t* req)
     web_server_set_cors_headers(req);
 
     // 요청 바디 읽기
-    char* buf = new char[256];
+    char* buf = (char*)heap_caps_malloc(256, MALLOC_CAP_SPIRAM);
+    if (!buf) buf = new char[256];  // Fallback to internal RAM
     int ret = httpd_req_recv(req, buf, 255);
     if (ret <= 0) {
-        delete[] buf;
+        heap_caps_free(buf);
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Failed to read body");
         return ESP_FAIL;
     }

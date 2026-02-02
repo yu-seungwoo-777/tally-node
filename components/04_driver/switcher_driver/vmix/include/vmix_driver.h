@@ -142,8 +142,9 @@ private:
     // 소켓
     int sock_fd_;
 
-    // 버퍼
-    std::array<uint8_t, 4096> rx_buffer_;
+    // 버퍼 (PSRAM 동적 할당)
+    uint8_t* rx_buffer_;
+    static constexpr size_t RX_BUFFER_SIZE = 4096;
 
     // Packed Tally 데이터 (캐시, RAII 래퍼)
     mutable PackedData cached_packed_;

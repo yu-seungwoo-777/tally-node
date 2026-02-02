@@ -202,7 +202,7 @@ static void draw_tx_header(u8g2_t* u8g2)
 
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
     char page_str[8];
-    snprintf(page_str, sizeof(page_str), "%d/6", s_current_page);
+    snprintf(page_str, sizeof(page_str), "%d/%d", s_current_page, TX_PAGE_COUNT);
     u8g2_DrawStr(u8g2, 80, 10, page_str);
 }
 
@@ -720,7 +720,7 @@ extern "C" void tx_page_set_snr(float snr)
 
 extern "C" void tx_page_switch_page(uint8_t page)
 {
-    if (page >= 1 && page <= 6) {
+    if (page >= 1 && page <= TX_PAGE_COUNT) {
         s_current_page = page;
     }
 }
@@ -728,4 +728,9 @@ extern "C" void tx_page_switch_page(uint8_t page)
 extern "C" uint8_t tx_page_get_current_page(void)
 {
     return s_current_page;
+}
+
+extern "C" uint8_t tx_page_get_page_count(void)
+{
+    return TX_PAGE_COUNT;
 }

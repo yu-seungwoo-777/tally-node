@@ -117,9 +117,10 @@ static esp_err_t handle_button_single_click(const event_data_t* event)
 {
     (void)event;
 
-    // TxPage: 1 -> 2 -> 3 -> 4 -> 5 -> 1 순환
+    // TxPage 순환 (1 -> 2 -> ... -> TX_PAGE_COUNT -> 1)
     uint8_t current = display_manager_get_page_index();
-    uint8_t next = (current == 5) ? 1 : (current + 1);
+    uint8_t page_count = tx_page_get_page_count();
+    uint8_t next = (current >= page_count) ? 1 : (current + 1);
     display_manager_switch_page(next);
     display_manager_force_refresh();
     T_LOGD(TAG, "TxPage: %d -> %d", current, next);

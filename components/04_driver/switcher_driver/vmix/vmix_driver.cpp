@@ -7,6 +7,7 @@
 
 #include "vmix_driver.h"
 #include "t_log.h"
+#include "esp_heap_caps.h"
 #include <sys/socket.h>
 #include <sys/poll.h>
 
@@ -35,7 +36,7 @@ VmixDriver::VmixDriver(const VmixConfig& config)
     , state_()
     , conn_state_(CONNECTION_STATE_DISCONNECTED)
     , sock_fd_(-1)
-    , rx_buffer_()
+    , rx_buffer_(nullptr)
     , cached_packed_(TALLY_MAX_CHANNELS)  // RAII 자동 초기화
     , tally_callback_()
     , connection_callback_()
@@ -46,11 +47,27 @@ VmixDriver::VmixDriver(const VmixConfig& config)
     , last_disconnect_time_(0)
     , version_requested_(false)
 {
-    rx_buffer_.fill(0);
+    // PSRAM에 rx_buffer 할당 (4KB)
+    rx_buffer_ = (uint8_t*)heap_caps_malloc(RX_BUFFER_SIZE, MALLOC_CAP_SPIRAM);
+    if (!rx_buffer_) {
+        T_LOGW(TAG, "PSRAM allocation failed, using internal RAM");
+        rx_buffer_ = (uint8_t*)malloc(RX_BUFFER_SIZE);
+    }
+    if (rx_buffer_) {
+        memset(rx_buffer_, 0, RX_BUFFER_SIZE);
+        T_LOGD(TAG, "rx_buffer allocated: %zu bytes (%s)",
+               RX_BUFFER_SIZE,
+               heap_caps_get_free_size(MALLOC_CAP_SPIRAM) > 0 ? "PSRAM" : "Internal RAM");
+    }
 }
 
 VmixDriver::~VmixDriver() {
     disconnect();
+    // rx_buffer 해제
+    if (rx_buffer_) {
+        heap_caps_free(rx_buffer_);
+        rx_buffer_ = nullptr;
+    }
     // cached_packed_은 자동 정리 (RAII)
 }
 
@@ -457,7 +474,7 @@ int VmixDriver::receiveData() {
         return -1;
     }
 
-    ssize_t received = recv(sock_fd_, rx_buffer_.data(), rx_buffer_.size() - 1, 0);
+    ssize_t received = recv(sock_fd_, rx_buffer_, RX_BUFFER_SIZE - 1, 0);
 
     if (received <= 0) {
         if (received < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
@@ -484,7 +501,7 @@ int VmixDriver::receiveData() {
     state_.last_update_ms = getMillis();
 
     // 데이터 파싱 (TALLY 또는 VERSION)
-    std::string response(reinterpret_cast<char*>(rx_buffer_.data()), received);
+    std::string response(reinterpret_cast<char*>(rx_buffer_), received);
     int parsed = 0;
 
     // P2: VERSION 응답 확인

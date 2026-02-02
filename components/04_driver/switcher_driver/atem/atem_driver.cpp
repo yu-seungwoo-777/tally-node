@@ -7,6 +7,7 @@
 
 #include "atem_driver.h"
 #include "t_log.h"
+#include "esp_heap_caps.h"
 
 // =============================================================================
 // Tally 설정 (하드코딩)
@@ -43,8 +44,8 @@ AtemDriver::AtemDriver(const AtemConfig& config)
     , state_()
     , conn_state_(CONNECTION_STATE_DISCONNECTED)
     , sock_fd_(-1)
-    , rx_buffer_()
-    , tx_buffer_()
+    , rx_buffer_(nullptr)
+    , tx_buffer_(nullptr)
     , cached_packed_(TALLY_MAX_CHANNELS)  // RAII 자동 초기화
     , tally_callback_()
     , connection_callback_()
@@ -53,11 +54,29 @@ AtemDriver::AtemDriver(const AtemConfig& config)
     , lastNetworkRestart_(0)
     , needsNetworkRestart_(false)
 {
-    rx_buffer_.fill(0);
-    tx_buffer_.fill(0);
+    // PSRAM에 rx_buffer 할당 (ATEM_MAX_PACKET_SIZE = 1500바이트)
+    rx_buffer_ = (uint8_t*)heap_caps_malloc(ATEM_MAX_PACKET_SIZE, MALLOC_CAP_SPIRAM);
+    if (!rx_buffer_) {
+        T_LOGW(TAG, "PSRAM allocation failed for rx_buffer, using internal RAM");
+        rx_buffer_ = (uint8_t*)malloc(ATEM_MAX_PACKET_SIZE);
+    }
+    if (rx_buffer_) {
+        memset(rx_buffer_, 0, ATEM_MAX_PACKET_SIZE);
+    }
 
-    // 디버깅: 드라이버 생성 로그 (이름, IP, 인스턴스 주소)
-    T_LOGD(TAG, "Driver created: %s@%s (this=%p)", config_.name.c_str(), config_.ip.c_str(), this);
+    // PSRAM에 tx_buffer 할당 (64바이트)
+    tx_buffer_ = (uint8_t*)heap_caps_malloc(TX_BUFFER_SIZE, MALLOC_CAP_SPIRAM);
+    if (!tx_buffer_) {
+        T_LOGW(TAG, "PSRAM allocation failed for tx_buffer, using internal RAM");
+        tx_buffer_ = (uint8_t*)malloc(TX_BUFFER_SIZE);
+    }
+    if (tx_buffer_) {
+        memset(tx_buffer_, 0, TX_BUFFER_SIZE);
+    }
+
+    T_LOGD(TAG, "Driver created: %s@%s (this=%p, buffers: %s)",
+           config_.name.c_str(), config_.ip.c_str(), this,
+           heap_caps_get_free_size(MALLOC_CAP_SPIRAM) > 0 ? "PSRAM" : "Internal RAM");
 }
 
 AtemDriver::~AtemDriver() {
@@ -65,6 +84,17 @@ AtemDriver::~AtemDriver() {
     T_LOGD(TAG, "Driver destroyed: %s@%s (this=%p, session=0x%04X)",
              config_.name.c_str(), config_.ip.c_str(), this, state_.session_id);
     disconnect();
+
+    // 버퍼 해제
+    if (rx_buffer_) {
+        heap_caps_free(rx_buffer_);
+        rx_buffer_ = nullptr;
+    }
+    if (tx_buffer_) {
+        heap_caps_free(tx_buffer_);
+        tx_buffer_ = nullptr;
+    }
+
     // cached_packed_은 자동 정리 (RAII)
 }
 
@@ -228,7 +258,7 @@ int AtemDriver::loop() {
         struct sockaddr_in remote_addr;
         socklen_t addr_len = sizeof(remote_addr);
 
-        ssize_t received = recvfrom(sock_fd_, rx_buffer_.data(), rx_buffer_.size(),
+        ssize_t received = recvfrom(sock_fd_, rx_buffer_, ATEM_MAX_PACKET_SIZE,
                                      0, (struct sockaddr*)&remote_addr, &addr_len);
 
         if (received > 0) {
@@ -247,7 +277,7 @@ int AtemDriver::loop() {
             last_packet_recv_ms = recv_time;
 
             // 패킷 처리
-            int result = processPacket(rx_buffer_.data(), static_cast<uint16_t>(received));
+            int result = processPacket(rx_buffer_, static_cast<uint16_t>(received));
             if (result == 0) {
                 // 유효한 패킷 처리 성공 - last_contact 업데이트
                 state_.last_contact_ms = getMillis();
@@ -480,33 +510,33 @@ int AtemDriver::createCommandPacket(const char* cmd, const uint8_t* data, uint16
     uint16_t cmd_length = ATEM_CMD_HEADER_LENGTH + length;
     uint16_t packet_length = ATEM_HEADER_LENGTH + cmd_length;
 
-    if (packet_length > tx_buffer_.size()) {
+    if (packet_length > TX_BUFFER_SIZE) {
         T_LOGE(TAG, "fail:pkt_size");
         return -1;
     }
 
-    memset(tx_buffer_.data(), 0, packet_length);
+    memset(tx_buffer_, 0, packet_length);
 
     // 헤더 구성: flags = ACK_REQUEST (0x01) - 응답 요청
     uint16_t header_word = (ATEM_FLAG_ACK_REQUEST << 11) | (packet_length & 0x07FF);
-    AtemProtocol::setU16(tx_buffer_.data(), 0, header_word);
-    AtemProtocol::setU16(tx_buffer_.data(), 2, state_.session_id);
-    AtemProtocol::setU16(tx_buffer_.data(), 4, 0);  // ACK ID
+    AtemProtocol::setU16(tx_buffer_, 0, header_word);
+    AtemProtocol::setU16(tx_buffer_, 2, state_.session_id);
+    AtemProtocol::setU16(tx_buffer_, 4, 0);  // ACK ID
 
     // Packet ID 증가
     state_.local_packet_id++;
-    AtemProtocol::setU16(tx_buffer_.data(), 10, state_.local_packet_id);
+    AtemProtocol::setU16(tx_buffer_, 10, state_.local_packet_id);
 
     // 명령 헤더
-    AtemProtocol::setU16(tx_buffer_.data(), 12, cmd_length);
-    AtemProtocol::setCommand(tx_buffer_.data(), 16, cmd);
+    AtemProtocol::setU16(tx_buffer_, 12, cmd_length);
+    AtemProtocol::setCommand(tx_buffer_, 16, cmd);
 
     // 명령 데이터
     if (length > 0) {
-        memcpy(tx_buffer_.data() + 20, data, length);
+        memcpy(tx_buffer_ + 20, data, length);
     }
 
-    return sendPacket(tx_buffer_.data(), packet_length);
+    return sendPacket(tx_buffer_, packet_length);
 }
 
 // ============================================================================

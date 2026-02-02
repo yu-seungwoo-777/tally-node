@@ -473,7 +473,7 @@ extern "C" void rx_page_set_rx_stats(int16_t rssi, float snr, uint32_t interval)
 
 extern "C" void rx_page_switch_page(uint8_t page)
 {
-    if (page >= 1 && page <= 3) {
+    if (page >= 1 && page <= RX_PAGE_COUNT) {
         s_current_page = page;
     }
 }
@@ -481,6 +481,11 @@ extern "C" void rx_page_switch_page(uint8_t page)
 extern "C" uint8_t rx_page_get_current_page(void)
 {
     return s_current_page;
+}
+
+extern "C" uint8_t rx_page_get_page_count(void)
+{
+    return RX_PAGE_COUNT;
 }
 
 // ========== 카메라 ID 변경 팝업 제어 ==========

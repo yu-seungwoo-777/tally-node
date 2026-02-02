@@ -7,6 +7,7 @@
 #include "web_server_helpers.h"
 #include "t_log.h"
 #include "esp_http_client.h"
+#include "esp_heap_caps.h"
 #include <cstring>
 #include <malloc.h>
 
@@ -73,8 +74,12 @@ esp_err_t api_notices_handler(httpd_req_t* req)
 {
     web_server_set_cors_headers(req);
 
-    // HTTP 응답 버퍼 (스택 오버플로우 방지: 힙 할당)
-    char* response_buffer = (char*)malloc(2048);
+    // HTTP 응답 버퍼 (PSRAM 할당으로 내부 RAM 절약)
+    char* response_buffer = (char*)heap_caps_malloc(2048, MALLOC_CAP_SPIRAM);
+    if (!response_buffer) {
+        // Fallback to internal RAM
+        response_buffer = (char*)malloc(2048);
+    }
     if (!response_buffer) {
         httpd_resp_set_type(req, "application/json");
         httpd_resp_sendstr(req, "{\"success\":false,\"notices\":[]}");
@@ -108,7 +113,7 @@ esp_err_t api_notices_handler(httpd_req_t* req)
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
         T_LOGE(TAG, "notices:fail:init");
-        free(response_buffer);
+        heap_caps_free(response_buffer);
         httpd_resp_set_type(req, "application/json");
         httpd_resp_sendstr(req, "{\"success\":false,\"notices\":[]}");
         return ESP_OK;

@@ -3,11 +3,12 @@ name: manager-project
 description: |
   Project setup specialist. Use PROACTIVELY for initialization, .moai configuration, scaffolding, and new project creation.
   MUST INVOKE when ANY of these keywords appear in user request:
+  --ultrathink flag: Activate Sequential Thinking MCP for deep analysis of project structure, configuration strategies, and scaffolding approaches.
   EN: project setup, initialization, .moai, project configuration, scaffold, new project
   KO: 프로젝트설정, 초기화, .moai, 프로젝트구성, 스캐폴드, 새프로젝트
   JA: プロジェクトセットアップ, 初期化, .moai, プロジェクト構成, スキャフォールド
   ZH: 项目设置, 初始化, .moai, 项目配置, 脚手架
-tools: Read, Write, Edit, MultiEdit, Grep, Glob, TodoWrite, mcp__context7__resolve-library-id, mcp__context7__get-library-docs
+tools: Read, Write, Edit, MultiEdit, Grep, Glob, Bash, TodoWrite, Task, Skill, mcp__sequential-thinking__sequentialthinking, mcp__context7__resolve-library-id, mcp__context7__get-library-docs
 model: inherit
 permissionMode: default
 skills: moai-foundation-claude, moai-workflow-project, moai-workflow-templates, moai-workflow-worktree
@@ -145,9 +146,9 @@ Conditional Skills (auto-loaded by Alfred when needed)
 
 ## Key Role
 
-project-manager is called from the `/moai:0-project` command
+project-manager is called from the `/moai project` command
 
-- When `/moai:0-project` is executed, it is called as `Task: project-manager` to perform project analysis
+- When `/moai project` is executed, it is called as `Task: project-manager` to perform project analysis
 - Receives conversation_language parameter from Alfred (e.g., "ko", "en", "ja", "zh") as first input
 - Directly responsible for project type detection (new/legacy) and document creation
 - Product/structure/tech documents written interactively in the selected language
@@ -368,7 +369,7 @@ Project Overview:
 - Team Size: Solo developer
 - Tech Stack: Next.js, TypeScript, Supabase
 
-Next Steps: Run /moai:1-plan to create your first SPEC.
+Next Steps: Run /moai plan to create your first SPEC.
 
 [HARD] Internal Agent Data: XML tags are reserved for agent-to-agent data transfer only.
 
@@ -418,7 +419,7 @@ Agent responses use XML structure for downstream system integration:
   <summary>
     <project_overview>Team composition, technology stack, complexity tier</project_overview>
     <mode_confirmation>Execution mode and settings applied</mode_confirmation>
-    <next_steps>Recommended downstream actions (e.g., /moai:1-plan)</next_steps>
+    <next_steps>Recommended downstream actions (e.g., /moai plan)</next_steps>
   </summary>
 
   <errors_and_warnings>
@@ -957,7 +958,7 @@ IF complexity_tier == "COMPLEX" and user approved Plan Mode:
 
 Upstream Agents (typically call this agent):
 
-- None - This is an initiator agent called directly by `/moai:0-project` command
+- None - This is an initiator agent called directly by `/moai project` command
 
 Downstream Agents (this agent typically calls):
 

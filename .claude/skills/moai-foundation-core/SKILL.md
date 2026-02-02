@@ -1,27 +1,28 @@
 ---
-name: "moai-foundation-core"
-description: "MoAI-ADK's foundational principles - TRUST 5, SPEC-First DDD, delegation patterns, token optimization, progressive disclosure, modular architecture, agent catalog, command reference, and execution rules for building AI-powered development workflows"
-version: 2.4.0
-category: "foundation"
-modularized: true
+name: moai-foundation-core
+description: >
+  MoAI-ADK's foundational principles - TRUST 5, SPEC-First DDD, delegation patterns,
+  token optimization, progressive disclosure, modular architecture, agent catalog,
+  command reference, and execution rules for building AI-powered development workflows
+license: Apache-2.0
+compatibility: Designed for Claude Code
+allowed-tools: Read Grep Glob mcp__context7__resolve-library-id mcp__context7__get-library-docs
 user-invocable: false
-tags: ['foundation', 'core', 'orchestration', 'agents', 'commands', 'trust-5', 'spec-first-ddd']
-updated: 2026-01-11
-status: "active"
-allowed-tools:
-  - Read
-  - Grep
-  - Glob
-  - mcp__context7__resolve-library-id
-  - mcp__context7__get-library-docs
+metadata:
+  version: "2.5.0"
+  category: "foundation"
+  status: "active"
+  updated: "2026-01-21"
+  modularized: "true"
+  tags: "foundation, core, orchestration, agents, commands, trust-5, spec-first-ddd"
 
-# Progressive Disclosure Configuration
+# MoAI Extension: Progressive Disclosure
 progressive_disclosure:
   enabled: true
-  level1_tokens: ~100
-  level2_tokens: ~5000
+  level1_tokens: 100
+  level2_tokens: 5000
 
-# Trigger Conditions for Level 2 Loading
+# MoAI Extension: Triggers
 triggers:
   keywords:
     - "trust-5"
@@ -55,7 +56,7 @@ triggers:
 
 Foundational principles and architectural patterns that power MoAI-ADK's AI-driven development workflow.
 
-Core Philosophy: Quality-first, test-driven, modular, and efficient AI development through proven patterns and automated workflows.
+Core Philosophy: Quality-first, domain-driven, modular, and efficient AI development through proven patterns and automated workflows.
 
 ## Quick Reference
 
@@ -63,7 +64,7 @@ What is MoAI Foundation Core?
 
 Six essential principles that ensure quality, efficiency, and scalability in AI-powered development:
 
-1. TRUST 5 Framework - Quality gate system (Test-first, Readable, Unified, Secured, Trackable)
+1. TRUST 5 Framework - Quality gate system (Tested, Readable, Unified, Secured, Trackable)
 2. SPEC-First DDD - Specification-driven domain-driven development workflow
 3. Delegation Patterns - Task orchestration via specialized agents (never direct execution)
 4. Token Optimization - 200K budget management and context efficiency
@@ -101,7 +102,7 @@ Purpose: Automated quality gates ensuring code quality, security, and maintainab
 
 Five Pillars:
 
-Test-first Pillar: Maintain test coverage at or above 85 percent. Execute pytest with coverage reporting. Block merge and generate missing tests on failure. High coverage ensures code reliability and reduces production defects. Catches bugs early and reduces debugging time by 60-70 percent.
+Tested Pillar: Maintain comprehensive test coverage with characterization tests ensuring behavior preservation. Execute pytest with coverage reporting. Block merge and generate missing tests on failure. Characterization tests capture current behavior for legacy code, while specification tests validate domain requirements for new code. High coverage ensures code reliability and reduces production defects. Preserves behavior during refactoring and reduces debugging time by 60-70 percent.
 
 Readable Pillar: Use clear and descriptive naming conventions. Execute ruff linter checks. Issue warning and suggest refactoring improvements on failure. Clear naming improves code comprehension and team collaboration. Reduces onboarding time by 40 percent and improves maintenance velocity.
 

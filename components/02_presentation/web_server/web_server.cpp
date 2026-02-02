@@ -12,8 +12,10 @@
 #include "web_server_helpers.h"
 #include "event_bus.h"
 #include "esp_http_server.h"
+#include "esp_heap_caps.h"
 #include "t_log.h"
 #include "esp_system.h"
+#include "cJSON.h"
 #include "freertos/FreeRTOS.h"
 
 static const char* TAG = "02_WS";
@@ -27,6 +29,23 @@ extern "C" {
 
 static bool s_initialized = false;
 
+// ============================================================================
+// cJSON PSRAM 할당 함수
+// ============================================================================
+
+static void* cjson_malloc_psram(size_t size) {
+    void* ptr = heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+    if (!ptr) {
+        // Fallback to internal RAM
+        ptr = malloc(size);
+    }
+    return ptr;
+}
+
+static void cjson_free_psram(void* ptr) {
+    heap_caps_free(ptr);
+}
+
 /**
  * @brief 웹 서버 초기화
  * @return ESP_OK 성공, ESP_ERR_INVALID_STATE 이미 초기화됨
@@ -38,6 +57,13 @@ esp_err_t web_server_init(void)
         T_LOGW(TAG, "Web server already initialized");
         return ESP_OK;
     }
+
+    // cJSON을 PSRAM으로 리디렉션 (메모리 절약)
+    cJSON_Hooks hooks;
+    hooks.malloc_fn = cjson_malloc_psram;
+    hooks.free_fn = cjson_free_psram;
+    cJSON_InitHooks(&hooks);
+    T_LOGI(TAG, "cJSON configured to use PSRAM");
 
     // 캐시 초기화
     web_server_cache_init();

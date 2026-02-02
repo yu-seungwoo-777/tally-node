@@ -20,7 +20,7 @@
 
 static const char* TAG = "02_Display";
 #define DEFAULT_REFRESH_INTERVAL_MS  500  // 2 FPS
-#define MAX_PAGES                     5
+#define MAX_PAGES                     6
 #define STATUS_LOG_INTERVAL_MS       5000  // 상태 로그 출력 주기 (5초)
 
 // 태스크 설정

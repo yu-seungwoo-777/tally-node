@@ -1,2 +1,0 @@
-# ESP-IDF sdkconfig - LWIP settings
-CONFIG_LWIP_MAX_SOCKETS=24

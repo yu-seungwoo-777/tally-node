@@ -12,13 +12,22 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-# Import TimeoutError from lib.timeout (canonical definition)
+# Import yaml with helpful error message
 try:
-    from lib.timeout import TimeoutError  # noqa: F401
+    import yaml
+except ImportError as e:
+    raise ImportError(
+        "PyYAML is required for MoAI-ADK hooks. "
+        "Install with: pip install pyyaml\n"
+        f"Or use: uv run --with pyyaml <hook_script>\n"
+        f"Original error: {e}"
+    ) from e
+
+# Import TimeoutError from lib.unified_timeout_manager (canonical definition)
+try:
+    from lib.unified_timeout_manager import TimeoutError  # noqa: F401
 except ImportError:
-    # Fallback if lib.timeout not available
+    # Fallback if unified_timeout_manager not available
     class TimeoutError(Exception):  # type: ignore[no-redef]
         """Signal-based timeout exception"""
 
@@ -368,7 +377,7 @@ def count_specs(cwd: str) -> dict[str, int]:
 
         # Parse YAML front matter
         try:
-            content = spec_file.read_text(encoding="utf-8")
+            content = spec_file.read_text(encoding="utf-8", errors="replace")
             if content.startswith("---"):
                 yaml_end = content.find("---", 3)
                 if yaml_end > 0:
@@ -407,7 +416,7 @@ def get_project_language(cwd: str) -> str:
     config_path = project_root / ".moai" / "config" / "config.yaml"
     if config_path.exists():
         try:
-            config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            config = yaml.safe_load(config_path.read_text(encoding="utf-8", errors="replace")) or {}
             lang = config.get("language", "")
             if lang:
                 return lang
@@ -471,7 +480,7 @@ def get_version_check_config(cwd: str) -> dict[str, Any]:
         return defaults
 
     try:
-        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8", errors="replace")) or {}
 
         # Extract moai.version_check section
         moai_config = config.get("moai", {})
