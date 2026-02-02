@@ -52,6 +52,15 @@ const char* switcher_role_to_string(switcher_role_t role) {
     }
 }
 
+const char* network_interface_to_string(tally_network_if_t iface) {
+    switch (iface) {
+        case TALLY_NET_AUTO:     return "Auto";
+        case TALLY_NET_ETHERNET: return "Ethernet";
+        case TALLY_NET_WIFI:     return "WiFi";
+        default:                 return "Unknown";
+    }
+}
+
 } // extern "C"
 
 // ============================================================================
@@ -267,8 +276,13 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
             bool now_connected = (state == CONNECTION_STATE_READY || state == CONNECTION_STATE_CONNECTED);
             info->is_connected = now_connected;
 
-            // 연결 완료 시 항상 이벤트 발행 (camera_limit 등 최신 상태 반영)
+            // 연결 완료 시 로그 출력 및 이벤트 발행
             if (now_connected && !was_connected) {
+                const char* role_str = switcher_role_to_string(role);
+                const char* iface_str = network_interface_to_string(
+                    static_cast<tally_network_if_t>(info->network_interface));
+                T_LOGI(TAG, "%s switcher connected via %s (type=%s, ip=%s)",
+                       role_str, iface_str, info->type, info->ip);
                 publishSwitcherStatus();
             }
         }
@@ -342,8 +356,13 @@ bool SwitcherService::setVmix(switcher_role_t role, const char* name, const char
             bool now_connected = (state == CONNECTION_STATE_READY || state == CONNECTION_STATE_CONNECTED);
             info->is_connected = now_connected;
 
-            // 연결 완료 시 항상 이벤트 발행 (camera_limit 등 최신 상태 반영)
+            // 연결 완료 시 로그 출력 및 이벤트 발행
             if (now_connected && !was_connected) {
+                const char* role_str = switcher_role_to_string(role);
+                const char* iface_str = network_interface_to_string(
+                    static_cast<tally_network_if_t>(info->network_interface));
+                T_LOGI(TAG, "%s switcher connected via %s (type=%s, ip=%s)",
+                       role_str, iface_str, info->type, info->ip);
                 publishSwitcherStatus();
             }
         }
@@ -1309,7 +1328,8 @@ void SwitcherService::reconfigureSwitchersForNetwork() {
     if (primary_.adapter) {
         tally_network_if_t iface = static_cast<tally_network_if_t>(primary_.network_interface);
         if (iface != TALLY_NET_AUTO) {
-            T_LOGD(TAG, "Primary switcher network reconfigure (if=%d, type=%s)", iface, primary_.type);
+            T_LOGI(TAG, "Primary switcher reconfigure via %s (type=%s, ip=%s)",
+                   network_interface_to_string(iface), primary_.type, primary_.ip);
             // ATEM은 재설정 후 연결, vMix는 대기 중이면 연결 시작
             if (primary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
                 setAtem(SWITCHER_ROLE_PRIMARY, "Primary",
@@ -1321,7 +1341,7 @@ void SwitcherService::reconfigureSwitchersForNetwork() {
                 // vMix: 네트워크 준비되었고 연결 대기 중이면 연결 시작
                 if (primary_.adapter->getConnectionState() == CONNECTION_STATE_DISCONNECTED) {
                     if (isInterfaceConnected(primary_.network_interface)) {
-                        T_LOGD(TAG, "Primary vMix connect triggered by network ready event");
+                        T_LOGI(TAG, "Primary vMix connecting via %s", network_interface_to_string(iface));
                         primary_.adapter->connect();
                     }
                 }
@@ -1333,7 +1353,8 @@ void SwitcherService::reconfigureSwitchersForNetwork() {
     if (secondary_.adapter) {
         tally_network_if_t iface = static_cast<tally_network_if_t>(secondary_.network_interface);
         if (iface != TALLY_NET_AUTO) {
-            T_LOGD(TAG, "Secondary switcher network reconfigure (if=%d, type=%s)", iface, secondary_.type);
+            T_LOGI(TAG, "Secondary switcher reconfigure via %s (type=%s, ip=%s)",
+                   network_interface_to_string(iface), secondary_.type, secondary_.ip);
             // ATEM은 재설정 후 연결, vMix는 대기 중이면 연결 시작
             if (secondary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
                 setAtem(SWITCHER_ROLE_SECONDARY, "Secondary",
@@ -1345,7 +1366,7 @@ void SwitcherService::reconfigureSwitchersForNetwork() {
                 // vMix: 네트워크 준비되었고 연결 대기 중이면 연결 시작
                 if (secondary_.adapter->getConnectionState() == CONNECTION_STATE_DISCONNECTED) {
                     if (isInterfaceConnected(secondary_.network_interface)) {
-                        T_LOGD(TAG, "Secondary vMix connect triggered by network ready event");
+                        T_LOGI(TAG, "Secondary vMix connecting via %s", network_interface_to_string(iface));
                         secondary_.adapter->connect();
                     }
                 }

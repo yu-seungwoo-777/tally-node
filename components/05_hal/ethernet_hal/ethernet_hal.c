@@ -33,9 +33,14 @@ static bool s_started = false;
 static bool s_detected = false;          // W5500 칩 감지 여부
 static bool s_link_up = false;           // 링크 상태 추적
 static bool s_recovering = false;        // 링크 복구 중 플래그
+static bool s_restarting = false;        // 재시작 중 플래그 (중복 재시작 방지)
 static ethernet_hal_state_t s_state = ETHERNET_HAL_STATE_IDLE;
 static esp_eth_handle_t s_eth_handle = NULL;
 static esp_netif_t* s_netif = NULL;
+static void* s_eth_glue = NULL;          // netif glue 핸들 (레퍼런스 관리용)
+static esp_eth_mac_t* s_eth_mac = NULL;  // MAC 핸들 (SPI 디바이스 정리용)
+static esp_eth_phy_t* s_eth_phy = NULL;  // PHY 핸들 (리소스 정리용)
+static TaskHandle_t s_recovery_task = NULL;  // 복구 태스크 핸들 (정리용)
 static ethernet_hal_event_callback_t s_event_callback = NULL;
 static EventGroupHandle_t s_event_group = NULL;
 
@@ -49,7 +54,7 @@ static esp_event_handler_instance_t s_ip_event_instance = NULL;
 #define ETH_HAL_GOT_IP_BIT     BIT2
 
 // 링크 복구 설정
-#define ETH_HAL_LINK_RECOVERY_DELAY_MS    5000  // 링크 다운 후 복구 대기 시간 (ms)
+#define ETH_HAL_LINK_RECOVERY_DELAY_MS    2000  // 링크 다운 후 복구 대기 시간 (ms) - 빠른 복구
 #define ETH_HAL_LINK_RECOVERY_STACK_SIZE  4096  // 복구 태스크 스택 크기
 
 // ============================================================================
@@ -81,15 +86,17 @@ static void link_recovery_task(void* arg)
     vTaskDelay(pdMS_TO_TICKS(ETH_HAL_LINK_RECOVERY_DELAY_MS));
 
     // 대기 후에도 링크가 다운인 경우 재시작
-    if (!s_link_up && s_started) {
+    if (!s_link_up && s_started && !s_restarting) {
         T_LOGW(TAG, "recovery:restart");
-        ethernet_hal_restart();
+        ethernet_hal_restart();  // 함수 내부에서 s_restarting 관리
     } else {
-        T_LOGD(TAG, "recovery:cancel:link_up");
+        T_LOGD(TAG, "recovery:cancel:link_up=%d,started=%d,restarting=%d",
+               s_link_up, s_started, s_restarting);
     }
 
-    // 복구 플래그 해제
+    // 복구 플래그 및 핸들 해제
     s_recovering = false;
+    s_recovery_task = NULL;
 
     // 태스크 자가 삭제
     vTaskDelete(NULL);
@@ -140,8 +147,8 @@ static void eth_event_handler(void* arg, esp_event_base_t event_base,
                 T_LOGE(TAG, "evt:link_down");
                 s_link_up = false;
 
-                // 링크 복구 태스크 시작 (이미 복구 중이 아닐 때만)
-                if (!s_recovering && s_started) {
+                // 링크 복구 태스크 시작 (이미 복구 중이거나 재시작 중이 아닐 때만)
+                if (!s_recovering && !s_restarting && s_started) {
                     s_recovering = true;
                     BaseType_t ret = xTaskCreate(
                         link_recovery_task,
@@ -149,11 +156,12 @@ static void eth_event_handler(void* arg, esp_event_base_t event_base,
                         ETH_HAL_LINK_RECOVERY_STACK_SIZE,
                         NULL,
                         5,  // 우선순위
-                        NULL
+                        &s_recovery_task  // 핸들 저장 (정리 시 사용)
                     );
                     if (ret != pdPASS) {
                         T_LOGE(TAG, "fail:recovery_task");
                         s_recovering = false;
+                        s_recovery_task = NULL;
                     }
                 }
                 break;
@@ -375,21 +383,27 @@ esp_err_t ethernet_hal_start(void)
     eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
     phy_config.reset_gpio_num = -1;
 
-    // MAC과 PHY 생성
-    esp_eth_mac_t* mac = esp_eth_mac_new_w5500(&w5500_config, &mac_config);
-    esp_eth_phy_t* phy = esp_eth_phy_new_w5500(&phy_config);
+    // MAC과 PHY 생성 (핸들 저장 필수 - 정리 시 사용)
+    s_eth_mac = esp_eth_mac_new_w5500(&w5500_config, &mac_config);
+    s_eth_phy = esp_eth_phy_new_w5500(&phy_config);
 
-    if (!mac || !phy) {
+    if (!s_eth_mac || !s_eth_phy) {
         T_LOGE(TAG, "fail:mac_phy");
-        if (mac) free(mac);
-        if (phy) free(phy);
+        if (s_eth_mac) {
+            s_eth_mac->del(s_eth_mac);
+            s_eth_mac = NULL;
+        }
+        if (s_eth_phy) {
+            s_eth_phy->del(s_eth_phy);
+            s_eth_phy = NULL;
+        }
         return ESP_FAIL;
     }
 
     // Ethernet 드라이버 설치
     esp_eth_config_t eth_config = {
-        .mac = mac,
-        .phy = phy,
+        .mac = s_eth_mac,
+        .phy = s_eth_phy,
         .check_link_period_ms = 2000,
     };
 
@@ -397,6 +411,14 @@ esp_err_t ethernet_hal_start(void)
     if (ret != ESP_OK) {
         T_LOGE(TAG, "fail:driver:0x%x", ret);
         s_detected = false;
+        if (s_eth_mac) {
+            s_eth_mac->del(s_eth_mac);
+            s_eth_mac = NULL;
+        }
+        if (s_eth_phy) {
+            s_eth_phy->del(s_eth_phy);
+            s_eth_phy = NULL;
+        }
         return ret;
     }
 
@@ -436,9 +458,9 @@ esp_err_t ethernet_hal_start(void)
     dns_info.ip.u_addr.ip4.addr = esp_ip4addr_aton("1.1.1.1");
     esp_netif_set_dns_info(s_netif, ESP_NETIF_DNS_BACKUP, &dns_info);
 
-    // netif 연결
-    void* glue = esp_eth_new_netif_glue(s_eth_handle);
-    ret = esp_netif_attach(s_netif, glue);
+    // netif 연결 (glue 핸들 저장 필수 - 정리 시 사용)
+    s_eth_glue = esp_eth_new_netif_glue(s_eth_handle);
+    ret = esp_netif_attach(s_netif, s_eth_glue);
     if (ret != ESP_OK) {
         T_LOGE(TAG, "fail:attach:0x%x", ret);
         return ret;
@@ -503,18 +525,7 @@ esp_err_t ethernet_hal_stop(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (s_eth_handle) {
-        esp_eth_stop(s_eth_handle);
-        esp_eth_driver_uninstall(s_eth_handle);
-        s_eth_handle = NULL;
-    }
-
-    if (s_netif) {
-        esp_netif_destroy(s_netif);
-        s_netif = NULL;
-    }
-
-    // 이벤트 핸들러 등록 해제 (ESP-IDF 5.5.0: instance API 사용)
+    // 1. 이벤트 핸들러 등록 해제 (레퍼런스 제거 최우선)
     if (s_eth_event_instance) {
         esp_event_handler_instance_unregister(ETH_EVENT, ESP_EVENT_ANY_ID, s_eth_event_instance);
         s_eth_event_instance = NULL;
@@ -522,6 +533,64 @@ esp_err_t ethernet_hal_stop(void)
     if (s_ip_event_instance) {
         esp_event_handler_instance_unregister(IP_EVENT, IP_EVENT_ETH_GOT_IP, s_ip_event_instance);
         s_ip_event_instance = NULL;
+    }
+
+    // 1-1. 복구 태스크 대기 (실행 중이면 완료될 때까지 대기)
+    if (s_recovery_task != NULL) {
+        T_LOGD(TAG, "wait:recovery_task");
+        // 복구 태스크가 자가 삭제될 때까지 최대 3초 대기
+        for (int i = 0; i < 30 && s_recovery_task != NULL; i++) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
+        if (s_recovery_task != NULL) {
+            T_LOGW(TAG, "warn:recovery_task_timeout");
+            s_recovery_task = NULL;  // 타임아웃 후 강제 초기화
+        }
+        s_recovering = false;
+    }
+
+    // 2. Ethernet 정지 (netif 해제 전 필수)
+    if (s_eth_handle) {
+        esp_eth_stop(s_eth_handle);
+        vTaskDelay(pdMS_TO_TICKS(200));  // 정지 완료 대기
+    }
+
+    // 3. netif 해제 (glue 삭제 전 필수)
+    if (s_netif) {
+        esp_netif_destroy(s_netif);
+        s_netif = NULL;
+        vTaskDelay(pdMS_TO_TICKS(100));  // netif 정리 완료 대기
+    }
+
+    // 4. netif glue 해제 (드라이버 레퍼런스 제거)
+    if (s_eth_glue) {
+        esp_eth_del_netif_glue(s_eth_glue);
+        s_eth_glue = NULL;
+    }
+
+    // 5. 드라이버 언인스톨 (MAC/PHY 삭제 전 필수)
+    if (s_eth_handle) {
+        esp_eth_driver_uninstall(s_eth_handle);
+        s_eth_handle = NULL;
+        vTaskDelay(pdMS_TO_TICKS(200));  // 언인스톨 완료 대기
+    }
+
+    // 6. MAC 삭제 (SPI 디바이스 제거)
+    if (s_eth_mac) {
+        s_eth_mac->del(s_eth_mac);
+        s_eth_mac = NULL;
+    }
+
+    // 7. PHY 삭제
+    if (s_eth_phy) {
+        s_eth_phy->del(s_eth_phy);
+        s_eth_phy = NULL;
+    }
+
+    // 8. SPI 버스 해제 (재시작 시 중복 초기화 방지)
+    esp_err_t ret = spi_bus_free(EORA_S3_W5500_SPI_HOST);
+    if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
+        T_LOGW(TAG, "warn:spi_free:0x%x", ret);
     }
 
     s_started = false;
@@ -542,12 +611,22 @@ esp_err_t ethernet_hal_restart(void)
 {
     T_LOGD(TAG, "restart");
 
+    // 재시작 중 플래그 설정 (중복 재시작 및 복구 태스크 방지)
+    if (s_restarting) {
+        T_LOGW(TAG, "warn:already_restarting");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    s_restarting = true;
     esp_err_t ret = ethernet_hal_stop();
     if (ret != ESP_OK) {
+        s_restarting = false;
         return ret;
     }
     vTaskDelay(pdMS_TO_TICKS(500));
-    return ethernet_hal_start();
+    ret = ethernet_hal_start();
+    s_restarting = false;
+    return ret;
 }
 
 // ============================================================================
