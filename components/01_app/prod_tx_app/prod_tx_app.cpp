@@ -462,12 +462,12 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     }
 
     lora_service_config_t lora_config = {
-        .frequency = saved_freq,
-        .spreading_factor = saved_sf,
-        .coding_rate = saved_cr,
-        .bandwidth = saved_bw,
-        .tx_power = saved_txp,
-        .sync_word = saved_sync
+        .frequency = device_config.rf.frequency,
+        .spreading_factor = device_config.rf.sf,
+        .coding_rate = device_config.rf.cr,
+        .bandwidth = device_config.rf.bw,
+        .tx_power = device_config.rf.tx_power,
+        .sync_word = device_config.rf.sync_word
     };
     esp_err_t lora_ret = lora_service_init(&lora_config);
     if (lora_ret != ESP_OK) {

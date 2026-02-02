@@ -60,7 +60,7 @@ public:
     static esp_err_t setEthernetInternal(const config_ethernet_t* config);  // 내부용 (이벤트 미발행)
 
     // Device 설정
-    static esp_err_t getDevice(config_device_t* config, lora_chip_type_t chip_type);
+    static esp_err_t getDevice(config_device_t* config, int chip_type);
     static esp_err_t setDevice(const config_device_t* config);
     static esp_err_t setBrightness(uint8_t brightness);
     static esp_err_t setBrightnessInternal(uint8_t brightness);  // 이벤트 핸들러용 (이벤트 미발행)
@@ -1286,7 +1286,7 @@ esp_err_t ConfigServiceClass::loadAll(config_all_t* config)
 
     getWiFiSTA(&config->wifi_sta);
     getEthernet(&config->ethernet);
-    getDevice(&config->device, LORA_CHIP_UNKNOWN);  // 내부 호출: 기본값 868MHz
+    getDevice(&config->device, 0);  // LORA_CHIP_UNKNOWN
     getPrimary(&config->primary);
     getSecondary(&config->secondary);
     config->dual_enabled = getDualEnabled();
@@ -1795,7 +1795,7 @@ esp_err_t ConfigServiceClass::factoryReset(void)
 // Device 설정
 // ============================================================================
 
-esp_err_t ConfigServiceClass::getDevice(config_device_t* config, lora_chip_type_t chip_type)
+esp_err_t ConfigServiceClass::getDevice(config_device_t* config, int chip_type)
 {
     if (!config) {
         return ESP_ERR_INVALID_ARG;
@@ -1805,7 +1805,7 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config, lora_chip_type_
 
     // 칩 타입에 따른 기본 주파수 결정
     float default_freq = NVS_LORA_DEFAULT_FREQ_868;
-    if (chip_type == LORA_CHIP_SX1268_433M) {
+    if (chip_type == 2) {
         default_freq = NVS_LORA_DEFAULT_FREQ_433;
     }
 
@@ -1915,7 +1915,7 @@ esp_err_t ConfigServiceClass::setBrightness(uint8_t brightness)
 esp_err_t ConfigServiceClass::setBrightnessInternal(uint8_t brightness)
 {
     config_device_t dev;
-    esp_err_t ret = getDevice(&dev, LORA_CHIP_UNKNOWN);
+    esp_err_t ret = getDevice(&dev, 0);
     if (ret != ESP_OK && ret != 0x105) {
         return ret;
     }
@@ -1928,7 +1928,7 @@ esp_err_t ConfigServiceClass::setBrightnessInternal(uint8_t brightness)
 esp_err_t ConfigServiceClass::setCameraIdInternal(uint8_t camera_id)
 {
     config_device_t dev;
-    esp_err_t ret = getDevice(&dev, LORA_CHIP_UNKNOWN);
+    esp_err_t ret = getDevice(&dev, 0);
     if (ret != ESP_OK && ret != 0x105) {
         return ret;
     }
@@ -1954,7 +1954,7 @@ esp_err_t ConfigServiceClass::setCameraId(uint8_t camera_id)
 uint8_t ConfigServiceClass::getCameraId(void)
 {
     config_device_t dev;
-    esp_err_t ret = getDevice(&dev, LORA_CHIP_UNKNOWN);
+    esp_err_t ret = getDevice(&dev, 0);
     if (ret != ESP_OK) {
         return 1;  // 기본값
     }
@@ -1964,7 +1964,7 @@ uint8_t ConfigServiceClass::getCameraId(void)
 esp_err_t ConfigServiceClass::setRf(float frequency, uint8_t sync_word)
 {
     config_device_t dev;
-    esp_err_t ret = getDevice(&dev, LORA_CHIP_UNKNOWN);
+    esp_err_t ret = getDevice(&dev, 0);
     if (ret != ESP_OK && ret != 0x105) {
         return ret;
     }
@@ -2933,7 +2933,7 @@ esp_err_t config_service_factory_reset(void)
 // Device 설정 API
 // ============================================================================
 
-esp_err_t config_service_get_device(config_device_t* config, lora_chip_type_t chip_type)
+esp_err_t config_service_get_device(config_device_t* config, int chip_type)
 {
     return ConfigServiceClass::getDevice(config, chip_type);
 }

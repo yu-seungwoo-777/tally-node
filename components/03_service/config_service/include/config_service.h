@@ -23,16 +23,13 @@
 #include <stdbool.h>
 #include "esp_err.h"
 
+// LoRa 칩 타입 (lora_driver.h의 lora_chip_type_t 참조)
+// typedef 사용하지 않고 int로 직접 선언하여 중복 정의 방지
+// LORA_CHIP_UNKNOWN=0, LORA_CHIP_SX1262_868M=1, LORA_CHIP_SX1268_433M=2
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-// LoRa 칩 타입 (lora_driver.h)
-typedef enum {
-    LORA_CHIP_UNKNOWN = 0,
-    LORA_CHIP_SX1262_868M = 1,
-    LORA_CHIP_SX1268_433M = 2,
-} lora_chip_type_t;
 
 // ============================================================================
 // C 구조체 (외부 인터페이스)
@@ -262,10 +259,10 @@ esp_err_t config_service_set_secondary_offset(uint8_t offset);
 /**
  * @brief Device 설정 로드
  * @param config[out] 설정을 저장할 구조체
- * @param chip_type LoRa 칩 타입 (기본값 결정용, LORA_CHIP_UNKNOWN=868MHz)
+ * @param chip_type LoRa 칩 타입 (0=UNKNOWN, 1=SX1262_868M, 2=SX1268_433M)
  * @return ESP_OK 성공, ESP_FAIL 실패
  */
-esp_err_t config_service_get_device(config_device_t* config, lora_chip_type_t chip_type);
+esp_err_t config_service_get_device(config_device_t* config, int chip_type);
 
 /**
  * @brief Device 설정 저장
