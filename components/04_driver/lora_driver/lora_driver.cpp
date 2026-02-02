@@ -48,6 +48,7 @@ static Module* s_module = nullptr;
 static SX126x* s_radio = nullptr;
 
 static lora_chip_type_t s_chip_type = LORA_CHIP_UNKNOWN;
+static lora_chip_type_t s_detected_chip = LORA_CHIP_UNKNOWN;  // 감지된 칩 (초기화 전)
 static float s_frequency = 0.0f;
 static uint8_t s_sync_word = 0x12;
 static bool s_initialized = false;
@@ -219,39 +220,73 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
     s_module = new Module(hal, EORA_S3_LORA_CS, EORA_S3_LORA_DIO1,
                          EORA_S3_LORA_RST, EORA_S3_LORA_BUSY);
 
-    // 칩 자동 감지: SX1262 → SX1268 순차 시도
-    T_LOGD(TAG, "detect:sx1262");
-    SX1262* radio_1262 = new SX1262(s_module);
-    // begin()은 칩에 맞는 임시 주파수로 초기화
-    int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+    // 칩 초기화 (이미 감지된 칩이 있으면 감지 과정 생략)
+    if (s_detected_chip != LORA_CHIP_UNKNOWN) {
+        // 이미 감지된 칩으로 바로 초기화
+        T_LOGD(TAG, "use_detected_chip:%d", s_detected_chip);
 
-    if (state == RADIOLIB_ERR_NONE) {
-        s_radio = radio_1262;
-        s_chip_type = LORA_CHIP_SX1262_868M;
-        T_LOGI(TAG, "chip: SX1262 (868MHz)");
+        if (s_detected_chip == LORA_CHIP_SX1262_868M) {
+            SX1262* radio_1262 = new SX1262(s_module);
+            int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+            if (state == RADIOLIB_ERR_NONE) {
+                s_radio = radio_1262;
+                s_chip_type = LORA_CHIP_SX1262_868M;
+                T_LOGI(TAG, "chip: SX1262 (868MHz) pre-detected");
+            } else {
+                delete radio_1262;
+                T_LOGE(TAG, "fail:pre_detected_sx1262");
+                delete s_module;
+                s_module = nullptr;
+                return ESP_FAIL;
+            }
+        } else if (s_detected_chip == LORA_CHIP_SX1268_433M) {
+            SX1268* radio_1268 = new SX1268(s_module);
+            int16_t state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+            if (state == RADIOLIB_ERR_NONE) {
+                s_radio = radio_1268;
+                s_chip_type = LORA_CHIP_SX1268_433M;
+                T_LOGI(TAG, "chip: SX1268 (433MHz) pre-detected");
+            } else {
+                delete radio_1268;
+                T_LOGE(TAG, "fail:pre_detected_sx1268");
+                delete s_module;
+                s_module = nullptr;
+                return ESP_FAIL;
+            }
+        }
     } else {
-        T_LOGD(TAG, "detect:sx1268");
-        delete radio_1262;
-
-        // SX1268 시도
-        SX1268* radio_1268 = new SX1268(s_module);
-        state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+        // 칩 감지되지 않음: 기존 로직으로 감지 시도
+        T_LOGD(TAG, "detect:sx1262");
+        SX1262* radio_1262 = new SX1262(s_module);
+        int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
 
         if (state == RADIOLIB_ERR_NONE) {
-            s_radio = radio_1268;
-            s_chip_type = LORA_CHIP_SX1268_433M;
-            T_LOGI(TAG, "chip: SX1268 (433MHz)");
+            s_radio = radio_1262;
+            s_chip_type = LORA_CHIP_SX1262_868M;
+            T_LOGI(TAG, "chip: SX1262 (868MHz)");
         } else {
-            T_LOGE(TAG, "fail:detect:both_chips");
-            delete radio_1268;
-            delete s_module;
-            s_module = nullptr;
-            return ESP_FAIL;
+            T_LOGD(TAG, "detect:sx1268");
+            delete radio_1262;
+
+            SX1268* radio_1268 = new SX1268(s_module);
+            state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+
+            if (state == RADIOLIB_ERR_NONE) {
+                s_radio = radio_1268;
+                s_chip_type = LORA_CHIP_SX1268_433M;
+                T_LOGI(TAG, "chip: SX1268 (433MHz)");
+            } else {
+                T_LOGE(TAG, "fail:detect:both_chips");
+                delete radio_1268;
+                delete s_module;
+                s_module = nullptr;
+                return ESP_FAIL;
+            }
         }
     }
 
     // NVS 주파수로 설정
-    state = s_radio->setFrequency(freq);
+    int16_t state = s_radio->setFrequency(freq);
     if (state != RADIOLIB_ERR_NONE) {
         T_LOGE(TAG, "fail:freq:0x%x", state);
         return ESP_FAIL;
@@ -800,6 +835,8 @@ lora_chip_type_t lora_driver_detect_chip(void) {
     delete module;
     lora_hal_deinit();
 
+    // 감지된 칩 저장 (초기화 시 재사용)
+    s_detected_chip = detected;
     return detected;
 }
 
