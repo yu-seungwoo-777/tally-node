@@ -771,7 +771,17 @@ lora_chip_type_t lora_driver_detect_chip(void) {
         delete radio_1262;
         delete module;
 
-        // SX1262 실패 후 Module 재생성 (SPI 상태 초기화)
+        // SX1262 실패 후 HAL 완전 재초기화 (SPI 버스 복구)
+        lora_hal_deinit();
+        vTaskDelay(pdMS_TO_TICKS(50));  // SPI 안정화 대기
+
+        ret = lora_hal_init();
+        if (ret != ESP_OK) {
+            T_LOGE(TAG, "detect:fail:hal_reinit:0x%x", ret);
+            return LORA_CHIP_UNKNOWN;
+        }
+
+        hal = lora_hal_get_instance();
         module = new Module(hal, EORA_S3_LORA_CS, EORA_S3_LORA_DIO1,
                            EORA_S3_LORA_RST, EORA_S3_LORA_BUSY);
 
