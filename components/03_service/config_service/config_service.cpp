@@ -1795,7 +1795,7 @@ esp_err_t ConfigServiceClass::factoryReset(void)
 // Device 설정
 // ============================================================================
 
-esp_err_t ConfigServiceClass::getDevice(config_device_t* config)
+esp_err_t ConfigServiceClass::getDevice(config_device_t* config, lora_chip_type_t chip_type)
 {
     if (!config) {
         return ESP_ERR_INVALID_ARG;
@@ -1803,10 +1803,16 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config)
 
     memset(config, 0, sizeof(config_device_t));
 
+    // 칩 타입에 따른 기본 주파수 결정
+    float default_freq = NVS_LORA_DEFAULT_FREQ_868;
+    if (chip_type == LORA_CHIP_SX1268_433M) {
+        default_freq = NVS_LORA_DEFAULT_FREQ_433;
+    }
+
     // 기본값 설정 (NVSConfig)
     config->brightness = NVS_DEVICE_BRIGHTNESS;
     config->camera_id = NVS_DEVICE_CAMERA_ID;
-    config->rf.frequency = NVS_LORA_DEFAULT_FREQ_868;
+    config->rf.frequency = default_freq;
     config->rf.sync_word = NVS_LORA_DEFAULT_SYNC_WORD;
     config->rf.sf = NVS_LORA_DEFAULT_SF;
     config->rf.cr = NVS_LORA_DEFAULT_CR;

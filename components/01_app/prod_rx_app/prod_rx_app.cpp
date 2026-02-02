@@ -274,35 +274,24 @@ bool prod_rx_app_init(const prod_rx_config_t* config)
     config_device_t device_config;
     // 칩 감지 후 기본값 결정
     lora_chip_type_t chip = lora_driver_detect_chip();
-    float default_freq = (chip == LORA_CHIP_SX1268_433M) ? NVS_LORA_DEFAULT_FREQ_433 : NVS_LORA_DEFAULT_FREQ_868;
 
-    float saved_freq = default_freq;
-    uint8_t saved_sync = NVS_LORA_DEFAULT_SYNC_WORD;
-    uint8_t saved_sf = NVS_LORA_DEFAULT_SF;
-    uint8_t saved_cr = NVS_LORA_DEFAULT_CR;
-    float saved_bw = NVS_LORA_DEFAULT_BW;
-    int8_t saved_txp = NVS_LORA_DEFAULT_TX_POWER;
-
-    if (config_service_get_device(&device_config) == ESP_OK) {
-        saved_freq = device_config.rf.frequency;
-        saved_sync = device_config.rf.sync_word;
-        saved_sf = device_config.rf.sf;
-        saved_cr = device_config.rf.cr;
-        saved_bw = device_config.rf.bw;
-        saved_txp = device_config.rf.tx_power;
+    if (config_service_get_device(&device_config, chip) == ESP_OK) {
         T_LOGD(TAG, "RF config loaded: %.1f MHz, Sync 0x%02X, SF%d, CR%d, BW%.0f, TXP%ddBm",
-                 saved_freq, saved_sync, saved_sf, saved_cr, saved_bw, saved_txp);
+                 device_config.rf.frequency, device_config.rf.sync_word,
+                 device_config.rf.sf, device_config.rf.cr,
+                 device_config.rf.bw, device_config.rf.tx_power);
     } else {
-        T_LOGI(TAG, "RF config using chip defaults: %.1f MHz", default_freq);
+        T_LOGE(TAG, "RF config load failed");
+        return false;
     }
 
     lora_service_config_t lora_config = {
-        .frequency = saved_freq,
-        .spreading_factor = saved_sf,
-        .coding_rate = saved_cr,
-        .bandwidth = saved_bw,
-        .tx_power = saved_txp,
-        .sync_word = saved_sync
+        .frequency = device_config.rf.frequency,
+        .spreading_factor = device_config.rf.sf,
+        .coding_rate = device_config.rf.cr,
+        .bandwidth = device_config.rf.bw,
+        .tx_power = device_config.rf.tx_power,
+        .sync_word = device_config.rf.sync_word
     };
     esp_err_t lora_ret = lora_service_init(&lora_config);
     if (lora_ret != ESP_OK) {

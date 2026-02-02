@@ -27,6 +27,13 @@
 extern "C" {
 #endif
 
+// LoRa 칩 타입 (lora_driver.h)
+typedef enum {
+    LORA_CHIP_UNKNOWN = 0,
+    LORA_CHIP_SX1262_868M = 1,
+    LORA_CHIP_SX1268_433M = 2,
+} lora_chip_type_t;
+
 // ============================================================================
 // C 구조체 (외부 인터페이스)
 // ============================================================================
@@ -255,9 +262,10 @@ esp_err_t config_service_set_secondary_offset(uint8_t offset);
 /**
  * @brief Device 설정 로드
  * @param config[out] 설정을 저장할 구조체
+ * @param chip_type LoRa 칩 타입 (기본값 결정용, LORA_CHIP_UNKNOWN=868MHz)
  * @return ESP_OK 성공, ESP_FAIL 실패
  */
-esp_err_t config_service_get_device(config_device_t* config);
+esp_err_t config_service_get_device(config_device_t* config, lora_chip_type_t chip_type);
 
 /**
  * @brief Device 설정 저장
