@@ -331,6 +331,73 @@ esp_err_t ethernet_hal_start(void)
         return ret;
     }
 
+    // ========================================================================
+    // W5500 칩 유무 감지 (SPI 통해 칩 ID 확인)
+    // ========================================================================
+    {
+        // 임시 SPI 디바이스 설정 (간단한 읽기 전용)
+        spi_device_interface_config_t temp_devcfg = {
+            .command_bits = 16,
+            .address_bits = 8,
+            .dummy_bits = 8,
+            .mode = 0,
+            .clock_speed_hz = 2 * 1000 * 1000,  // 2MHz (안정적인 감지)
+            .queue_size = 1,
+            .spics_io_num = EORA_S3_W5500_CS,
+            .flags = 0,
+        };
+
+        spi_device_handle_t temp_handle;
+        ret = spi_bus_add_device(EORA_S3_W5500_SPI_HOST, &temp_devcfg, &temp_handle);
+        if (ret != ESP_OK) {
+            T_LOGE(TAG, "fail:spi_add:0x%x", ret);
+            return ret;
+        }
+
+        // W5500 칩 ID 레지스터(0x0000) 읽기
+        // W5500 SPI 형식: [Opcode(1byte)][Address(2bytes)][Data(1byte)][Dummy(1byte)]
+        // Read: 0x00 + Address[15:0]
+        uint32_t tx_data = (0x00 << 16) | 0x0000;  // Read opcode + address 0
+        uint32_t rx_data = 0;
+
+        spi_transaction_t trans = {
+            .flags = SPI_TRANS_USE_TXDATA | SPI_TRANS_USE_RXDATA,
+            .length = 32,  // 32비트 전송
+            .tx_data[0] = (tx_data >> 24) & 0xFF,
+            .tx_data[1] = (tx_data >> 16) & 0xFF,
+            .tx_data[2] = (tx_data >> 8) & 0xFF,
+            .tx_data[3] = tx_data & 0xFF,
+        };
+
+        ret = spi_device_polling_transmit(temp_handle, &trans);
+
+        // 임시 디바이스 제거
+        spi_bus_remove_device(temp_handle);
+
+        if (ret != ESP_OK) {
+            T_LOGW(TAG, "w5500:not_detected:spi_fail");
+            spi_bus_free(EORA_S3_W5500_SPI_HOST);
+            return ESP_ERR_NOT_FOUND;
+        }
+
+        // 수신 데이터에서 칩 ID 추출 (하위 바이트)
+        rx_data = ((uint32_t)trans.rx_data[0] << 24) |
+                  ((uint32_t)trans.rx_data[1] << 16) |
+                  ((uint32_t)trans.rx_data[2] << 8) |
+                  trans.rx_data[3];
+
+        uint8_t chip_id = rx_data & 0xFF;
+
+        if (chip_id != 0x04) {
+            // W5500 칩 ID가 아니면 칩 없음
+            T_LOGW(TAG, "w5500:not_detected:chip_id:0x%02x", chip_id);
+            spi_bus_free(EORA_S3_W5500_SPI_HOST);
+            return ESP_ERR_NOT_FOUND;
+        }
+
+        T_LOGD(TAG, "w5500:detected:chip_id:0x%02x", chip_id);
+    }
+
     // SPI 디바이스 설정
     spi_device_interface_config_t spi_devcfg = {
         .command_bits = 16,
