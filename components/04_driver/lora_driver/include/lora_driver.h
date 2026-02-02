@@ -137,6 +137,12 @@ esp_err_t lora_driver_set_sync_word(uint8_t sync_word);
 float lora_driver_get_default_frequency(void);
 
 /**
+ * @brief 현재 장착된 칩 타입 반환
+ * @return lora_chip_type_t 현재 칩 타입 (초기화 전: UNKNOWN, 감지됨: 감지된 타입)
+ */
+lora_chip_type_t lora_driver_get_chip_type(void);
+
+/**
  * @brief 장착된 LoRa 칩 타입 감지 (초기화 없이)
  *
  * 드라이버 초기화 전에 칩 타입만 확인하여 기본값 설정에 사용

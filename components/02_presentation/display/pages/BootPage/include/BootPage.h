@@ -31,6 +31,12 @@ void boot_page_set_message(const char* message);
  */
 void boot_page_set_progress(uint8_t progress);
 
+/**
+ * @brief LoRa 칩 타입 설정
+ * @param chip_type 칩 타입 (0=Unknown, 1=SX1262_868M, 2=SX1268_433M)
+ */
+void boot_page_set_chip_type(uint8_t chip_type);
+
 #ifdef __cplusplus
 }
 #endif

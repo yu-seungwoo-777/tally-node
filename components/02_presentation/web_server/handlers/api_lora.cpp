@@ -71,23 +71,58 @@ esp_err_t api_lora_scan_start_handler(httpd_req_t* req)
         return web_server_send_json_bad_request(req, "Invalid JSON");
     }
 
-    // 파라미터 추출 (기본값: 863-870 MHz, 0.1 MHz step)
+    // 칩 타입 확인 후 기본 범위 설정 (캐시된 시스템 정보 사용)
+    const web_server_data_t* cache = web_server_cache_get();
+    uint8_t chip_type = cache->system.lora_chip_type;  // 0=Unknown, 1=SX1262_868M, 2=SX1268_433M
+
+    float default_start, default_end;
+    bool is_433_module = (chip_type == 2);  // SX1268_433M
+
+    if (is_433_module) {
+        default_start = 410.0f;  // 433MHz 모듈 기본 범위
+        default_end = 493.0f;
+    } else {
+        default_start = 850.0f;  // 868MHz 모듈 기본 범위
+        default_end = 930.0f;
+    }
+
+    // 파라미터 추출 (기본값: 칩 타입에 따른 범위)
     cJSON* start_json = cJSON_GetObjectItem(root, "startFreq");
     cJSON* end_json = cJSON_GetObjectItem(root, "endFreq");
-    cJSON* step_json = cJSON_GetObjectItem(root, "step");
 
-    float start_freq = 863.0f;
-    float end_freq = 870.0f;
-    float step = 0.1f;
+    float start_freq = default_start;
+    float end_freq = default_end;
+    float step = 1.0f;
 
     if (start_json && cJSON_IsNumber(start_json)) {
         start_freq = (float)start_json->valuedouble;
+        // 범위 검증
+        if (is_433_module) {
+            if (start_freq < 410.0f || start_freq > 493.0f) {
+                cJSON_Delete(root);
+                return web_server_send_json_error(req, "Start frequency out of range (410-493 MHz for 433MHz module)");
+            }
+        } else {
+            if (start_freq < 850.0f || start_freq > 930.0f) {
+                cJSON_Delete(root);
+                return web_server_send_json_error(req, "Start frequency out of range (850-930 MHz for 868MHz module)");
+            }
+        }
     }
     if (end_json && cJSON_IsNumber(end_json)) {
         end_freq = (float)end_json->valuedouble;
-    }
-    if (step_json && cJSON_IsNumber(step_json)) {
-        step = (float)step_json->valuedouble;
+        // 범위 검증
+        if (is_433_module) {
+            if (end_freq < 410.0f || end_freq > 493.0f) {
+                cJSON_Delete(root);
+                return web_server_send_json_error(req, "End frequency out of range (410-493 MHz for 433MHz module)");
+            }
+        } else {
+            if (end_freq < 850.0f || end_freq > 930.0f) {
+                cJSON_Delete(root);
+                return web_server_send_json_error(req, "End frequency out of range (850-930 MHz for 868MHz module)");
+            }
+        }
     }
 
     cJSON_Delete(root);

@@ -19,9 +19,11 @@ static const char* TAG = "02_BootPage";
 static struct {
     char message[32];
     uint8_t progress;
+    uint8_t chip_type;  // 0=Unknown, 1=SX1262_868M, 2=SX1268_433M
 } s_boot_page = {
     .message = "EoRa-S3 Tally Node",
     .progress = 0,
+    .chip_type = 0,
 };
 
 // ============================================================================
@@ -60,11 +62,24 @@ static void draw_professional_box(u8g2_t* u8g2)
     u8g2_DrawStr(u8g2, title_x, box_y + 14, title_version);
 
     // 모드 정보 (2줄, 중앙 정렬)
+    const char* freq_str;
+    switch (s_boot_page.chip_type) {
+        case 1:  // SX1262_868M
+            freq_str = "868MHz";
+            break;
+        case 2:  // SX1268_433M
+            freq_str = "433MHz";
+            break;
+        default:
+            freq_str = "Unknown";
+            break;
+    }
+
     char mode_str[32];
 #ifdef DEVICE_MODE_TX
-    snprintf(mode_str, sizeof(mode_str), "MODE: TX (868MHz)");
+    snprintf(mode_str, sizeof(mode_str), "MODE: TX (%s)", freq_str);
 #else
-    snprintf(mode_str, sizeof(mode_str), "MODE: RX (868MHz)");
+    snprintf(mode_str, sizeof(mode_str), "MODE: RX (%s)", freq_str);
 #endif
     int mode_width = u8g2_GetStrWidth(u8g2, mode_str);
     int mode_x = box_x + (box_width - mode_width) / 2;
@@ -165,4 +180,9 @@ extern "C" void boot_page_set_progress(uint8_t progress)
         progress = 100;
     }
     s_boot_page.progress = progress;
+}
+
+extern "C" void boot_page_set_chip_type(uint8_t chip_type)
+{
+    s_boot_page.chip_type = chip_type;
 }

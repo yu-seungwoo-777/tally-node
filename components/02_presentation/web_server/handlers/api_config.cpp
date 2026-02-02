@@ -60,23 +60,48 @@ esp_err_t api_config_post_handler(httpd_req_t* req)
     if (strncmp(path, "device/rf", 9) == 0) {
         cJSON* freq = cJSON_GetObjectItem(root, "frequency");
         cJSON* sync = cJSON_GetObjectItem(root, "syncWord");
-        if (freq && sync && cJSON_IsNumber(freq) && cJSON_IsNumber(sync)) {
-            // RF 설정은 즉시 적용 (broadcast 후 NVS 저장)
-            lora_rf_event_t rf_event;
-            rf_event.frequency = (float)freq->valuedouble;
-            rf_event.sync_word = (uint8_t)sync->valueint;
-            event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
 
-            T_LOGD(TAG_RF, "RF config request: %.1f MHz, Sync 0x%02X",
-                     rf_event.frequency, rf_event.sync_word);
-
+        if (!freq || !cJSON_IsNumber(freq)) {
+            T_LOGE(TAG, "Missing or invalid 'frequency'");
             cJSON_Delete(root);
-            return web_server_send_json_ok(req);
-        } else {
-            T_LOGE(TAG, "Missing 'frequency' or 'syncWord'");
-            cJSON_Delete(root);
-            return web_server_send_json_error(req, "Missing 'frequency' or 'syncWord'");
+            return web_server_send_json_error(req, "Missing or invalid 'frequency'");
         }
+        if (!sync || !cJSON_IsNumber(sync)) {
+            T_LOGE(TAG, "Missing or invalid 'syncWord'");
+            cJSON_Delete(root);
+            return web_server_send_json_error(req, "Missing or invalid 'syncWord'");
+        }
+
+        float frequency = (float)freq->valuedouble;
+        uint8_t sync_word = (uint8_t)sync->valueint;
+
+        // 주파수 범위 검증 (433MHz/868MHz 대역 확인)
+        bool valid = false;
+        if (frequency >= 410.0f && frequency <= 493.0f) {
+            // 433MHz 대역
+            valid = true;
+        } else if (frequency >= 850.0f && frequency <= 930.0f) {
+            // 868MHz 대역
+            valid = true;
+        }
+
+        if (!valid) {
+            T_LOGW(TAG, "Invalid frequency: %.1f MHz (valid: 410-493, 850-930)", frequency);
+            cJSON_Delete(root);
+            return web_server_send_json_error(req, "Frequency out of range (410-493MHz or 850-930MHz)");
+        }
+
+        // RF 설정은 즉시 적용 (broadcast 후 NVS 저장)
+        lora_rf_event_t rf_event;
+        rf_event.frequency = frequency;
+        rf_event.sync_word = sync_word;
+        event_bus_publish(EVT_RF_CHANGED, &rf_event, sizeof(rf_event));
+
+        T_LOGD(TAG_RF, "RF config request: %.1f MHz, Sync 0x%02X",
+                 rf_event.frequency, rf_event.sync_word);
+
+        cJSON_Delete(root);
+        return web_server_send_json_ok(req);
     }
     else if (strncmp(path, "switcher/primary", 16) == 0) {
         parse_result = web_server_config_parse_switcher_primary(root, &save_req);

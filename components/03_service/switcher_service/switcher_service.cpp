@@ -989,13 +989,6 @@ packed_data_t SwitcherService::combineDualModeTally() const {
     if (primary_.adapter) {
         primary_data = primary_.adapter->getPackedTally();
         has_primary = packed_data_is_valid(&primary_data);
-
-        // Primary 로그 출력
-        if (has_primary) {
-            char tally_str[64];
-            packed_data_format_tally(&primary_data, tally_str, sizeof(tally_str));
-            T_LOGI(TAG, "Primary Tally: %s (ch=%d)", tally_str, primary_data.channel_count);
-        }
     }
 
     // Secondary 데이터 가져오기
@@ -1004,13 +997,6 @@ packed_data_t SwitcherService::combineDualModeTally() const {
     if (secondary_.adapter) {
         secondary_data = secondary_.adapter->getPackedTally();
         has_secondary = packed_data_is_valid(&secondary_data);
-
-        // Secondary 로그 출력
-        if (has_secondary) {
-            char tally_str[64];
-            packed_data_format_tally(&secondary_data, tally_str, sizeof(tally_str));
-            T_LOGI(TAG, "Secondary Tally: %s (ch=%d, offset=%d)", tally_str, secondary_data.channel_count, secondary_offset_);
-        }
     }
 
     // 둘 다 없으면 빈 값 반환

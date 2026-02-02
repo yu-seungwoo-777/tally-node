@@ -231,7 +231,7 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
             if (state == RADIOLIB_ERR_NONE) {
                 s_radio = radio_1262;
                 s_chip_type = LORA_CHIP_SX1262_868M;
-                T_LOGI(TAG, "chip: SX1262 (868MHz) pre-detected");
+                T_LOGI(TAG, "chip: SX1262 (868MHz) - using detected chip");
             } else {
                 delete radio_1262;
                 T_LOGE(TAG, "fail:pre_detected_sx1262");
@@ -245,7 +245,7 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
             if (state == RADIOLIB_ERR_NONE) {
                 s_radio = radio_1268;
                 s_chip_type = LORA_CHIP_SX1268_433M;
-                T_LOGI(TAG, "chip: SX1268 (433MHz) pre-detected");
+                T_LOGI(TAG, "chip: SX1268 (433MHz) - using detected chip");
             } else {
                 delete radio_1268;
                 T_LOGE(TAG, "fail:pre_detected_sx1268");
@@ -758,6 +758,18 @@ float lora_driver_get_default_frequency(void) {
         default:
             return 868.0f;  // 폴백
     }
+}
+
+/**
+ * @brief 현재 장착된 칩 타입 반환
+ */
+lora_chip_type_t lora_driver_get_chip_type(void) {
+    // 초기화 전: 감지된 칩이 있으면 반환
+    if (!s_initialized && s_detected_chip != LORA_CHIP_UNKNOWN) {
+        return s_detected_chip;
+    }
+    // 초기화 후: 현재 칩 타입 반환
+    return s_chip_type;
 }
 
 /**
