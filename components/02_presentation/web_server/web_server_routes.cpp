@@ -27,7 +27,7 @@ const httpd_uri_t g_routes[] = {
     { .uri = "/",                   .method = HTTP_GET,    .handler = index_handler,        .user_ctx = nullptr },
     { .uri = "/css/styles.css",     .method = HTTP_GET,    .handler = css_handler,          .user_ctx = nullptr },
     { .uri = "/js/app.bundle.js",   .method = HTTP_GET,    .handler = js_handler,           .user_ctx = nullptr },
-    { .uri = "/vendor/alpine.js",   .method = HTTP_GET,    .handler = alpine_handler,       .user_ctx = nullptr },
+
     { .uri = "/favicon.ico",        .method = HTTP_GET,    .handler = favicon_handler,      .user_ctx = nullptr },
 
     // API - Status

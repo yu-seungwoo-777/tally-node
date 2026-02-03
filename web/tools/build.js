@@ -42,6 +42,7 @@ function copyRecursive(srcDir, destDir) {
         if (entry.name === 'pages') continue;
         if (entry.name === 'js') continue;
         if (entry.name === 'css') continue;
+        if (entry.name === 'vendor') continue;
         if (entry.name.endsWith('.bak')) continue;
 
         const srcPath = path.join(srcDir, entry.name);
@@ -142,6 +143,7 @@ function copyVendor() {
     fs.mkdirSync(destVendorDir, { recursive: true });
     const files = fs.readdirSync(vendorDir);
     for (const file of files) {
+        if (file === 'alpine.js') continue;  // app.bundle.js에 병합됨
         copyFile(path.join(vendorDir, file), path.join(destVendorDir, file));
     }
 }
@@ -171,12 +173,20 @@ mergePagesToIndex();
 console.log('\n📦 JS...');
 await bundleJs();
 
+// Alpine.js를 app.bundle.js 앞에 병합 (별도 요청 제거)
+console.log('\n🏔️ Alpine.js 병합...');
+const alpineSrc = fs.readFileSync(path.join(SRC_DIR, 'vendor/alpine.js'), 'utf-8');
+const bundlePath = path.join(DIST_DIR, 'js/app.bundle.js');
+const bundleSrc = fs.readFileSync(bundlePath, 'utf-8');
+fs.writeFileSync(bundlePath, alpineSrc + '\n' + bundleSrc);
+console.log(`  Merged alpine.js + app.bundle.js (${(fs.statSync(bundlePath).size / 1024).toFixed(1)} KB)`);
+
 // index.html script 태그 변경
 const indexPath = path.join(DIST_DIR, 'index.html');
 let indexHtml = fs.readFileSync(indexPath, 'utf-8');
 indexHtml = indexHtml.replace(
     '<script type="module" src="js/app.js"></script>',
-    '<script src="js/app.bundle.js?v=' + Date.now() + '"></script>'
+    '<script defer src="js/app.bundle.js?v=' + Date.now() + '"></script>'
 );
 fs.writeFileSync(indexPath, indexHtml);
 

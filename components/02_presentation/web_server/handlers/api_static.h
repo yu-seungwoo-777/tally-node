@@ -38,14 +38,6 @@ esp_err_t css_handler(httpd_req_t* req);
 esp_err_t js_handler(httpd_req_t* req);
 
 /**
- * @brief Alpine.js 파일 핸들러
- * @param req HTTP 요청
- * @return ESP_OK 항상 성공
- * @details 임베디드된 alpine.js 파일을 응답으로 전송합니다
- */
-esp_err_t alpine_handler(httpd_req_t* req);
-
-/**
  * @brief Favicon 핸들러
  * @param req HTTP 요청
  * @return ESP_OK 항상 성공

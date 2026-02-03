@@ -24,7 +24,7 @@ typedef struct {
 static static_file_cache_t s_index_gz_cache = {nullptr, 0, false};
 static static_file_cache_t s_css_gz_cache = {nullptr, 0, false};
 static static_file_cache_t s_js_gz_cache = {nullptr, 0, false};
-static static_file_cache_t s_alpine_gz_cache = {nullptr, 0, false};
+
 
 // ============================================================================
 // PSRAM 캐싱 초기화
@@ -63,14 +63,10 @@ void web_server_static_cache_init(void)
     cache_to_psram(index_html_gz_data, index_html_gz_len, &s_index_gz_cache, "index.html.gz");
     cache_to_psram(styles_css_gz_data, styles_css_gz_len, &s_css_gz_cache, "styles.css.gz");
     cache_to_psram(app_bundle_js_gz_data, app_bundle_js_gz_len, &s_js_gz_cache, "app.bundle.js.gz");
-    cache_to_psram(alpine_js_gz_data, alpine_js_gz_len, &s_alpine_gz_cache, "alpine.js.gz");
-
     size_t total_cached = 0;
     if (s_index_gz_cache.cached) total_cached += s_index_gz_cache.len;
     if (s_css_gz_cache.cached) total_cached += s_css_gz_cache.len;
     if (s_js_gz_cache.cached) total_cached += s_js_gz_cache.len;
-    if (s_alpine_gz_cache.cached) total_cached += s_alpine_gz_cache.len;
-
     T_LOGI(TAG, "PSRAM cache complete: %zu KB (gzip)", total_cached / 1024);
 }
 
@@ -87,10 +83,6 @@ void web_server_static_cache_deinit(void)
     if (s_js_gz_cache.cached && s_js_gz_cache.data) {
         heap_caps_free((void*)s_js_gz_cache.data);
         s_js_gz_cache.cached = false;
-    }
-    if (s_alpine_gz_cache.cached && s_alpine_gz_cache.data) {
-        heap_caps_free((void*)s_alpine_gz_cache.data);
-        s_alpine_gz_cache.cached = false;
     }
 }
 
@@ -148,12 +140,6 @@ esp_err_t css_handler(httpd_req_t* req)
 esp_err_t js_handler(httpd_req_t* req)
 {
     send_static_response(req, "text/javascript", &s_js_gz_cache, app_bundle_js_data, app_bundle_js_len);
-    return ESP_OK;
-}
-
-esp_err_t alpine_handler(httpd_req_t* req)
-{
-    send_static_response(req, "text/javascript", &s_alpine_gz_cache, alpine_js_data, alpine_js_len);
     return ESP_OK;
 }
 
