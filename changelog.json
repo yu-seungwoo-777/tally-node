@@ -1,6 +1,28 @@
 {
   "versions": [
     {
+      "version": "2.3.1",
+      "date": "2026-02-03",
+      "tx": {
+        "ko": {
+          "title": "웹서버 로딩 속도 및 연결 효율성 개선",
+          "changes": [
+            "Alpine.js를 앱 번들에 통합하여 TCP 연결 수 감소",
+            "정적 파일 gzip 압축 및 minify 적용으로 로딩 속도 개선",
+            "웹 인터페이스 전반적인 성능 최적화"
+          ]
+        },
+        "en": {
+          "title": "Web server loading speed and connection efficiency improvements",
+          "changes": [
+            "Integrated Alpine.js into app bundle to reduce TCP connections",
+            "Applied gzip compression and minification for static files to improve loading speed",
+            "Overall web interface performance optimization"
+          ]
+        }
+      }
+    },
+    {
       "version": "2.3.0",
       "date": "2026-02-02",
       "tx": {
@@ -18,6 +40,24 @@
             "Auto-detection of 433MHz/868MHz LoRa modules",
             "Dynamic frequency range setting by chip type",
             "Enhanced Ethernet Static IP validation"
+          ]
+        }
+      },
+      "rx": {
+        "ko": {
+          "title": "LoRa 칩 타입별 주파수 대역 지원",
+          "changes": [
+            "433MHz/868MHz LoRa 모듈 자동 감지",
+            "칩 타입별 주파수 대역 동적 설정",
+            "부팅 화면에 LoRa 칩 타입 표시"
+          ]
+        },
+        "en": {
+          "title": "LoRa Chip Type Specific Frequency Band Support",
+          "changes": [
+            "Auto-detection of 433MHz/868MHz LoRa modules",
+            "Dynamic frequency range setting by chip type",
+            "Display LoRa chip type on boot screen"
           ]
         }
       }

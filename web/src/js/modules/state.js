@@ -70,7 +70,7 @@ export function stateModule() {
             temperature: 0,
             uptime: 0,
             freeHeap: 0,
-            version: '2.3.0',
+            version: '2.3.1',
             loraChipType: 1  // 1=SX1262_868M, 2=SX1268_433M
         },
 
@@ -252,7 +252,7 @@ export function stateModule() {
                     this.system.uptime = data.system.uptime || 0;
                     this.system.loraChipType = data.system.loraChipType || 1;
                     // 펌웨어 버전 (API에서 가져옴)
-                    this.system.version = data.system.version || '2.3.0';
+                    this.system.version = data.system.version || '2.3.1';
                 }
 
                 // Switcher 업데이트 (primary/secondary에 상태+설정 병합)
