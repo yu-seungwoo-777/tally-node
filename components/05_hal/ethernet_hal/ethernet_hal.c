@@ -336,7 +336,7 @@ esp_err_t ethernet_hal_start(void)
         .command_bits = 16,
         .address_bits = 8,
         .mode = 0,
-        .clock_speed_hz = 8 * 1000 * 1000,  // 8MHz (HTTPS 안정성을 위해 낮춤)
+        .clock_speed_hz = 20 * 1000 * 1000,  // 20MHz
         .queue_size = 32,
         .spics_io_num = EORA_S3_W5500_CS,
     };
