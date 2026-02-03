@@ -7,6 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { gzipSync } from 'zlib';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -106,6 +107,54 @@ for (const file of files) {
     embedFile(file, EMBED_DIR);
 }
 
+// gzip 압축본 생성 (HTML, CSS, JS만 대상)
+const GZIP_EXTENSIONS = ['.html', '.css', '.js'];
+const gzFiles = files.filter(f => GZIP_EXTENSIONS.includes(path.extname(f)));
+const gzIncludeNames = [];
+
+console.log('\n🔒 Gzip compressing...');
+for (const file of gzFiles) {
+    const content = fs.readFileSync(file);
+    const compressed = gzipSync(content, { level: 9 });
+    const basename = path.basename(file);
+    const varName = basename.replace(/[.-]/g, '_') + '_gz';
+    const headerName = varName + '_h.h';
+
+    // 압축본이 원본보다 큰 경우 건너뜀 (작은 파일)
+    if (compressed.length >= content.length) {
+        console.log(`  SKIP ${basename}: compressed (${compressed.length}B) >= original (${content.length}B)`);
+        continue;
+    }
+
+    // C 배열 생성
+    const hexArray = [];
+    for (let i = 0; i < compressed.length; i++) {
+        hexArray.push('0x' + compressed[i].toString(16).padStart(2, '0'));
+    }
+    const lines = [];
+    for (let i = 0; i < hexArray.length; i += 12) {
+        lines.push(hexArray.slice(i, i + 12).join(', '));
+    }
+    const formattedArray = lines.join(',\n    ');
+
+    const header = `// Auto-generated gzip from ${basename}
+// DO NOT EDIT
+
+#pragma once
+
+#include <stddef.h>
+
+static const unsigned char ${varName}_data[] = {
+    ${formattedArray}
+};
+
+static const size_t ${varName}_len = ${compressed.length};
+`;
+    fs.writeFileSync(path.join(EMBED_DIR, headerName), header);
+    gzIncludeNames.push(headerName);
+    console.log(`  ${basename} → ${headerName} (${content.length}B → ${compressed.length}B)`);
+}
+
 // 인덱스 파일 생성
 const indexHeader = `// Auto-generated file list
 // DO NOT EDIT
@@ -119,6 +168,8 @@ const includes = files.map(f => {
     return `#include "${name}_h.h"`;
 }).join('\n');
 
-fs.writeFileSync(path.join(EMBED_DIR, 'static_files.h'), indexHeader + includes);
+const gzIncludes = gzIncludeNames.map(n => `#include "${n}"`).join('\n');
 
-console.log(`\n✅ Embedded ${files.length} files!\n`);
+fs.writeFileSync(path.join(EMBED_DIR, 'static_files.h'), indexHeader + includes + '\n\n// Gzip 압축본\n' + gzIncludes);
+
+console.log(`\n✅ Embedded ${files.length} files + ${gzIncludeNames.length} gzip!\n`);

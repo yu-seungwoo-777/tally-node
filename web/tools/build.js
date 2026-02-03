@@ -11,6 +11,7 @@ import * as esbuild from 'esbuild';
 import postcss from 'postcss';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
+import cssnano from 'cssnano';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -92,7 +93,8 @@ async function buildCss() {
     const css = fs.readFileSync(inputCss, 'utf-8');
     const result = await postcss([
         tailwindcss,
-        autoprefixer
+        autoprefixer,
+        cssnano
     ]).process(css, { from: undefined });
 
     // Tailwind 결과 + 커스텀 CSS 병합
@@ -120,7 +122,7 @@ async function bundleJs() {
         outfile: outFile,
         format: 'iife',
         target: 'es2020',
-        minify: false,
+        minify: true,
         banner: {
             js: '// Tally Node Web Application'
         }
