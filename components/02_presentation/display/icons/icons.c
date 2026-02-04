@@ -29,11 +29,19 @@ void drawTallyBatteryIcon(u8g2_t *u8g2, int16_t x, int16_t y, uint8_t level)
 
 /**
  * @brief 배터리 퍼센트를 레벨로 변환
+ *
+ * 레벨 기준 (보수적 설정, 사용자에게 넉넉하게 표시):
+ * - 0%  ~ 10%:  EMPTY (0칸) - 거의 소진
+ * - 11% ~ 40%:  LOW   (1칸) - 3.5V~3.7V
+ * - 41% ~ 75%:  MEDIUM(2칸) - 3.7V~3.95V
+ * - 76% ~ 100%: FULL  (3칸) - 3.95V 이상
+ *
+ * @note 딥슬립은 3.2V 미만 (0%)에서 트리거됨
  */
 uint8_t getBatteryLevel(uint8_t percentage)
 {
-    if (percentage <= 25) return BATTERY_LEVEL_EMPTY;
-    if (percentage <= 50) return BATTERY_LEVEL_LOW;
+    if (percentage <= 10) return BATTERY_LEVEL_EMPTY;
+    if (percentage <= 40) return BATTERY_LEVEL_LOW;
     if (percentage <= 75) return BATTERY_LEVEL_MEDIUM;
     return BATTERY_LEVEL_FULL;
 }

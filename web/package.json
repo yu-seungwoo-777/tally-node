@@ -1,6 +1,6 @@
 {
   "name": "tally-web-ui",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "Tally Node Web UI",
   "type": "module",
   "scripts": {
