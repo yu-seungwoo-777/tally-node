@@ -17,6 +17,9 @@ export function testModule() {
          */
         async startTestMode() {
             try {
+                // API 요청 전에 running 상태를 true로 설정하여 중복 클릭 방지
+                this.testMode.running = true;
+
                 const response = await fetch('/api/test/start', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -27,13 +30,16 @@ export function testModule() {
                 });
 
                 if (response.ok) {
-                    this.testMode.running = true;
                     this.showToast('Test mode started', 'alert-info');
                 } else {
+                    // 응답 실패 시 running 상태 복원
+                    this.testMode.running = false;
                     const error = await response.json();
                     this.showToast(error.message || 'Failed to start test mode', 'alert-error');
                 }
             } catch (e) {
+                // 에러 발생 시 running 상태 복원
+                this.testMode.running = false;
                 this.showToast('Failed to start test mode', 'alert-error');
             }
         },

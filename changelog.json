@@ -1,6 +1,46 @@
 {
   "versions": [
     {
+      "version": "2.3.2",
+      "date": "2026-02-04",
+      "tx": {
+        "ko": {
+          "title": "배터리 아이콘 표시 로직 개선",
+          "changes": [
+            "배터리 잔량에 따른 아이콘 단계 구체화",
+            "배터리 레벨 계산 정확도 개선",
+            "시각적 피드백 명확화"
+          ]
+        },
+        "en": {
+          "title": "Battery icon display logic improved",
+          "changes": [
+            "Refined battery icon stages based on remaining level",
+            "Improved battery level calculation accuracy",
+            "Clarified visual feedback"
+          ]
+        }
+      },
+      "rx": {
+        "ko": {
+          "title": "배터리 아이콘 표시 로직 개선",
+          "changes": [
+            "배터리 잔량에 따른 아이콘 단계 구체화",
+            "배터리 레벨 계산 정확도 개선",
+            "시각적 피드백 명확화"
+          ]
+        },
+        "en": {
+          "title": "Battery icon display logic improved",
+          "changes": [
+            "Refined battery icon stages based on remaining level",
+            "Improved battery level calculation accuracy",
+            "Clarified visual feedback"
+          ]
+        }
+      }
+    },
+    {
       "version": "2.3.1",
       "date": "2026-02-03",
       "tx": {

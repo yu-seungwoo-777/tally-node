@@ -179,8 +179,11 @@ esp_err_t tally_test_service_start(uint8_t max_channels, uint16_t interval_ms)
             T_LOGW(TAG, "Cleaning up stale task handle");
             s_test.task_handle = nullptr;
         } else {
-            T_LOGW(TAG, "Previous task still exists (state=%d), force cleanup", old_state);
-            s_test.task_handle = nullptr;
+            // 태스크가 아직 실행 중(Running/Ready/Blocked)이면 에러 반환
+            // 강제 cleanup 제거: 실행 중인 태스크의 핸들을 nullptr로 만들면
+            // 태스크 제어 불가 상태가 되고 중복 태스크 생성 가능
+            T_LOGE(TAG, "Previous task still running (state=%d), cannot start new task", old_state);
+            return ESP_ERR_INVALID_STATE;
         }
     }
 

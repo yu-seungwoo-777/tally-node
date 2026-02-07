@@ -133,16 +133,7 @@ static esp_err_t handle_button_single_click(const event_data_t* event)
 static esp_err_t handle_button_long_press(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "Long press -> License validation attempt");
-
-    // 저장된 라이센스 키로 검증
-    char license_key[17] = {0};
-    if (license_service_get_key(license_key) == ESP_OK && strlen(license_key) == 16) {
-        T_LOGI(TAG, "Validating with saved license key: %.16s", license_key);
-        license_service_validate(license_key);
-    } else {
-        T_LOGW(TAG, "No license key, skipping validation");
-    }
+    T_LOGD(TAG, "Long press (no action)");
     return ESP_OK;
 }
 
