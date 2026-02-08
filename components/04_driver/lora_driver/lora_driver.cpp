@@ -789,27 +789,6 @@ lora_chip_type_t lora_driver_get_chip_type(void) {
 }
 
 /**
- * @brief SX126x 디바이스 ID로 칩 타입 판별
- *
- * SX1262와 SX1268는 거의 동일하지만 지원 주파수 대역이 다름
- * 디바이스 ID 레지스터(0x419)를 읽어서 구분
- */
-static lora_chip_type_t detect_chip_by_id(SX126x* radio) {
-    // SX126x 디바이스 ID 레지스터 주소
-    const uint8_t REG_ID = 0x419;
-
-    // 디바이스 ID 읽기 (Little Endian, 2바이트)
-    uint8_t id_bytes[2];
-    uint16_t device_id = 0;
-
-    // SPI 거친 읽기 (SX126x SPI 인터페이스)
-    // RadioLib 내부 함수 사용이 어려우므로 간접적으로 begin 성공 후 주파수 설정으로 판별
-    // 433MHz 모듈은 850-930MHz 범위에서 실패해야 함
-
-    return LORA_CHIP_UNKNOWN;  // ID 기반 판별 불가시 폴백
-}
-
-/**
  * @brief 장착된 LoRa 칩 타입 감지 (초기화 없이)
  *
  * 드라이버 초기화 전에 칩 타입만 확인하여 기본값 설정에 사용
