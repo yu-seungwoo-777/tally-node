@@ -217,7 +217,7 @@ static void draw_tx_header(u8g2_t* u8g2)
  * 4-Line 레이아웃:
  * - Line 1 (y=28): "PGM: 1,2,3,4" 형식
  * - Line 2 (y=39): "PVW: 5" 형식
- * - Line 3 (y=50): "AP:[ON]  WiFi:[✓]  ETH:[✓]" 형식
+ * - Line 3 (y=50): "AP:[ON]/OFF  WiFi:[✓]  ETH:[✓]" 형식 (OFF는 strike-through)
  * - Line 4 (y=61): "SINGLE  ATEM:[✓]" 형식
  */
 static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
@@ -260,12 +260,23 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     // Line 3 (y=50): AP, WiFi, Ethernet 상태
     int line3_x = 4;
 
-    // AP 상태
-    const char* ap_status = s_ap_data.ap_enabled ? "[ON]" : "[OFF]";
+    // AP 상태 (활성화: [ON], 비활성화: OFF with strike-through)
     u8g2_DrawStr(u8g2, line3_x, 50, "AP:");
     line3_x += u8g2_GetStrWidth(u8g2, "AP:");
-    u8g2_DrawStr(u8g2, line3_x, 50, ap_status);
-    line3_x += u8g2_GetStrWidth(u8g2, ap_status) + 4;
+
+    if (s_ap_data.ap_enabled) {
+        // 활성화: [ON] 표시
+        u8g2_DrawStr(u8g2, line3_x, 50, "[ON]");
+        line3_x += u8g2_GetStrWidth(u8g2, "[ON]") + 4;
+    } else {
+        // 비활성화: OFF 텍스트 + strike-through
+        const char* off_text = "OFF";
+        u8g2_DrawStr(u8g2, line3_x, 50, off_text);
+        int off_width = u8g2_GetStrWidth(u8g2, off_text);
+        // 텍스트 중간에 가로선 그리기 (profont11_mf 높이 ~11px, 중간은 y~46)
+        u8g2_DrawHLine(u8g2, line3_x, 46, off_width);
+        line3_x += off_width + 4;
+    }
 
     // WiFi 상태
     u8g2_DrawStr(u8g2, line3_x, 50, "WiFi:");
