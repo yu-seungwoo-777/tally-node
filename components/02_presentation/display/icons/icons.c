@@ -129,3 +129,49 @@ void drawTallySignalIcon(u8g2_t *u8g2, int16_t x, int16_t y, int16_t rssi, float
         u8g2_DrawFrame(u8g2, x + (barWidth + barGap) * 2, y, barWidth, 8);
     }
 }
+
+/**
+ * @brief 체크마크 그리기 (8x8 픽셀 영역)
+ *
+ *     ✓
+ *    /
+ *   /
+ *  /
+ * /
+ *
+ * @param u8g2 U8G2 디스플레이 포인터
+ * @param x X 좌표 (왼쪽 상단)
+ * @param y Y 좌표 (왼쪽 상단)
+ */
+void drawCheckMark(u8g2_t *u8g2, int16_t x, int16_t y)
+{
+    // 체크마크: 왼쪽 아래에서 오른쪽 위로 대각선
+    // (x+1, y+7) -> (x+3, y+5) -> (x+7, y+1)
+
+    // 첫 번째 선: 왼쪽 아래에서 중간까지
+    u8g2_DrawLine(u8g2, x + 1, y + 7, x + 3, y + 5);
+
+    // 두 번째 선: 중간에서 오른쪽 위까지
+    u8g2_DrawLine(u8g2, x + 3, y + 5, x + 7, y + 1);
+}
+
+/**
+ * @brief 엑스마크 그리기 (8x8 픽셀 영역)
+ *
+ *     ✗
+ *    \ /
+ *     X
+ *    / \
+ *
+ * @param u8g2 U8G2 디스플레이 포인터
+ * @param x X 좌표 (왼쪽 상단)
+ * @param y Y 좌표 (왼쪽 상단)
+ */
+void drawXMark(u8g2_t *u8g2, int16_t x, int16_t y)
+{
+    // 첫 번째 대각선: 왼쪽 위에서 오른쪽 아래로
+    u8g2_DrawLine(u8g2, x + 1, y + 1, x + 7, y + 7);
+
+    // 두 번째 대각선: 오른쪽 위에서 왼쪽 아래로
+    u8g2_DrawLine(u8g2, x + 7, y + 1, x + 1, y + 7);
+}

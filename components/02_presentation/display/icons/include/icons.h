@@ -65,6 +65,22 @@ uint8_t getSignalLevel(int16_t rssi, float snr);
  */
 void drawTallySignalIcon(u8g2_t *u8g2, int16_t x, int16_t y, int16_t rssi, float snr);
 
+/**
+ * @brief 체크마크 그리기 (8x8 픽셀)
+ * @param u8g2 U8G2 디스플레이 포인터
+ * @param x X 좌표
+ * @param y Y 좌표
+ */
+void drawCheckMark(u8g2_t *u8g2, int16_t x, int16_t y);
+
+/**
+ * @brief 엑스마크 그리기 (8x8 픽셀)
+ * @param u8g2 U8G2 디스플레이 포인터
+ * @param x X 좌표
+ * @param y Y 좌표
+ */
+void drawXMark(u8g2_t *u8g2, int16_t x, int16_t y);
+
 #ifdef __cplusplus
 }
 #endif
