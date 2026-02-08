@@ -12,6 +12,7 @@
  */
 
 #include "TxPage.h"
+#include "TxPageTypes.h"
 #include "icons.h"
 #include "t_log.h"
 #include <string.h>
@@ -64,36 +65,36 @@ static struct {
     char ap_name[32];       // AP SSID
     char ap_password[64];   // AP 비밀번호
     char ap_ip[16];        // AP IP
-    bool ap_enabled;        // AP 활성화 상태
+    ap_status_t ap_status;  // AP 활성화 상태 (ENUM)
 } s_ap_data = {
     .ap_name = "TallyNode-AP",
     .ap_password = "********",
     .ap_ip = "192.168.4.1",
-    .ap_enabled = false,    // 기본 비활성화
+    .ap_status = AP_STATUS_INACTIVE,  // 기본 비활성화
 };
 
 // WIFI 정보 (Page 4)
 static struct {
-    char wifi_ssid[32];     // WIFI SSID
-    char wifi_password[64]; // WIFI 비밀번호
-    char wifi_ip[16];       // WIFI IP
-    bool wifi_connected;
+    char wifi_ssid[32];       // WIFI SSID
+    char wifi_password[64];   // WIFI 비밀번호
+    char wifi_ip[16];         // WIFI IP
+    network_status_t wifi_status;  // WiFi 연결 상태 (ENUM)
 } s_wifi_data = {
     .wifi_ssid = "",
     .wifi_password = "********",
     .wifi_ip = "",
-    .wifi_connected = false,
+    .wifi_status = NET_STATUS_NOT_DETECTED,  // 기본 미감지
 };
 
 // ETHERNET 정보 (Page 5)
 static struct {
-    char eth_ip[16];        // Ethernet IP
-    bool eth_dhcp_mode;     // true=DHCP, false=Static
-    bool eth_connected;
+    char eth_ip[16];            // Ethernet IP
+    bool eth_dhcp_mode;         // true=DHCP, false=Static
+    network_status_t eth_status;  // Ethernet 연결 상태 (ENUM)
 } s_eth_data = {
     .eth_ip = "",
     .eth_dhcp_mode = true,
-    .eth_connected = false,
+    .eth_status = NET_STATUS_NOT_DETECTED,  // 기본 미감지
 };
 
 // 시스템 정보 (Page 6)
@@ -265,36 +266,44 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     // AP 상태 (활성화: V, 비활성화: X)
     u8g2_DrawStr(u8g2, line3_x, 50, "AP:");
     line3_x += u8g2_GetStrWidth(u8g2, "AP:");
-    if (s_ap_data.ap_enabled) {
-        drawCheckMark(u8g2, line3_x, 43);  // 활성화
+    if (s_ap_data.ap_status == AP_STATUS_ACTIVE) {
+        drawCheckMark(u8g2, line3_x, 46);  // 활성화 [V]
     } else {
-        drawXMark(u8g2, line3_x, 43);  // 비활성화
+        drawXMark(u8g2, line3_x, 46);  // 비활성화 [X]
     }
     line3_x += 10;  // 아이콘 너비 + 여백
 
-    // WiFi 상태 (연결: V, 미연결/연결안됨: - 또는 X)
+    // WiFi 상태 (연결: V, 미연결: -, 연결안됨: X)
     u8g2_DrawStr(u8g2, line3_x, 50, "WiFi:");
     line3_x += u8g2_GetStrWidth(u8g2, "WiFi:");
-    if (s_wifi_data.wifi_connected) {
-        drawCheckMark(u8g2, line3_x, 43);  // 연결됨
-    } else {
-        // 미연결 상태 확인 (현재는 연결 안 됨으로만 표시)
-        // TODO: 하드웨어 감지 상태에 따라 - 또는 X 구분
-        u8g2_DrawHLine(u8g2, line3_x, 46, 8);  // 미연결 (-)
-        // drawXMark(u8g2, line3_x, 43);  // 연결 안 됨
+    switch (s_wifi_data.wifi_status) {
+        case NET_STATUS_CONNECTED:
+            drawCheckMark(u8g2, line3_x, 46);  // 연결됨 [V]
+            break;
+        case NET_STATUS_DISCONNECTED:
+            drawXMark(u8g2, line3_x, 46);  // 연결 안 됨 [X]
+            break;
+        case NET_STATUS_NOT_DETECTED:
+        default:
+            u8g2_DrawHLine(u8g2, line3_x, 46, 8);  // 미연결 [-]
+            break;
     }
     line3_x += 10;
 
-    // Ethernet 상태 (연결: V, 미연결/연결안됨: - 또는 X)
+    // Ethernet 상태 (연결: V, 미연결: -, 연결안됨: X)
     u8g2_DrawStr(u8g2, line3_x, 50, "ETH:");
     line3_x += u8g2_GetStrWidth(u8g2, "ETH:");
-    if (s_eth_data.eth_connected) {
-        drawCheckMark(u8g2, line3_x, 43);  // 연결됨
-    } else {
-        // 미연결 상태 확인 (현재는 연결 안 됨으로만 표시)
-        // TODO: 하드웨어 감지 상태에 따라 - 또는 X 구분
-        u8g2_DrawHLine(u8g2, line3_x, 46, 8);  // 미연결 (-)
-        // drawXMark(u8g2, line3_x, 43);  // 연결 안 됨
+    switch (s_eth_data.eth_status) {
+        case NET_STATUS_CONNECTED:
+            drawCheckMark(u8g2, line3_x, 46);  // 연결됨 [V]
+            break;
+        case NET_STATUS_DISCONNECTED:
+            drawXMark(u8g2, line3_x, 46);  // 연결 안 됨 [X]
+            break;
+        case NET_STATUS_NOT_DETECTED:
+        default:
+            u8g2_DrawHLine(u8g2, line3_x, 46, 8);  // 미연결 [-]
+            break;
     }
 
     // Line 4 (y=61): 듀얼 모드 + ATEM 상태
@@ -309,9 +318,9 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     u8g2_DrawStr(u8g2, line4_x, 61, "ATEM:");
     line4_x += u8g2_GetStrWidth(u8g2, "ATEM:");
     if (s_switcher_data.s1_connected) {
-        drawCheckMark(u8g2, line4_x, 54);  // y=61-7
+        drawCheckMark(u8g2, line4_x, 57);  // y=61-4
     } else {
-        drawXMark(u8g2, line4_x, 54);
+        drawXMark(u8g2, line4_x, 57);
     }
 
     // 듀얼 모드일 경우 S2 상태도 표시
@@ -320,9 +329,9 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
         u8g2_DrawStr(u8g2, line4_x, 61, "S2:");
         line4_x += u8g2_GetStrWidth(u8g2, "S2:");
         if (s_switcher_data.s2_connected) {
-            drawCheckMark(u8g2, line4_x, 54);
+            drawCheckMark(u8g2, line4_x, 57);  // y=61-4
         } else {
-            drawXMark(u8g2, line4_x, 54);
+            drawXMark(u8g2, line4_x, 57);
         }
     }
 }
@@ -701,7 +710,8 @@ extern "C" void tx_page_set_ap_ip(const char* ip)
 
 extern "C" void tx_page_set_ap_enabled(bool enabled)
 {
-    s_ap_data.ap_enabled = enabled;
+    // bool → enum 변환 (호환성 유지)
+    s_ap_data.ap_status = enabled ? AP_STATUS_ACTIVE : AP_STATUS_INACTIVE;
 }
 
 // ========== WIFI 정보 (Page 4) ==========
@@ -732,7 +742,9 @@ extern "C" void tx_page_set_wifi_ip(const char* ip)
 
 extern "C" void tx_page_set_wifi_connected(bool connected)
 {
-    s_wifi_data.wifi_connected = connected;
+    // bool → enum 변환 (호환성 유지)
+    s_wifi_data.wifi_status = connected ?
+        NET_STATUS_CONNECTED : NET_STATUS_DISCONNECTED;
 }
 
 // ========== ETHERNET 정보 (Page 5) ==========
@@ -752,7 +764,9 @@ extern "C" void tx_page_set_eth_dhcp_mode(bool dhcp_mode)
 
 extern "C" void tx_page_set_eth_connected(bool connected)
 {
-    s_eth_data.eth_connected = connected;
+    // bool → enum 변환 (호환성 유지)
+    s_eth_data.eth_status = connected ?
+        NET_STATUS_CONNECTED : NET_STATUS_DISCONNECTED;
 }
 
 // ========== 시스템 정보 (Page 6) ==========
