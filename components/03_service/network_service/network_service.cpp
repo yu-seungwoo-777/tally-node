@@ -294,7 +294,8 @@ network_status_t NetworkServiceClass::getStatus(void)
 
     // WiFi AP 상태
     if (wifi_driver_is_initialized()) {
-        status.wifi_ap.active = s_config.wifi_ap.enabled;
+        status.wifi_ap.detected = s_config.wifi_ap.enabled;  // 설정에서 활성화되었는지
+        status.wifi_ap.active = wifi_driver_ap_is_started();  // 실제 시작되었는지
         status.wifi_ap.connected = wifi_driver_ap_is_started();
 
         wifi_driver_status_t wifi_status = wifi_driver_get_status();
@@ -305,7 +306,8 @@ network_status_t NetworkServiceClass::getStatus(void)
 
     // WiFi STA 상태 (드라이버 초기화된 경우 항상 확인)
     if (wifi_driver_is_initialized()) {
-        status.wifi_sta.active = s_config.wifi_sta.enabled;
+        status.wifi_sta.detected = s_config.wifi_sta.enabled;  // 설정에서 활성화되었는지
+        status.wifi_sta.active = wifi_driver_sta_is_connected(); // 실제 연결되었는지
         status.wifi_sta.connected = wifi_driver_sta_is_connected();
 
         wifi_driver_status_t wifi_status = wifi_driver_get_status();
@@ -318,7 +320,7 @@ network_status_t NetworkServiceClass::getStatus(void)
     if (ethernet_driver_is_initialized()) {
         ethernet_driver_status_t eth_status = ethernet_driver_get_status();
         status.ethernet.active = eth_status.initialized;
-        status.ethernet.detected = eth_status.detected;
+        status.ethernet.detected = s_config.ethernet.enabled && eth_status.detected;  // 설정 활성화 + 하드웨어 감지
         status.ethernet.connected = eth_status.link_up && eth_status.got_ip;
         strncpy(status.ethernet.ip, eth_status.ip, sizeof(status.ethernet.ip));
         strncpy(status.ethernet.netmask, eth_status.netmask, sizeof(status.ethernet.netmask));
@@ -394,10 +396,14 @@ void NetworkServiceClass::publishStatus(void)
 
     // 디버그: 상태 변경 원인 추적
     bool sta_changed = (s_last_status.wifi_sta.connected != status.wifi_sta.connected ||
+                       s_last_status.wifi_sta.detected != status.wifi_sta.detected ||
                        strncmp(s_last_status.wifi_sta.ip, status.wifi_sta.ip, sizeof(s_last_status.wifi_sta.ip)) != 0);
     bool eth_changed = (s_last_status.ethernet.connected != status.ethernet.connected ||
+                       s_last_status.ethernet.detected != status.ethernet.detected ||
                        strncmp(s_last_status.ethernet.ip, status.ethernet.ip, sizeof(s_last_status.ethernet.ip)) != 0);
-    bool ap_changed = (strncmp(s_last_status.wifi_ap.ip, status.wifi_ap.ip, sizeof(s_last_status.wifi_ap.ip)) != 0);
+    bool ap_changed = (s_last_status.wifi_ap.connected != status.wifi_ap.connected ||
+                       s_last_status.wifi_ap.detected != status.wifi_ap.detected ||
+                       strncmp(s_last_status.wifi_ap.ip, status.wifi_ap.ip, sizeof(s_last_status.wifi_ap.ip)) != 0);
 
     T_LOGD(TAG, "publishStatus: sta_changed=%d eth_changed=%d ap_changed=%d", sta_changed, eth_changed, ap_changed);
     T_LOGD(TAG, "  eth: conn=%d (was %d), ip=%s (was %s)",
@@ -412,6 +418,7 @@ void NetworkServiceClass::publishStatus(void)
         // 이벤트 데이터 생성
         event.ap_enabled = s_config.wifi_ap.enabled;
         event.sta_connected = status.wifi_sta.connected;
+        event.sta_detected = status.wifi_sta.detected;  // WiFi STA 하드웨어 감지 상태
         event.eth_connected = status.ethernet.connected;
         event.eth_detected = status.ethernet.detected;
         event.eth_dhcp = s_config.ethernet.dhcp_enabled;
@@ -701,6 +708,17 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
 
         // 초기화 완료 후 상태 발행 태스크 자동 시작
         start();
+    } else {
+        // 드라이버가 이미 초기화된 상태에서 설정이 변경된 경우
+        // Ethernet 활성화/비활성화 변경을 감지하여 재시작
+        static bool last_eth_enabled = false;
+        bool eth_changed = (last_eth_enabled != s_config.ethernet.enabled);
+        last_eth_enabled = s_config.ethernet.enabled;
+
+        if (eth_changed) {
+            T_LOGI(TAG, "Ethernet config changed (enabled=%d), restarting...", s_config.ethernet.enabled);
+            restartEthernet();
+        }
     }
 
     return ESP_OK;

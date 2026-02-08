@@ -65,12 +65,12 @@ static struct {
     char ap_name[32];       // AP SSID
     char ap_password[64];   // AP 비밀번호
     char ap_ip[16];        // AP IP
-    ap_status_t ap_status;  // AP 활성화 상태 (ENUM)
+    tx_ap_status_t ap_status;  // AP 활성화 상태 (ENUM)
 } s_ap_data = {
     .ap_name = "TallyNode-AP",
     .ap_password = "********",
     .ap_ip = "192.168.4.1",
-    .ap_status = AP_STATUS_INACTIVE,  // 기본 비활성화
+    .ap_status = TX_AP_STATUS_INACTIVE,  // 기본 비활성화
 };
 
 // WIFI 정보 (Page 4)
@@ -78,23 +78,23 @@ static struct {
     char wifi_ssid[32];       // WIFI SSID
     char wifi_password[64];   // WIFI 비밀번호
     char wifi_ip[16];         // WIFI IP
-    network_status_t wifi_status;  // WiFi 연결 상태 (ENUM)
+    tx_network_status_t wifi_status;  // WiFi 연결 상태 (ENUM)
 } s_wifi_data = {
     .wifi_ssid = "",
     .wifi_password = "********",
     .wifi_ip = "",
-    .wifi_status = NET_STATUS_NOT_DETECTED,  // 기본 미감지
+    .wifi_status = TX_NET_STATUS_NOT_DETECTED,  // 기본 미감지
 };
 
 // ETHERNET 정보 (Page 5)
 static struct {
     char eth_ip[16];            // Ethernet IP
     bool eth_dhcp_mode;         // true=DHCP, false=Static
-    network_status_t eth_status;  // Ethernet 연결 상태 (ENUM)
+    tx_network_status_t eth_status;  // Ethernet 연결 상태 (ENUM)
 } s_eth_data = {
     .eth_ip = "",
     .eth_dhcp_mode = true,
-    .eth_status = NET_STATUS_NOT_DETECTED,  // 기본 미감지
+    .eth_status = TX_NET_STATUS_NOT_DETECTED,  // 기본 미감지
 };
 
 // 시스템 정보 (Page 6)
@@ -244,7 +244,7 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     } else {
         snprintf(pgm_str, sizeof(pgm_str), "PGM: ---");
     }
-    u8g2_DrawStr(u8g2, 4, 28, pgm_str);
+    u8g2_DrawStr(u8g2, 2, 28, pgm_str);
 
     // Line 2 (y=39): PVW 채널 목록
     char pvw_str[32];
@@ -258,80 +258,80 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     } else {
         snprintf(pvw_str, sizeof(pvw_str), "PVW: ---");
     }
-    u8g2_DrawStr(u8g2, 4, 39, pvw_str);
+    u8g2_DrawStr(u8g2, 2, 39, pvw_str);
 
     // Line 3 (y=50): AP, WiFi, Ethernet 상태
-    int line3_x = 4;
+    int line3_x = 2;
 
     // AP 상태 (활성화: V, 비활성화: X)
     u8g2_DrawStr(u8g2, line3_x, 50, "AP:");
-    line3_x += u8g2_GetStrWidth(u8g2, "AP:");
-    if (s_ap_data.ap_status == AP_STATUS_ACTIVE) {
-        drawCheckMark(u8g2, line3_x, 46);  // 활성화 [V]
+    line3_x += u8g2_GetStrWidth(u8g2, "AP:") + 2;  // 라벨 너비 + 간격
+    if (s_ap_data.ap_status == TX_AP_STATUS_ACTIVE) {
+        drawCheckMark(u8g2, line3_x, 50);  // 활성화 [V]
     } else {
-        drawXMark(u8g2, line3_x, 46);  // 비활성화 [X]
+        drawXMark(u8g2, line3_x, 50);  // 비활성화 [X]
     }
-    line3_x += 10;  // 아이콘 너비 + 여백
+    line3_x += 12;  // 아이콘 너비(8) + 간격(4)
 
     // WiFi 상태 (연결: V, 미연결: -, 연결안됨: X)
     u8g2_DrawStr(u8g2, line3_x, 50, "WiFi:");
-    line3_x += u8g2_GetStrWidth(u8g2, "WiFi:");
+    line3_x += u8g2_GetStrWidth(u8g2, "WiFi:") + 2;  // 라벨 너비 + 간격
     switch (s_wifi_data.wifi_status) {
-        case NET_STATUS_CONNECTED:
-            drawCheckMark(u8g2, line3_x, 46);  // 연결됨 [V]
+        case TX_NET_STATUS_CONNECTED:
+            drawCheckMark(u8g2, line3_x, 50);  // 연결됨 [V]
             break;
-        case NET_STATUS_DISCONNECTED:
-            drawXMark(u8g2, line3_x, 46);  // 연결 안 됨 [X]
+        case TX_NET_STATUS_DISCONNECTED:
+            drawXMark(u8g2, line3_x, 50);  // 연결 안 됨 [X]
             break;
-        case NET_STATUS_NOT_DETECTED:
+        case TX_NET_STATUS_NOT_DETECTED:
         default:
             u8g2_DrawHLine(u8g2, line3_x, 46, 8);  // 미연결 [-]
             break;
     }
-    line3_x += 10;
+    line3_x += 12;  // 아이콘 너비(8) + 간격(4)
 
     // Ethernet 상태 (연결: V, 미연결: -, 연결안됨: X)
     u8g2_DrawStr(u8g2, line3_x, 50, "ETH:");
-    line3_x += u8g2_GetStrWidth(u8g2, "ETH:");
+    line3_x += u8g2_GetStrWidth(u8g2, "ETH:") + 2;  // 라벨 너비 + 간격
     switch (s_eth_data.eth_status) {
-        case NET_STATUS_CONNECTED:
-            drawCheckMark(u8g2, line3_x, 46);  // 연결됨 [V]
+        case TX_NET_STATUS_CONNECTED:
+            drawCheckMark(u8g2, line3_x, 50);  // 연결됨 [V]
             break;
-        case NET_STATUS_DISCONNECTED:
-            drawXMark(u8g2, line3_x, 46);  // 연결 안 됨 [X]
+        case TX_NET_STATUS_DISCONNECTED:
+            drawXMark(u8g2, line3_x, 50);  // 연결 안 됨 [X]
             break;
-        case NET_STATUS_NOT_DETECTED:
+        case TX_NET_STATUS_NOT_DETECTED:
         default:
             u8g2_DrawHLine(u8g2, line3_x, 46, 8);  // 미연결 [-]
             break;
     }
 
     // Line 4 (y=61): 듀얼 모드 + ATEM 상태
-    int line4_x = 4;
+    int line4_x = 2;
 
     // 듀얼 모드 표시
     const char* mode_str = s_switcher_data.dual_mode ? "DUAL" : "SINGLE";
     u8g2_DrawStr(u8g2, line4_x, 61, mode_str);
-    line4_x += u8g2_GetStrWidth(u8g2, mode_str) + 4;
+    line4_x += u8g2_GetStrWidth(u8g2, mode_str) + 4;  // 모드 너비 + 간격
 
     // ATEM 상태 (S1)
     u8g2_DrawStr(u8g2, line4_x, 61, "ATEM:");
-    line4_x += u8g2_GetStrWidth(u8g2, "ATEM:");
+    line4_x += u8g2_GetStrWidth(u8g2, "ATEM:") + 2;  // 라벨 너비 + 간격
     if (s_switcher_data.s1_connected) {
-        drawCheckMark(u8g2, line4_x, 57);  // y=61-4
+        drawCheckMark(u8g2, line4_x, 61);  // y=61-4
     } else {
-        drawXMark(u8g2, line4_x, 57);
+        drawXMark(u8g2, line4_x, 61);
     }
+    line4_x += 12;  // 아이콘 너비(8) + 간격(4)
 
     // 듀얼 모드일 경우 S2 상태도 표시
     if (s_switcher_data.dual_mode) {
-        line4_x += 14;  // 아이콘 너비 + 여백
         u8g2_DrawStr(u8g2, line4_x, 61, "S2:");
-        line4_x += u8g2_GetStrWidth(u8g2, "S2:");
+        line4_x += u8g2_GetStrWidth(u8g2, "S2:") + 2;  // 라벨 너비 + 간격
         if (s_switcher_data.s2_connected) {
-            drawCheckMark(u8g2, line4_x, 57);  // y=61-4
+            drawCheckMark(u8g2, line4_x, 61);  // y=61-4
         } else {
-            drawXMark(u8g2, line4_x, 57);
+            drawXMark(u8g2, line4_x, 61);
         }
     }
 }
@@ -438,9 +438,9 @@ static void draw_switcher_page(u8g2_t* u8g2)
     // S1 IP (y=39)
     u8g2_DrawStr(u8g2, 2, 39, "S1 IP:");
     if (strlen(s_switcher_data.s1_ip) > 0) {
-        u8g2_DrawStr(u8g2, 40, 39, s_switcher_data.s1_ip);
+        u8g2_DrawStr(u8g2, 25, 39, s_switcher_data.s1_ip);
     } else {
-        u8g2_DrawStr(u8g2, 40, 39, "---");
+        u8g2_DrawStr(u8g2, 25, 39, "---");
     }
 
     // S2 (듀얼모드일 때만 표시)
@@ -455,9 +455,9 @@ static void draw_switcher_page(u8g2_t* u8g2)
         // S2 IP (y=61)
         u8g2_DrawStr(u8g2, 2, 61, "S2 IP:");
         if (strlen(s_switcher_data.s2_ip) > 0) {
-            u8g2_DrawStr(u8g2, 40, 61, s_switcher_data.s2_ip);
+            u8g2_DrawStr(u8g2, 25, 61, s_switcher_data.s2_ip);
         } else {
-            u8g2_DrawStr(u8g2, 40, 61, "---");
+            u8g2_DrawStr(u8g2, 25, 61, "---");
         }
     }
 }
@@ -490,7 +490,7 @@ static void draw_ap_page(u8g2_t* u8g2)
     u8g2_DrawStr(u8g2, 25, 39, s_ap_data.ap_ip);
 
     // 상태 표시
-    if (!s_ap_data.ap_enabled) {
+    if (s_ap_data.ap_status == TX_AP_STATUS_INACTIVE) {
         u8g2_DrawStr(u8g2, 2, 61, "DISABLED");
     } else {
         u8g2_DrawStr(u8g2, 2, 61, "ACTIVE");
@@ -526,14 +526,14 @@ static void draw_wifi_page(u8g2_t* u8g2)
 
     // IP
     u8g2_DrawStr(u8g2, 2, 39, "IP:");
-    if (s_wifi_data.wifi_connected && strlen(s_wifi_data.wifi_ip) > 0) {
+    if (s_wifi_data.wifi_status == TX_NET_STATUS_CONNECTED && strlen(s_wifi_data.wifi_ip) > 0) {
         u8g2_DrawStr(u8g2, 25, 39, s_wifi_data.wifi_ip);
     } else {
         u8g2_DrawStr(u8g2, 25, 39, "---");
     }
 
     // 상태 표시
-    if (s_wifi_data.wifi_connected) {
+    if (s_wifi_data.wifi_status == TX_NET_STATUS_CONNECTED) {
         u8g2_DrawStr(u8g2, 2, 61, "CONNECTED");
     } else {
         u8g2_DrawStr(u8g2, 2, 61, "DISCONNECTED");
@@ -556,7 +556,7 @@ static void draw_ethernet_page(u8g2_t* u8g2)
 
     // IP
     u8g2_DrawStr(u8g2, 2, 28, "IP:");
-    if (s_eth_data.eth_connected && strlen(s_eth_data.eth_ip) > 0) {
+    if (s_eth_data.eth_status == TX_NET_STATUS_CONNECTED && strlen(s_eth_data.eth_ip) > 0) {
         u8g2_DrawStr(u8g2, 25, 28, s_eth_data.eth_ip);
     } else {
         u8g2_DrawStr(u8g2, 25, 28, "---");
@@ -566,7 +566,7 @@ static void draw_ethernet_page(u8g2_t* u8g2)
     u8g2_DrawStr(u8g2, 2, 39, s_eth_data.eth_dhcp_mode ? "DHCP" : "STATIC");
 
     // 상태 표시
-    if (s_eth_data.eth_connected) {
+    if (s_eth_data.eth_status == TX_NET_STATUS_CONNECTED) {
         u8g2_DrawStr(u8g2, 2, 61, "LINK UP");
     } else {
         u8g2_DrawStr(u8g2, 2, 61, "LINK DOWN");
@@ -593,13 +593,13 @@ static void draw_system_page(u8g2_t* u8g2)
     u8g2_DrawStr(u8g2, 2, 28, "FREQ:");
     char freq_str[16];
     snprintf(freq_str, sizeof(freq_str), "%.1f MHz", s_system_data.frequency);
-    u8g2_DrawStr(u8g2, 35, 28, freq_str);
+    u8g2_DrawStr(u8g2, 55, 28, freq_str);
 
     // SYNC
     u8g2_DrawStr(u8g2, 2, 39, "SYNC:");
     char sync_str[8];
     snprintf(sync_str, sizeof(sync_str), "0x%02X", s_system_data.sync_word);
-    u8g2_DrawStr(u8g2, 35, 39, sync_str);
+    u8g2_DrawStr(u8g2, 55, 39, sync_str);
 
     // VOLTAGE
     u8g2_DrawStr(u8g2, 2, 50, "VOLTAGE:");
@@ -611,7 +611,7 @@ static void draw_system_page(u8g2_t* u8g2)
     u8g2_DrawStr(u8g2, 2, 61, "TEMP:");
     char temp_str[10];
     snprintf(temp_str, sizeof(temp_str), "%.1f C", s_system_data.temperature);
-    u8g2_DrawStr(u8g2, 35, 61, temp_str);
+    u8g2_DrawStr(u8g2, 55, 61, temp_str);
 
     // Device ID (오른쪽 정렬)
     int id_width = u8g2_GetStrWidth(u8g2, s_system_data.device_id);
@@ -711,7 +711,7 @@ extern "C" void tx_page_set_ap_ip(const char* ip)
 extern "C" void tx_page_set_ap_enabled(bool enabled)
 {
     // bool → enum 변환 (호환성 유지)
-    s_ap_data.ap_status = enabled ? AP_STATUS_ACTIVE : AP_STATUS_INACTIVE;
+    s_ap_data.ap_status = enabled ? TX_AP_STATUS_ACTIVE : TX_AP_STATUS_INACTIVE;
 }
 
 // ========== WIFI 정보 (Page 4) ==========
@@ -744,7 +744,7 @@ extern "C" void tx_page_set_wifi_connected(bool connected)
 {
     // bool → enum 변환 (호환성 유지)
     s_wifi_data.wifi_status = connected ?
-        NET_STATUS_CONNECTED : NET_STATUS_DISCONNECTED;
+        TX_NET_STATUS_CONNECTED : TX_NET_STATUS_DISCONNECTED;
 }
 
 // ========== ETHERNET 정보 (Page 5) ==========
@@ -766,7 +766,34 @@ extern "C" void tx_page_set_eth_connected(bool connected)
 {
     // bool → enum 변환 (호환성 유지)
     s_eth_data.eth_status = connected ?
-        NET_STATUS_CONNECTED : NET_STATUS_DISCONNECTED;
+        TX_NET_STATUS_CONNECTED : TX_NET_STATUS_DISCONNECTED;
+}
+
+/**
+ * @brief WiFi 3단계 상태 설정 (신규 API)
+ * @param status 네트워크 상태 (NOT_DETECTED/DISCONNECTED/CONNECTED)
+ */
+extern "C" void tx_page_set_wifi_status(tx_network_status_t status)
+{
+    s_wifi_data.wifi_status = status;
+}
+
+/**
+ * @brief Ethernet 3단계 상태 설정 (신규 API)
+ * @param status 네트워크 상태 (NOT_DETECTED/DISCONNECTED/CONNECTED)
+ */
+extern "C" void tx_page_set_eth_status(tx_network_status_t status)
+{
+    s_eth_data.eth_status = status;
+}
+
+/**
+ * @brief AP 3단계 상태 설정 (신규 API)
+ * @param status AP 상태 (INACTIVE/ACTIVE)
+ */
+extern "C" void tx_page_set_ap_status(tx_ap_status_t status)
+{
+    s_ap_data.ap_status = status;
 }
 
 // ========== 시스템 정보 (Page 6) ==========

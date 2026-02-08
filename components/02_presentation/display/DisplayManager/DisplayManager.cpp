@@ -591,21 +591,34 @@ static esp_err_t on_network_status_changed(const event_data_t* event)
     // TxPage에 상태 설정
     tx_page_set_ap_name(net->ap_ssid);
     tx_page_set_ap_ip(net->ap_ip);
-    tx_page_set_ap_enabled(net->ap_enabled);
+    tx_page_set_ap_status(net->ap_enabled ? TX_AP_STATUS_ACTIVE : TX_AP_STATUS_INACTIVE);
     tx_page_set_wifi_ssid(net->sta_ssid);
     tx_page_set_wifi_ip(net->sta_ip);
-    tx_page_set_wifi_connected(net->sta_connected);
     tx_page_set_eth_ip(net->eth_ip);
     display_manager_update_ethernet_dhcp_mode(net->eth_dhcp);
+
+    // WiFi 상태: sta_detected 고려하여 3단계 상태 설정
+    if (!net->sta_detected) {
+        // 하드웨어 미감지 → NOT_DETECTED
+        tx_page_set_wifi_status(TX_NET_STATUS_NOT_DETECTED);
+    } else if (net->sta_connected) {
+        // 연결됨 → CONNECTED
+        tx_page_set_wifi_status(TX_NET_STATUS_CONNECTED);
+    } else {
+        // 연결 안 됨 → DISCONNECTED
+        tx_page_set_wifi_status(TX_NET_STATUS_DISCONNECTED);
+    }
 
     // Ethernet 상태: eth_detected 고려하여 3단계 상태 설정
     if (!net->eth_detected) {
         // 하드웨어 미감지 → NOT_DETECTED
-        // TODO: tx_page_set_eth_status(NET_STATUS_NOT_DETECTED);
-        tx_page_set_eth_connected(false);  // 임시 연결 안 됨으로 처리
+        tx_page_set_eth_status(TX_NET_STATUS_NOT_DETECTED);
+    } else if (net->eth_connected) {
+        // 연결됨 → CONNECTED
+        tx_page_set_eth_status(TX_NET_STATUS_CONNECTED);
     } else {
-        // 하드웨어 감지됨 → connected 상태 그대로 사용
-        tx_page_set_eth_connected(net->eth_connected);
+        // 연결 안 됨 → DISCONNECTED
+        tx_page_set_eth_status(TX_NET_STATUS_DISCONNECTED);
     }
 
     return ESP_OK;

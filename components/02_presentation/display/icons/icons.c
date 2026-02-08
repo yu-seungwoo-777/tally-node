@@ -131,47 +131,31 @@ void drawTallySignalIcon(u8g2_t *u8g2, int16_t x, int16_t y, int16_t rssi, float
 }
 
 /**
- * @brief 체크마크 그리기 (8x8 픽셀 영역)
+ * @brief 체크마크 그리기 (텍스트 기반)
  *
- *     ✓
- *    /
- *   /
- *  /
- * /
+ * "V" 문자를 사용하여 연결 상태 표시
  *
  * @param u8g2 U8G2 디스플레이 포인터
- * @param x X 좌표 (왼쪽 상단)
- * @param y Y 좌표 (왼쪽 상단)
+ * @param x X 좌표
+ * @param y Y 좌표 (베이스라인)
  */
 void drawCheckMark(u8g2_t *u8g2, int16_t x, int16_t y)
 {
-    // 체크마크: 왼쪽 아래에서 오른쪽 위로 대각선
-    // (x+1, y+7) -> (x+3, y+5) -> (x+7, y+1)
-
-    // 첫 번째 선: 왼쪽 아래에서 중간까지
-    u8g2_DrawLine(u8g2, x + 1, y + 7, x + 3, y + 5);
-
-    // 두 번째 선: 중간에서 오른쪽 위까지
-    u8g2_DrawLine(u8g2, x + 3, y + 5, x + 7, y + 1);
+    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+    u8g2_DrawStr(u8g2, x, y, "V");
 }
 
 /**
- * @brief 엑스마크 그리기 (8x8 픽셀 영역)
+ * @brief 엑스마크 그리기 (텍스트 기반)
  *
- *     ✗
- *    \ /
- *     X
- *    / \
+ * "X" 문자를 사용하여 연결 실패 상태 표시
  *
  * @param u8g2 U8G2 디스플레이 포인터
- * @param x X 좌표 (왼쪽 상단)
- * @param y Y 좌표 (왼쪽 상단)
+ * @param x X 좌표
+ * @param y Y 좌표 (베이스라인)
  */
 void drawXMark(u8g2_t *u8g2, int16_t x, int16_t y)
 {
-    // 첫 번째 대각선: 왼쪽 위에서 오른쪽 아래로
-    u8g2_DrawLine(u8g2, x + 1, y + 1, x + 7, y + 7);
-
-    // 두 번째 대각선: 오른쪽 위에서 왼쪽 아래로
-    u8g2_DrawLine(u8g2, x + 7, y + 1, x + 1, y + 7);
+    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
+    u8g2_DrawStr(u8g2, x, y, "X");
 }

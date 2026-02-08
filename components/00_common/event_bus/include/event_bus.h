@@ -256,6 +256,7 @@ typedef struct __attribute__((packed)) {
     char sta_ssid[33];       ///< STA SSID
     char sta_ip[16];         ///< STA IP 주소
     bool sta_connected;      ///< STA 연결 여부
+    bool sta_detected;       ///< STA 하드웨어 감지 여부 (NEW)
 
     // Ethernet (Page 4)
     char eth_ip[16];         ///< Ethernet IP 주소

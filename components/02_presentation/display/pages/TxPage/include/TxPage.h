@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "DisplayManager.h"
+#include "TxPageTypes.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -148,6 +149,24 @@ void tx_page_set_eth_dhcp_mode(bool dhcp_mode);
  * @param connected 연결 상태
  */
 void tx_page_set_eth_connected(bool connected);
+
+/**
+ * @brief WiFi 3단계 상태 설정 (신규 API)
+ * @param status 네트워크 상태 (NOT_DETECTED/DISCONNECTED/CONNECTED)
+ */
+void tx_page_set_wifi_status(tx_network_status_t status);
+
+/**
+ * @brief Ethernet 3단계 상태 설정 (신규 API)
+ * @param status 네트워크 상태 (NOT_DETECTED/DISCONNECTED/CONNECTED)
+ */
+void tx_page_set_eth_status(tx_network_status_t status);
+
+/**
+ * @brief AP 3단계 상태 설정 (신규 API)
+ * @param status AP 상태 (INACTIVE/ACTIVE)
+ */
+void tx_page_set_ap_status(tx_ap_status_t status);
 
 // ========== 시스템 정보 (Page 6) ==========
 

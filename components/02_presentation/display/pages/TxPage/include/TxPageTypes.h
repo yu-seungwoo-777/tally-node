@@ -21,10 +21,10 @@ extern "C" {
  * SPEC-STATUS-DASHBOARD-001 REQ-014, REQ-015 참조
  */
 typedef enum {
-    NET_STATUS_NOT_DETECTED = 0,  // 하드웨어 미감지 [━]
-    NET_STATUS_DISCONNECTED = 1,  // 연결 안 됨 [X]
-    NET_STATUS_CONNECTED = 2      // 연결됨 [V]
-} network_status_t;
+    TX_NET_STATUS_NOT_DETECTED = 0,  // 하드웨어 미감지 [━]
+    TX_NET_STATUS_DISCONNECTED = 1,  // 연결 안 됨 [X]
+    TX_NET_STATUS_CONNECTED = 2      // 연결됨 [V]
+} tx_network_status_t;
 
 /**
  * @brief AP (Access Point) 상태 코드
@@ -32,9 +32,9 @@ typedef enum {
  * SPEC-STATUS-DASHBOARD-001 REQ-013 참조
  */
 typedef enum {
-    AP_STATUS_INACTIVE = 0,  // 비활성화 [X]
-    AP_STATUS_ACTIVE = 1     // 활성화 [V]
-} ap_status_t;
+    TX_AP_STATUS_INACTIVE = 0,  // 비활성화 [X]
+    TX_AP_STATUS_ACTIVE = 1     // 활성화 [V]
+} tx_ap_status_t;
 
 #ifdef __cplusplus
 }

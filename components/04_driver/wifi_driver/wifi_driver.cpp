@@ -91,6 +91,7 @@ private:
     static NetworkCallback s_network_callback;
     static uint8_t s_sta_retry_count;
     static bool s_sta_auth_failed;  // 인증 실패 상태 (비밀번호 오류 등)
+    static bool s_reconfiguring;    // 재설정 중 플래그 (이벤트 핸들러에서 재연결 방지)
     static constexpr uint8_t MAX_STA_RETRY = 5;
 };
 
@@ -119,6 +120,7 @@ char WiFiDriver::s_sta_ip[16] = {0};
 WiFiDriver::NetworkCallback WiFiDriver::s_network_callback = nullptr;
 uint8_t WiFiDriver::s_sta_retry_count = 0;
 bool WiFiDriver::s_sta_auth_failed = false;
+bool WiFiDriver::s_reconfiguring = false;
 
 // ============================================================================
 // 이벤트 핸들러
@@ -185,6 +187,13 @@ void WiFiDriver::eventHandler(void* arg, esp_event_base_t event_base,
                 // 네트워크 상태 변경 콜백 호출 (연결 해제)
                 if (s_network_callback) {
                     s_network_callback(false, nullptr);
+                }
+
+                // 재설정 중이거나 STA 비활성화 상태면 재연결하지 않음
+                if (s_reconfiguring || !s_sta_enabled) {
+                    T_LOGI(TAG, "STA reconnect skipped (reconfiguring=%d, enabled=%d)",
+                            s_reconfiguring, s_sta_enabled);
+                    break;
                 }
 
                 // 인증 실패 경우 (비밀번호 오류 등) - 플래그 설정 후 재시도 중지
@@ -456,9 +465,13 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
 
     T_LOGI(TAG, "Reconfiguring WiFi Driver");
 
-    // 새 설정 저장
+    // 새 설정 저장 (플래그 업데이트를 WiFi 시작 전으로 미룸)
     bool new_ap_enabled = (ap_ssid != nullptr);
     bool new_sta_enabled = (sta_ssid != nullptr);
+
+    // 중요: 플래그를 먼저 업데이트하여 이벤트 핸들러에서 올바른 상태를 확인하도록 함
+    s_ap_enabled = new_ap_enabled;
+    s_sta_enabled = new_sta_enabled;
 
     // 기존 netif 상태 확인
     bool has_sta_netif = (s_netif_sta != nullptr);
@@ -466,6 +479,9 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
 
     T_LOGD(TAG, "  Existing netif: STA=%d, AP=%d", has_sta_netif, has_ap_netif);
     T_LOGD(TAG, "  New config: STA=%d, AP=%d", new_sta_enabled, new_ap_enabled);
+
+    // 재설정 중 플래그 설정 (이벤트 핸들러에서 재연결 방지)
+    s_reconfiguring = true;
 
     // WiFi 모드 결정
     wifi_mode_t mode = WIFI_MODE_NULL;
@@ -490,8 +506,8 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
         // WiFi 정지
         wifi_hal_stop();
 
-        // LwIP 스레드가 netif down 처리를 완료할 때까지 대기
-        vTaskDelay(pdMS_TO_TICKS(200));
+        // LwIP 스레드가 netif down 처리를 완료할 때까지 대기 (지연된 이벤트 처리 시간 확보)
+        vTaskDelay(pdMS_TO_TICKS(500));
 
         // WiFi 모드 NULL 설정
         esp_wifi_set_mode(WIFI_MODE_NULL);
@@ -500,9 +516,15 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
         // 재활성화 시 기존 netif를 재사용
         T_LOGD(TAG, "netif preserved (STA=%p, AP=%p)", (void*)s_netif_sta, (void*)s_netif_ap);
 
-        // 상태 업데이트
-        s_ap_enabled = false;
-        s_sta_enabled = false;
+        // 상태 초기화 (모든 WiFi 기능 비활성화)
+        s_ap_started = false;
+        s_sta_connected = false;
+        s_sta_rssi = 0;
+        s_ap_clients = 0;
+        memset(s_ap_ip, 0, sizeof(s_ap_ip));
+        memset(s_sta_ip, 0, sizeof(s_sta_ip));
+
+        // SSID 초기화 (플래그는 함수 시작 부분에서 이미 업데이트됨)
         s_ap_ssid[0] = '\0';
         s_sta_ssid[0] = '\0';
 
@@ -516,6 +538,7 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
             s_netif_ap = (esp_netif_t*)wifi_hal_create_ap_netif();
             if (!s_netif_ap) {
                 T_LOGE(TAG, "Failed to create AP netif");
+                s_reconfiguring = false;
                 return ESP_FAIL;
             }
         }
@@ -548,11 +571,9 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
         }
 
         wifi_hal_set_config(WIFI_IF_AP, &ap_config);
-        s_ap_enabled = true;
     } else {
         // AP 비활성화: netif는 유지 (LwIP 충돌 방지)
         T_LOGD(TAG, "AP disabled (netif=%p preserved)", (void*)s_netif_ap);
-        s_ap_enabled = false;
         s_ap_ssid[0] = '\0';
     }
 
@@ -562,6 +583,7 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
             s_netif_sta = (esp_netif_t*)wifi_hal_create_sta_netif();
             if (!s_netif_sta) {
                 T_LOGE(TAG, "Failed to create STA netif");
+                s_reconfiguring = false;
                 return ESP_FAIL;
             }
         }
@@ -589,11 +611,9 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
             sizeof(sta_config.sta.ssid) - 1);
 
         wifi_hal_set_config(WIFI_IF_STA, &sta_config);
-        s_sta_enabled = true;
     } else {
         // STA 비활성화: netif는 유지 (LwIP 충돌 방지)
         T_LOGD(TAG, "STA disabled (netif=%p preserved)", (void*)s_netif_sta);
-        s_sta_enabled = false;
         s_sta_ssid[0] = '\0';
     }
 
@@ -614,8 +634,8 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
         // WiFi 정지 (LwIP 스레드에서 netif down 처리됨)
         wifi_hal_stop();
 
-        // LwIP 스레드가 netif down 처리를 완료할 때까지 대기
-        vTaskDelay(pdMS_TO_TICKS(200));
+        // LwIP 스레드가 netif down 처리를 완료할 때까지 대기 (지연된 이벤트 처리 시간 확보)
+        vTaskDelay(pdMS_TO_TICKS(500));
 
         // 모드 변경
         esp_wifi_set_mode(mode);
@@ -633,6 +653,9 @@ esp_err_t WiFiDriver::reconfigure(const char* ap_ssid, const char* ap_password,
         s_ap_password[0] != '\0' ? "secured" : "open");
     T_LOGI(TAG, "  STA: %s (%s)", s_sta_enabled ? s_sta_ssid : "disabled",
         s_sta_password[0] != '\0' ? "secured" : "open");
+
+    // 재설정 완료 플래그 해제
+    s_reconfiguring = false;
 
     return ESP_OK;
 }

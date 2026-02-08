@@ -226,20 +226,8 @@ static esp_err_t handle_network_connected(const event_data_t* event)
     (void)event;
     T_LOGD(TAG, "Network connected");
 
-    // 디스플레이에 네트워크 상태 갱신
-    network_status_t net_status = network_service_get_status();
-
-    // WiFi STA 연결 시 디스플레이 갱신
-    if (net_status.wifi_sta.connected) {
-        tx_page_set_wifi_ip(net_status.wifi_sta.ip);
-        tx_page_set_wifi_connected(true);
-    }
-
-    // Ethernet 연결 시 디스플레이 갱신
-    if (net_status.ethernet.connected) {
-        tx_page_set_eth_ip(net_status.ethernet.ip);
-        tx_page_set_eth_connected(true);
-    }
+    // 디스플레이 상태는 DisplayManager가 EVT_NETWORK_STATUS_CHANGED 이벤트로 처리
+    // 네트워크 상태 갱신은 이벤트 버스를 통해 자동으로 전파됨
 
     return ESP_OK;
 }
