@@ -204,60 +204,6 @@ static void on_switcher_change(switcher_role_t role)
 }
 
 // ============================================================================
-// Tally 상태 변경 핸들러 (테스트 모드용)
-// ============================================================================
-
-static esp_err_t handle_tally_state_changed(const event_data_t* event)
-{
-    if (!event || !s_app.initialized) {
-        return ESP_OK;
-    }
-
-    // 테스트 모드 실행 중인지 확인
-    bool test_mode_running = tally_test_service_is_running();
-
-    // 테스트 모드가 실행 중이 아니면 스킵 (스위처 Tally는 SwitcherService에서 처리)
-    if (!test_mode_running) {
-        return ESP_OK;
-    }
-
-    // 데이터 크기 확인
-    if (event->data_size < sizeof(tally_event_data_t)) {
-        return ESP_OK;
-    }
-
-    const tally_event_data_t* tally_event = (const tally_event_data_t*)event->data;
-    if (!tally_event) {
-        return ESP_OK;
-    }
-
-    // 채널 수 유효성 확인
-    if (tally_event->channel_count == 0 || tally_event->channel_count > TALLY_MAX_CHANNELS) {
-        return ESP_OK;
-    }
-
-    // packed_data_t 생성 (tally_data는 내부 배열이므로 복사 필요 없음)
-    packed_data_t tally;
-    tally.channel_count = tally_event->channel_count;
-    tally.data_size = (tally_event->channel_count + 3) / 4;
-    tally.data = (uint8_t*)tally_event->tally_data;
-
-    char hex_str[16];
-    packed_data_to_hex(&tally, hex_str, sizeof(hex_str));
-
-    // 테스트 모드에서는 라이선스 확인 패스
-    esp_err_t ret = lora_service_send_tally(&tally);
-    if (ret == ESP_OK) {
-        T_LOGI(TAG, "LoRa TX (test mode): [F1][%d][%s] (%d channels, %d bytes)",
-                 tally.channel_count, hex_str, tally.channel_count, tally.data_size);
-    } else {
-        T_LOGE(TAG, "LoRa TX failed: [%s] -> %s", hex_str, esp_err_to_name(ret));
-    }
-
-    return ESP_OK;
-}
-
-// ============================================================================
 // 네트워크/스위처 연결 상태 변경 핸들러 (즉시 TxPage 갱신)
 // ============================================================================
 
@@ -360,9 +306,7 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
     // 테스트 모드 이벤트
     event_bus_subscribe(EVT_TALLY_TEST_MODE_START, handle_test_mode_start);
     event_bus_subscribe(EVT_TALLY_TEST_MODE_STOP, handle_test_mode_stop);
-    // Tally 상태 변경 이벤트 (테스트 모드 포함)
-    event_bus_subscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
-    // 배터리 엠티 체크 (1초마다 HardwareService에서 EVT_INFO_UPDATED 발행)
+    // 배터리 엤티 체크 (1초마다 HardwareService에서 EVT_INFO_UPDATED 발행)
     event_bus_subscribe(EVT_INFO_UPDATED, [](const event_data_t* event) -> esp_err_t {
         (void)event;
         check_battery_empty();
@@ -630,8 +574,6 @@ void prod_tx_app_stop(void)
     // 테스트 모드 이벤트 구독 취소
     event_bus_unsubscribe(EVT_TALLY_TEST_MODE_START, handle_test_mode_start);
     event_bus_unsubscribe(EVT_TALLY_TEST_MODE_STOP, handle_test_mode_stop);
-    // Tally 상태 변경 이벤트 구독 취소
-    event_bus_unsubscribe(EVT_TALLY_STATE_CHANGED, handle_tally_state_changed);
 
     button_service_stop();
 

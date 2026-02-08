@@ -100,7 +100,7 @@ static void publish_tally_event(uint8_t step)
 
     // 이벤트 발행
     static tally_event_data_t s_tally_event;
-    s_tally_event.source = 0;  // Test mode
+    s_tally_event.source = 255;  // Test mode (255=예약된 값, SWITCHER_ROLE_PRIMARY=0과 충돌 방지)
     s_tally_event.channel_count = s_test.max_channels;
     s_tally_event.tally_value = 0;
 

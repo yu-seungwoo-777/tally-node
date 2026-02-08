@@ -1,6 +1,28 @@
 {
   "versions": [
     {
+      "version": "2.3.4",
+      "date": "2026-02-07",
+      "tx": {
+        "ko": {
+          "title": "버튼 동작 및 테스트 모드 개선",
+          "changes": [
+            "버튼 동작 로직 개선",
+            "테스트 모드 동작 방식 개선",
+            "테스트 모드 중복 시작 방지"
+          ]
+        },
+        "en": {
+          "title": "Button operation and test mode improvements",
+          "changes": [
+            "Improved button operation logic",
+            "Enhanced test mode behavior",
+            "Prevented duplicate test mode start"
+          ]
+        }
+      }
+    },
+    {
       "version": "2.3.2",
       "date": "2026-02-04",
       "tx": {

@@ -243,6 +243,8 @@ static esp_err_t on_license_state_changed(const event_data_t* event) {
  *
  * SwitcherService에서 Tally 변경 시 EVT_TALLY_STATE_CHANGED 이벤트를 발행하면
  * LoRaService가 이를 구독하여 LoRa 송신을 수행합니다.
+ * - 테스트 모드(source=255): 라이선스 확인 없이 송신
+ * - 일반 탈리(source=0=SWITCHER_ROLE_PRIMARY): 라이선스 확인 후 송신
  */
 #ifdef DEVICE_MODE_TX
 static esp_err_t on_tally_state_changed(const event_data_t* event) {
@@ -255,7 +257,27 @@ static esp_err_t on_tally_state_changed(const event_data_t* event) {
         return ESP_OK;
     }
 
-    // 라이선스 확인 (캐시된 상태 사용)
+    // 테스트 모드(source=255): 라이선스 확인 없이 송신
+    if (tally_event->source == 255) {
+        packed_data_t tally;
+        tally.channel_count = tally_event->channel_count;
+        tally.data_size = (tally_event->channel_count + 3) / 4;
+        tally.data = (uint8_t*)tally_event->tally_data;
+
+        char hex_str[16];
+        packed_data_to_hex(&tally, hex_str, sizeof(hex_str));
+
+        esp_err_t ret = lora_service_send_tally(&tally);
+        if (ret == ESP_OK) {
+            T_LOGI(TAG, "LoRa TX (test mode): [F1][%d][%s] (%d channels, %d bytes)",
+                     tally.channel_count, hex_str, tally.channel_count, tally.data_size);
+        } else {
+            T_LOGE(TAG, "LoRa TX failed: [%s] -> %s", hex_str, esp_err_to_name(ret));
+        }
+        return ESP_OK;
+    }
+
+    // 일반 탈리: 라이선스 확인 (캐시된 상태 사용)
     if (!s_license_valid) {
         T_LOGW(TAG, "LoRa TX skipped: License not authenticated");
         return ESP_OK;

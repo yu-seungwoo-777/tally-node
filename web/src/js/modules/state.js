@@ -70,7 +70,7 @@ export function stateModule() {
             temperature: 0,
             uptime: 0,
             freeHeap: 0,
-            version: '2.3.3',
+            version: '2.3.4',
             loraChipType: 1  // 1=SX1262_868M, 2=SX1268_433M
         },
 
