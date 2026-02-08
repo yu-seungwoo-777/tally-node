@@ -125,8 +125,6 @@ static uint8_t s_current_page = 1;
 
 static void draw_tx_header(u8g2_t* u8g2);
 static void draw_hybrid_dashboard_page(u8g2_t* u8g2);
-static void draw_channel_list(u8g2_t* u8g2, const uint8_t* channels, uint8_t count,
-                              int y_pos, int max_width);
 static void draw_switcher_page(u8g2_t* u8g2);
 static void draw_ap_page(u8g2_t* u8g2);
 static void draw_wifi_page(u8g2_t* u8g2);
@@ -216,12 +214,12 @@ static void draw_tx_header(u8g2_t* u8g2)
  * @brief 하이브리드 대시보드 페이지 그리기 (Page 1)
  *
  * 4-Line 레이아웃:
- * - Line 1 (y=28): "PGM: 1,2,3,4" 형식
- * - Line 2 (y=39): "PVW: 5" 형식
+ * - Line 1 (y=28): "PGM: 1,2,3,4" 형식 (콜론 후 공백)
+ * - Line 2 (y=39): "PVW: 5" 형식 (콜론 후 공백)
  * - Line 3 (y=50): "AP:V/X  WiFi:-/V/X  ETH:-/V/X" 형식
  *   AP: 활성화(V), 비활성화(X)
  *   WiFi/ETH: 연결(V), 미연결(-), 연결안됨(X)
- * - Line 4 (y=61): "SINGLE  ATEM:[✓]" 형식
+ * - Line 4 (y=61): "SINGLE: ATEM:[✓]" 형식
  */
 static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
 {
@@ -236,13 +234,13 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     char pgm_str[32];
     if (s_tally_data.pgm_count > 0) {
         int offset = 0;
-        offset += snprintf(pgm_str, sizeof(pgm_str), "PGM:");
+        offset += snprintf(pgm_str, sizeof(pgm_str), "PGM: ");
         for (uint8_t i = 0; i < s_tally_data.pgm_count && i < 10; i++) {
             offset += snprintf(pgm_str + offset, sizeof(pgm_str) - offset,
                               "%s%d", (i > 0) ? "," : "", s_tally_data.pgm_channels[i]);
         }
     } else {
-        snprintf(pgm_str, sizeof(pgm_str), "PGM: ---");
+        snprintf(pgm_str, sizeof(pgm_str), "PGM:  ---");
     }
     u8g2_DrawStr(u8g2, 2, 28, pgm_str);
 
@@ -250,13 +248,13 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     char pvw_str[32];
     if (s_tally_data.pvw_count > 0) {
         int offset = 0;
-        offset += snprintf(pvw_str, sizeof(pvw_str), "PVW:");
+        offset += snprintf(pvw_str, sizeof(pvw_str), "PVW: ");
         for (uint8_t i = 0; i < s_tally_data.pvw_count && i < 10; i++) {
             offset += snprintf(pvw_str + offset, sizeof(pvw_str) - offset,
                               "%s%d", (i > 0) ? "," : "", s_tally_data.pvw_channels[i]);
         }
     } else {
-        snprintf(pvw_str, sizeof(pvw_str), "PVW: ---");
+        snprintf(pvw_str, sizeof(pvw_str), "PVW:  ---");
     }
     u8g2_DrawStr(u8g2, 2, 39, pvw_str);
 
@@ -310,9 +308,9 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     int line4_x = 2;
 
     // 듀얼 모드 표시
-    const char* mode_str = s_switcher_data.dual_mode ? "DUAL" : "SINGLE";
+    const char* mode_str = s_switcher_data.dual_mode ? "DUAL:" : "SINGLE:";
     u8g2_DrawStr(u8g2, line4_x, 61, mode_str);
-    line4_x += u8g2_GetStrWidth(u8g2, mode_str) + 4;  // 모드 너비 + 간격
+    line4_x += u8g2_GetStrWidth(u8g2, mode_str) + 2;  // 모드 너비 + 간격
 
     // S1 상태 (스위처 타입 표시)
     u8g2_DrawStr(u8g2, line4_x, 61, s_switcher_data.s1_type);
@@ -337,91 +335,17 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
 }
 
 /**
- * @brief 채널 리스트 문자열 생성 (가운데 정렬 + 생략)
- */
-static void draw_channel_list(u8g2_t* u8g2, const uint8_t* channels, uint8_t count,
-                               int y_pos, int max_width)
-{
-    u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
-
-    if (count == 0) {
-        // 채널 없음
-        const char* empty = "---";
-        int width = u8g2_GetStrWidth(u8g2, empty);
-        u8g2_DrawStr(u8g2, (max_width - width) / 2, y_pos, empty);
-        return;
-    }
-
-    // 전체 문자열 생성 (예: "1,2,3,4,5")
-    char full_str[64];
-    int offset = 0;
-    for (uint8_t i = 0; i < count && i < 20; i++) {
-        if (i > 0) {
-            offset += snprintf(full_str + offset, sizeof(full_str) - offset, ",");
-        }
-        offset += snprintf(full_str + offset, sizeof(full_str) - offset, "%d", channels[i]);
-    }
-
-    // 전체 너비 계산
-    int full_width = u8g2_GetStrWidth(u8g2, full_str);
-
-    if (full_width <= max_width) {
-        // 가운데 정렬로 그리기
-        u8g2_DrawStr(u8g2, (max_width - full_width) / 2, y_pos, full_str);
-    } else {
-        // 너무 길면 생략 (...) 처리
-        const char ellipsis[] = "...";
-        u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-        int ellipsis_width = u8g2_GetStrWidth(u8g2, ellipsis);
-
-        u8g2_SetFont(u8g2, u8g2_font_profont22_mf);
-
-        // 가능한 많이 표시하고 나머지는 ...으로
-        char truncated[64];
-        int trunc_offset = 0;
-        int trunc_width = 0;
-
-        for (uint8_t i = 0; i < count && i < 20; i++) {
-            char num_str[8];
-            int len = snprintf(num_str, sizeof(num_str), "%d%s",
-                              channels[i], (i < count - 1) ? "," : "");
-            int num_width = u8g2_GetStrWidth(u8g2, num_str);
-
-            if (trunc_width + num_width + ellipsis_width > max_width) {
-                break;
-            }
-
-            strncpy(truncated + trunc_offset, num_str, sizeof(truncated) - trunc_offset);
-            trunc_offset += len;
-            trunc_width += num_width;
-        }
-
-        if (trunc_offset > 0) {
-            truncated[trunc_offset] = '\0';
-            int display_width = trunc_width + ellipsis_width;
-            if (display_width > max_width) {
-                display_width = max_width;
-            }
-            u8g2_DrawStr(u8g2, (max_width - display_width) / 2, y_pos, truncated);
-
-            u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-            u8g2_DrawStr(u8g2, (max_width - display_width) / 2 + trunc_width, y_pos, ellipsis);
-        }
-    }
-}
-
-/**
  * @brief 스위처 페이지 그리기 (Page 2)
  */
 static void draw_switcher_page(u8g2_t* u8g2)
 {
     draw_tx_header(u8g2);
 
-    // 헤더: MODE: SINGLE / DUAL
+    // 헤더: MODE: SINGLE: / DUAL:
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
     u8g2_DrawStr(u8g2, 2, 10, "MODE:");
-    const char* mode_str = s_switcher_data.dual_mode ? "DUAL" : "SINGLE";
-    u8g2_DrawStr(u8g2, 35, 10, mode_str);
+    const char* mode_str = s_switcher_data.dual_mode ? "DUAL:" : "SINGLE:";
+    u8g2_DrawStr(u8g2, 38, 10, mode_str);
 
     // 구분선
     u8g2_DrawHLine(u8g2, 0, 14, 128);

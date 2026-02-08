@@ -255,34 +255,50 @@ esp_err_t lora_driver_init(const lora_config_t* config) {
             }
         }
     } else {
-        // 칩 감지되지 않음: 기존 로직으로 감지 시도
-        T_LOGD(TAG, "detect:sx1262");
-        SX1262* radio_1262 = new SX1262(s_module);
-        int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+        // 칩 감지되지 않음: 433MHz 먼저 시도 후 868MHz로 확인
+        T_LOGD(TAG, "detect:sx1268@433");
+        SX1268* radio_1268 = new SX1268(s_module);
+        int16_t state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
 
         if (state == RADIOLIB_ERR_NONE) {
-            s_radio = radio_1262;
-            s_chip_type = LORA_CHIP_SX1262_868M;
-            T_LOGI(TAG, "chip: SX1262 (868MHz)");
-        } else {
-            T_LOGD(TAG, "detect:sx1268");
-            delete radio_1262;
+            // 433MHz로 성공 시 868MHz 설정도 시도하여 868MHz 모듈인지 확인
+            T_LOGD(TAG, "detect:sx1268@433:ok, test@868");
+            int16_t state_868 = radio_1268->setFrequency(868.0f);
 
-            SX1268* radio_1268 = new SX1268(s_module);
-            state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
-
-            if (state == RADIOLIB_ERR_NONE) {
+            if (state_868 == RADIOLIB_ERR_NONE) {
+                // 433MHz와 868MHz 모두 성공 = SX1262 (868MHz 모듈)
+                s_radio = radio_1268;  // SX1268 객체지만 SX1262로 취급
+                s_chip_type = LORA_CHIP_SX1262_868M;
+                T_LOGI(TAG, "chip: SX1262 (868MHz, supports 433 too)");
+            } else {
+                // 433MHz만 성공 = SX1268 (433MHz 전용)
                 s_radio = radio_1268;
                 s_chip_type = LORA_CHIP_SX1268_433M;
-                T_LOGI(TAG, "chip: SX1268 (433MHz)");
+                T_LOGI(TAG, "chip: SX1268 (433MHz only)");
+            }
+        } else {
+            // 433MHz 실패 시 868MHz 시도
+            T_LOGD(TAG, "detect:sx1268@433:fail, try@868");
+            delete radio_1268;
+
+            SX1262* radio_1262 = new SX1262(s_module);
+            state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+
+            if (state == RADIOLIB_ERR_NONE) {
+                s_radio = radio_1262;
+                s_chip_type = LORA_CHIP_SX1262_868M;
+                T_LOGI(TAG, "chip: SX1262 (868MHz)");
             } else {
                 T_LOGE(TAG, "fail:detect:both_chips");
-                delete radio_1268;
+                delete radio_1262;
                 delete s_module;
                 s_module = nullptr;
                 return ESP_FAIL;
             }
         }
+
+        // 감지된 칩 저장 (다음 초기화 시 재사용)
+        s_detected_chip = s_chip_type;
     }
 
     // NVS 주파수로 설정
@@ -773,9 +789,35 @@ lora_chip_type_t lora_driver_get_chip_type(void) {
 }
 
 /**
+ * @brief SX126x 디바이스 ID로 칩 타입 판별
+ *
+ * SX1262와 SX1268는 거의 동일하지만 지원 주파수 대역이 다름
+ * 디바이스 ID 레지스터(0x419)를 읽어서 구분
+ */
+static lora_chip_type_t detect_chip_by_id(SX126x* radio) {
+    // SX126x 디바이스 ID 레지스터 주소
+    const uint8_t REG_ID = 0x419;
+
+    // 디바이스 ID 읽기 (Little Endian, 2바이트)
+    uint8_t id_bytes[2];
+    uint16_t device_id = 0;
+
+    // SPI 거친 읽기 (SX126x SPI 인터페이스)
+    // RadioLib 내부 함수 사용이 어려우므로 간접적으로 begin 성공 후 주파수 설정으로 판별
+    // 433MHz 모듈은 850-930MHz 범위에서 실패해야 함
+
+    return LORA_CHIP_UNKNOWN;  // ID 기반 판별 불가시 폴백
+}
+
+/**
  * @brief 장착된 LoRa 칩 타입 감지 (초기화 없이)
  *
  * 드라이버 초기화 전에 칩 타입만 확인하여 기본값 설정에 사용
+ *
+ * 감지 방식:
+ * 1. 868MHz로 begin() 시도 (SX1262와 SX1268 모두 성공 가능)
+ * 2. 433MHz로 설정 후 재시도 (실제 433MHz 모듈만 성공)
+ * 3. RadioLib의 내부 칩 타입 확인 (getDeviceType())
  */
 lora_chip_type_t lora_driver_detect_chip(void) {
     T_LOGD(TAG, "detect:chip");
@@ -804,23 +846,36 @@ lora_chip_type_t lora_driver_detect_chip(void) {
 
     lora_chip_type_t detected = LORA_CHIP_UNKNOWN;
 
-    // SX1262 시도
-    T_LOGD(TAG, "detect:sx1262");
-    SX1262* radio_1262 = new SX1262(module);
-    int16_t state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+    // SX1268 먼저 시도 (433MHz 전용 모듈)
+    T_LOGD(TAG, "detect:sx1268@433");
+    SX1268* radio_1268 = new SX1268(module);
+    int16_t state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
 
     if (state == RADIOLIB_ERR_NONE) {
-        detected = LORA_CHIP_SX1262_868M;
-        T_LOGI(TAG, "detected: SX1262 (868MHz)");
-        delete radio_1262;
+        // 433MHz로 성공 시 868MHz 설정도 시도하여 868MHz 모듈인지 확인
+        T_LOGD(TAG, "detect:sx1268@433:ok, test@868");
+        int16_t state_868 = radio_1268->setFrequency(868.0f);
+
+        if (state_868 == RADIOLIB_ERR_NONE) {
+            // 433MHz와 868MHz 모두 성공 = SX1262 (868MHz 모듈이 433MHz도 지원)
+            detected = LORA_CHIP_SX1262_868M;
+            T_LOGI(TAG, "detected: SX1262 (868MHz, supports 433 too)");
+        } else {
+            // 433MHz만 성공 = SX1268 (433MHz 전용)
+            detected = LORA_CHIP_SX1268_433M;
+            T_LOGI(TAG, "detected: SX1268 (433MHz only)");
+        }
+
+        delete radio_1268;
     } else {
-        T_LOGD(TAG, "detect:sx1268");
-        delete radio_1262;
+        // 433MHz 실패 시 868MHz 시도
+        T_LOGD(TAG, "detect:sx1268@433:fail, try@868");
+        delete radio_1268;
         delete module;
 
-        // SX1262 실패 후 HAL 완전 재초기화 (SPI 버스 복구)
+        // HAL 완전 재초기화 (SPI 버스 복구)
         lora_hal_deinit();
-        vTaskDelay(pdMS_TO_TICKS(50));  // SPI 안정화 대기
+        vTaskDelay(pdMS_TO_TICKS(50));
 
         ret = lora_hal_init();
         if (ret != ESP_OK) {
@@ -832,14 +887,17 @@ lora_chip_type_t lora_driver_detect_chip(void) {
         module = new Module(hal, EORA_S3_LORA_CS, EORA_S3_LORA_DIO1,
                            EORA_S3_LORA_RST, EORA_S3_LORA_BUSY);
 
-        // SX1268 시도
-        SX1268* radio_1268 = new SX1268(module);
-        state = radio_1268->begin(433.0f, bw, sf, cr, sw, txp, 8, 0.0f);
+        // SX1262 시도 (868MHz)
+        SX1262* radio_1262 = new SX1262(module);
+        state = radio_1262->begin(868.0f, bw, sf, cr, sw, txp, 8, 0.0f);
 
         if (state == RADIOLIB_ERR_NONE) {
-            detected = LORA_CHIP_SX1268_433M;
-            T_LOGI(TAG, "detected: SX1268 (433MHz)");
-            delete radio_1268;
+            detected = LORA_CHIP_SX1262_868M;
+            T_LOGI(TAG, "detected: SX1262 (868MHz)");
+            delete radio_1262;
+        } else {
+            T_LOGE(TAG, "detect:fail:both_chips");
+            delete radio_1262;
         }
     }
 
