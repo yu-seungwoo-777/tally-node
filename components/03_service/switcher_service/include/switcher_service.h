@@ -432,6 +432,7 @@ private:
         uint16_t port;             ///< 포트 번호
         uint8_t network_interface; ///< 네트워크 인터페이스 (0=Auto, 1=Ethernet, 2=WiFi)
         uint8_t camera_limit;      ///< 카메라 제한 (0=무제한)
+        uint8_t reconnect_fail_count;      ///< consecutive reconnection failure count
 
         SwitcherInfo()
             : adapter(nullptr)
@@ -445,7 +446,8 @@ private:
             , ip("")
             , port(0)
             , network_interface(0)
-            , camera_limit(0) {}
+            , camera_limit(0)
+            , reconnect_fail_count(0) {}
 
         void cleanup() {
             adapter.reset();

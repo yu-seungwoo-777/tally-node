@@ -278,6 +278,7 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
 
             // 연결 완료 시 로그 출력 및 이벤트 발행
             if (now_connected && !was_connected) {
+                info->reconnect_fail_count = 0;  // CHANGE B: Reset on successful connection
                 const char* role_str = switcher_role_to_string(role);
                 const char* iface_str = network_interface_to_string(
                     static_cast<tally_network_if_t>(info->network_interface));
@@ -299,6 +300,7 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
     info->last_reconnect_attempt = 0;
     info->last_packed_change_time = 0;  // 첫 Tally 데이터 받을 때까지 대기
     info->is_connected = false;
+    info->reconnect_fail_count = 0;  // CHANGE B: Reset on successful connection
 
     // 설정 정보 저장 (이벤트 발행용)
     strncpy(info->type, "ATEM", sizeof(info->type) - 1);
@@ -831,7 +833,19 @@ void SwitcherService::taskLoop() {
             bool interface_connected = isInterfaceConnected(primary_.network_interface);
             if (interface_connected) {
                 if (now - primary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
-                    T_LOGD(TAG, "Primary reconnect attempt (interface connected)");
+                    primary_.reconnect_fail_count++;
+
+                    // CHANGE B: After 5 consecutive failures, reinitialize the adapter
+                    if (primary_.reconnect_fail_count >= 5) {
+                        T_LOGW(TAG, "Primary: %d consecutive reconnect failures → reinitializing adapter",
+                               primary_.reconnect_fail_count);
+                        primary_.adapter->disconnect();
+                        primary_.adapter->initialize();
+                        primary_.reconnect_fail_count = 0;
+                    }
+
+                    T_LOGD(TAG, "Primary reconnect attempt (interface connected, attempt=%d)",
+                           primary_.reconnect_fail_count);
                     primary_.adapter->connect();
                     primary_.last_reconnect_attempt = now;
                 }
@@ -845,6 +859,20 @@ void SwitcherService::taskLoop() {
             }
         }
         else if (state == CONNECTION_STATE_CONNECTED || state == CONNECTION_STATE_READY) {
+            // CHANGE D: Connection health watchdog - check if we're receiving data
+            if (primary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
+                AtemDriver* atem = static_cast<AtemDriver*>(primary_.adapter.get());
+                uint32_t last_update = atem->getLastUpdateTime();
+                if (last_update > 0) {
+                    uint32_t silence_duration = now - last_update;
+                    // Warn if no data for 10 seconds (below ATEM's 5-second timeout, so this shouldn't normally trigger)
+                    // This helps diagnose cases where the driver thinks it's connected but isn't receiving
+                    if (silence_duration > 10000 && silence_duration < 15000) {
+                        T_LOGW(TAG, "Primary: no ATEM data for %d ms while in CONNECTED state", silence_duration);
+                    }
+                }
+            }
+
             // 정상 연결 상태 → Packed 변화 없으면 health refresh
             if (primary_.last_packed_change_time > 0) {
                 uint32_t no_change_duration = now - primary_.last_packed_change_time;
@@ -891,7 +919,19 @@ void SwitcherService::taskLoop() {
             bool interface_connected = isInterfaceConnected(secondary_.network_interface);
             if (interface_connected) {
                 if (now - secondary_.last_reconnect_attempt > SWITCHER_RETRY_INTERVAL_MS) {
-                    T_LOGD(TAG, "Secondary reconnect attempt (interface connected)");
+                    secondary_.reconnect_fail_count++;
+
+                    // CHANGE B: After 5 consecutive failures, reinitialize the adapter
+                    if (secondary_.reconnect_fail_count >= 5) {
+                        T_LOGW(TAG, "Secondary: %d consecutive reconnect failures → reinitializing adapter",
+                               secondary_.reconnect_fail_count);
+                        secondary_.adapter->disconnect();
+                        secondary_.adapter->initialize();
+                        secondary_.reconnect_fail_count = 0;
+                    }
+
+                    T_LOGD(TAG, "Secondary reconnect attempt (interface connected, attempt=%d)",
+                           secondary_.reconnect_fail_count);
                     secondary_.adapter->connect();
                     secondary_.last_reconnect_attempt = now;
                 }
@@ -905,6 +945,20 @@ void SwitcherService::taskLoop() {
             }
         }
         else if (state == CONNECTION_STATE_CONNECTED || state == CONNECTION_STATE_READY) {
+            // CHANGE D: Connection health watchdog - check if we're receiving data
+            if (secondary_.adapter->getType() == SWITCHER_TYPE_ATEM) {
+                AtemDriver* atem = static_cast<AtemDriver*>(secondary_.adapter.get());
+                uint32_t last_update = atem->getLastUpdateTime();
+                if (last_update > 0) {
+                    uint32_t silence_duration = now - last_update;
+                    // Warn if no data for 10 seconds (below ATEM's 5-second timeout, so this shouldn't normally trigger)
+                    // This helps diagnose cases where the driver thinks it's connected but isn't receiving
+                    if (silence_duration > 10000 && silence_duration < 15000) {
+                        T_LOGW(TAG, "Secondary: no ATEM data for %d ms while in CONNECTED state", silence_duration);
+                    }
+                }
+            }
+
             // 정상 연결 상태 → Packed 변화 없으면 health refresh
             if (secondary_.last_packed_change_time > 0) {
                 uint32_t no_change_duration = now - secondary_.last_packed_change_time;

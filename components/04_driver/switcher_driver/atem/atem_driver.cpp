@@ -161,6 +161,12 @@ void AtemDriver::connect() {
         return;
     }
 
+    // CHANGE A: Always close existing socket before reconnecting for clean state
+    if (sock_fd_ >= 0) {
+        close(sock_fd_);
+        sock_fd_ = -1;
+    }
+
     // 소켓이 유효하지 않으면 다시 초기화
     if (sock_fd_ < 0) {
         if (!initialize()) {
