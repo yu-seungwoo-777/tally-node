@@ -336,7 +336,7 @@ esp_err_t ethernet_hal_start(void)
         .command_bits = 16,
         .address_bits = 8,
         .mode = 0,
-        .clock_speed_hz = 20 * 1000 * 1000,  // 20MHz
+        .clock_speed_hz = 40 * 1000 * 1000,  // 40MHz (W5500 최대 지원)
         .queue_size = 32,
         .spics_io_num = EORA_S3_W5500_CS,
     };
@@ -346,33 +346,40 @@ esp_err_t ethernet_hal_start(void)
     w5500_config.int_gpio_num = EORA_S3_W5500_INT;
 
     // INT 핀 연결 여부 감지 (W5500 INT는 active-low, 유휴 시 High 출력)
-    // 풀다운 모드로 설정하여 W5500 연결 여부 확인
+    // 풀업 모드로 설정하여 W5500 INT 핀 High 레벨 감지
+    bool use_polling = false;
+
     if (w5500_config.int_gpio_num >= 0) {
         gpio_config_t io_conf = {};
         io_conf.pin_bit_mask = (1ULL << w5500_config.int_gpio_num);
         io_conf.mode = GPIO_MODE_INPUT;
-        io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-        io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;  // 풀다운
+        io_conf.pull_up_en = GPIO_PULLUP_ENABLE;       // 풀업 활성화
+        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE; // 풀다운 비활성화
         io_conf.intr_type = GPIO_INTR_DISABLE;
         gpio_config(&io_conf);
 
         // W5500가 연결되어 있으면 INT 핀은 High (유휴 상태)
-        // 연결되어 있지 않으면 핀은 Low (풀다운에 의해)
+        // 연결되어 있지 않으면 핀은 Low (부유 상태)
         vTaskDelay(pdMS_TO_TICKS(10));  // 안정화 대기
         int int_level = gpio_get_level(w5500_config.int_gpio_num);
 
         if (int_level == 1) {
-            // High 감지 = W5500 INT 연결됨
-            T_LOGD(TAG, "int:connected");
+            // High 감지 = W5500 INT 연결됨, 인터럽트 모드 사용
+            T_LOGI(TAG, "int:connected (interrupt mode)");
         } else {
-            // Low 감지 = INT 핀 미연결 (폴링 모드 사용)
-            w5500_config.int_gpio_num = -1;
-            T_LOGD(TAG, "int:not_connected");
+            // Low 감지 = INT 핀 미연결, 폴링 모드 사용
+            T_LOGW(TAG, "int:not_detected (polling mode, level=%d)", int_level);
+            use_polling = true;
         }
+    } else {
+        // INT GPIO가 정의되지 않음 = 폴링 모드 사용
+        T_LOGI(TAG, "int:not_configured (polling mode)");
+        use_polling = true;
     }
 
-    // INT GPIO가 없거나 감지되지 않으면 폴링 모드 사용
-    if (w5500_config.int_gpio_num < 0) {
+    // 폴링 모드 설정
+    if (use_polling) {
+        w5500_config.int_gpio_num = -1;  // 인터럽트 비활성화
         w5500_config.poll_period_ms = 20;  // 20ms (인터럽트 부하와 응답 속도 균형)
     }
 

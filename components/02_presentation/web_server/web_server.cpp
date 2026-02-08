@@ -17,6 +17,8 @@
 #include "esp_system.h"
 #include "cJSON.h"
 #include "freertos/FreeRTOS.h"
+#include <sys/socket.h>
+#include <netinet/tcp.h>
 
 static const char* TAG = "02_WS";
 static httpd_handle_t s_server = nullptr;
@@ -100,6 +102,19 @@ esp_err_t web_server_init(void)
 }
 
 /**
+ * @brief 소켓 오픈 콜백 - TCP_NODELAY 설정
+ */
+static esp_err_t web_server_socket_open(httpd_handle_t hd, int sockfd) {
+    // TCP_NODELAY 활성화 (Nagle 알고리즘 비활성화)
+    // 웹서버 응답 속도 개선을 위한 설정
+    int nodelay = 1;
+    if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) < 0) {
+        T_LOGW(TAG, "socket:fail:setsockopt:nodelay (fd=%d)", sockfd);
+    }
+    return ESP_OK;
+}
+
+/**
  * @brief 웹 서버 시작
  * @return ESP_OK 성공, ESP_ERR_INVALID_STATE 초기화되지 않음, ESP_FAIL HTTP 서버 시작 실패
  * @details HTTP 서버를 시작하고 모든 API 핸들러를 등록합니다
@@ -118,7 +133,7 @@ esp_err_t web_server_start(void)
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = 80;
-    config.max_open_sockets = 7;  // LWIP_MAX_SOCKETS=10일 때 최대값 (10-3=7)
+    config.max_open_sockets = 7;  // 단일 사용자 웹서버 (최대 21 가능: LWIP_MAX_SOCKETS 24-3)
     config.max_uri_handlers = g_route_count + 4;  // 여유분 확보
     config.stack_size = 12288;  // 스택 오버플로우 방지 (8KB → 12KB, cJSON 생성 시 여유)
     config.task_priority = 5;  // 3→5 (event_bus와 동일, CPU 시간 확보)
@@ -128,6 +143,8 @@ esp_err_t web_server_start(void)
     config.keep_alive_idle = 30;     // 30초 동안 유휴시 연결 유지
     config.keep_alive_interval = 5;  // 5초마다 keep-alive 프로브
     config.keep_alive_count = 3;     // 3회 실패시 연결 종료
+    // TCP_NODELAY 활성화 (웹서버 응답 속도 개선)
+    config.open_fn = web_server_socket_open;
 
     esp_err_t ret = httpd_start(&s_server, &config);
     if (ret != ESP_OK) {

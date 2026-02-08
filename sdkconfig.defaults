@@ -1,61 +1,40 @@
 # ============================================================
-# ESP-IDF 5.x Configuration
+# ESP-IDF 5.5 Configuration
 # ============================================================
-# ESP-IDF v5.x 설정 파일 (ESP-IDF 5.2/5.5 호환)
-# PlatformIO: espressif32 @ ~6.7.0
-# Framework: framework-espidf @ ~5.20100.0
+# ESP-IDF v5.5 호환 설정 파일
+# PlatformIO: espressif32 @ 6.12.0
+# Framework: framework-espidf @ 3.50500.0 (5.5.0)
 
 # ============================================================
-# Bootloader 로그 비활성화
+# Bootloader 설정
 # ============================================================
+# Bootloader 로그 비활성화
 CONFIG_BOOTLOADER_LOG_LEVEL_NONE=y
 CONFIG_BOOTLOADER_LOG_LEVEL=0
 CONFIG_LOG_COLORS=n
 
 # ============================================================
-# ESP 시스템 시작 로그 비활성화
+# 시스템 설정
 # ============================================================
+# ESP 시스템 이벤트 태스크 스택
 CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=16384
+# 인터럽트 와치독 타임아웃
 CONFIG_ESP_INT_WDT_TIMEOUT_MS=5000
 
-# CPU 시작 로그 비활성화
-CONFIG_ESP_SYSTEM_MEM_STATS_FORMAT_STR=0
-CONFIG_ESP_SYSTEM_MEM_STATS_FILE=0
-
 # ============================================================
-# 내부 컴포넌트 로그 비활성화
+# 힙 메모리 설정
 # ============================================================
-# ESP_EVENT 로그 비활성화
-CONFIG_ESP_EVENT_LOG_LEVEL_NONE=y
-CONFIG_ESP_EVENT_LOG_LEVEL=0
-
-# heap 로그 비활성화
 CONFIG_HEAP_MEM_ALIGNMENT_REGION=1
 CONFIG_HEAP_POISONING_DISABLED=y
-CONFIG_HEAP_TRACING_DISABLED=y
-
-# SPI Flash 로그 비활성화
-CONFIG_ESP_ROM_SPI_FLASH_LOG_LEVEL_NONE=y
-CONFIG_ESP_ROM_SPI_FLASH_LOG_LEVEL=0
-
-# efuse 로그 비활성화
-CONFIG_EFUSE_LOG_LEVEL_NONE=y
-CONFIG_EFUSE_LOG_LEVEL=0
-
-# i2c 로그 비활성화
-CONFIG_I2C_LOG_LEVEL_NONE=y
-CONFIG_I2C_LOG_LEVEL=0
-
-# sleep/gpio 로그 비활성화
-CONFIG_GPIO_LOG_LEVEL_NONE=y
-CONFIG_GPIO_LOG_LEVEL=0
 
 # ============================================================
-# 전역 로그 레벨 최소화 (ERROR만)
+# 전역 로그 설정 (최소화)
 # ============================================================
+# 로그 레벨: ERROR만 (1)
 CONFIG_LOG_DEFAULT_LEVEL_ERROR=y
 CONFIG_LOG_DEFAULT_LEVEL=1
 CONFIG_LOG_MAXIMUM_LEVEL=5
+# 타임스탬프 소스: 시스템
 CONFIG_LOG_TIMESTAMP_SOURCE_SYS=y
 
 # ============================================================
@@ -64,51 +43,30 @@ CONFIG_LOG_TIMESTAMP_SOURCE_SYS=y
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
 
-# ESP-IDF 내부 컴포넌트 로그 비활성화
-# lwIP 로그 비활성화
+# ============================================================
+# lwIP 로그 설정
+# ============================================================
 CONFIG_LWIP_LOG_LEVEL_NONE=y
 CONFIG_LWIP_LOG_LEVEL=0
 CONFIG_LWIP_DEBUG=0
 
-# NetIF 로그 비활성화
-CONFIG_ESP_NETIF_LOG_LEVEL_NONE=y
-CONFIG_ESP_NETIF_LOG_LEVEL=0
-
-# HTTP 서버 로그 비활성화
-CONFIG_HTTPD_LOG_LEVEL_NONE=y
-CONFIG_HTTPD_LOG_LEVEL=0
-
 # ============================================================
 # WiFi 설정
 # ============================================================
-
-# --- WiFi Log (비활성화) ---
-CONFIG_ESP_WIFI_LOG_DEFAULT_LEVEL_NONE=y
-CONFIG_ESP_WIFI_LOG_LEVEL=0
-CONFIG_ESP_WIFI_LOG_LEVEL_NONE=y
-
-# --- WiFi Event Log (비활성화) ---
-CONFIG_ESP_WIFI_EVENT_LOG_LEVEL_NONE=y
-CONFIG_ESP_WIFI_EVENT_LOG_LEVEL=0
-
-# --- WiFi Performance ---
+# WiFi 성능 최적화
 CONFIG_ESP_WIFI_IRAM_OPT=y
 CONFIG_ESP_WIFI_RX_IRAM_OPT=y
 CONFIG_ESP_WIFI_SLP_IRAM_OPT=y
-CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=32   # 64→32 (약 50KB 절약)
-CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=32  # 64→32
-CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=32  # 64→32
-# WiFi 고속화 (AMPDU/AMSDU - 802.11n)
+# WiFi 버퍼 (64→32, 약 50KB 절약)
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=32
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=32
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=32
+# WiFi 고속화 (AMPDU - 802.11n)
 CONFIG_ESP_WIFI_AMPDU_RX_ENABLED=y
-CONFIG_ESP_WIFI_AMSDU_RX_ENABLED=y
 CONFIG_ESP_WIFI_AMPDU_TX_ENABLED=y
-# WiFi 전력 및 속도 최적화
-CONFIG_ESP_WIFI_DYNAMIC_TX_POWER=y
-CONFIG_ESP_WIFI_STATIC_RX_TX_BUF_NUM=16
-CONFIG_ESP_WIFI_DYNAMIC_RX_TX_BUF_NUM=32
 # WiFi 슬립 모드 비활성화 (항상 깨어있음)
 CONFIG_ESP_WIFI_STA_DISCONNECTED_PM_ENABLE=n
-# WiFi NVRAM 설정 (최적화)
+# WiFi NVRAM 설정
 CONFIG_ESP_WIFI_ENABLE_WPA3_OWE_STA=n
 
 # ============================================================
@@ -122,18 +80,17 @@ CONFIG_PM_ENABLE=n
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 
 # ============================================================
-# Main Task 설정
+# Task 설정
 # ============================================================
+# Main Task 스택
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
-
-# ============================================================
-# System Event Task 설정
-# ============================================================
+# System Event Task 스택
 CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=16384
 
 # ============================================================
-# CPU 클럭 설정
+# CPU 설정
 # ============================================================
+# CPU 클럭 240MHz
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240
 
@@ -144,54 +101,103 @@ CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
 
 # ============================================================
-# lwIP 네트워크 설정
+# lwIP 네트워크 설정 (ESP-IDF 5.5 호환)
 # ============================================================
-CONFIG_LWIP_MAX_SOCKETS=24  # 16→24 (max_open_sockets=16 허용)
-CONFIG_LWIP_SO_REUSE=y  # 소켓 즉시 재사용
+# 소켓 설정
+CONFIG_LWIP_MAX_SOCKETS=24
+CONFIG_LWIP_SO_REUSE=y
 CONFIG_LWIP_SO_RCVBUF=y
-CONFIG_LWIP_SO_SNDRCVTIMEO=y  # 송수신 타임아웃 활성화
-CONFIG_LWIP_RECV_BUFSIZE_DEFAULT=49152   # 32KB→48KB (더 큰 수신 버퍼)
-# TCP 연결 설정
-CONFIG_LWIP_TCP_LISTEN_BACKLOG=16  # 연결 대기열
-CONFIG_LWIP_TCP_MAX_KEEPALIVE=10  # Keepalive 검사
-# TCP_NODELAY 활성화 (작은 패킷 즉시 전송 - 웹 응답 속도 향상)
-CONFIG_LWIP_TCP_NODELAY=y
+# 소켓 linger 옵션
+CONFIG_LWIP_SO_LINGER=y
+# REUSEADDR 모든 수신자에게 전달
+CONFIG_LWIP_SO_REUSE_RXTOALL=y
+
+# TCP/UDP 연결 제한 (MEMP_NUM_* → LWIP_MAX_*로 변경)
+# 활성 TCP 연결 (기본값 16→8)
+CONFIG_LWIP_MAX_ACTIVE_TCP=8
+# 대기(Listening) TCP 연결 (기본값 16→8)
+CONFIG_LWIP_MAX_LISTENING_TCP=8
+# UDP 연결 (기본값 16→32)
+CONFIG_LWIP_MAX_UDP_PCBS=32
+
 # lwIP 태스크 설정
 CONFIG_LWIP_TCPIP_TASK_STACK_SIZE=4096
-CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=64  # 32→64 (lwIP 태스크 메일박스)
-# lwIP 태스크 우선순위
+CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=64
 CONFIG_LWIP_TCPIP_TASK_PRIO=5
 CONFIG_LWIP_IRAM_OPTIMIZATION=y
-# TCP 버퍼 (단일 사용자 속도 최적화)
-CONFIG_LWIP_TCP_WND_DEFAULT=49152    # 32KB→48KB (처리량 50% 증가)
-CONFIG_LWIP_TCP_SND_BUF_DEFAULT=24576  # 16KB→24KB (전송 속도 증가)
+
+# TCP 버퍼 설정
+CONFIG_LWIP_TCP_WND_DEFAULT=49152
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=24576
 CONFIG_LWIP_TCP_MSS=1440
-# TCP PCB (HTTPS 웹서버 연결)
-CONFIG_MEMP_NUM_TCP_PCB=8          # 활성 TCP 연결 (기본값 5→8)
-CONFIG_MEMP_NUM_TCP_PCB_LISTEN=8   # 대기 연결 (기본값 유지)
-CONFIG_LWIP_TCP_RECVMBOX_SIZE=64   # TCP 받기 메일박스 (32→64)
-# UDP/PBUF 버퍼 (ATEM UDP 통신 안정화)
-CONFIG_LWIP_UDP_RECVMBOX_SIZE=64  # UDP 받기 메일박스 (32→64)
-CONFIG_MEMP_NUM_UDP_PCB=32        # UDP PCB 개수 (16→32)
-CONFIG_PBUF_POOL_SIZE=128         # PBUF 풀 크기 (64→128, 256KB)
-CONFIG_LWIP_PBUF_POOL_BUFSIZE=2048  # PBUF 버퍼 크기 (유지)
+# TCP 최적화 (Nagle 비활성화, SACK 활성화)
+CONFIG_LWIP_TCP_NODELAY=y
+CONFIG_LWIP_TCP_SACK_OUT=y
+CONFIG_LWIP_TCP_OOSEQ_MAX_PBUFS=8
+# TCP 메일박스
+CONFIG_LWIP_TCP_RECVMBOX_SIZE=64
+CONFIG_LWIP_TCP_ACCEPTMBOX_SIZE=32
 
 # ============================================================
-# HTTP 서버 설정
+# HTTP 서버 설정 (ESP-IDF 5.5 호환)
 # ============================================================
-CONFIG_HTTPD_TX_PKT_SIZE=32768  # 32KB (PSRAM 활성화로 대용량 전송 가능)
-CONFIG_HTTPD_TASK_STACK_SIZE=12288  # 12KB (유지)
+# HTTP 요청 헤더 최대 길이 (기본값 1024)
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+# HTTP URI 최대 길이 (기본값 512)
+CONFIG_HTTPD_MAX_URI_LEN=512
+# HTTP 에러 응답에 TCP_NODELAY 사용
+CONFIG_HTTPD_ERR_RESP_NO_DELAY=y
+# WebSocket 지원
+CONFIG_HTTPD_WS_SUPPORT=y
+
+# ============================================================
+# 주의: ESP-IDF 5.5에서 제거된 설정들 (런타임/기본값 사용)
+# ============================================================
+# 아래 설정들은 더 이상 Kconfig에서 지원하지 않습니다:
+#
+# 컴포넌트별 로그 레벨 (통합 로그 시스템 사용):
+#   CONFIG_ESP_EVENT_LOG_LEVEL_*
+#   CONFIG_ESP_ROM_SPI_FLASH_LOG_LEVEL_*
+#   CONFIG_EFUSE_LOG_LEVEL_*
+#   CONFIG_I2C_LOG_LEVEL_*
+#   CONFIG_GPIO_LOG_LEVEL_*
+#   CONFIG_ESP_NETIF_LOG_LEVEL_*
+#   CONFIG_HTTPD_LOG_LEVEL_*
+#   CONFIG_ESP_WIFI_LOG_LEVEL_*
+#
+# lwIP 소켓 옵션 (기본적으로 활성화됨):
+#   CONFIG_LWIP_SO_SNDRCVTIMEO (기본값으로 자동 설정)
+#   CONFIG_LWIP_TCP_NODELAY (기본적으로 활성화)
+#   CONFIG_LWIP_RECV_BUFSIZE_DEFAULT (SO_RCVBUF로 자동 관리)
+#   CONFIG_LWIP_TCP_LISTEN_BACKLOG (자동 관리)
+#   CONFIG_LWIP_TCP_MAX_KEEPALIVE (기본값 사용)
+#
+# lwIP 메모리 풀 (LWIP_MAX_*로 변경됨):
+#   CONFIG_MEMP_NUM_TCP_PCB → CONFIG_LWIP_MAX_ACTIVE_TCP
+#   CONFIG_MEMP_NUM_TCP_PCB_LISTEN → CONFIG_LWIP_MAX_LISTENING_TCP
+#   CONFIG_MEMP_NUM_UDP_PCB → CONFIG_LWIP_MAX_UDP_PCBS
+#   CONFIG_PBUF_POOL_SIZE (자동 관리)
+#   CONFIG_LWIP_PBUF_POOL_BUFSIZE (자동 관리)
+#
+# HTTP 서버 설정 (런타임 구조체로 설정):
+#   CONFIG_HTTPD_TX_PKT_SIZE → httpd_config_t.stack_size
+#   CONFIG_HTTPD_TASK_STACK_SIZE → httpd_config_t.task_stack_size
+#
+# mbedTLS/TLS 설정 (간소화됨):
+#   CONFIG_MBEDTLS_SSL_SESSION_TICKETS (기본값 사용)
+#   CONFIG_MBEDTLS_CIPHER_MODE_* (자동 관리)
+#   CONFIG_MBEDTLS_SHA256_C (기본적으로 활성화)
+#   CONFIG_ESP_TLS_CERTIFICATE_BUNDLE (자동 관리)
+#
+# SPIRAM 설정 (자동 감지 사용):
+#   CONFIG_SPIRAM_MODE_OPI (자동 감지)
+#   CONFIG_SPIRAM_USE_SPIRAM (자동 감지)
 
 # ============================================================
 # FreeRTOS 설정
 # ============================================================
 CONFIG_FREERTOS_HZ=1000
-# CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS is not set
-# CONFIG_FREERTOS_USE_TRACE_FACILITY is not set
-# CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS is not set
-# CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER is not set
-
-# Timer Service Task 스택 크기 증가 (카메라 ID 롱프레스 타이머용)
+# Timer Service Task 스택 (카메라 ID 롱프레스 타이머용)
 CONFIG_FREERTOS_TIMER_TASK_STACK_DEPTH=4096
 
 # ============================================================
@@ -203,47 +209,24 @@ CONFIG_ETH_SPI_ETHERNET_W5500=y
 # ============================================================
 # mbedTLS TLS 설정 (HTTPS 연결용)
 # ============================================================
-# TLS 버전 활성화
-CONFIG_MBEDTLS_TLS_VERSION_1_2=y
-CONFIG_MBEDTLS_TLS_VERSION_1_3=y
-
-# TLS / X509
-CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
-CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT=y
-CONFIG_MBEDTLS_SSL_SERVER_NAME_INDICATION=y
-
 # 인증서 검증 관련
 CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=y
 CONFIG_MBEDTLS_SSL_ALPN=y
-CONFIG_MBEDTLS_SSL_SESSION_TICKETS=y
-
-# 암호_SUITE 호환성 (서버와 호환되는 Suite)
-CONFIG_MBEDTLS_CIPHER_MODE_CBC=y
-CONFIG_MBEDTLS_CIPHER_MODE_GCM=y
-CONFIG_MBEDTLS_CIPHER_MODE_CCM=y
-CONFIG_MBEDTLS_AES_C=y
-CONFIG_MBEDTLS_SHA256_C=y
-CONFIG_MBEDTLS_SHA512_C=y
-
-# TLS 버퍼 크기 (입력/출력 균형 - Ethernet 안정성)
+# TLS 버퍼 크기
 CONFIG_MBEDTLS_ASYMMETRIC_CONTENT_LEN=n
-CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN=16384  # 16KB symmetric (IN/OUT 동일)
-CONFIG_MBEDTLS_DYNAMIC_BUFFER=y  # 동적 버퍼 할당으로 메모리 부족 해결
+CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN=16384
+# 동적 버퍼 할당
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
 
 # HTTP Client 설정
 CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y
 CONFIG_ESP_HTTP_CLIENT_ENABLE_BASIC_AUTH=y
 
-# CA 번들 설정 (Let's Encrypt 등 공용 인증서)
-CONFIG_ESP_TLS_CERTIFICATE_BUNDLE=y
-CONFIG_ESP_TLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
-CONFIG_ESP_TLS_CERTIFICATE_BUNDLE_DEFAULT_CMDS=y
-
-# PSRAM 활성화 (EoRa S3 보드에 2MB Octal PSRAM 있음)
+# ============================================================
+# PSRAM 활성화 (EoRa S3 보드에 2MB Octal PSRAM)
+# ============================================================
 CONFIG_SPIRAM=y
 CONFIG_SPIRAM_SPEED_80M=y
-CONFIG_SPIRAM_MODE_OPI=y
-CONFIG_SPIRAM_TYPE_AUTO=n
 CONFIG_SPIRAM_BOOT_INIT=y
 CONFIG_SPIRAM_USE_MALLOC=y
 CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768
