@@ -271,7 +271,7 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     } else {
         drawXMark(u8g2, line3_x, 50);  // 비활성화 [X]
     }
-    line3_x += 12;  // 아이콘 너비(8) + 간격(4)
+    line3_x += 16;  // 아이콘 너비(8) + 간격(8)
 
     // WiFi 상태 (연결: V, 미연결: -, 연결안됨: X)
     u8g2_DrawStr(u8g2, line3_x, 50, "WiFi:");
@@ -288,7 +288,7 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
             u8g2_DrawHLine(u8g2, line3_x, 46, 8);  // 미연결 [-]
             break;
     }
-    line3_x += 12;  // 아이콘 너비(8) + 간격(4)
+    line3_x += 16;  // 아이콘 너비(8) + 간격(8)
 
     // Ethernet 상태 (연결: V, 미연결: -, 연결안됨: X)
     u8g2_DrawStr(u8g2, line3_x, 50, "ETH:");
@@ -314,9 +314,9 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     u8g2_DrawStr(u8g2, line4_x, 61, mode_str);
     line4_x += u8g2_GetStrWidth(u8g2, mode_str) + 4;  // 모드 너비 + 간격
 
-    // ATEM 상태 (S1)
-    u8g2_DrawStr(u8g2, line4_x, 61, "ATEM:");
-    line4_x += u8g2_GetStrWidth(u8g2, "ATEM:") + 2;  // 라벨 너비 + 간격
+    // S1 상태 (스위처 타입 표시)
+    u8g2_DrawStr(u8g2, line4_x, 61, s_switcher_data.s1_type);
+    line4_x += u8g2_GetStrWidth(u8g2, s_switcher_data.s1_type) + 2;  // 라벨 너비 + 간격
     if (s_switcher_data.s1_connected) {
         drawCheckMark(u8g2, line4_x, 61);  // y=61-4
     } else {
@@ -326,8 +326,8 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
 
     // 듀얼 모드일 경우 S2 상태도 표시
     if (s_switcher_data.dual_mode) {
-        u8g2_DrawStr(u8g2, line4_x, 61, "S2:");
-        line4_x += u8g2_GetStrWidth(u8g2, "S2:") + 2;  // 라벨 너비 + 간격
+        u8g2_DrawStr(u8g2, line4_x, 61, s_switcher_data.s2_type);
+        line4_x += u8g2_GetStrWidth(u8g2, s_switcher_data.s2_type) + 2;  // 라벨 너비 + 간격
         if (s_switcher_data.s2_connected) {
             drawCheckMark(u8g2, line4_x, 61);  // y=61-4
         } else {
