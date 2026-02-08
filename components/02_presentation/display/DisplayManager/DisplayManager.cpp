@@ -597,7 +597,16 @@ static esp_err_t on_network_status_changed(const event_data_t* event)
     tx_page_set_wifi_connected(net->sta_connected);
     tx_page_set_eth_ip(net->eth_ip);
     display_manager_update_ethernet_dhcp_mode(net->eth_dhcp);
-    tx_page_set_eth_connected(net->eth_connected);
+
+    // Ethernet 상태: eth_detected 고려하여 3단계 상태 설정
+    if (!net->eth_detected) {
+        // 하드웨어 미감지 → NOT_DETECTED
+        // TODO: tx_page_set_eth_status(NET_STATUS_NOT_DETECTED);
+        tx_page_set_eth_connected(false);  // 임시 연결 안 됨으로 처리
+    } else {
+        // 하드웨어 감지됨 → connected 상태 그대로 사용
+        tx_page_set_eth_connected(net->eth_connected);
+    }
 
     return ESP_OK;
 }
