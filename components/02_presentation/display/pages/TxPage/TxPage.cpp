@@ -215,10 +215,10 @@ static void draw_tx_header(u8g2_t* u8g2)
  * @brief 하이브리드 대시보드 페이지 그리기 (Page 1)
  *
  * 4-Line 레이아웃:
- * - Line 1 (y=14): "PGM: 1,2,3,4" 형식
- * - Line 2 (y=25): "PVW: 5" 형식
- * - Line 3 (y=36): "AP:[ON]  WiFi:[✓]  ETH:[✓]" 형식
- * - Line 4 (y=47): "SINGLE  ATEM:[✓]" 형식
+ * - Line 1 (y=28): "PGM: 1,2,3,4" 형식
+ * - Line 2 (y=39): "PVW: 5" 형식
+ * - Line 3 (y=50): "AP:[ON]  WiFi:[✓]  ETH:[✓]" 형식
+ * - Line 4 (y=61): "SINGLE  ATEM:[✓]" 형식
  */
 static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
 {
@@ -229,7 +229,7 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
 
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
 
-    // Line 1 (y=25): PGM 채널 목록
+    // Line 1 (y=28): PGM 채널 목록
     char pgm_str[32];
     if (s_tally_data.pgm_count > 0) {
         int offset = 0;
@@ -241,9 +241,9 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     } else {
         snprintf(pgm_str, sizeof(pgm_str), "PGM: ---");
     }
-    u8g2_DrawStr(u8g2, 4, 25, pgm_str);
+    u8g2_DrawStr(u8g2, 4, 28, pgm_str);
 
-    // Line 2 (y=36): PVW 채널 목록
+    // Line 2 (y=39): PVW 채널 목록
     char pvw_str[32];
     if (s_tally_data.pvw_count > 0) {
         int offset = 0;
@@ -255,65 +255,65 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     } else {
         snprintf(pvw_str, sizeof(pvw_str), "PVW: ---");
     }
-    u8g2_DrawStr(u8g2, 4, 36, pvw_str);
+    u8g2_DrawStr(u8g2, 4, 39, pvw_str);
 
-    // Line 3 (y=47): AP, WiFi, Ethernet 상태
+    // Line 3 (y=50): AP, WiFi, Ethernet 상태
     int line3_x = 4;
 
     // AP 상태
     const char* ap_status = s_ap_data.ap_enabled ? "[ON]" : "[OFF]";
-    u8g2_DrawStr(u8g2, line3_x, 47, "AP:");
+    u8g2_DrawStr(u8g2, line3_x, 50, "AP:");
     line3_x += u8g2_GetStrWidth(u8g2, "AP:");
-    u8g2_DrawStr(u8g2, line3_x, 47, ap_status);
+    u8g2_DrawStr(u8g2, line3_x, 50, ap_status);
     line3_x += u8g2_GetStrWidth(u8g2, ap_status) + 4;
 
     // WiFi 상태
-    u8g2_DrawStr(u8g2, line3_x, 47, "WiFi:");
+    u8g2_DrawStr(u8g2, line3_x, 50, "WiFi:");
     line3_x += u8g2_GetStrWidth(u8g2, "WiFi:");
-    // 체크마크/엑스마크 y 위치 조정: 텍스트 베이스라인(y=47)에서 아이콘이 중앙에 오도록
+    // 체크마크/엑스마크 y 위치 조정: 텍스트 베이스라인(y=50)에서 아이콘이 중앙에 오도록
     // profont11_mf 폰트 높이 ~11px, 아이콘 높이 8px
     if (s_wifi_data.wifi_connected) {
-        drawCheckMark(u8g2, line3_x, 40);  // y=47-7 (아이콘 하단 정렬)
+        drawCheckMark(u8g2, line3_x, 43);  // y=50-7 (아이콘 하단 정렬)
     } else {
-        drawXMark(u8g2, line3_x, 40);
+        drawXMark(u8g2, line3_x, 43);
     }
     line3_x += 10;  // 아이콘 너비 + 여백
 
     // Ethernet 상태
-    u8g2_DrawStr(u8g2, line3_x, 47, "ETH:");
+    u8g2_DrawStr(u8g2, line3_x, 50, "ETH:");
     line3_x += u8g2_GetStrWidth(u8g2, "ETH:");
     if (s_eth_data.eth_connected) {
-        drawCheckMark(u8g2, line3_x, 40);
+        drawCheckMark(u8g2, line3_x, 43);
     } else {
-        drawXMark(u8g2, line3_x, 40);
+        drawXMark(u8g2, line3_x, 43);
     }
 
-    // Line 4 (y=58): 듀얼 모드 + ATEM 상태
+    // Line 4 (y=61): 듀얼 모드 + ATEM 상태
     int line4_x = 4;
 
     // 듀얼 모드 표시
     const char* mode_str = s_switcher_data.dual_mode ? "DUAL" : "SINGLE";
-    u8g2_DrawStr(u8g2, line4_x, 58, mode_str);
+    u8g2_DrawStr(u8g2, line4_x, 61, mode_str);
     line4_x += u8g2_GetStrWidth(u8g2, mode_str) + 4;
 
     // ATEM 상태 (S1)
-    u8g2_DrawStr(u8g2, line4_x, 58, "ATEM:");
+    u8g2_DrawStr(u8g2, line4_x, 61, "ATEM:");
     line4_x += u8g2_GetStrWidth(u8g2, "ATEM:");
     if (s_switcher_data.s1_connected) {
-        drawCheckMark(u8g2, line4_x, 51);  // y=58-7
+        drawCheckMark(u8g2, line4_x, 54);  // y=61-7
     } else {
-        drawXMark(u8g2, line4_x, 51);
+        drawXMark(u8g2, line4_x, 54);
     }
 
     // 듀얼 모드일 경우 S2 상태도 표시
     if (s_switcher_data.dual_mode) {
         line4_x += 14;  // 아이콘 너비 + 여백
-        u8g2_DrawStr(u8g2, line4_x, 58, "S2:");
+        u8g2_DrawStr(u8g2, line4_x, 61, "S2:");
         line4_x += u8g2_GetStrWidth(u8g2, "S2:");
         if (s_switcher_data.s2_connected) {
-            drawCheckMark(u8g2, line4_x, 51);
+            drawCheckMark(u8g2, line4_x, 54);
         } else {
-            drawXMark(u8g2, line4_x, 51);
+            drawXMark(u8g2, line4_x, 54);
         }
     }
 }
