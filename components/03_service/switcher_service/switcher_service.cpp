@@ -276,14 +276,19 @@ bool SwitcherService::setAtem(switcher_role_t role, const char* name, const char
             bool now_connected = (state == CONNECTION_STATE_READY || state == CONNECTION_STATE_CONNECTED);
             info->is_connected = now_connected;
 
-            // 연결 완료 시 로그 출력 및 이벤트 발행
-            if (now_connected && !was_connected) {
-                info->reconnect_fail_count = 0;  // CHANGE B: Reset on successful connection
-                const char* role_str = switcher_role_to_string(role);
-                const char* iface_str = network_interface_to_string(
-                    static_cast<tally_network_if_t>(info->network_interface));
-                T_LOGI(TAG, "%s switcher connected via %s (type=%s, ip=%s)",
-                       role_str, iface_str, info->type, info->ip);
+            // 연결 상태 변화 시 즉시 상태 발행 (연결 및 해제 모두)
+            if (was_connected != now_connected) {
+                if (now_connected) {
+                    info->reconnect_fail_count = 0;  // CHANGE B: Reset on successful connection
+                    const char* role_str = switcher_role_to_string(role);
+                    const char* iface_str = network_interface_to_string(
+                        static_cast<tally_network_if_t>(info->network_interface));
+                    T_LOGI(TAG, "%s switcher connected via %s (type=%s, ip=%s)",
+                           role_str, iface_str, info->type, info->ip);
+                } else {
+                    const char* role_str = switcher_role_to_string(role);
+                    T_LOGW(TAG, "%s switcher disconnected", role_str);
+                }
                 publishSwitcherStatus();
             }
         }
