@@ -341,11 +341,11 @@ static void draw_switcher_page(u8g2_t* u8g2)
 {
     draw_tx_header(u8g2);
 
-    // 헤더: MODE: SINGLE: / DUAL:
+    // 헤더: MODE: SINGLE / DUAL
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
     u8g2_DrawStr(u8g2, 2, 10, "MODE:");
-    const char* mode_str = s_switcher_data.dual_mode ? "DUAL:" : "SINGLE:";
-    u8g2_DrawStr(u8g2, 38, 10, mode_str);
+    const char* mode_str = s_switcher_data.dual_mode ? "DUAL" : "SINGLE";
+    u8g2_DrawStr(u8g2, 35, 10, mode_str);
 
     // 구분선
     u8g2_DrawHLine(u8g2, 0, 14, 128);
