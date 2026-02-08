@@ -124,7 +124,6 @@ static uint8_t s_current_page = 1;
 
 static void draw_tx_header(u8g2_t* u8g2);
 static void draw_hybrid_dashboard_page(u8g2_t* u8g2);
-static void draw_tally_page(u8g2_t* u8g2);
 static void draw_channel_list(u8g2_t* u8g2, const uint8_t* channels, uint8_t count,
                               int y_pos, int max_width);
 static void draw_switcher_page(u8g2_t* u8g2);
@@ -391,37 +390,6 @@ static void draw_channel_list(u8g2_t* u8g2, const uint8_t* channels, uint8_t cou
             u8g2_DrawStr(u8g2, (max_width - display_width) / 2 + trunc_width, y_pos, ellipsis);
         }
     }
-}
-
-/**
- * @brief Tally 페이지 그리기 (Page 1)
- */
-static void draw_tally_page(u8g2_t* u8g2)
-{
-    draw_tx_header(u8g2);
-
-    // 헤더: TALLY
-    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-    u8g2_DrawStr(u8g2, 2, 10, "TALLY");
-
-    // 구분선
-    u8g2_DrawHLine(u8g2, 0, 14, 128);
-
-    // 화면 절반 나누기
-    u8g2_DrawHLine(u8g2, 0, 39, 128);
-
-    // 리스트 영역 너비: 전체 128px - 라벨 영역(약23px) - 여백(5px) = 100px
-    const int list_width = 100;
-
-    // PGM 영역 (위쪽 절반)
-    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-    u8g2_DrawStr(u8g2, 110, 26, "PGM");
-    draw_channel_list(u8g2, s_tally_data.pgm_channels, s_tally_data.pgm_count, 34, list_width);
-
-    // PVW 영역 (아래쪽 절반)
-    u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
-    u8g2_DrawStr(u8g2, 110, 51, "PVW");
-    draw_channel_list(u8g2, s_tally_data.pvw_channels, s_tally_data.pvw_count, 59, list_width);
 }
 
 /**
