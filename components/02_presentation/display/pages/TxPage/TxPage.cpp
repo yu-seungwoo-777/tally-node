@@ -217,7 +217,9 @@ static void draw_tx_header(u8g2_t* u8g2)
  * 4-Line 레이아웃:
  * - Line 1 (y=28): "PGM: 1,2,3,4" 형식
  * - Line 2 (y=39): "PVW: 5" 형식
- * - Line 3 (y=50): "AP:━  WiFi:[✓]  ETH:[✓]" 형식 (AP는 가로선만)
+ * - Line 3 (y=50): "AP:V/X  WiFi:-/V/X  ETH:-/V/X" 형식
+ *   AP: 활성화(V), 비활성화(X)
+ *   WiFi/ETH: 연결(V), 미연결(-), 연결안됨(X)
  * - Line 4 (y=61): "SINGLE  ATEM:[✓]" 형식
  */
 static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
@@ -260,39 +262,39 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     // Line 3 (y=50): AP, WiFi, Ethernet 상태
     int line3_x = 4;
 
-    // AP 상태 (가로선만 표시)
+    // AP 상태 (활성화: V, 비활성화: X)
     u8g2_DrawStr(u8g2, line3_x, 50, "AP:");
     line3_x += u8g2_GetStrWidth(u8g2, "AP:");
-
     if (s_ap_data.ap_enabled) {
-        // 활성화: 긴 가로선 (20px)
-        u8g2_DrawHLine(u8g2, line3_x, 46, 20);
-        line3_x += 24;
+        drawCheckMark(u8g2, line3_x, 43);  // 활성화
     } else {
-        // 비활성화: 짧은 가로선 (10px)
-        u8g2_DrawHLine(u8g2, line3_x, 46, 10);
-        line3_x += 14;
-    }
-
-    // WiFi 상태
-    u8g2_DrawStr(u8g2, line3_x, 50, "WiFi:");
-    line3_x += u8g2_GetStrWidth(u8g2, "WiFi:");
-    // 체크마크/엑스마크 y 위치 조정: 텍스트 베이스라인(y=50)에서 아이콘이 중앙에 오도록
-    // profont11_mf 폰트 높이 ~11px, 아이콘 높이 8px
-    if (s_wifi_data.wifi_connected) {
-        drawCheckMark(u8g2, line3_x, 43);  // y=50-7 (아이콘 하단 정렬)
-    } else {
-        drawXMark(u8g2, line3_x, 43);
+        drawXMark(u8g2, line3_x, 43);  // 비활성화
     }
     line3_x += 10;  // 아이콘 너비 + 여백
 
-    // Ethernet 상태
+    // WiFi 상태 (연결: V, 미연결/연결안됨: - 또는 X)
+    u8g2_DrawStr(u8g2, line3_x, 50, "WiFi:");
+    line3_x += u8g2_GetStrWidth(u8g2, "WiFi:");
+    if (s_wifi_data.wifi_connected) {
+        drawCheckMark(u8g2, line3_x, 43);  // 연결됨
+    } else {
+        // 미연결 상태 확인 (현재는 연결 안 됨으로만 표시)
+        // TODO: 하드웨어 감지 상태에 따라 - 또는 X 구분
+        u8g2_DrawHLine(u8g2, line3_x, 46, 8);  // 미연결 (-)
+        // drawXMark(u8g2, line3_x, 43);  // 연결 안 됨
+    }
+    line3_x += 10;
+
+    // Ethernet 상태 (연결: V, 미연결/연결안됨: - 또는 X)
     u8g2_DrawStr(u8g2, line3_x, 50, "ETH:");
     line3_x += u8g2_GetStrWidth(u8g2, "ETH:");
     if (s_eth_data.eth_connected) {
-        drawCheckMark(u8g2, line3_x, 43);
+        drawCheckMark(u8g2, line3_x, 43);  // 연결됨
     } else {
-        drawXMark(u8g2, line3_x, 43);
+        // 미연결 상태 확인 (현재는 연결 안 됨으로만 표시)
+        // TODO: 하드웨어 감지 상태에 따라 - 또는 X 구분
+        u8g2_DrawHLine(u8g2, line3_x, 46, 8);  // 미연결 (-)
+        // drawXMark(u8g2, line3_x, 43);  // 연결 안 됨
     }
 
     // Line 4 (y=61): 듀얼 모드 + ATEM 상태
