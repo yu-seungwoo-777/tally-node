@@ -74,7 +74,7 @@ void web_server_cache_invalidate(void)
     s_cache.network_valid = false;
     s_cache.config_valid = false;
     s_cache.devices_valid = false;
-    s_cache.license_valid = false;
+    // 라이선스는 네트워크 연결과 무관하게 NVS에 저장되므로 캐시 유지
 }
 
 void web_server_cache_deinit(void)
