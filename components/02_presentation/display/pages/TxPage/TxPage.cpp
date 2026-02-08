@@ -361,10 +361,11 @@ static void draw_switcher_page(u8g2_t* u8g2)
 
     // S1 IP (y=39)
     u8g2_DrawStr(u8g2, 2, 39, "S1 IP:");
+    int s1_ip_x = 2 + u8g2_GetStrWidth(u8g2, "S1 IP:") + 2;  // 라벨 너비 + 간격
     if (strlen(s_switcher_data.s1_ip) > 0) {
-        u8g2_DrawStr(u8g2, 25, 39, s_switcher_data.s1_ip);
+        u8g2_DrawStr(u8g2, s1_ip_x, 39, s_switcher_data.s1_ip);
     } else {
-        u8g2_DrawStr(u8g2, 25, 39, "---");
+        u8g2_DrawStr(u8g2, s1_ip_x, 39, "---");
     }
 
     // S2 (듀얼모드일 때만 표시)
@@ -378,10 +379,11 @@ static void draw_switcher_page(u8g2_t* u8g2)
 
         // S2 IP (y=61)
         u8g2_DrawStr(u8g2, 2, 61, "S2 IP:");
+        int s2_ip_x = 2 + u8g2_GetStrWidth(u8g2, "S2 IP:") + 2;  // 라벨 너비 + 간격
         if (strlen(s_switcher_data.s2_ip) > 0) {
-            u8g2_DrawStr(u8g2, 25, 61, s_switcher_data.s2_ip);
+            u8g2_DrawStr(u8g2, s2_ip_x, 61, s_switcher_data.s2_ip);
         } else {
-            u8g2_DrawStr(u8g2, 25, 61, "---");
+            u8g2_DrawStr(u8g2, s2_ip_x, 61, "---");
         }
     }
 }
