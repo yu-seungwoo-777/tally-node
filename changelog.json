@@ -1,6 +1,30 @@
 {
   "versions": [
     {
+      "version": "2.4.0",
+      "date": "2026-02-08",
+      "tx": {
+        "ko": {
+          "title": "433MHz LoRa 모듈 지원 및 디스플레이 개선",
+          "changes": [
+            "433MHz LoRa 모듈(SX1268) 칩 감지 버그 수정",
+            "칩 감지 로직 개선: 433MHz 먼저 시도 후 868MHz로 확인",
+            "디스플레이 간격 조정: PGM/PVW, SINGLE/DUAL 콜론 추가",
+            "S1/S2 IP 라벨과 IP 주소 간격 동적 계산"
+          ]
+        },
+        "en": {
+          "title": "433MHz LoRa module support and display improvements",
+          "changes": [
+            "Fixed 433MHz LoRa module (SX1268) chip detection bug",
+            "Improved chip detection logic: Try 433MHz first, then verify with 868MHz",
+            "Display spacing adjustments: PGM/PVW, SINGLE/DUAL colon added",
+            "S1/S2 IP label and IP address spacing dynamically calculated"
+          ]
+        }
+      }
+    },
+    {
       "version": "2.3.5",
       "date": "2026-02-08",
       "tx": {
