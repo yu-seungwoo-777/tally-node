@@ -21,26 +21,6 @@
           "Frequency validation range improvement (410-493, 850-930)"
         ]
       }
-    },
-    {
-      "version": "2.4.0",
-      "date": "2026-02-08",
-      "ko": {
-        "title": "버전 2.4.0",
-        "changes": [
-          "LoRa 모듈 감지 로직 개선",
-          "Ethernet을 통한 웹서버 속도 개선",
-          "TX 디스플레이 개선"
-        ]
-      },
-      "en": {
-        "title": "Version 2.4.0",
-        "changes": [
-          "LoRa module detection logic improved",
-          "Web server speed improved via Ethernet",
-          "TX display improvements"
-        ]
-      }
     }
   ]
 }
