@@ -1821,7 +1821,7 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config, int chip_type)
     config->rf.tx_power = NVS_LORA_DEFAULT_TX_POWER;
 
     nvs_handle_t handle;
-    esp_err_t ret = nvs_open("config", NVS_READONLY, &handle);
+    esp_err_t ret = nvs_open("config", NVS_READWRITE, &handle);  // READWRITE로 변경 (주파수 교정 저장을 위해)
     if (ret != ESP_OK) {
         // NVS 열기 실패 시 기본값 반환, 전달받은 chip_type 저장
         if (chip_type > 0) {
