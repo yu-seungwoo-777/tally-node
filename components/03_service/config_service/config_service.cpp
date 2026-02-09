@@ -1842,6 +1842,54 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config, int chip_type)
         config->rf.frequency = freq_int / 10.0f;
     }
 
+    // 칩 타입에 따른 주파수 유효성 검증 및 자동 교정
+    // SX1268: 433MHz만 지원, SX1262: 868MHz만 지원
+    if (config->rf.frequency > 0) {
+        bool needs_override = false;
+        float correct_freq = 0.0f;
+
+        // 433MHz 대역 범위: 420-450MHz, 868MHz 대역 범위: 850-900MHz
+        if (config->rf.frequency >= 420.0f && config->rf.frequency <= 450.0f) {
+            // 현재 주파수가 433MHz 대역
+            correct_freq = 433.0f;
+            // SX1262는 433MHz를 지원하지 않음
+            if (config->chip_type == LORA_CHIP_SX1262) {
+                needs_override = true;
+            }
+        } else if (config->rf.frequency >= 850.0f && config->rf.frequency <= 900.0f) {
+            // 현재 주파수가 868MHz 대역
+            correct_freq = 868.0f;
+            // SX1268은 868MHz를 지원하지 않음
+            if (config->chip_type == LORA_CHIP_SX1268) {
+                needs_override = true;
+            }
+        } else {
+            // 명확하지 않은 주파수인 경우, 칩 타입에 따라 기본값 설정
+            if (config->chip_type == LORA_CHIP_SX1268) {
+                correct_freq = 433.0f;
+                needs_override = true;
+            } else if (config->chip_type == LORA_CHIP_SX1262) {
+                correct_freq = 868.0f;
+                needs_override = true;
+            }
+        }
+
+        if (needs_override) {
+            ESP_LOGW(TAG, "칩 타입과 NVS 주파수 불일치 감지");
+            ESP_LOGW(TAG, "  칩 타입: %s (0x%02X)",
+                     config->chip_type == LORA_CHIP_SX1268 ? "SX1268(433MHz)" : "SX1262(868MHz)",
+                     config->chip_type);
+            ESP_LOGW(TAG, "  NVS 주파수: %.1f MHz", config->rf.frequency);
+            ESP_LOGW(TAG, "  -> 칩 타입에 맞춰 %.1f MHz로 자동 교정합니다", correct_freq);
+
+            config->rf.frequency = correct_freq;
+
+            // 교정된 주파수를 NVS에 즉시 저장
+            nvs_set_u32(handle, "dev_frequency", (uint32_t)(correct_freq * 10));
+            nvs_commit(handle);
+        }
+    }
+
     uint8_t sync_word = NVS_LORA_DEFAULT_SYNC_WORD;
     if (nvs_get_u8(handle, "dev_sync_word", &sync_word) == ESP_OK) {
         config->rf.sync_word = sync_word;
