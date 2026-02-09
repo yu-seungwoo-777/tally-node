@@ -1851,17 +1851,23 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config, int chip_type)
         // 433MHz 대역 범위: 420-450MHz, 868MHz 대역 범위: 850-900MHz
         if (config->rf.frequency >= 420.0f && config->rf.frequency <= 450.0f) {
             // 현재 주파수가 433MHz 대역
-            correct_freq = 433.0f;
-            // SX1262(1)는 433MHz를 지원하지 않음
+            // SX1262(1)는 433MHz를 지원하지 않음 → 868MHz로 교정 필요
             if (chip_type == 1) {
+                correct_freq = 868.0f;
                 needs_override = true;
+            } else {
+                // SX1268(2)는 433MHz 지원
+                correct_freq = config->rf.frequency;
             }
         } else if (config->rf.frequency >= 850.0f && config->rf.frequency <= 900.0f) {
             // 현재 주파수가 868MHz 대역
-            correct_freq = 868.0f;
-            // SX1268(2)은 868MHz를 지원하지 않음
+            // SX1268(2)은 868MHz를 지원하지 않음 → 433MHz로 교정 필요
             if (chip_type == 2) {
+                correct_freq = 433.0f;
                 needs_override = true;
+            } else {
+                // SX1262(1)는 868MHz 지원
+                correct_freq = config->rf.frequency;
             }
         } else {
             // 명확하지 않은 주파수인 경우, 칩 타입에 따라 기본값 설정
