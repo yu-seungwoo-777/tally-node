@@ -106,6 +106,7 @@ typedef struct {
 typedef struct {
     uint8_t brightness;      // 0-255
     uint8_t camera_id;       // 카메라 ID
+    uint8_t chip_type;       // LoRa 칩 타입 (0=Unknown, 1=SX1262_868M, 2=SX1268_433M)
     config_rf_t rf;          // RF 설정
 } config_device_t;
 

@@ -1286,7 +1286,13 @@ esp_err_t ConfigServiceClass::loadAll(config_all_t* config)
 
     getWiFiSTA(&config->wifi_sta);
     getEthernet(&config->ethernet);
-    getDevice(&config->device, 0);  // LORA_CHIP_UNKNOWN
+
+    // 먼저 chip_type=0으로 로드하여 NVS에 저장된 chip_type을 가져옴
+    getDevice(&config->device, 0);
+
+    // NVS에서 로드된 chip_type이 없으면 기본값(0) 유지, 있으면 해당 값 사용
+    // 이후 getDevice() 내부에서 저장된 chip_type을 사용하여 주파수 유효성 검증
+
     getPrimary(&config->primary);
     getSecondary(&config->secondary);
     config->dual_enabled = getDualEnabled();
@@ -1803,16 +1809,11 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config, int chip_type)
 
     memset(config, 0, sizeof(config_device_t));
 
-    // 칩 타입에 따른 기본 주파수 결정
-    float default_freq = NVS_LORA_DEFAULT_FREQ_868;
-    if (chip_type == 2) {
-        default_freq = NVS_LORA_DEFAULT_FREQ_433;
-    }
-
     // 기본값 설정 (NVSConfig)
     config->brightness = NVS_DEVICE_BRIGHTNESS;
     config->camera_id = NVS_DEVICE_CAMERA_ID;
-    config->rf.frequency = default_freq;
+    config->chip_type = 0;  // 기본값: Unknown
+    config->rf.frequency = NVS_LORA_DEFAULT_FREQ_868;
     config->rf.sync_word = NVS_LORA_DEFAULT_SYNC_WORD;
     config->rf.sf = NVS_LORA_DEFAULT_SF;
     config->rf.cr = NVS_LORA_DEFAULT_CR;
@@ -1822,8 +1823,36 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config, int chip_type)
     nvs_handle_t handle;
     esp_err_t ret = nvs_open("config", NVS_READONLY, &handle);
     if (ret != ESP_OK) {
-        // NVS 열기 실패 시 기본값 반환
+        // NVS 열기 실패 시 기본값 반환, 전달받은 chip_type 저장
+        if (chip_type > 0) {
+            config->chip_type = chip_type;
+            // 칩 타입에 따른 기본 주파수 설정
+            if (chip_type == 2) {
+                config->rf.frequency = NVS_LORA_DEFAULT_FREQ_433;
+            } else {
+                config->rf.frequency = NVS_LORA_DEFAULT_FREQ_868;
+            }
+        }
         return ESP_OK;
+    }
+
+    // NVS에서 저장된 chip_type 읽기
+    uint8_t stored_chip_type = 0;
+    if (nvs_get_u8(handle, "dev_chip_type", &stored_chip_type) == ESP_OK) {
+        config->chip_type = stored_chip_type;
+    }
+
+    // 전달받은 chip_type이 0이 아니면 우선 적용 (최신 칩 타입 정보 반영)
+    if (chip_type > 0) {
+        config->chip_type = chip_type;
+    }
+
+    // 유효한 chip_type에 따라 기본 주파수 설정
+    int effective_chip_type = (config->chip_type > 0) ? config->chip_type : chip_type;
+    if (effective_chip_type == 2) {
+        config->rf.frequency = NVS_LORA_DEFAULT_FREQ_433;
+    } else if (effective_chip_type == 1) {
+        config->rf.frequency = NVS_LORA_DEFAULT_FREQ_868;
     }
 
     uint8_t brightness = NVS_DEVICE_BRIGHTNESS;
@@ -1844,7 +1873,7 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config, int chip_type)
 
     // 칩 타입에 따른 주파수 유효성 검증 및 자동 교정
     // SX1268: 433MHz만 지원, SX1262: 868MHz만 지원
-    if (config->rf.frequency > 0) {
+    if (config->rf.frequency > 0 && config->chip_type > 0) {
         bool needs_override = false;
         float correct_freq = 0.0f;
 
@@ -1852,7 +1881,7 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config, int chip_type)
         if (config->rf.frequency >= 420.0f && config->rf.frequency <= 450.0f) {
             // 현재 주파수가 433MHz 대역
             // SX1262(1)는 433MHz를 지원하지 않음 → 868MHz로 교정 필요
-            if (chip_type == 1) {
+            if (config->chip_type == 1) {
                 correct_freq = 868.0f;
                 needs_override = true;
             } else {
@@ -1862,7 +1891,7 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config, int chip_type)
         } else if (config->rf.frequency >= 850.0f && config->rf.frequency <= 900.0f) {
             // 현재 주파수가 868MHz 대역
             // SX1268(2)은 868MHz를 지원하지 않음 → 433MHz로 교정 필요
-            if (chip_type == 2) {
+            if (config->chip_type == 2) {
                 correct_freq = 433.0f;
                 needs_override = true;
             } else {
@@ -1871,10 +1900,10 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config, int chip_type)
             }
         } else {
             // 명확하지 않은 주파수인 경우, 칩 타입에 따라 기본값 설정
-            if (chip_type == 2) {  // SX1268
+            if (config->chip_type == 2) {  // SX1268
                 correct_freq = 433.0f;
                 needs_override = true;
-            } else if (chip_type == 1) {  // SX1262
+            } else if (config->chip_type == 1) {  // SX1262
                 correct_freq = 868.0f;
                 needs_override = true;
             }
@@ -1883,8 +1912,8 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config, int chip_type)
         if (needs_override) {
             T_LOGW(TAG, "칩 타입과 NVS 주파수 불일치 감지");
             T_LOGW(TAG, "  칩 타입: %s (0x%02X)",
-                     chip_type == 2 ? "SX1268(433MHz)" : "SX1262(868MHz)",
-                     chip_type);
+                     config->chip_type == 2 ? "SX1268(433MHz)" : "SX1262(868MHz)",
+                     config->chip_type);
             T_LOGW(TAG, "  NVS 주파수: %.1f MHz", config->rf.frequency);
             T_LOGW(TAG, "  -> 칩 타입에 맞춰 %.1f MHz로 자동 교정합니다", correct_freq);
 
@@ -1939,6 +1968,7 @@ esp_err_t ConfigServiceClass::setDevice(const config_device_t* config)
 
     nvs_set_u8(handle, "dev_brightness", config->brightness);
     nvs_set_u8(handle, "dev_camera_id", config->camera_id);
+    nvs_set_u8(handle, "dev_chip_type", config->chip_type);  // chip_type 저장
     nvs_set_u32(handle, "dev_frequency", (uint32_t)(config->rf.frequency * 10));  // 소수점 저장 위해 *10
     nvs_set_u8(handle, "dev_sync_word", config->rf.sync_word);
     nvs_set_u8(handle, "dev_sf", config->rf.sf);
