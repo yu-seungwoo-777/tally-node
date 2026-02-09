@@ -348,28 +348,42 @@ esp_err_t ethernet_hal_start(void)
     // INT 핀 연결 여부 감지 (W5500 INT는 active-low, 유휴 시 High 출력)
     // 풀업 모드로 설정하여 W5500 INT 핀 High 레벨 감지
     bool use_polling = false;
+    bool int_pin_detected = false;
 
     if (w5500_config.int_gpio_num >= 0) {
+        // INT 핀 초기화: 부유 핀 감지를 위한 풀-다운 저항 사용
+        // W5500가 연결되면 내부 풀-업으로 인해 High 상태 유지
+        // 연결되지 않으면 핀은 Low 유지 (부유 방지)
         gpio_config_t io_conf = {};
         io_conf.pin_bit_mask = (1ULL << w5500_config.int_gpio_num);
         io_conf.mode = GPIO_MODE_INPUT;
-        io_conf.pull_up_en = GPIO_PULLUP_ENABLE;       // 풀업 활성화
-        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE; // 풀다운 비활성화
+        io_conf.pull_up_en = GPIO_PULLUP_DISABLE;  // 풀업 비활성화
+        io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE; // 풀다운 활성화 (부유 방지)
         io_conf.intr_type = GPIO_INTR_DISABLE;
         gpio_config(&io_conf);
 
-        // W5500가 연결되어 있으면 INT 핀은 High (유휴 상태)
-        // 연결되어 있지 않으면 핀은 Low (부유 상태)
-        vTaskDelay(pdMS_TO_TICKS(10));  // 안정화 대기
+        // 다중 읽기로 안정성 확인 (부유 핀 임시 읽기 방지)
+        int stable_count = 0;
         int int_level = gpio_get_level(w5500_config.int_gpio_num);
 
-        if (int_level == 1) {
-            // High 감지 = W5500 INT 연결됨, 인터럽트 모드 사용
-            T_LOGI(TAG, "int:connected (interrupt mode)");
+        // 3회 연속 일치 여부 확인
+        for (int i = 0; i < 2; i++) {
+            int_level = gpio_get_level(w5500_config.int_gpio_num);
+            if (int_level == 1) {
+                stable_count++;
+            } else {
+                stable_count = 0;
+            }
+        }
+
+        if (stable_count == 3) {
+            // 3회 연속 HIGH 감지 = W5500 INT 핀 연결됨 (내부 풀업 활성화됨)
+            int_pin_detected = true;
+            T_LOGI(TAG, "int:connected (interrupt mode, stable HIGH)");
         } else {
-            // Low 감지 = INT 핀 미연결, 폴링 모드 사용
-            T_LOGW(TAG, "int:not_detected (polling mode, level=%d)", int_level);
+            // 3회 연속 LOW 감지 = INT 핀 미연결 (부유 상태 방지됨)
             use_polling = true;
+            T_LOGW(TAG, "int:not_detected (polling mode, stable LOW)");
         }
     } else {
         // INT GPIO가 정의되지 않음 = 폴링 모드 사용
@@ -395,7 +409,8 @@ esp_err_t ethernet_hal_start(void)
     s_eth_phy = esp_eth_phy_new_w5500(&phy_config);
 
     if (!s_eth_mac || !s_eth_phy) {
-        T_LOGE(TAG, "fail:mac_phy");
+        T_LOGE(TAG, "fail:mac_phy (chip not responding)");
+        s_detected = false;
         if (s_eth_mac) {
             s_eth_mac->del(s_eth_mac);
             s_eth_mac = NULL;
@@ -407,7 +422,7 @@ esp_err_t ethernet_hal_start(void)
         return ESP_FAIL;
     }
 
-    // Ethernet 드라이버 설치
+    // ESP-IDF 드라이버 설치 (핸들 확인 후)
     esp_eth_config_t eth_config = {
         .mac = s_eth_mac,
         .phy = s_eth_phy,
@@ -416,20 +431,22 @@ esp_err_t ethernet_hal_start(void)
 
     ret = esp_eth_driver_install(&eth_config, &s_eth_handle);
     if (ret != ESP_OK) {
-        T_LOGE(TAG, "fail:driver:0x%x", ret);
+        T_LOGE(TAG, "fail:driver:0x%x (driver installation failed)", ret);
         s_detected = false;
-        if (s_eth_mac) {
-            s_eth_mac->del(s_eth_mac);
-            s_eth_mac = NULL;
-        }
-        if (s_eth_phy) {
-            s_eth_phy->del(s_eth_phy);
-            s_eth_phy = NULL;
-        }
+        s_eth_mac->del(s_eth_mac);
+        s_eth_mac = NULL;
+        s_eth_phy->del(s_eth_phy);
+        s_eth_phy = NULL;
         return ret;
     }
 
+    // 드라이버 설치 성공 후 실제 칩 감지 여부 확인
     s_detected = true;
+
+    // INT 핀 감지 성공 시 인터럽트 모드 로그 출력 (드라이버 설치 성공 후)
+    if (int_pin_detected) {
+        T_LOGI(TAG, "int:connected (interrupt mode, chip verified)");
+    }
 
     // MAC 주소 설정
     uint8_t base_mac[6];
