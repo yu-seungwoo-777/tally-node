@@ -21,7 +21,7 @@ extern "C" {
 // ============================================================================
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "2.4.0"  // platformio.ini에서 관리하는 것이 권장됨
+#define FIRMWARE_VERSION "2.4.1"  // platformio.ini에서 관리하는 것이 권장됨
 #endif
 
 // ============================================================================
