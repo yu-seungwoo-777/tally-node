@@ -1852,35 +1852,35 @@ esp_err_t ConfigServiceClass::getDevice(config_device_t* config, int chip_type)
         if (config->rf.frequency >= 420.0f && config->rf.frequency <= 450.0f) {
             // 현재 주파수가 433MHz 대역
             correct_freq = 433.0f;
-            // SX1262는 433MHz를 지원하지 않음
-            if (chip_type == LORA_CHIP_SX1262) {
+            // SX1262(1)는 433MHz를 지원하지 않음
+            if (chip_type == 1) {
                 needs_override = true;
             }
         } else if (config->rf.frequency >= 850.0f && config->rf.frequency <= 900.0f) {
             // 현재 주파수가 868MHz 대역
             correct_freq = 868.0f;
-            // SX1268은 868MHz를 지원하지 않음
-            if (chip_type == LORA_CHIP_SX1268) {
+            // SX1268(2)은 868MHz를 지원하지 않음
+            if (chip_type == 2) {
                 needs_override = true;
             }
         } else {
             // 명확하지 않은 주파수인 경우, 칩 타입에 따라 기본값 설정
-            if (chip_type == LORA_CHIP_SX1268) {
+            if (chip_type == 2) {  // SX1268
                 correct_freq = 433.0f;
                 needs_override = true;
-            } else if (chip_type == LORA_CHIP_SX1262) {
+            } else if (chip_type == 1) {  // SX1262
                 correct_freq = 868.0f;
                 needs_override = true;
             }
         }
 
         if (needs_override) {
-            ESP_LOGW(TAG, "칩 타입과 NVS 주파수 불일치 감지");
-            ESP_LOGW(TAG, "  칩 타입: %s (0x%02X)",
-                     chip_type == LORA_CHIP_SX1268 ? "SX1268(433MHz)" : "SX1262(868MHz)",
+            T_LOGW(TAG, "칩 타입과 NVS 주파수 불일치 감지");
+            T_LOGW(TAG, "  칩 타입: %s (0x%02X)",
+                     chip_type == 2 ? "SX1268(433MHz)" : "SX1262(868MHz)",
                      chip_type);
-            ESP_LOGW(TAG, "  NVS 주파수: %.1f MHz", config->rf.frequency);
-            ESP_LOGW(TAG, "  -> 칩 타입에 맞춰 %.1f MHz로 자동 교정합니다", correct_freq);
+            T_LOGW(TAG, "  NVS 주파수: %.1f MHz", config->rf.frequency);
+            T_LOGW(TAG, "  -> 칩 타입에 맞춰 %.1f MHz로 자동 교정합니다", correct_freq);
 
             config->rf.frequency = correct_freq;
 
