@@ -1,6 +1,6 @@
 {
   "name": "tally-node",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Tally Node - ESP32 LoRa Tally System",
   "scripts": {
     "upload": ". venv/bin/activate && cd web && npm run deploy && cd .. && pio run -t upload && pio device monitor",

@@ -1,144 +1,18 @@
 {
   "versions": [
     {
-      "version": "2.4.0",
-      "date": "2026-02-08",
+      "version": "0.0.1",
+      "date": "2026-02-09",
       "ko": {
-        "title": "버전 2.4.0",
+        "title": "버전 0.0.1",
         "changes": [
-          "LoRa 모듈 감지 로직 개선",
-          "Ethernet을 통한 웹서버 속도 개선",
-          "TX 디스플레이 개선"
+          "초기 릴리스"
         ]
       },
       "en": {
-        "title": "Version 2.4.0",
+        "title": "Version 0.0.1",
         "changes": [
-          "LoRa module detection logic improved",
-          "Web server speed improved via Ethernet",
-          "TX display improvements"
-        ]
-      }
-    },
-    {
-      "version": "2.3.5",
-      "date": "2026-02-08",
-      "ko": {
-        "title": "버전 2.3.5",
-        "changes": [
-          "연결 해제 시 즉시 웹 UI 상태 업데이트",
-          "소켓 재생성 강화로 깨끗한 연결 상태 보장",
-          "5회 연속 재연결 실패 시 어댑터 전체 재초기화",
-          "연결 상태 Watchdog으로 조용한 연결 끊김 감지"
-        ]
-      },
-      "en": {
-        "title": "Version 2.3.5",
-        "changes": [
-          "Immediate web UI status update on disconnection",
-          "Socket recreation enforcement for clean connection state",
-          "Full adapter reinitialization after 5 consecutive retry failures",
-          "Connection health watchdog to detect silent disconnections"
-        ]
-      }
-    },
-    {
-      "version": "2.3.4",
-      "date": "2026-02-07",
-      "ko": {
-        "title": "버전 2.3.4",
-        "changes": [
-          "버튼 동작 로직 개선",
-          "테스트 모드 동작 방식 개선",
-          "테스트 모드 중복 시작 방지"
-        ]
-      },
-      "en": {
-        "title": "Version 2.3.4",
-        "changes": [
-          "Improved button operation logic",
-          "Enhanced test mode behavior",
-          "Prevented duplicate test mode start"
-        ]
-      }
-    },
-    {
-      "version": "2.3.2",
-      "date": "2026-02-04",
-      "ko": {
-        "title": "버전 2.3.2",
-        "changes": [
-          "배터리 잔량에 따른 아이콘 단계 구체화",
-          "배터리 레벨 계산 정확도 개선",
-          "시각적 피드백 명확화"
-        ]
-      },
-      "en": {
-        "title": "Version 2.3.2",
-        "changes": [
-          "Refined battery icon stages based on remaining level",
-          "Improved battery level calculation accuracy",
-          "Clarified visual feedback"
-        ]
-      }
-    },
-    {
-      "version": "2.3.1",
-      "date": "2026-02-03",
-      "ko": {
-        "title": "버전 2.3.1",
-        "changes": [
-          "Alpine.js를 앱 번들에 통합하여 TCP 연결 수 감소",
-          "정적 파일 gzip 압축 및 minify 적용으로 로딩 속도 개선",
-          "웹 인터페이스 전반적인 성능 최적화"
-        ]
-      },
-      "en": {
-        "title": "Version 2.3.1",
-        "changes": [
-          "Integrated Alpine.js into app bundle to reduce TCP connections",
-          "Applied gzip compression and minification for static files to improve loading speed",
-          "Overall web interface performance optimization"
-        ]
-      }
-    },
-    {
-      "version": "2.3.0",
-      "date": "2026-02-02",
-      "ko": {
-        "title": "버전 2.3.0",
-        "changes": [
-          "433MHz/868MHz LoRa 모듈 자동 감지",
-          "칩 타입별 주파수 대역 동적 설정",
-          "Ethernet Static IP 검증 강화"
-        ]
-      },
-      "en": {
-        "title": "Version 2.3.0",
-        "changes": [
-          "Auto-detection of 433MHz/868MHz LoRa modules",
-          "Dynamic frequency range setting by chip type",
-          "Enhanced Ethernet Static IP validation"
-        ]
-      }
-    },
-    {
-      "version": "2.2.0",
-      "date": "2026-02-02",
-      "ko": {
-        "title": "버전 2.2.0",
-        "changes": [
-          "외부 PSRAM 메모리 지원 추가",
-          "웹 리소스 캐싱으로 로딩 속도 향상",
-          "정적 파일 메모리 매핑 지원"
-        ]
-      },
-      "en": {
-        "title": "Version 2.2.0",
-        "changes": [
-          "Added external PSRAM memory support",
-          "Improved web loading speed with resource caching",
-          "Enabled memory mapping for static files"
+          "Initial release"
         ]
       }
     }
