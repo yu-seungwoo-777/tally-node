@@ -275,46 +275,66 @@ async function getChangesWithSuggestions(rl, commits) {
   console.log('📋 변경사항 입력');
   console.log('='.repeat(60));
 
-  // Claude 추천 먼저 표시
   let suggestions = null;
+
+  // 커밋이 있고 Claude API가 있으면 자동으로 추천 먼저 표시
   if (commits.length > 0 && ANTHROPIC_API_KEY) {
-    const useClaude = await confirm(rl, 'Claude AI가 커밋 로그를 분석하여 변경사항을 추천해 드릴까요?');
-    if (useClaude) {
-      suggestions = await getClaudeCommitSuggestions(commits);
+    console.log('🤖 Claude AI가 커밋 로그를 분석 중...\n');
+    suggestions = await getClaudeCommitSuggestions(commits);
 
-      if (suggestions && suggestions.length > 0) {
-        console.log('\n🤖 Claude가 추천하는 변경사항:');
-        console.log('-'.repeat(60));
-        suggestions.forEach((s, i) => {
-          console.log(`  ${i + 1}. ${s}`);
-        });
-        console.log('-'.repeat(60));
+    if (suggestions && suggestions.length > 0) {
+      console.log('📋 Claude가 추천하는 changelog 변경사항:');
+      console.log('-'.repeat(60));
+      suggestions.forEach((s, i) => {
+        console.log(`  ${i + 1}. ${s}`);
+      });
+      console.log('-'.repeat(60));
 
-        const acceptSuggestions = await confirm(rl, '\n이 추천 내용을 사용하시겠습니까?');
-        if (acceptSuggestions) {
-          return suggestions;
-        }
-      }
+      console.log('\n위 내용을 기준으로 수정/추가/삭제할 수 있습니다.');
+      console.log('빈 줄 입력 시 위 내용이 그대로 사용됩니다.\n');
     }
   }
 
-  // 수동 입력 (자유 형식)
-  console.log('\n변경사항을 자유롭게 입력하세요.');
-  console.log('예시: WiFi 연결 안정성 개선, 이더넷 핀 플로팅 버그 수정, LoRa 주파수 검증 로직 추가');
-  console.log('빈 줄을 입력하면 완료됩니다.\n');
+  // 추천이 없으면 안내 메시지
+  if (!suggestions || suggestions.length === 0) {
+    console.log('변경사항을 자유롭게 입력하세요.');
+    console.log('예시: WiFi 연결 안정성 개선, 이더넷 핀 플로팅 버그 수정');
+    console.log('빈 줄을 입력하면 완료됩니다.\n');
+  }
 
+  // 사용자 입력 (추천 내용을 기본값으로 제공)
   const changes = [];
   let i = 1;
 
   while (true) {
-    const change = await prompt(rl, `${i}.`);
+    const defaultValue = suggestions && suggestions[i - 1] ? suggestions[i - 1] : '';
+    const promptText = defaultValue ? `${i}. [${defaultValue}]` : `${i}.`;
+    const change = await prompt(rl, promptText);
 
     if (!change.trim()) {
+      if (defaultValue) {
+        // 빈 입력이면 기본값 사용
+        changes.push(defaultValue);
+      }
+      // 빈 입력이고 기본값도 없으면 종료
+      if (!change.trim() && !defaultValue) {
+        break;
+      }
+      i++;
+      if (!change.trim() && defaultValue) {
+        // 기본값을 추가하고 다음으로
+        continue;
+      }
       break;
     }
 
     changes.push(change.trim());
     i++;
+  }
+
+  // 추천만 사용하고 사용자 입력이 없으면 추천 반환
+  if (changes.length === 0 && suggestions && suggestions.length > 0) {
+    return suggestions;
   }
 
   return changes;
