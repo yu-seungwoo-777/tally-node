@@ -73,6 +73,18 @@ print_separator() {
 
 # --- 동기화 함수 ---
 
+# 펌웨어 버전 추출 함수
+get_firmware_version() {
+    local version_file="$PROJECT_DIR/platformio.ini"
+    if [ -f "$version_file" ]; then
+        # sed를 사용한 버전 추출 (macOS 호환)
+        # -D 옵션이 있는 줄만 추출 (한 번에 필터링)
+        grep 'FIRMWARE_VERSION.*-D' "$version_file" | sed -E 's/.*-DFIRMWARE_VERSION=\\\"([0-9.]+)\\\".*/\1/' || echo "unknown"
+    else
+        echo "unknown"
+    fi
+}
+
 # expect를 사용한 rsync 실행 함수
 run_rsync_with_expect() {
     local rsync_command="$1"
@@ -113,7 +125,7 @@ EOF
 sync_from_remote() {
     log_info "원격 서버에서 프로젝트를 가져옵니다..."
 
-    # 다운로드 제외 목록
+    # 다운로드 제외 목록 (.pio 전체 제외 - 원격에서 빌드 후 업로드)
     EXCLUDE_LIST=(
         --exclude='.pio'
         --exclude='venv'
@@ -134,6 +146,10 @@ sync_from_remote() {
     # expect를 사용하여 rsync 실행
     if run_rsync_with_expect "$RSYNC_CMD"; then
         log_success "프로젝트를 가져왔습니다."
+
+        # 가져온 프로젝트의 펌웨어 버전 표시
+        local fw_version=$(get_firmware_version)
+        log_info "펌웨어 버전: ${GREEN}$fw_version${NC}"
     else
         log_error "가져오기 중 오류가 발생했습니다."
         return 1
@@ -255,12 +271,16 @@ clean_build() {
 
 # --- 메인 메뉴 함수 ---
 show_menu() {
+    # 펌웨어 버전 추출
+    local fw_version=$(get_firmware_version)
+
     clear
     echo "======================================================"
     echo "           Tally-Node Project Manager v2.5          "
     echo "======================================================"
     echo "  프로젝트 경로: $PROJECT_DIR"
     echo "  원격 경로: $REMOTE_USER@$REMOTE_IP:$REMOTE_PATH"
+    echo -e "  펌웨어 버전: ${GREEN}$fw_version${NC}"
     echo "------------------------------------------------------"
     echo "  1. 원격 서버에서 프로젝트 가져오기 (Pull)"
     echo "  2. 디바이스 모니터 시작"

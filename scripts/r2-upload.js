@@ -37,35 +37,162 @@ const R2_BUCKET = process.env.R2_BUCKET;
 const R2_PREFIX = 'eora_s3';
 
 /**
- * Get version from platformio.ini
- * Falls back to package.json version if not found
+ * Get version from a file with regex pattern
  */
-function getFirmwareVersion() {
-  const platformioPath = join(__dirname, '..', 'platformio.ini');
-
-  if (!existsSync(platformioPath)) {
-    console.warn('Warning: platformio.ini not found, using package.json version');
-    const packageJson = require('../package.json');
-    return packageJson.version;
+function getVersionFromFile(filePath, pattern, description) {
+  if (!existsSync(filePath)) {
+    return { version: null, source: description, status: 'not_found' };
   }
 
-  const platformioContent = readFileSync(platformioPath, 'utf-8');
-
-  // Match -DFIRMWARE_VERSION=\"x.y.z\" pattern
-  const versionMatch = platformioContent.match(/-DFIRMWARE_VERSION=\\"([^"]+)\\"/);
-
-  if (versionMatch && versionMatch[1]) {
-    const version = versionMatch[1];
-    console.log(`✓ Found firmware version in platformio.ini: ${version}`);
-    return version;
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    const match = content.match(pattern);
+    if (match && match[1]) {
+      return { version: match[1], source: description, status: 'found' };
+    }
+    return { version: null, source: description, status: 'not_found' };
+  } catch (e) {
+    return { version: null, source: description, status: 'error', error: e.message };
   }
-
-  console.warn('Warning: FIRMWARE_VERSION not found in platformio.ini, using package.json version');
-  const packageJson = require('../package.json');
-  return packageJson.version;
 }
 
-const VERSION = getFirmwareVersion();
+/**
+ * Extract version from web bundle file
+ */
+function getVersionFromWebBundle() {
+  const bundlePath = join(__dirname, '..', 'web', 'dist', 'js', 'app.bundle.js');
+
+  if (!existsSync(bundlePath)) {
+    return { version: null, source: 'web/dist/js/app.bundle.js', status: 'not_found' };
+  }
+
+  try {
+    const content = readFileSync(bundlePath, 'utf-8');
+    // version: 'x.y.z' 패턴 검색
+    const match = content.match(/version:\s*['"]([0-9.]+)['"]/);
+    if (match && match[1]) {
+      return { version: match[1], source: 'web/dist/js/app.bundle.js', status: 'found' };
+    }
+    return { version: null, source: 'web/dist/js/app.bundle.js', status: 'not_found' };
+  } catch (e) {
+    return { version: null, source: 'web/dist/js/app.bundle.js', status: 'error', error: e.message };
+  }
+}
+
+/**
+ * Extract version from PIO binary using strings command
+ */
+function getVersionFromPIOBinary(buildEnv) {
+  const binaryPath = join(__dirname, '..', '.pio', 'build', buildEnv, 'firmware.bin');
+
+  if (!existsSync(binaryPath)) {
+    return { version: null, source: `${buildEnv}/firmware.bin`, status: 'not_found' };
+  }
+
+  try {
+    // strings 명령으로 바이너리에서 문자열 추출 후 버전 패턴 검색
+    const output = execSync(`strings "${binaryPath}" 2>/dev/null | grep -E "^[0-9]+\.[0-9]+\.[0-9]+$" | head -1 || echo ""`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    const version = output.trim();
+    if (version && /^\d+\.\d+\.\d+$/.test(version)) {
+      return { version, source: `${buildEnv}/firmware.bin`, status: 'found' };
+    }
+
+    return { version: null, source: `${buildEnv}/firmware.bin`, status: 'not_found' };
+  } catch (e) {
+    return { version: null, source: `${buildEnv}/firmware.bin`, status: 'error', error: e.message };
+  }
+}
+
+/**
+ * Check all version sources and display comprehensive report
+ */
+function checkAllVersions() {
+  console.log('\n' + '='.repeat(60));
+  console.log('📋 펌웨어 버전 확인');
+  console.log('='.repeat(60));
+
+  const versionChecks = [];
+
+  // 1. 소스 파일들에서 버전 확인
+  const sourceChecks = [
+    getVersionFromFile(
+      join(__dirname, '..', 'platformio.ini'),
+      /-DFIRMWARE_VERSION=\\"([0-9.]+)\\"/,
+      'platformio.ini'
+    ),
+    getVersionFromFile(
+      join(__dirname, '..', 'components', '00_common', 'app_types', 'include', 'app_types.h'),
+      /#define FIRMWARE_VERSION "([0-9.]+)"/,
+      'app_types.h'
+    ),
+    getVersionFromFile(
+      join(__dirname, '..', 'web', 'package.json'),
+      /"version":\s*"([0-9.]+)"/,
+      'web/package.json'
+    ),
+    getVersionFromFile(
+      join(__dirname, '..', 'changelog.json'),
+      /"version":\s*"([0-9.]+)"/,
+      'changelog.json'
+    ),
+    getVersionFromWebBundle()
+  ];
+
+  sourceChecks.forEach(check => {
+    versionChecks.push(check);
+    const status = check.status === 'found' ? '✓' : check.status === 'not_found' ? '⚠' : '❌';
+    const version = check.version || '없음';
+    console.log(`  ${status} ${check.source}: ${version}`);
+  });
+
+  // 2. PIO 빌드된 바이너리에서 버전 확인
+  console.log('\n📦 PIO 빌드 바이너리:');
+  const txBinary = getVersionFromPIOBinary('eora_s3_tx');
+  const rxBinary = getVersionFromPIOBinary('eora_s3_rx');
+
+  versionChecks.push(txBinary, rxBinary);
+
+  const txStatus = txBinary.status === 'found' ? '✓' : '⚠';
+  const rxStatus = rxBinary.status === 'found' ? '✓' : '⚠';
+  const txVersion = txBinary.version || '빌드 안됨';
+  const rxVersion = rxBinary.version || '빌드 안됨';
+
+  console.log(`  ${txStatus} TX (${txBinary.source}): ${txVersion}`);
+  console.log(`  ${rxStatus} RX (${rxBinary.source}): ${rxVersion}`);
+
+  // 3. 버전 일치 여부 확인
+  console.log('\n' + '-'.repeat(60));
+  const foundVersions = versionChecks
+    .filter(c => c.status === 'found' && c.version)
+    .map(c => c.version);
+
+  const uniqueVersions = [...new Set(foundVersions)];
+  const allMatch = uniqueVersions.length <= 1;
+
+  if (allMatch && foundVersions.length > 0) {
+    console.log(`  ✅ 모든 버전이 일치합니다: ${uniqueVersions[0]}`);
+    return uniqueVersions[0];
+  } else if (foundVersions.length === 0) {
+    console.log('  ⚠️  버전을 찾을 수 없습니다.');
+    console.log('  먼저 "npm run version"으로 버전을 설정하세요.');
+    process.exit(1);
+  } else {
+    console.log('  ⚠️  버전 불일치가 발견되었습니다:');
+    uniqueVersions.forEach(v => {
+      const sources = versionChecks.filter(c => c.version === v).map(c => c.source);
+      console.log(`    ${v}: ${sources.join(', ')}`);
+    });
+    console.log('\n  모든 버전이 일치하도록 설정하세요.');
+    process.exit(1);
+  }
+}
+
+// Check all versions first
+const VERSION = checkAllVersions();
 
 // Board configurations
 const BASE_BOARD = 'eora_s3';
