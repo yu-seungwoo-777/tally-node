@@ -159,22 +159,37 @@ function displayCurrentVersions(versions) {
  */
 function getGitCommitsSince(lastVersion) {
   try {
-    // 버전 태그가 있으면 해당 태그 이후, 없으면 최근 20개 커밋
     let commits = [];
 
-    try {
-      // 태그 기반 커밋 조회
-      const tagRange = lastVersion !== 'unknown' ? `v${lastVersion}..HEAD` : '';
-      const output = execSync(
-        `git log ${tagRange} --pretty=format:"%h|%s|%an|%ad" --date=short -20`,
-        { cwd: PROJECT_ROOT, encoding: 'utf-8' }
-      );
-      commits = output.trim().split('\n').filter(line => line.trim());
-    } catch (e) {
-      // 태그가 없으면 최근 커밋 조회
+    // 먼저 태그 존재 여부 확인
+    const tagExists = lastVersion !== 'unknown' && (() => {
+      try {
+        execSync(`git rev-parse v${lastVersion}^{tag} --quiet`, { cwd: PROJECT_ROOT, stdio: 'ignore' });
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+
+    if (tagExists) {
+      // 태그가 있으면 태그 이후 커밋 조회
+      try {
+        const output = execSync(
+          `git log v${lastVersion}..HEAD --pretty=format:"%h|%s|%an|%ad" --date=short -20`,
+          { cwd: PROJECT_ROOT, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }
+        );
+        commits = output.trim().split('\n').filter(line => line.trim());
+      } catch (e) {
+        // 태그는 있지만 범위가 비어있을 수 있음
+        commits = [];
+      }
+    }
+
+    // 태그가 없거나 결과가 없으면 최근 커밋 조회
+    if (commits.length === 0) {
       const output = execSync(
         'git log --pretty=format:"%h|%s|%an|%ad" --date=short -20',
-        { cwd: PROJECT_ROOT, encoding: 'utf-8' }
+        { cwd: PROJECT_ROOT, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }
       );
       commits = output.trim().split('\n').filter(line => line.trim());
     }
