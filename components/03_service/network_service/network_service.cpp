@@ -710,14 +710,62 @@ esp_err_t NetworkServiceClass::onConfigDataEvent(const event_data_t* event)
         start();
     } else {
         // 드라이버가 이미 초기화된 상태에서 설정이 변경된 경우
-        // Ethernet 활성화/비활성화 변경을 감지하여 재시작
+        // Ethernet 설정 변경을 감지하여 재시작
         static bool last_eth_enabled = false;
-        bool eth_changed = (last_eth_enabled != s_config.ethernet.enabled);
-        last_eth_enabled = s_config.ethernet.enabled;
+        static bool last_eth_dhcp_enabled = true;  // 초기값은 DHCP (일반적인 기본값)
+        static char last_eth_static_ip[16] = "";
+        static char last_eth_static_netmask[16] = "";
+        static char last_eth_static_gateway[16] = "";
 
-        if (eth_changed) {
-            T_LOGI(TAG, "Ethernet config changed (enabled=%d), restarting...", s_config.ethernet.enabled);
+        // Ethernet 설정 변경 감지
+        bool eth_enabled_changed = (last_eth_enabled != s_config.ethernet.enabled);
+        bool eth_dhcp_changed = (last_eth_dhcp_enabled != s_config.ethernet.dhcp_enabled);
+        bool eth_ip_changed = (strcmp(last_eth_static_ip, s_config.ethernet.static_ip) != 0);
+        bool eth_netmask_changed = (strcmp(last_eth_static_netmask, s_config.ethernet.static_netmask) != 0);
+        bool eth_gateway_changed = (strcmp(last_eth_static_gateway, s_config.ethernet.static_gateway) != 0);
+
+        // 상태 업데이트
+        last_eth_enabled = s_config.ethernet.enabled;
+        last_eth_dhcp_enabled = s_config.ethernet.dhcp_enabled;
+        strncpy(last_eth_static_ip, s_config.ethernet.static_ip, sizeof(last_eth_static_ip) - 1);
+        last_eth_static_ip[sizeof(last_eth_static_ip) - 1] = '\0';
+        strncpy(last_eth_static_netmask, s_config.ethernet.static_netmask, sizeof(last_eth_static_netmask) - 1);
+        last_eth_static_netmask[sizeof(last_eth_static_netmask) - 1] = '\0';
+        strncpy(last_eth_static_gateway, s_config.ethernet.static_gateway, sizeof(last_eth_static_gateway) - 1);
+        last_eth_static_gateway[sizeof(last_eth_static_gateway) - 1] = '\0';
+
+        // 재시작 조건: Ethernet 관련 설정 중 하나라도 변경되면 재시작
+        bool need_ethernet_restart = eth_enabled_changed || eth_dhcp_changed ||
+                                      eth_ip_changed || eth_netmask_changed || eth_gateway_changed;
+
+        if (need_ethernet_restart) {
+            T_LOGI(TAG, "Ethernet config changed (enabled=%d, dhcp=%d), restarting...",
+                   s_config.ethernet.enabled, s_config.ethernet.dhcp_enabled);
             restartEthernet();
+        }
+
+        // WiFi STA 설정 변경 감지
+        static bool last_wifi_sta_enabled = false;
+        static char last_wifi_sta_ssid[33] = "";
+        static char last_wifi_sta_password[65] = "";
+
+        bool wifi_sta_enabled_changed = (last_wifi_sta_enabled != s_config.wifi_sta.enabled);
+        bool wifi_sta_ssid_changed = (strcmp(last_wifi_sta_ssid, s_config.wifi_sta.ssid) != 0);
+        bool wifi_sta_password_changed = (strcmp(last_wifi_sta_password, s_config.wifi_sta.password) != 0);
+
+        // 상태 업데이트
+        last_wifi_sta_enabled = s_config.wifi_sta.enabled;
+        strncpy(last_wifi_sta_ssid, s_config.wifi_sta.ssid, sizeof(last_wifi_sta_ssid) - 1);
+        last_wifi_sta_ssid[sizeof(last_wifi_sta_ssid) - 1] = '\0';
+        strncpy(last_wifi_sta_password, s_config.wifi_sta.password, sizeof(last_wifi_sta_password) - 1);
+        last_wifi_sta_password[sizeof(last_wifi_sta_password) - 1] = '\0';
+
+        // 재시작 조건: WiFi STA 설정 중 하나라도 변경되면 재시작
+        bool need_wifi_restart = wifi_sta_enabled_changed || wifi_sta_ssid_changed || wifi_sta_password_changed;
+
+        if (need_wifi_restart) {
+            T_LOGI(TAG, "WiFi STA config changed (enabled=%d), restarting...", s_config.wifi_sta.enabled);
+            restartWiFi();
         }
     }
 
