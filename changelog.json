@@ -1,6 +1,24 @@
 {
   "versions": [
     {
+      "version": "2.4.3",
+      "date": "2026-02-11",
+      "ko": {
+        "title": "TX 롱프레스로 네트워크 초기화 기능 추가",
+        "changes": [
+          "TX 버튼 길게 누르면 네트워크 설정 초기화",
+          "네트워크 연결 문제 시 쉬운 재설정 방법 제공"
+        ]
+      },
+      "en": {
+        "title": "Add network initialization via TX long press",
+        "changes": [
+          "Long press TX button to reset network settings",
+          "Provide easy reset method for network connection issues"
+        ]
+      }
+    },
+    {
       "version": "2.4.2",
       "date": "2026-02-11",
       "ko": {
