@@ -27,6 +27,9 @@ const readline = require('readline');
 const { execSync } = require('child_process');
 require('dotenv').config({ path: join(__dirname, '..', '.env') });
 
+// Import version check functions
+const { checkAllVersions } = require('./version-check.js');
+
 // Configuration from environment variables
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
@@ -36,163 +39,8 @@ const R2_BUCKET = process.env.R2_BUCKET;
 // R2 path prefix
 const R2_PREFIX = 'eora_s3';
 
-/**
- * Get version from a file with regex pattern
- */
-function getVersionFromFile(filePath, pattern, description) {
-  if (!existsSync(filePath)) {
-    return { version: null, source: description, status: 'not_found' };
-  }
-
-  try {
-    const content = readFileSync(filePath, 'utf-8');
-    const match = content.match(pattern);
-    if (match && match[1]) {
-      return { version: match[1], source: description, status: 'found' };
-    }
-    return { version: null, source: description, status: 'not_found' };
-  } catch (e) {
-    return { version: null, source: description, status: 'error', error: e.message };
-  }
-}
-
-/**
- * Extract version from web bundle file
- */
-function getVersionFromWebBundle() {
-  const bundlePath = join(__dirname, '..', 'web', 'dist', 'js', 'app.bundle.js');
-
-  if (!existsSync(bundlePath)) {
-    return { version: null, source: 'web/dist/js/app.bundle.js', status: 'not_found' };
-  }
-
-  try {
-    const content = readFileSync(bundlePath, 'utf-8');
-    // version: 'x.y.z' 패턴 검색
-    const match = content.match(/version:\s*['"]([0-9.]+)['"]/);
-    if (match && match[1]) {
-      return { version: match[1], source: 'web/dist/js/app.bundle.js', status: 'found' };
-    }
-    return { version: null, source: 'web/dist/js/app.bundle.js', status: 'not_found' };
-  } catch (e) {
-    return { version: null, source: 'web/dist/js/app.bundle.js', status: 'error', error: e.message };
-  }
-}
-
-/**
- * Extract version from PIO binary using strings command
- */
-function getVersionFromPIOBinary(buildEnv) {
-  const binaryPath = join(__dirname, '..', '.pio', 'build', buildEnv, 'firmware.bin');
-
-  if (!existsSync(binaryPath)) {
-    return { version: null, source: `${buildEnv}/firmware.bin`, status: 'not_found' };
-  }
-
-  try {
-    // strings 명령으로 바이너리에서 문자열 추출 후 버전 패턴 검색
-    const output = execSync(`strings "${binaryPath}" 2>/dev/null | grep -E "^[0-9]+\.[0-9]+\.[0-9]+$" | head -1 || echo ""`, {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-
-    const version = output.trim();
-    if (version && /^\d+\.\d+\.\d+$/.test(version)) {
-      return { version, source: `${buildEnv}/firmware.bin`, status: 'found' };
-    }
-
-    return { version: null, source: `${buildEnv}/firmware.bin`, status: 'not_found' };
-  } catch (e) {
-    return { version: null, source: `${buildEnv}/firmware.bin`, status: 'error', error: e.message };
-  }
-}
-
-/**
- * Check all version sources and display comprehensive report
- */
-function checkAllVersions() {
-  console.log('\n' + '='.repeat(60));
-  console.log('📋 펌웨어 버전 확인');
-  console.log('='.repeat(60));
-
-  const versionChecks = [];
-
-  // 1. 소스 파일들에서 버전 확인
-  const sourceChecks = [
-    getVersionFromFile(
-      join(__dirname, '..', 'platformio.ini'),
-      /-DFIRMWARE_VERSION=\\"([0-9.]+)\\"/,
-      'platformio.ini'
-    ),
-    getVersionFromFile(
-      join(__dirname, '..', 'components', '00_common', 'app_types', 'include', 'app_types.h'),
-      /#define FIRMWARE_VERSION "([0-9.]+)"/,
-      'app_types.h'
-    ),
-    getVersionFromFile(
-      join(__dirname, '..', 'web', 'package.json'),
-      /"version":\s*"([0-9.]+)"/,
-      'web/package.json'
-    ),
-    getVersionFromFile(
-      join(__dirname, '..', 'changelog.json'),
-      /"version":\s*"([0-9.]+)"/,
-      'changelog.json'
-    ),
-    getVersionFromWebBundle()
-  ];
-
-  sourceChecks.forEach(check => {
-    versionChecks.push(check);
-    const status = check.status === 'found' ? '✓' : check.status === 'not_found' ? '⚠' : '❌';
-    const version = check.version || '없음';
-    console.log(`  ${status} ${check.source}: ${version}`);
-  });
-
-  // 2. PIO 빌드된 바이너리에서 버전 확인
-  console.log('\n📦 PIO 빌드 바이너리:');
-  const txBinary = getVersionFromPIOBinary('eora_s3_tx');
-  const rxBinary = getVersionFromPIOBinary('eora_s3_rx');
-
-  versionChecks.push(txBinary, rxBinary);
-
-  const txStatus = txBinary.status === 'found' ? '✓' : '⚠';
-  const rxStatus = rxBinary.status === 'found' ? '✓' : '⚠';
-  const txVersion = txBinary.version || '빌드 안됨';
-  const rxVersion = rxBinary.version || '빌드 안됨';
-
-  console.log(`  ${txStatus} TX (${txBinary.source}): ${txVersion}`);
-  console.log(`  ${rxStatus} RX (${rxBinary.source}): ${rxVersion}`);
-
-  // 3. 버전 일치 여부 확인
-  console.log('\n' + '-'.repeat(60));
-  const foundVersions = versionChecks
-    .filter(c => c.status === 'found' && c.version)
-    .map(c => c.version);
-
-  const uniqueVersions = [...new Set(foundVersions)];
-  const allMatch = uniqueVersions.length <= 1;
-
-  if (allMatch && foundVersions.length > 0) {
-    console.log(`  ✅ 모든 버전이 일치합니다: ${uniqueVersions[0]}`);
-    return uniqueVersions[0];
-  } else if (foundVersions.length === 0) {
-    console.log('  ⚠️  버전을 찾을 수 없습니다.');
-    console.log('  먼저 "npm run version"으로 버전을 설정하세요.');
-    process.exit(1);
-  } else {
-    console.log('  ⚠️  버전 불일치가 발견되었습니다:');
-    uniqueVersions.forEach(v => {
-      const sources = versionChecks.filter(c => c.version === v).map(c => c.source);
-      console.log(`    ${v}: ${sources.join(', ')}`);
-    });
-    console.log('\n  모든 버전이 일치하도록 설정하세요.');
-    process.exit(1);
-  }
-}
-
-// Check all versions first
-const VERSION = checkAllVersions();
+// Global VERSION variable (will be set in main)
+let VERSION;
 
 // Board configurations
 const BASE_BOARD = 'eora_s3';
@@ -406,23 +254,20 @@ function confirm(message) {
 /**
  * Generate changelog entry using Claude CLI
  */
-function generateChangelogWithClaude(txChanges, rxChanges) {
+function generateChangelogWithClaude(changes) {
   const today = new Date().toISOString().split('T')[0];
 
   const prompt = `작업: 펌웨어 changelog 생성 (한글 + 영어)
 
 === 변경사항 ===
-TX: ${txChanges || '없음'}
-RX: ${rxChanges || '없음'}
+${changes || '없음'}
 
 === 지시사항 ===
-1. 각 보드(TX/RX)별로 title, changes 구조 (fixes는 별도로 작성하지 말고 changes에 통합)
-2. 한글(ko)과 영어(en)双语로 작성
-3. title은 변경사항을 요약한 짧은 문장
-4. changes는 기능적 핵심만 3개 이내로 작성 (기술적 세부사항은 생략)
-5. 관련 기능은 하나로 통합 (예: "IP 검사 강화 및 자동 전환 추가")
-6. 출력은 JSON 객체만 반환 (코드 블록 없이)
-7. 변경사항이 없는 보드는 포함하지 않음
+1. 한글(ko)과 영어(en)双语로 작성
+2. title은 변경사항을 요약한 짧은 문장
+3. changes는 기능적 핵심만 3개 이내로 작성 (기술적 세부사항은 생략)
+4. 관련 기능은 하나로 통합 (예: "IP 검사 강화 및 자동 전환 추가")
+5. 출력은 JSON 객체만 반환 (코드 블록 없이)
 
 버전: ${VERSION}
 날짜: ${today}
@@ -431,11 +276,8 @@ JSON 형식:
 {
   "version": "${VERSION}",
   "date": "${today}",
-  "tx": {
-    "ko": { "title": "...", "changes": [...] },
-    "en": { "title": "...", "changes": [...] }
-  },
-  "rx": { ... }
+  "ko": { "title": "...", "changes": [...] },
+  "en": { "title": "...", "changes": [...] }
 }`;
 
   try {
@@ -480,43 +322,26 @@ async function uploadChangelog(s3Client) {
     console.log(`\n${'='.repeat(60)}`);
     console.log(`Changelog 작성 for version ${VERSION}`);
     console.log(`${'='.repeat(60)}`);
-    console.log('변경사항이 없는 보드는 빈 줄로 건너뛰세요.\n');
 
     const rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout
     });
 
-    // TX changes (empty line to skip)
-    const txChanges = await new Promise((resolve) => {
+    // 변경사항 입력 (TX/RX 구분 없음)
+    const changes = await new Promise((resolve) => {
       const lines = [];
-      const askTx = () => {
-        rl.question('TX 변경사항 (빈 줄로 완료): ', (line) => {
+      const ask = () => {
+        rl.question('변경사항 (빈 줄로 완료): ', (line) => {
           if (!line) {
             resolve(lines.join('\n'));
           } else {
             lines.push(line);
-            askTx();
+            ask();
           }
         });
       };
-      askTx();
-    });
-
-    // RX changes (empty line to skip)
-    const rxChanges = await new Promise((resolve) => {
-      const lines = [];
-      const askRx = () => {
-        rl.question('RX 변경사항 (빈 줄로 완료): ', (line) => {
-          if (!line) {
-            resolve(lines.join('\n'));
-          } else {
-            lines.push(line);
-            askRx();
-          }
-        });
-      };
-      askRx();
+      ask();
     });
 
     rl.close();
@@ -524,37 +349,111 @@ async function uploadChangelog(s3Client) {
     // Generate changelog using Claude CLI
     console.log('\n🤖 Claude로 changelog 생성 중...');
 
-    const claudeResult = generateChangelogWithClaude(txChanges, rxChanges);
+    const claudeResult = generateChangelogWithClaude(changes);
 
     if (claudeResult) {
       try {
         // Parse Claude response
         let jsonMatch = claudeResult.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-          const newEntry = JSON.parse(jsonMatch[0]);
+          let newEntry = JSON.parse(jsonMatch[0]);
 
-          console.log('\n📝 생성된 changelog:');
-          console.log(JSON.stringify(newEntry, null, 2));
+          // Changelog 확인 및 수정 루프
+          while (true) {
+            console.log('\n📝 생성된 changelog:');
+            console.log(JSON.stringify(newEntry, null, 2));
 
-          const confirmAdd = await confirm('이 changelog를 추가하시겠습니까?');
+            const action = await new Promise((resolve) => {
+              const rlConfirm = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+              });
+              rlConfirm.question('이 changelog를 추가하시겠습니까? (y: 추가, n: 취소, m: 수정 의견 입력): ', (answer) => {
+                rlConfirm.close();
+                resolve(answer.toLowerCase().trim());
+              });
+            });
 
-          if (confirmAdd) {
-            changelog.versions.push(newEntry);
+            if (action === 'y' || action === 'yes') {
+              break; // 추가 진행
+            } else if (action === 'n' || action === 'no') {
+              console.log('⚠️  Changelog 추가가 취소되었습니다.');
+              return { success: false, skipped: true, file: 'changelog.json', reason: 'user_cancelled' };
+            } else if (action === 'm') {
+              // 수정 의견 입력
+              const revision = await new Promise((resolve) => {
+                const rlRev = readline.createInterface({
+                  input: process.stdin,
+                  output: process.stdout
+                });
+                rlRev.question('수정 의견을 입력하세요: ', (answer) => {
+                  rlRev.close();
+                  resolve(answer);
+                });
+              });
 
-            // Sort by date (newest first)
-            changelog.versions.sort((a, b) => new Date(b.date) - new Date(a.date));
+              if (!revision.trim()) {
+                console.log('수정 의견이 비어있어서 다시 시도합니다.');
+                continue;
+              }
 
-            // Update changelogData
-            changelogData = JSON.stringify(changelog, null, 2);
+              // Claude로 수정 요청
+              console.log('\n🤖 Claude로 changelog 수정 중...');
 
-            // Save to file
-            writeFileSync(changelogPath, changelogData, 'utf-8');
+              const revisionPrompt = `작업: 기존 changelog 수정
 
-            console.log(`✅ Added version ${VERSION} to changelog.json`);
-          } else {
-            console.log('⚠️  Changelog 추가가 취소되었습니다.');
-            return { success: false, skipped: true, file: 'changelog.json', reason: 'user_cancelled' };
+=== 기존 changelog ===
+${JSON.stringify(newEntry, null, 2)}
+
+=== 수정 의견 ===
+${revision}
+
+=== 지시사항 ===
+1. 수정 의견을 반영하여 changelog를 수정하세요
+2. 한글(ko)과 영어(en)双语로 작성
+3. 출력은 JSON 객체만 반환 (코드 블록 없이)`;
+
+              try {
+                const revisionResult = execSync(`echo '${revisionPrompt.replace(/'/g, "'\\''")}' | claude`, {
+                  encoding: 'utf-8',
+                  stdio: ['pipe', 'pipe', 'pipe']
+                });
+
+                const jsonMatch2 = revisionResult.match(/\{[\s\S]*\}/);
+                if (jsonMatch2) {
+                  newEntry = JSON.parse(jsonMatch2[0]);
+                  console.log('✅ changelog가 수정되었습니다.');
+                } else {
+                  console.log('⚠️  JSON 파싱 실패, 다시 시도하세요.');
+                }
+              } catch (error) {
+                console.error(`❌ 수정 실패: ${error.message}`);
+                console.log('다시 시도하세요.');
+              }
+              // 루프 계속
+            } else {
+              console.log('y, n, m 중 하나를 입력하세요.');
+            }
           }
+
+          // 추가 진행
+          changelog.versions.push(newEntry);
+
+          // Sort by date (newest first), then by version (newest first)
+          changelog.versions.sort((a, b) => {
+            const dateCompare = new Date(b.date) - new Date(a.date);
+            if (dateCompare !== 0) return dateCompare;
+            // Same date: sort by version (newest first)
+            return b.version.localeCompare(a.version);
+          });
+
+          // Update changelogData
+          changelogData = JSON.stringify(changelog, null, 2);
+
+          // Save to file
+          writeFileSync(changelogPath, changelogData, 'utf-8');
+
+          console.log(`✅ Added version ${VERSION} to changelog.json`);
         } else {
           throw new Error('JSON 파싱 실패');
         }
@@ -610,9 +509,237 @@ async function uploadLatest(s3Client) {
 }
 
 /**
+ * Update changelog using Claude CLI
+ */
+async function updateChangelog(targetVersion, changelogVersion) {
+  console.log(`\n⚠️  changelog.json만 버전이 다릅니다 (${changelogVersion} → ${targetVersion})`);
+  console.log('\nchangelog.json를 자동으로 업데이트하시겠습니까?');
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+
+  const shouldUpdate = await new Promise((resolve) => {
+    rl.question('업데이트하려면 y, 건너뛰려면 n: ', (answer) => {
+      rl.close();
+      resolve(answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes');
+    });
+  });
+
+  if (!shouldUpdate) {
+    return false;
+  }
+
+  // 출력 최근 10개 git 로그
+  console.log('\n' + '='.repeat(60));
+  console.log('최근 Git 커밋 로그 (10개)');
+  console.log('='.repeat(60));
+  try {
+    const gitLog = execSync('git log -10 --oneline --no-decorate', {
+      encoding: 'utf-8',
+      cwd: join(__dirname, '..')
+    });
+    console.log(gitLog);
+  } catch (error) {
+    console.log('(Git 로그를 가져올 수 없습니다)');
+  }
+  console.log('='.repeat(60));
+
+  console.log('\n변경사항을 입력하세요 (빈 줄로 완료):');
+
+  // 변경사항 입력 (TX/RX 구분 없음)
+  const changes = await new Promise((resolve) => {
+    const lines = [];
+    const rl2 = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+    const ask = () => {
+      rl2.question('변경사항 (빈 줄로 완료): ', (line) => {
+        if (!line) {
+          rl2.close();
+          resolve(lines.join('\n'));
+        } else {
+          lines.push(line);
+          ask();
+        }
+      });
+    };
+    ask();
+  });
+
+  // Claude CLI로 changelog 생성
+  console.log('\n🤖 Claude로 changelog 생성 중...');
+
+  const today = new Date().toISOString().split('T')[0];
+  const prompt = `작업: 펌웨어 changelog 생성 (한글 + 영어)
+
+=== 변경사항 ===
+${changes || '없음'}
+
+=== 지시사항 ===
+1. 한글(ko)과 영어(en)双语로 작성
+2. title은 변경사항을 요약한 짧은 문장
+3. changes는 기능적 핵심만 3개 이내로 작성 (기술적 세부사항은 생략)
+4. 관련 기능은 하나로 통합 (예: "IP 검사 강화 및 자동 전환 추가")
+5. 출력은 JSON 객체만 반환 (코드 블록 없이)
+
+버전: ${targetVersion}
+날짜: ${today}
+
+JSON 형식:
+{
+  "version": "${targetVersion}",
+  "date": "${today}",
+  "ko": { "title": "...", "changes": [...] },
+  "en": { "title": "...", "changes": [...] }
+}`;
+
+  try {
+    const claudeResult = execSync(`echo '${prompt.replace(/'/g, "'\\''")}' | claude`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+
+    // Parse Claude response
+    let jsonMatch = claudeResult.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('JSON 파싱 실패');
+    }
+
+    let newEntry = JSON.parse(jsonMatch[0]);
+
+    // Changelog 확인 및 수정 루프
+    while (true) {
+      console.log('\n📝 생성된 changelog:');
+      console.log(JSON.stringify(newEntry, null, 2));
+
+      const action = await new Promise((resolve) => {
+        const rl4 = readline.createInterface({
+          input: process.stdin,
+          output: process.stdout
+        });
+        rl4.question('이 changelog를 추가하시겠습니까? (y: 추가, n: 취소, m: 수정 의견 입력): ', (answer) => {
+          rl4.close();
+          resolve(answer.toLowerCase().trim());
+        });
+      });
+
+      if (action === 'y' || action === 'yes') {
+        break; // 추가 진행
+      } else if (action === 'n' || action === 'no') {
+        return false; // 취소
+      } else if (action === 'm') {
+        // 수정 의견 입력
+        const revision = await new Promise((resolve) => {
+          const rl5 = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+          });
+          rl5.question('수정 의견을 입력하세요: ', (answer) => {
+            rl5.close();
+            resolve(answer);
+          });
+        });
+
+        if (!revision.trim()) {
+          console.log('수정 의견이 비어있어서 다시 시도합니다.');
+          continue;
+        }
+
+        // Claude로 수정 요청
+        console.log('\n🤖 Claude로 changelog 수정 중...');
+
+        const revisionPrompt = `작업: 기존 changelog 수정
+
+=== 기존 changelog ===
+${JSON.stringify(newEntry, null, 2)}
+
+=== 수정 의견 ===
+${revision}
+
+=== 지시사항 ===
+1. 수정 의견을 반영하여 changelog를 수정하세요
+2. 한글(ko)과 영어(en)双语로 작성
+3. 출력은 JSON 객체만 반환 (코드 블록 없이)`;
+
+        try {
+          const revisionResult = execSync(`echo '${revisionPrompt.replace(/'/g, "'\\''")}' | claude`, {
+            encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe']
+          });
+
+          const jsonMatch2 = revisionResult.match(/\{[\s\S]*\}/);
+          if (jsonMatch2) {
+            newEntry = JSON.parse(jsonMatch2[0]);
+            console.log('✅ changelog가 수정되었습니다.');
+          } else {
+            console.log('⚠️  JSON 파싱 실패, 다시 시도하세요.');
+          }
+        } catch (error) {
+          console.error(`❌ 수정 실패: ${error.message}`);
+          console.log('다시 시도하세요.');
+        }
+        // 루프 계속
+      } else {
+        console.log('y, n, m 중 하나를 입력하세요.');
+      }
+    }
+
+    // Read changelog.json
+    const changelogPath = join(__dirname, '..', 'changelog.json');
+    const changelogData = readFileSync(changelogPath, 'utf-8');
+    const changelog = JSON.parse(changelogData);
+
+    // Add new entry
+    changelog.versions.push(newEntry);
+
+    // Sort by date (newest first), then by version (newest first)
+    changelog.versions.sort((a, b) => {
+      const dateCompare = new Date(b.date) - new Date(a.date);
+      if (dateCompare !== 0) return dateCompare;
+      // Same date: sort by version (newest first)
+      return b.version.localeCompare(a.version);
+    });
+
+    // Save
+    writeFileSync(changelogPath, JSON.stringify(changelog, null, 2), 'utf-8');
+
+    console.log(`\n✅ changelog.json에 버전 ${targetVersion}이 추가되었습니다.`);
+    return true;
+  } catch (error) {
+    console.error(`\n❌ Changelog 생성 실패: ${error.message}`);
+    return false;
+  }
+}
+
+/**
  * Main upload function
  */
 async function main() {
+  // Check all versions first
+  let versionResult;
+  try {
+    versionResult = checkAllVersions();
+    VERSION = versionResult.version;
+  } catch (error) {
+    console.error(`\n❌ 버전 확인 실패: ${error.message}`);
+    console.log('먼저 "npm run version"으로 버전을 확인하세요.');
+    process.exit(1);
+  }
+
+  // changelog만 다른 경우 업데이트 수행
+  if (versionResult.changelogOnlyMismatch) {
+    const updated = await updateChangelog(VERSION, versionResult.changelogVersion);
+    if (!updated) {
+      console.log('\n업데이트가 취소되었습니다.');
+      process.exit(1);
+    }
+  }
+
+  console.log(`\n📋 펌웨어 버전 확인 완료: ${VERSION}`);
+
   console.log('='.repeat(60));
   console.log('Cloudflare R2 Firmware Upload');
   console.log('='.repeat(60));
