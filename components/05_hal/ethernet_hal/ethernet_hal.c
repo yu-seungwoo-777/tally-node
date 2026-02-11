@@ -638,6 +638,11 @@ esp_err_t ethernet_hal_restart(void)
     // 재시작 중 플래그 설정 (중복 재시작 및 복구 태스크 방지)
     if (s_restarting) {
         T_LOGW(TAG, "warn:already_restarting");
+        // 정지 상태(!s_started)면 재시작 허용
+        if (!s_started) {
+            T_LOGD(TAG, "ok:already_stopped");
+            return ESP_OK;
+        }
         return ESP_ERR_INVALID_STATE;
     }
 
