@@ -35,9 +35,6 @@ function getVersionFromFile(filePath, pattern, description) {
 
 /**
  * Get version from web bundle
- *
- * 펌웨어 버전 패턴: version:"X.Y.Z",loraChipType 또는 version:"X.Y.Z",deviceId
- * Alpine.js 등 라이브러리 버전과 구분하기 위해 구체적인 패턴 사용
  */
 function getVersionFromWebBundle() {
   const bundlePath = join(PROJECT_ROOT, 'web', 'dist', 'js', 'app.bundle.js');
@@ -48,14 +45,10 @@ function getVersionFromWebBundle() {
 
   try {
     const content = readFileSync(bundlePath, 'utf-8');
-
-    // 펌웨어 버전 패턴: loraChipType 또는 deviceId 옆에 있는 version
-    // 예: version:"2.4.1",loraChipType:1 또는 version:"2.4.2",deviceId
     const firmwareMatch = content.match(/version:"(\d+\.\d+\.\d+)",(?:loraChipType|deviceId|config:)/);
     if (firmwareMatch && firmwareMatch[1]) {
       return { version: firmwareMatch[1], source: 'web/dist/js/app.bundle.js', status: 'found' };
     }
-
     return { version: null, source: 'web/dist/js/app.bundle.js', status: 'not_found' };
   } catch (e) {
     return { version: null, source: 'web/dist/js/app.bundle.js', status: 'error', error: e.message };
@@ -64,9 +57,6 @@ function getVersionFromWebBundle() {
 
 /**
  * Get version from PIO binary
- *
- * strings 명령으로 바이너리에서 버전 문자열 추출
- * ESP-IDF 버전(5.x.x 등)을 제외하고 펌웨어 버전(x.x.x) 추출
  */
 function getVersionFromPIOBinary(buildEnv) {
   const { execSync } = require('child_process');
@@ -77,7 +67,6 @@ function getVersionFromPIOBinary(buildEnv) {
   }
 
   try {
-    // 모든 x.x.x 형식의 버전 추출 후 ESP-IDF 버전(5.x.x) 제외
     const output = execSync(`strings "${binaryPath}" 2>/dev/null | grep -E "^[0-9]+\\.[0-9]+\\.[0-9]+$" | grep -vE "^5\\." | head -1 || echo ""`, {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe']
@@ -87,7 +76,6 @@ function getVersionFromPIOBinary(buildEnv) {
     if (version && /^\d+\.\d+\.\d+$/.test(version)) {
       return { version, source: `${buildEnv}/firmware.bin`, status: 'found' };
     }
-
     return { version: null, source: `${buildEnv}/firmware.bin`, status: 'not_found' };
   } catch (e) {
     return { version: null, source: `${buildEnv}/firmware.bin`, status: 'error', error: e.message };
@@ -120,6 +108,11 @@ function main() {
       join(PROJECT_ROOT, 'web', 'package.json'),
       /"version":\s*"([0-9.]+)"/,
       'web/package.json'
+    ),
+    getVersionFromFile(
+      join(PROJECT_ROOT, 'web', 'src', 'js', 'modules', 'state.js'),
+      /version:\s*'([0-9.]+)'/,
+      'web/src/js/modules/state.js'
     ),
     getVersionFromFile(
       join(PROJECT_ROOT, 'changelog.json'),
@@ -171,20 +164,103 @@ function main() {
     console.log('  ⚠️  버전을 찾을 수 없습니다.');
     console.log('='.repeat(60));
     process.exit(1);
-  } else {
-    console.log('  ❌ 버전 불일치가 발견되었습니다!');
-    console.log('='.repeat(60));
-    console.log('\n발견된 버전:');
-    uniqueVersions.forEach(v => {
-      const sources = versionChecks.filter(c => c.version === v).map(c => c.source);
-      console.log(`  ${v}:`);
-      sources.forEach(s => console.log(`    - ${s}`));
-    });
-    console.log('\n모든 버전이 일치하도록 설정해주세요.');
-    console.log('='.repeat(60));
-    process.exit(1);
   }
+
+  // 버전 불일치
+  console.log('  ❌ 버전 불일치가 발견되었습니다!');
+  console.log('='.repeat(60));
+  console.log('\n발견된 버전:');
+  uniqueVersions.forEach(v => {
+    const sources = versionChecks.filter(c => c.version === v).map(c => c.source);
+    console.log(`  ${v}:`);
+    sources.forEach(s => console.log(`    - ${s}`));
+  });
+  console.log('\n모든 버전이 일치하도록 설정해주세요.');
+  console.log('='.repeat(60));
+  process.exit(1);
 }
 
 // Run
-main();
+if (require.main === module) {
+  main();
+}
+
+// Export for use in other scripts
+module.exports = {
+  getVersionFromFile,
+  getVersionFromWebBundle,
+  getVersionFromPIOBinary,
+  checkAllVersions: function() {
+    const versionChecks = [];
+
+    const sourceChecks = [
+      getVersionFromFile(
+        join(PROJECT_ROOT, 'platformio.ini'),
+        /-DFIRMWARE_VERSION=\\"([0-9.]+)\\"/,
+        'platformio.ini'
+      ),
+      getVersionFromFile(
+        join(PROJECT_ROOT, 'components', '00_common', 'app_types', 'include', 'app_types.h'),
+        /#define FIRMWARE_VERSION "([0-9.]+)"/,
+        'app_types.h'
+      ),
+      getVersionFromFile(
+        join(PROJECT_ROOT, 'web', 'package.json'),
+        /"version":\s*"([0-9.]+)"/,
+        'web/package.json'
+      ),
+      getVersionFromFile(
+        join(PROJECT_ROOT, 'web', 'src', 'js', 'modules', 'state.js'),
+        /version:\s*'([0-9.]+)'/,
+        'web/src/js/modules/state.js'
+      ),
+      getVersionFromFile(
+        join(PROJECT_ROOT, 'changelog.json'),
+        /"version":\s*"([0-9.]+)"/,
+        'changelog.json'
+      ),
+      getVersionFromWebBundle()
+    ];
+
+    sourceChecks.forEach(check => versionChecks.push(check));
+
+    const txBinary = getVersionFromPIOBinary('eora_s3_tx');
+    const rxBinary = getVersionFromPIOBinary('eora_s3_rx');
+    versionChecks.push(txBinary, rxBinary);
+
+    const foundVersions = versionChecks
+      .filter(c => c.status === 'found' && c.version)
+      .map(c => c.version);
+
+    const uniqueVersions = [...new Set(foundVersions)];
+
+    // changelog만 다른지 확인
+    const changelogCheck = versionChecks.find(c => c.source === 'changelog.json');
+    const otherChecks = versionChecks.filter(c => c.source !== 'changelog.json');
+    const otherVersions = [...new Set(otherChecks.filter(c => c.version).map(c => c.version))];
+
+    // changelog만 버전이 다르고, 나머지는 모두 일치하는 경우
+    if (uniqueVersions.length === 2 && changelogCheck && changelogCheck.version && otherVersions.length === 1) {
+      // changelog만 다름 - main 버전 반환
+      return {
+        version: otherVersions[0],
+        changelogVersion: changelogCheck.version,
+        changelogOnlyMismatch: true
+      };
+    }
+
+    if (otherVersions.length === 1) {
+      return {
+        version: otherVersions[0],
+        changelogOnlyMismatch: false
+      };
+    }
+
+    const errorMsg = '버전 불일치가 발견되었습니다:\n' +
+      uniqueVersions.map(v => {
+        const sources = versionChecks.filter(c => c.version === v).map(c => c.source);
+        return `  ${v}: ${sources.join(', ')}`;
+      }).join('\n');
+    throw new Error(errorMsg);
+  }
+};
