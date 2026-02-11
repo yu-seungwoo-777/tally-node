@@ -6,7 +6,7 @@
  * - Active Low (누르면 0)
  * - 10ms 폴링 주기
  * - 20ms 디바운싱
- * - 기본 1000ms 롱 프레스 (TX: 5000ms, RX: 1000ms)
+ * - 롱프레스 시간 (TX: 5000ms, RX: 1000ms, 빌드 타임 결정)
  * - event_bus로 이벤트 발행
  */
 
@@ -54,18 +54,6 @@ bool button_service_is_pressed(void);
  * @return true 초기화됨, false 초기화되지 않음
  */
 bool button_service_is_initialized(void);
-
-/**
- * @brief 롱프레스 시간 설정
- * @param ms 롱프레스 시간 (밀리초)
- */
-void button_service_set_long_press_time(uint32_t ms);
-
-/**
- * @brief 롱프레스 시간 반환
- * @return 롱프레스 시간 (ms)
- */
-uint32_t button_service_get_long_press_time(void);
 
 #ifdef __cplusplus
 }

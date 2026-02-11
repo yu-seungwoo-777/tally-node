@@ -22,9 +22,15 @@ static const char* TAG = "03_Button";
 
 #define POLL_INTERVAL_MS     10    /**< 폴링 주기 (ms) */
 #define DEBOUNCE_MS          20    /**< 디바운스 시간 (ms) */
-#define DEFAULT_LONG_PRESS_MS 1000 /**< 기본 롱 프레스 시간 (ms) */
 #define LONG_PRESS_REPEAT_MS 500   /**< 롱 프레스 반복 간격 (ms) */
 #define MULTI_CLICK_TIMEOUT_MS 50  /**< 멀티클릭 타임아웃 (ms) */
+
+// 빌드 타임에 롱프레스 시간 결정 (TX: 5초, RX: 1초)
+#ifdef DEVICE_MODE_TX
+    #define LONG_PRESS_MS  5000    /**< TX 롱 프레스 시간 (Ethernet DHCP 초기화) */
+#else
+    #define LONG_PRESS_MS  1000    /**< RX 롱 프레스 시간 (카메라 ID 변경) */
+#endif
 
 // ============================================================================
 // 버튼 상태
@@ -52,18 +58,6 @@ public:
     static void deinit(void);
     static bool isPressed(void);
     static bool isInitialized(void) { return s_initialized; }
-
-    /**
-     * @brief 롱프레스 시간 설정 (ms)
-     * @param ms 롱프레스 시간 (밀리초)
-     */
-    static void setLongPressTime(uint32_t ms) { s_long_press_ms = ms; }
-
-    /**
-     * @brief 롱프레스 시간 반환
-     * @return 롱프레스 시간 (ms)
-     */
-    static uint32_t getLongPressTime(void) { return s_long_press_ms; }
 
 private:
     ButtonService() = delete;
@@ -103,7 +97,7 @@ uint64_t ButtonService::s_debounce_start = 0;
 uint64_t ButtonService::s_last_repeat_time = 0;
 uint32_t ButtonService::s_click_count = 0;
 bool ButtonService::s_long_press_fired = false;
-uint32_t ButtonService::s_long_press_ms = DEFAULT_LONG_PRESS_MS;
+uint32_t ButtonService::s_long_press_ms = LONG_PRESS_MS;
 bool ButtonService::s_last_gpio_state = false;
 
 // ============================================================================
@@ -360,16 +354,6 @@ bool button_service_is_pressed(void)
 bool button_service_is_initialized(void)
 {
     return ButtonService::isInitialized();
-}
-
-void button_service_set_long_press_time(uint32_t ms)
-{
-    ButtonService::setLongPressTime(ms);
-}
-
-uint32_t button_service_get_long_press_time(void)
-{
-    return ButtonService::getLongPressTime();
 }
 
 }  // extern "C"
