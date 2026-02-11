@@ -133,7 +133,7 @@ static esp_err_t handle_button_single_click(const event_data_t* event)
 static esp_err_t handle_button_long_press(const event_data_t* event)
 {
     (void)event;
-    T_LOGI(TAG, "Long press - Ethernet DHCP mode init");
+    T_LOGI(TAG, "Long press - Ethernet DHCP init & reboot");
 
     // 현재 설정 로드
     config_all_t config;
@@ -143,34 +143,25 @@ static esp_err_t handle_button_long_press(const event_data_t* event)
         return ESP_FAIL;
     }
 
-    // Ethernet을 DHCP 모드로 설정
-    bool was_dhcp = config.ethernet.dhcp_enabled;
-    config.ethernet.dhcp_enabled = true;
+    // Ethernet 활성화 + DHCP 모드로 설정
     config.ethernet.enabled = true;
+    config.ethernet.dhcp_enabled = true;
 
-    // DHCP 모드가 변경되었거나 Ethernet이 비활성화된 경우 재시작
-    if (!was_dhcp || !config.ethernet.enabled) {
-        T_LOGI(TAG, "Ethernet: %s -> DHCP, enabled: %d -> 1",
-                 was_dhcp ? "DHCP" : "Static", config.ethernet.enabled);
+    // WiFi AP + STA 활성화
+    config.wifi_ap.enabled = true;
+    config.wifi_sta.enabled = true;
 
-        // 설정 저장
-        ret = config_service_save_all(&config);
-        if (ret != ESP_OK) {
-            T_LOGE(TAG, "Config save failed: %s", esp_err_to_name(ret));
-            return ESP_FAIL;
-        }
-
-        // Ethernet 재시작 요청 이벤트 발행
-        network_restart_request_t restart = {
-            .type = NETWORK_RESTART_ETHERNET,
-            .ssid = "",
-            .password = ""
-        };
-        event_bus_publish(EVT_NETWORK_RESTART_REQUEST, &restart, sizeof(restart));
-        T_LOGI(TAG, "Ethernet restart requested (DHCP mode)");
-    } else {
-        T_LOGD(TAG, "Ethernet already in DHCP mode, no restart needed");
+    // 설정 저장
+    ret = config_service_save_all(&config);
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "Config save failed: %s", esp_err_to_name(ret));
+        return ESP_FAIL;
     }
+
+    T_LOGI(TAG, "Ethernet DHCP config saved, rebooting...");
+
+    // 재부팅
+    esp_restart();
 
     return ESP_OK;
 }
@@ -450,7 +441,11 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
 
     // 버튼 서비스 초기화
     ret = button_service_init();
-    if (ret != ESP_OK) {
+    if (ret == ESP_OK) {
+        // TX는 5초 롱프레스 (Ethernet DHCP 초기화)
+        button_service_set_long_press_time(5000);
+        T_LOGI(TAG, "TX long press time set to 5000ms");
+    } else {
         T_LOGW(TAG, "Button service init failed: %s", esp_err_to_name(ret));
     }
 
