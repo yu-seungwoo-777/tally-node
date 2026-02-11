@@ -133,14 +133,53 @@ static esp_err_t handle_button_single_click(const event_data_t* event)
 static esp_err_t handle_button_long_press(const event_data_t* event)
 {
     (void)event;
-    T_LOGD(TAG, "Long press (no action)");
+    T_LOGI(TAG, "Long press - Ethernet DHCP mode init");
+
+    // 현재 설정 로드
+    config_all_t config;
+    esp_err_t ret = config_service_load_all(&config);
+    if (ret != ESP_OK) {
+        T_LOGE(TAG, "Config load failed: %s", esp_err_to_name(ret));
+        return ESP_FAIL;
+    }
+
+    // Ethernet을 DHCP 모드로 설정
+    bool was_dhcp = config.ethernet.dhcp_enabled;
+    config.ethernet.dhcp_enabled = true;
+    config.ethernet.enabled = true;
+
+    // DHCP 모드가 변경되었거나 Ethernet이 비활성화된 경우 재시작
+    if (!was_dhcp || !config.ethernet.enabled) {
+        T_LOGI(TAG, "Ethernet: %s -> DHCP, enabled: %d -> 1",
+                 was_dhcp ? "DHCP" : "Static", config.ethernet.enabled);
+
+        // 설정 저장
+        ret = config_service_save_all(&config);
+        if (ret != ESP_OK) {
+            T_LOGE(TAG, "Config save failed: %s", esp_err_to_name(ret));
+            return ESP_FAIL;
+        }
+
+        // Ethernet 재시작 요청 이벤트 발행
+        network_restart_request_t restart = {
+            .type = NETWORK_RESTART_ETHERNET,
+            .ssid = "",
+            .password = ""
+        };
+        event_bus_publish(EVT_NETWORK_RESTART_REQUEST, &restart, sizeof(restart));
+        T_LOGI(TAG, "Ethernet restart requested (DHCP mode)");
+    } else {
+        T_LOGD(TAG, "Ethernet already in DHCP mode, no restart needed");
+    }
+
     return ESP_OK;
 }
 
 static esp_err_t handle_button_long_release(const event_data_t* event)
 {
     (void)event;
-    T_LOGD(TAG, "Long press release");
+    T_LOGI(TAG, "Long press release - DHCP mode init complete");
+    // DisplayManager가 알림 표시 (이미 config_service_save_all에서 저장됨)
     return ESP_OK;
 }
 #endif // DEVICE_MODE_TX
