@@ -441,11 +441,7 @@ bool prod_tx_app_init(const prod_tx_config_t* config)
 
     // 버튼 서비스 초기화
     ret = button_service_init();
-    if (ret == ESP_OK) {
-        // TX는 5초 롱프레스 (Ethernet DHCP 초기화)
-        button_service_set_long_press_time(5000);
-        T_LOGI(TAG, "TX long press time set to 5000ms");
-    } else {
+    if (ret != ESP_OK) {
         T_LOGW(TAG, "Button service init failed: %s", esp_err_to_name(ret));
     }
 
