@@ -22,7 +22,7 @@ static const char* TAG = "03_Button";
 
 #define POLL_INTERVAL_MS     10    /**< 폴링 주기 (ms) */
 #define DEBOUNCE_MS          20    /**< 디바운스 시간 (ms) */
-#define LONG_PRESS_MS        1000  /**< 롱 프레스 시간 (ms) */
+#define LONG_PRESS_MS        5000  /**< 롱 프레스 시간 (ms) */
 #define LONG_PRESS_REPEAT_MS 500   /**< 롱 프레스 반복 간격 (ms) */
 #define MULTI_CLICK_TIMEOUT_MS 50  /**< 멀티클릭 타임아웃 (ms) */
 
