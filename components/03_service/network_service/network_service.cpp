@@ -71,6 +71,7 @@ private:
     static TaskHandle_t s_task_handle;
     static app_network_config_t s_config;
     static network_status_t s_last_status;  // 이전 상태 (변경 감지용)
+    static bool s_last_eth_dhcp;           // 이전 Ethernet DHCP 모드 (변경 감지용)
 
     // 태스크 설정 상수
     static constexpr uint32_t STATUS_PUBLISH_INTERVAL_MS = 1000;  // 1초마다 상태 발행
@@ -88,6 +89,7 @@ bool NetworkServiceClass::s_running = false;
 TaskHandle_t NetworkServiceClass::s_task_handle = nullptr;
 app_network_config_t NetworkServiceClass::s_config = {};
 network_status_t NetworkServiceClass::s_last_status = {};
+bool NetworkServiceClass::s_last_eth_dhcp = true;  // 초기값은 DHCP (일반적인 기본값)
 
 // ============================================================================
 // 초기화/정리
@@ -398,6 +400,7 @@ void NetworkServiceClass::publishStatus(void)
     bool sta_changed = (s_last_status.wifi_sta.connected != status.wifi_sta.connected ||
                        s_last_status.wifi_sta.detected != status.wifi_sta.detected ||
                        strncmp(s_last_status.wifi_sta.ip, status.wifi_sta.ip, sizeof(s_last_status.wifi_sta.ip)) != 0);
+    bool eth_dhcp_mode_changed = (s_last_eth_dhcp != s_config.ethernet.dhcp_enabled);
     bool eth_changed = (s_last_status.ethernet.connected != status.ethernet.connected ||
                        s_last_status.ethernet.detected != status.ethernet.detected ||
                        strncmp(s_last_status.ethernet.ip, status.ethernet.ip, sizeof(s_last_status.ethernet.ip)) != 0);
@@ -405,12 +408,14 @@ void NetworkServiceClass::publishStatus(void)
                        s_last_status.wifi_ap.detected != status.wifi_ap.detected ||
                        strncmp(s_last_status.wifi_ap.ip, status.wifi_ap.ip, sizeof(s_last_status.wifi_ap.ip)) != 0);
 
-    T_LOGD(TAG, "publishStatus: sta_changed=%d eth_changed=%d ap_changed=%d", sta_changed, eth_changed, ap_changed);
-    T_LOGD(TAG, "  eth: conn=%d (was %d), ip=%s (was %s)",
+    T_LOGD(TAG, "publishStatus: sta_changed=%d eth_changed=%d eth_dhcp_changed=%d ap_changed=%d",
+            sta_changed, eth_changed, eth_dhcp_mode_changed, ap_changed);
+    T_LOGD(TAG, "  eth: conn=%d (was %d), ip=%s (was %s), dhcp=%d (was %d)",
             status.ethernet.connected, s_last_status.ethernet.connected,
-            status.ethernet.ip, s_last_status.ethernet.ip);
+            status.ethernet.ip, s_last_status.ethernet.ip,
+            s_config.ethernet.dhcp_enabled, s_last_eth_dhcp);
 
-    if (sta_changed || eth_changed || ap_changed) {
+    if (sta_changed || eth_changed || eth_dhcp_mode_changed || ap_changed) {
         // stack 변수 사용 (이벤트 버스가 복사)
         network_status_event_t event;
         memset(&event, 0, sizeof(event));
@@ -438,6 +443,7 @@ void NetworkServiceClass::publishStatus(void)
 
         // 현재 상태 저장
         s_last_status = status;
+        s_last_eth_dhcp = s_config.ethernet.dhcp_enabled;
     }
 }
 
