@@ -1,6 +1,6 @@
 {
   "name": "tally-node",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "description": "Tally Node - ESP32 LoRa Tally System",
   "scripts": {
     "upload": ". venv/bin/activate && cd web && npm run deploy && cd .. && pio run -t upload && pio device monitor",
@@ -11,7 +11,7 @@
     "clean-rx": ". venv/bin/activate && cd web && npm run deploy && cd .. && pio run -t erase && pio run -e eora_s3_rx -t clean && pio run -e eora_s3_rx -t upload && pio device monitor",
     "monitor": ". venv/bin/activate && pio device monitor",
     "txrx": ". venv/bin/activate && cd web && npm run deploy && cd .. && pio run -e eora_s3_tx -t clean && pio run -e eora_s3_rx -t clean && pio run -e eora_s3_tx && pio run -e eora_s3_rx",
-    "version": "node scripts/version-bump.js",
+    "version": "node scripts/version-check.js",
     "r2-upload": "node scripts/r2-upload.js",
     "changelog-add": "node scripts/changelog-add.js"
   },

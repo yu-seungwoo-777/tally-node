@@ -1,6 +1,6 @@
 {
   "name": "tally-web-ui",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "description": "Tally Node Web UI",
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "embed": "node tools/embed.js",
     "copy": "bash tools/copy-to-esp.sh",
     "deploy": "npm run build && npm run embed && npm run copy",
-    "version": "node ../scripts/version-bump.js"
+    "version": "node ../scripts/version-check.js"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.23",
