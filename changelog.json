@@ -1,6 +1,30 @@
 {
   "versions": [
     {
+      "version": "2.4.2",
+      "date": "2026-02-11",
+      "ko": {
+        "title": "버전 2.4.2",
+        "changes": [
+          "네트워크 설정 변경 시 재부팅 없이 즉시 적용되도록 개선",
+          "Ethernet DHCP/Static 모드 변경 감지 로직 추가",
+          "Ethernet Static IP 설정 변경 감지 로직 추가",
+          "WiFi STA SSID/비밀번호 변경 감지 로직 추가",
+          "Unity 기반 네트워크 서비스 설정 변경 감지 테스트 25개 추가"
+        ]
+      },
+      "en": {
+        "title": "Version 2.4.2",
+        "changes": [
+          "Network config changes now apply immediately without reboot",
+          "Added Ethernet DHCP/Static mode change detection",
+          "Added Ethernet Static IP configuration change detection",
+          "Added WiFi STA SSID/password change detection",
+          "Added 25 Unity tests for network service config change detection"
+        ]
+      }
+    },
+    {
       "version": "2.4.1",
       "date": "2026-02-09",
       "ko": {
