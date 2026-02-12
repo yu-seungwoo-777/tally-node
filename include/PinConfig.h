@@ -38,13 +38,13 @@
 #define EORA_S3_OLED_RST         GPIO_NUM_10  // OLED 전용
 
 // W5500 Ethernet - SPI3_HOST
-#define EORA_S3_W5500_MOSI      GPIO_NUM_16   // 갈색
-#define EORA_S3_W5500_MISO      GPIO_NUM_15   // 초록색
-#define EORA_S3_W5500_RST       GPIO_NUM_12   // 흰색
-#define EORA_S3_W5500_SCK       GPIO_NUM_48   // 파란색
-#define EORA_S3_W5500_CS        GPIO_NUM_47   // 노란색
-#define EORA_S3_W5500_INT       GPIO_NUM_35   // W5500 인터럽트 (부팅 시 자동 감지)
-#define EORA_S3_W5500_SPI_HOST  SPI3_HOST
+#define EORA_S3_W5500_MOSI      GPIO_NUM_16   // 파랑
+#define EORA_S3_W5500_MISO      GPIO_NUM_15   // 회색
+#define EORA_S3_W5500_RST       GPIO_NUM_12   // 초록
+#define EORA_S3_W5500_SCK       GPIO_NUM_48   // 빨강
+#define EORA_S3_W5500_CS        GPIO_NUM_47   // 노랑
+#define EORA_S3_W5500_INT       GPIO_NUM_35   // 주황, W5500 인터럽트 (부팅 시 자동 감지)
+#define EORA_S3_W5500_SPI_HOST  SPI3_HOST     // GND-보라, 3.3V-검정, 5v-흰색, NC-갈색(사용안함)
 
 // LED (Tally Light)
 #define EORA_S3_LED_BOARD       GPIO_NUM_37   // 보드 내장 LED
