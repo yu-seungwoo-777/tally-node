@@ -213,13 +213,11 @@ static void draw_tx_header(u8g2_t* u8g2)
 /**
  * @brief 하이브리드 대시보드 페이지 그리기 (Page 1)
  *
- * 4-Line 레이아웃:
- * - Line 1 (y=28): "PGM: 1,2,3,4" 형식 (콜론 후 공백)
- * - Line 2 (y=39): "PVW: 5" 형식 (콜론 후 공백)
- * - Line 3 (y=50): "AP:V/X  WiFi:-/V/X  ETH:-/V/X" 형식
- *   AP: 활성화(V), 비활성화(X)
- *   WiFi/ETH: 연결(V), 미연결(-), 연결안됨(X)
- * - Line 4 (y=61): "SINGLE: ATEM:[✓]" 형식
+ * 4-Line 2열 레이아웃 (오른쪽 항목 고정 X축 정렬):
+ * - Line 1 (y=28): "PGM: 1,2,3,4" | "AP:[V]" (x=80)
+ * - Line 2 (y=39): "PVW: 5" | "WiFi:[V]" (x=80)
+ * - Line 3 (y=50): "> SINGLE" / "> DUAL" | "ETH:[V]" (x=80)
+ * - Line 4 (y=61): 스위처 정보 "1: ATEM" / "2: OBS"
  */
 static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
 {
@@ -228,108 +226,135 @@ static void draw_hybrid_dashboard_page(u8g2_t* u8g2)
     // 구분선
     u8g2_DrawHLine(u8g2, 0, 14, 128);
 
+    // 2열 구분 세로선 (Line 3까지만, y=18~50, 길이=32)
+    const int divider_x = 75;
+    u8g2_DrawVLine(u8g2, divider_x, 18, 32);
+
     u8g2_SetFont(u8g2, u8g2_font_profont11_mf);
 
-    // Line 1 (y=28): PGM 채널 목록
+    // 오른쪽 정렬 X축 고정값
+    const int right_align_x = 80;
+
+    // 결과([V]/[X]/[-])는 동일 x축에 표시 (가장 긴 라벨 WiFi: 기준)
+    const int status_x = right_align_x + u8g2_GetStrWidth(u8g2, "WiFi:") + 1;
+
+    // Line 1 (y=28): PGM 채널 목록 (최대 3개 + ...) | AP 상태
     char pgm_str[32];
     if (s_tally_data.pgm_count > 0) {
         int offset = 0;
         offset += snprintf(pgm_str, sizeof(pgm_str), "PGM: ");
-        for (uint8_t i = 0; i < s_tally_data.pgm_count && i < 10; i++) {
+
+        // 최대 3개까지만 표시
+        uint8_t display_count = (s_tally_data.pgm_count > 3) ? 3 : s_tally_data.pgm_count;
+        for (uint8_t i = 0; i < display_count; i++) {
             offset += snprintf(pgm_str + offset, sizeof(pgm_str) - offset,
                               "%s%d", (i > 0) ? "," : "", s_tally_data.pgm_channels[i]);
+        }
+
+        // 남은 채널 있으면 .. 추가
+        if (s_tally_data.pgm_count > 3) {
+            snprintf(pgm_str + offset, sizeof(pgm_str) - offset, "..");
         }
     } else {
         snprintf(pgm_str, sizeof(pgm_str), "PGM:  ---");
     }
     u8g2_DrawStr(u8g2, 2, 28, pgm_str);
 
-    // Line 2 (y=39): PVW 채널 목록
+    // AP 라벨
+    u8g2_DrawStr(u8g2, right_align_x, 28, "AP:");
+    // AP 결과 (동일 x축)
+    if (s_ap_data.ap_status == TX_AP_STATUS_ACTIVE) {
+        u8g2_DrawStr(u8g2, status_x, 28, "[V]");
+    } else {
+        u8g2_DrawStr(u8g2, status_x, 28, "[X]");
+    }
+
+    // Line 2 (y=39): PVW 채널 목록 (최대 3개 + ...) | WiFi 상태
     char pvw_str[32];
     if (s_tally_data.pvw_count > 0) {
         int offset = 0;
         offset += snprintf(pvw_str, sizeof(pvw_str), "PVW: ");
-        for (uint8_t i = 0; i < s_tally_data.pvw_count && i < 10; i++) {
+
+        // 최대 3개까지만 표시
+        uint8_t display_count = (s_tally_data.pvw_count > 3) ? 3 : s_tally_data.pvw_count;
+        for (uint8_t i = 0; i < display_count; i++) {
             offset += snprintf(pvw_str + offset, sizeof(pvw_str) - offset,
                               "%s%d", (i > 0) ? "," : "", s_tally_data.pvw_channels[i]);
+        }
+
+        // 남은 채널 있으면 .. 추가
+        if (s_tally_data.pvw_count > 3) {
+            snprintf(pvw_str + offset, sizeof(pvw_str) - offset, "..");
         }
     } else {
         snprintf(pvw_str, sizeof(pvw_str), "PVW:  ---");
     }
     u8g2_DrawStr(u8g2, 2, 39, pvw_str);
 
-    // Line 3 (y=50): AP, WiFi, Ethernet 상태
-    int line3_x = 2;
-
-    // AP 상태 (활성화: V, 비활성화: X)
-    u8g2_DrawStr(u8g2, line3_x, 50, "AP:");
-    line3_x += u8g2_GetStrWidth(u8g2, "AP:") + 2;  // 라벨 너비 + 간격
-    if (s_ap_data.ap_status == TX_AP_STATUS_ACTIVE) {
-        drawCheckMark(u8g2, line3_x, 50);  // 활성화 [V]
-    } else {
-        drawXMark(u8g2, line3_x, 50);  // 비활성화 [X]
-    }
-    line3_x += 16;  // 아이콘 너비(8) + 간격(8)
-
-    // WiFi 상태 (연결: V, 미연결: -, 연결안됨: X)
-    u8g2_DrawStr(u8g2, line3_x, 50, "WiFi:");
-    line3_x += u8g2_GetStrWidth(u8g2, "WiFi:") + 2;  // 라벨 너비 + 간격
+    // WiFi 라벨
+    u8g2_DrawStr(u8g2, right_align_x, 39, "WiFi:");
+    // WiFi 결과 (동일 x축)
     switch (s_wifi_data.wifi_status) {
         case TX_NET_STATUS_CONNECTED:
-            drawCheckMark(u8g2, line3_x, 50);  // 연결됨 [V]
+            u8g2_DrawStr(u8g2, status_x, 39, "[V]");
             break;
         case TX_NET_STATUS_DISCONNECTED:
-            drawXMark(u8g2, line3_x, 50);  // 연결 안 됨 [X]
+            u8g2_DrawStr(u8g2, status_x, 39, "[-]");
             break;
         case TX_NET_STATUS_NOT_DETECTED:
         default:
-            u8g2_DrawHLine(u8g2, line3_x, 46, 8);  // 미연결 [-]
+            u8g2_DrawStr(u8g2, status_x, 39, "[X]");
             break;
     }
-    line3_x += 16;  // 아이콘 너비(8) + 간격(8)
 
-    // Ethernet 상태 (연결: V, 미연결: -, 연결안됨: X)
-    u8g2_DrawStr(u8g2, line3_x, 50, "ETH:");
-    line3_x += u8g2_GetStrWidth(u8g2, "ETH:") + 2;  // 라벨 너비 + 간격
+    // Line 3 (y=50): > SINGLE / > DUAL | ETH 상태
+    const char* mode_str = s_switcher_data.dual_mode ? "> DUAL" : "> SINGLE";
+    u8g2_DrawStr(u8g2, 2, 50, mode_str);
+
+    // ETH 라벨
+    u8g2_DrawStr(u8g2, right_align_x, 50, "ETH:");
+    // ETH 결과 (동일 x축)
     switch (s_eth_data.eth_status) {
         case TX_NET_STATUS_CONNECTED:
-            drawCheckMark(u8g2, line3_x, 50);  // 연결됨 [V]
+            u8g2_DrawStr(u8g2, status_x, 50, "[V]");
             break;
         case TX_NET_STATUS_DISCONNECTED:
-            drawXMark(u8g2, line3_x, 50);  // 연결 안 됨 [X]
+            u8g2_DrawStr(u8g2, status_x, 50, "[-]");
             break;
         case TX_NET_STATUS_NOT_DETECTED:
         default:
-            u8g2_DrawHLine(u8g2, line3_x, 46, 8);  // 미연결 [-]
+            u8g2_DrawStr(u8g2, status_x, 50, "[X]");
             break;
     }
 
-    // Line 4 (y=61): 듀얼 모드 + ATEM 상태
+    // Line 4 (y=61): 스위처 정보
     int line4_x = 2;
 
-    // 듀얼 모드 표시
-    const char* mode_str = s_switcher_data.dual_mode ? "DUAL:" : "SINGLE:";
-    u8g2_DrawStr(u8g2, line4_x, 61, mode_str);
-    line4_x += u8g2_GetStrWidth(u8g2, mode_str) + 2;  // 모드 너비 + 간격
+    // 스위처 정보 앞 기호 (>> 뒤 공백)
+    u8g2_DrawStr(u8g2, line4_x, 61, ">> ");
+    line4_x += u8g2_GetStrWidth(u8g2, ">> ") + 1;
 
-    // S1 상태 (스위처 타입 표시)
+    // S1 상태 (타입 + 상태)
     u8g2_DrawStr(u8g2, line4_x, 61, s_switcher_data.s1_type);
-    line4_x += u8g2_GetStrWidth(u8g2, s_switcher_data.s1_type) + 2;  // 라벨 너비 + 간격
+    line4_x += u8g2_GetStrWidth(u8g2, s_switcher_data.s1_type) + 1;
     if (s_switcher_data.s1_connected) {
-        drawCheckMark(u8g2, line4_x, 61);  // y=61-4
+        u8g2_DrawStr(u8g2, line4_x, 61, "[V]");
     } else {
-        drawXMark(u8g2, line4_x, 61);
+        u8g2_DrawStr(u8g2, line4_x, 61, "[X]");
     }
-    line4_x += 12;  // 아이콘 너비(8) + 간격(4)
 
-    // 듀얼 모드일 경우 S2 상태도 표시
+    // 듀얼 모드일 때만 "/"와 S2 상태 표시
     if (s_switcher_data.dual_mode) {
+        line4_x += u8g2_GetStrWidth(u8g2, "[V]") + 2;
+        u8g2_DrawStr(u8g2, line4_x, 61, "/");
+
+        line4_x += u8g2_GetStrWidth(u8g2, "/") + 2;
         u8g2_DrawStr(u8g2, line4_x, 61, s_switcher_data.s2_type);
-        line4_x += u8g2_GetStrWidth(u8g2, s_switcher_data.s2_type) + 2;  // 라벨 너비 + 간격
+        line4_x += u8g2_GetStrWidth(u8g2, s_switcher_data.s2_type) + 1;
         if (s_switcher_data.s2_connected) {
-            drawCheckMark(u8g2, line4_x, 61);  // y=61-4
+            u8g2_DrawStr(u8g2, line4_x, 61, "[V]");
         } else {
-            drawXMark(u8g2, line4_x, 61);
+            u8g2_DrawStr(u8g2, line4_x, 61, "[X]");
         }
     }
 }
