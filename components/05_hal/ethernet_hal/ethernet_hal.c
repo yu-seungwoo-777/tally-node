@@ -243,7 +243,7 @@ esp_err_t ethernet_hal_init(void)
     gpio_set_level(EORA_S3_W5500_RST, 0);
     vTaskDelay(pdMS_TO_TICKS(10));
     gpio_set_level(EORA_S3_W5500_RST, 1);
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(pdMS_TO_TICKS(200));  // W5500 칩 준비 대기 시간 증가 (50ms -> 200ms)
 
     s_initialized = true;
     s_state = ETHERNET_HAL_STATE_IDLE;
@@ -363,27 +363,29 @@ esp_err_t ethernet_hal_start(void)
         gpio_config(&io_conf);
 
         // 다중 읽기로 안정성 확인 (부유 핀 임시 읽기 방지)
+        // W5500가 부팅된 후 INT 핀이 HIGH로 출력되는지 확인
         int stable_count = 0;
-        int int_level = gpio_get_level(w5500_config.int_gpio_num);
+        const int detect_attempts = 5;  // 5회 검사로 안정성 확보
 
-        // 3회 연속 일치 여부 확인
-        for (int i = 0; i < 2; i++) {
-            int_level = gpio_get_level(w5500_config.int_gpio_num);
+        for (int i = 0; i < detect_attempts; i++) {
+            int int_level = gpio_get_level(w5500_config.int_gpio_num);
             if (int_level == 1) {
                 stable_count++;
-            } else {
-                stable_count = 0;
+            }
+            // HIGH 감지 시 바로 성공 판정 (W5500가 준비된 상태)
+            if (stable_count >= 2) {
+                break;
             }
         }
 
-        if (stable_count == 3) {
-            // 3회 연속 HIGH 감지 = W5500 INT 핀 연결됨 (내부 풀업 활성화됨)
+        if (stable_count >= 2) {
+            // 2회 이상 HIGH 감지 = W5500 INT 핀 연결됨 (내부 풀업 활성화됨)
             int_pin_detected = true;
             T_LOGI(TAG, "int:connected (interrupt mode, stable HIGH)");
         } else {
-            // 3회 연속 LOW 감지 = INT 핀 미연결 (부유 상태 방지됨)
+            // 2회 미만 HIGH 감지 = INT 핀 미연결 또는 W5500 미준비
             use_polling = true;
-            T_LOGW(TAG, "int:not_detected (polling mode, stable LOW)");
+            T_LOGW(TAG, "int:not_detected (polling mode, stable LOW, count:%d/5)", stable_count);
         }
     } else {
         // INT GPIO가 정의되지 않음 = 폴링 모드 사용
@@ -544,9 +546,16 @@ esp_err_t ethernet_hal_stop(void)
 {
     T_LOGD(TAG, "stop");
 
-    if (!s_initialized || !s_started) {
-        T_LOGE(TAG, "fail:invalid_state");
+    // 초기화 안됨은 에러
+    if (!s_initialized) {
+        T_LOGE(TAG, "fail:not_initialized");
         return ESP_ERR_INVALID_STATE;
+    }
+
+    // 이미 중지됨은 성공 (idempotent operation)
+    if (!s_started) {
+        T_LOGD(TAG, "ok:already_stopped");
+        return ESP_OK;
     }
 
     // 1. 이벤트 핸들러 등록 해제 (레퍼런스 제거 최우선)
