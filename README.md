@@ -9,9 +9,9 @@ ESP32-S3 based Wi-Fi & Ethernet Tally System for real-time communication with vi
 TALLY-NODE is a DIY-based TallyLight system that significantly reduces production costs while maintaining professional-grade reliability. Designed for real-time communication with video switchers, it currently supports Blackmagic ATEM and vMix, with more switchers coming soon.
 
 **Links:**
-- https://tally-node.com
-- https://tally-node.com/purchase
-- https://demo.tally-node.com
+- Website: https://tally-node.com
+- Purchase: https://tally-node.com/purchase
+- TX UI Demo: https://demo.tally-node.com
 
 ## Features
 

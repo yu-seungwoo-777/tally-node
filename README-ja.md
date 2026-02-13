@@ -9,9 +9,9 @@
 TALLY-NODEは、プロフェッショナルグレードの信頼性を維持しながら制作コストを大幅に削減するDIYベースのタリーライトシステムです。ビデオスイッチャーとのリアルタイム通信向けに設計されており、現在はBlackmagic ATEMとvMixをサポートしています。今後、より多くのスイッチャーのサポートを予定しています。
 
 **リンク:**
-- https://tally-node.com
-- https://tally-node.com/purchase
-- https://demo.tally-node.com
+- ウェブサイト: https://tally-node.com
+- 購入: https://tally-node.com/purchase
+- TX UI デモ: https://demo.tally-node.com
 
 ## 機能
 
