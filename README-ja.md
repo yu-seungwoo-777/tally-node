@@ -2,13 +2,16 @@
 
 ビデオスイッチャーとのリアルタイム通信を実現するESP32-S3ベースのWi-Fi & Ethernetタリーシステム。
 
-**リンク:** [ウェブサイト](https://tally-node.com) | [購入](https://tally-node.com/purchase) | [TX UI デモ](https://demo.tally-node.com)
-
 **言語:** [English](README.md) | [한국어](README-ko.md) | 日本語 | [简体中文](README-zh-cn.md) | [Español](README-es.md) | [Français](README-fr.md)
 
 ## 概要
 
 TALLY-NODEは、プロフェッショナルグレードの信頼性を維持しながら制作コストを大幅に削減するDIYベースのタリーライトシステムです。ビデオスイッチャーとのリアルタイム通信向けに設計されており、現在はBlackmagic ATEMとvMixをサポートしています。今後、より多くのスイッチャーのサポートを予定しています。
+
+**リンク:**
+- [ウェブサイト](https://tally-node.com)
+- [購入](https://tally-node.com/purchase)
+- [TX UI デモ](https://demo.tally-node.com)
 
 ## 機能
 
