@@ -9,9 +9,9 @@ ESP32-S3 기반 Wi-Fi & Ethernet 탈리 시스템 - 비디오 스위처와 실�
 TALLY-NODE는 제작 비용을 대폭 낮추면서도 전문급 안정성을 유지하는 DIY 기반 TallyLight 시스템입니다. 비디오 스위처와 실시간 통신을 위해 설계되었으며, 현재 Blackmagic ATEM과 vMix를 지원하며 더 많은 스위처 지원이 예정되어 있습니다.
 
 **링크:**
-- [웹사이트](https://tally-node.com)
-- [제품 구매](https://tally-node.com/purchase)
-- [TX UI 데모](https://demo.tally-node.com)
+- https://tally-node.com
+- https://tally-node.com/purchase
+- https://demo.tally-node.com
 
 ## 주요 기능
 

@@ -9,9 +9,9 @@ Systeme Tally Wi-Fi & Ethernet base sur ESP32-S3 pour la communication en temps 
 TALLY-NODE est un système TallyLight de type DIY qui réduit considérablement les coûts de production tout en maintenant une fiabilité de niveau professionnel. Conçu pour la communication en temps réel avec les mélangeurs vidéo, il prend actuellement en charge Blackmagic ATEM et vMix, avec d'autres mélangeurs à venir.
 
 **Liens :**
-- [Site Web](https://tally-node.com)
-- [Achat](https://tally-node.com/purchase)
-- [Démo TX UI](https://demo.tally-node.com)
+- https://tally-node.com
+- https://tally-node.com/purchase
+- https://demo.tally-node.com
 
 ## Fonctionnalités
 

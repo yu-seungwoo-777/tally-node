@@ -9,9 +9,9 @@
 TALLY-NODE 是一个基于 DIY 的 TallyLight 系统，在保持专业级可靠性的同时显著降低了制作成本。专为与视频切换台进行实时通信而设计，目前支持 Blackmagic ATEM 和 vMix，更多切换台即将推出。
 
 **链接：**
-- [官网](https://tally-node.com)
-- [购买](https://tally-node.com/purchase)
-- [TX UI 演示](https://demo.tally-node.com)
+- https://tally-node.com
+- https://tally-node.com/purchase
+- https://demo.tally-node.com
 
 ## 功能特性
 
