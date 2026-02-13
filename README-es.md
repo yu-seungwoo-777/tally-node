@@ -13,6 +13,8 @@ TALLY-NODE es un sistema TallyLight basado en DIY que reduce significativamente 
 - Compra: https://tally-node.com/purchase
 - Demo de TX UI: https://demo.tally-node.com
 
+![Diagrama del sistema TALLY-NODE](images/diagram.png)
+
 ## Caracteristicas
 
 ### Comunicacion Inalambrica LoRa

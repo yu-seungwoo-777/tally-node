@@ -13,6 +13,8 @@ TALLY-NODE는 제작 비용을 대폭 낮추면서도 전문급 안정성을 유
 - 제품 구매: https://tally-node.com/purchase
 - TX UI 데모: https://demo.tally-node.com
 
+![TALLY-NODE 시스템 다이어그램](images/diagram.png)
+
 ## 주요 기능
 
 ### LoRa 무선 통신

@@ -13,6 +13,8 @@ TALLY-NODE 是一个基于 DIY 的 TallyLight 系统，在保持专业级可靠�
 - 购买: https://tally-node.com/purchase
 - TX UI 演示: https://demo.tally-node.com
 
+![TALLY-NODE 系统图](images/diagram.png)
+
 ## 功能特性
 
 ### LoRa 无线通信

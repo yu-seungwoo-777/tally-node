@@ -13,6 +13,8 @@ TALLY-NODEは、プロフェッショナルグレードの信頼性を維持し�
 - 購入: https://tally-node.com/purchase
 - TX UI デモ: https://demo.tally-node.com
 
+![TALLY-NODE システム図](images/diagram.png)
+
 ## 機能
 
 ### LoRa無線通信
