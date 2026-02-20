@@ -209,6 +209,11 @@ void AtemDriver::disconnect() {
     bool was_connected = state_.connected;
     state_.connected = false;
     state_.initialized = false;
+
+    // 하트비트 상태 리셋
+    state_.last_heartbeat_ack_ms = 0;
+    state_.missed_heartbeats = 0;
+
     setConnectionState(CONNECTION_STATE_DISCONNECTED);
 
     if (was_connected) {
@@ -313,6 +318,38 @@ int AtemDriver::loop() {
         return -1;
     }
 
+    // 하트비트 타임아웃 검증 (좀비 연결 탐지)
+    // 초기화된 상태에서 하트비트 응답이 없는지 확인
+    if (state_.initialized && state_.last_heartbeat_ack_ms > 0) {
+        uint32_t time_since_heartbeat = now - state_.last_heartbeat_ack_ms;
+
+        // 하트비트 타임아웃 발생 (5초 이상 응답 없음)
+        if (time_since_heartbeat > AtemState::HEARTBEAT_TIMEOUT_MS) {
+            state_.missed_heartbeats++;
+
+            T_LOGW(TAG, "[%s] hb:timeout:%dms missed:%d/%d",
+                    config_.name.c_str(),
+                    (int)time_since_heartbeat,
+                    state_.missed_heartbeats,
+                    AtemState::MAX_MISSED_HEARTBEATS);
+
+            // 연속으로 3번 하트비트 타임아웃 시 재연결
+            if (state_.missed_heartbeats >= AtemState::MAX_MISSED_HEARTBEATS) {
+                T_LOGE(TAG, "[%s] hb:zombie_detected:%d consecutive timeouts, reconnecting",
+                        config_.name.c_str(), state_.missed_heartbeats);
+
+                // 연결 상태를 재설정하고 재연결
+                disconnect();
+
+                // 다음 루프에서 자동으로 연결 시도됨
+                return -1;
+            }
+
+            // 타임아웃 발생 시 갱신하여 중복 탐지 방지
+            state_.last_heartbeat_ack_ms = now;
+        }
+    }
+
     // Keepalive 전송 (1초마다)
     if (state_.initialized &&
         now - state_.last_keepalive_ms > ATEM_KEEPALIVE_INTERVAL_MS) {
@@ -331,10 +368,29 @@ int AtemDriver::loop() {
 // ============================================================================
 
 connection_state_t AtemDriver::getConnectionState() const {
+    // 좀비 연결 상태 감지: connected=true이지만 하트비트 응답이 없는 경우
+    if (state_.connected && state_.initialized &&
+        state_.last_heartbeat_ack_ms > 0 &&
+        state_.missed_heartbeats > 0) {
+        // 하트비트를 놓친 경우는 연결이 불안정한 상태로 간주
+        // (실제로는 loop()에서 재연결이 발동됨)
+        return CONNECTION_STATE_CONNECTING;  // 재연결 중으로 표시
+    }
     return conn_state_;
 }
 
 bool AtemDriver::isConnected() const {
+    // 하트비트 응답이 너무 오래된 경우는 연결되지 않은 것으로 간주
+    if (state_.connected && state_.initialized &&
+        state_.last_heartbeat_ack_ms > 0) {
+        uint32_t now = getMillis();
+        uint32_t time_since_heartbeat = now - state_.last_heartbeat_ack_ms;
+
+        // 하트비트 타임아웃 시간보다 길면 연결 끊김으로 간주
+        if (time_since_heartbeat > AtemState::HEARTBEAT_TIMEOUT_MS) {
+            return false;
+        }
+    }
     return state_.connected;
 }
 
@@ -591,6 +647,10 @@ int AtemDriver::processPacket(const uint8_t* data, uint16_t length) {
         state_.connected = true;
         state_.last_contact_ms = getMillis();
 
+        // 하트비트 응답 갱신 및 리셋
+        state_.last_heartbeat_ack_ms = getMillis();
+        state_.missed_heartbeats = 0;
+
         T_LOGD(TAG, "hello:ack:tx");
         setConnectionState(CONNECTION_STATE_CONNECTED);
 
@@ -647,6 +707,14 @@ int AtemDriver::processPacket(const uint8_t* data, uint16_t length) {
     // 패킷 ID 업데이트 (keepalive용)
     if (remote_packet_id > state_.remote_packet_id) {
         state_.remote_packet_id = remote_packet_id;
+    }
+
+    // 하트비트 응답 갱신 및 리셋 (모든 유효한 패킷은 응답으로 간주)
+    uint32_t now = getMillis();
+    state_.last_heartbeat_ack_ms = now;
+    if (state_.missed_heartbeats > 0) {
+        T_LOGD(TAG, "hb:recovered:%d->0", state_.missed_heartbeats);
+        state_.missed_heartbeats = 0;
     }
 
     // 명령 추출 및 처리

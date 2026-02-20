@@ -58,6 +58,12 @@ struct AtemState {
     // Keepalive
     uint32_t last_keepalive_ms;
 
+    // 하트비트 응답 추적 (좀비 연결 탐지)
+    uint32_t last_heartbeat_ack_ms;  ///< 마지막 하트비트 응답 시간 (ms)
+    uint8_t missed_heartbeats;       ///< 연속으로 놓친 하트비트 수
+    static constexpr uint8_t MAX_MISSED_HEARTBEATS = 3;  ///< 최대 허용 놓친 하트비트 수
+    static constexpr uint32_t HEARTBEAT_TIMEOUT_MS = 5000; ///< 하트비트 타임아웃 (5초)
+
     // 기기 정보
     uint8_t protocol_major;
     uint8_t protocol_minor;
@@ -88,6 +94,8 @@ struct AtemState {
         , remote_packet_id(0)
         , last_received_packet_id(0)
         , last_keepalive_ms(0)
+        , last_heartbeat_ack_ms(0)
+        , missed_heartbeats(0)
         , protocol_major(0)
         , protocol_minor(0)
         , num_mes(0)
