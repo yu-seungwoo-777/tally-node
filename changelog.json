@@ -4,19 +4,21 @@
       "version": "2.5.0",
       "date": "2026-02-12",
       "ko": {
-        "title": "이더넷 연결 감지 안정화 개선",
+        "title": "이더넷 연결 감지 안정화 및 TX 대시보드 개선",
         "changes": [
           "W5500 칩 준비 대기 시간 증가 (50ms → 200ms)",
           "INT 핀 감지 로직 개선 (5회 검사, 2회 이상 HIGH 성공)",
-          "ethernet_hal_stop() 함수 idempotent 변경 (재정지 시 에러 방지)"
+          "ethernet_hal_stop() 함수 idempotent 변경 (재정지 시 에러 방지)",
+          "TX 대시보드 레이아웃 최적화"
         ]
       },
       "en": {
-        "title": "Ethernet connection detection stability improvement",
+        "title": "Ethernet connection detection stability and TX dashboard improvements",
         "changes": [
           "Increased W5500 chip readiness wait time (50ms → 200ms)",
           "Improved INT pin detection logic (5 checks, 2+ HIGH success)",
-          "Made ethernet_hal_stop() idempotent (prevent errors on re-stop)"
+          "Made ethernet_hal_stop() idempotent (prevent errors on re-stop)",
+          "Optimized TX dashboard layout"
         ]
       }
     },

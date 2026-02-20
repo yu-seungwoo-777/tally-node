@@ -1,7 +1,4 @@
-# User Configuration
-# User-specific information and preferences
-
 user:
-  # User name for personalization and commit attribution
-  # Used in git commits when configured with Co-Authored-By
-  name: "root"
+    github_token: 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
+    github_username: yu
+    name: root

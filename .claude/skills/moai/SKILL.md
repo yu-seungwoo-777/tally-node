@@ -15,8 +15,8 @@ metadata:
 
 ## Pre-execution Context
 
-!`git status --porcelain`
-!`git branch --show-current`
+!`git status --porcelain 2>/dev/null || true`
+!`git branch --show-current 2>/dev/null || true`
 
 ## Essential Files
 
@@ -43,11 +43,25 @@ Fundamental Principles:
 
 ## Intent Router
 
-Parse $ARGUMENTS to determine which workflow to execute.
+### Raw User Input
+
+$ARGUMENTS
+
+### Routing Instructions
+
+[HARD] Route the Raw User Input above using the strict priority order below. Extract the FIRST WORD of the input for subcommand matching. All text after the subcommand keyword is CONTEXT to be passed to the matched workflow — it is NOT a routing signal and MUST NOT influence which workflow is selected.
+
+## Execution Mode Flags (mutually exclusive)
+
+- `--team`: Force Agent Teams mode for parallel execution
+- `--solo`: Force sub-agent mode (single agent per phase)
+- No flag: System auto-selects based on complexity thresholds (domains >= 3, files >= 10, or complexity score >= 7)
+
+When no flag is provided, the system evaluates task complexity and automatically selects between team mode (for complex, multi-domain tasks) and sub-agent mode (for focused, single-domain tasks).
 
 ### Priority 1: Explicit Subcommand Matching
 
-Match the first word of $ARGUMENTS against known subcommands:
+[HARD] Extract the FIRST WORD from the Raw User Input section above. If it matches any subcommand below (or its alias), route to that workflow IMMEDIATELY. Do NOT analyze the remaining text for routing — it is context for the matched workflow:
 
 - **plan** (aliases: spec): SPEC document creation workflow
 - **run** (aliases: impl): DDD implementation workflow
@@ -57,20 +71,20 @@ Match the first word of $ARGUMENTS against known subcommands:
 - **fix**: Auto-fix errors in a single pass
 - **loop**: Iterative auto-fix until completion marker detected
 
+
 ### Priority 2: SPEC-ID Detection
 
-If $ARGUMENTS contains a pattern matching SPEC-XXX (such as SPEC-AUTH-001), route to the **run** workflow automatically. The SPEC-ID becomes the target for DDD implementation.
+Only if Priority 1 did not match: Check if the Raw User Input contains a pattern matching SPEC-XXX (such as SPEC-AUTH-001). If found, route to the **run** workflow automatically. The SPEC-ID becomes the target for DDD implementation.
 
 ### Priority 3: Natural Language Classification
 
-When no explicit subcommand or SPEC-ID is detected, classify the intent:
+Only if BOTH Priority 1 AND Priority 2 did not match: Classify the intent of the ENTIRE Raw User Input as natural language. This priority is NEVER reached when the first word matches a known subcommand.
 
 - Planning and design language (design, architect, plan, spec, requirements, feature request) routes to **plan**
 - Error and fix language (fix, error, bug, broken, failing, lint) routes to **fix**
 - Iterative and repeat language (keep fixing, until done, repeat, iterate, all errors) routes to **loop**
 - Documentation language (document, sync, docs, readme, changelog, PR) routes to **sync** or **project**
 - Feedback and bug report language (report, feedback, suggestion, issue) routes to **feedback**
-- Review language (review, code review, audit, inspect) routes to **team-review** workflow (requires --team)
 - Implementation language (implement, build, create, add, develop) with clear scope routes to **moai** (default autonomous)
 
 ### Priority 4: Default Behavior
@@ -120,7 +134,7 @@ For detailed orchestration: Read workflows/fix.md
 Purpose: Repeatedly fix issues until completion marker detected or max iterations reached.
 Agents: expert-debug, expert-backend, expert-frontend, expert-testing
 Phases: Parallel diagnostics, TODO generation, autonomous fixing, iterative verification, completion detection.
-Flags: --max N (iteration limit, default 100), --auto, --seq
+Flags: --max N (iteration limit, default 100), --auto-fix, --seq
 For detailed orchestration: Read workflows/loop.md
 
 ### (default) - MoAI Autonomous Workflow
@@ -128,7 +142,12 @@ For detailed orchestration: Read workflows/loop.md
 Purpose: Full autonomous plan -> run -> sync pipeline. Default when no subcommand matches.
 Agents: Explore, manager-spec, manager-ddd, manager-quality, manager-docs, manager-git
 Phases: Parallel exploration, SPEC generation (user approval), DDD implementation with optional auto-fix loop, documentation sync, completion marker.
-Flags: --loop (iterative fixing), --max N, --branch, --pr, --resume SPEC-XXX, --team, --solo, --auto
+Flags: --loop (iterative fixing), --max N, --branch, --pr, --resume SPEC-XXX, --team (force team mode), --solo (force sub-agent mode)
+
+**Note**: When no execution mode flag is provided, the system automatically selects based on complexity:
+- Team mode: Multi-domain tasks (>=3 domains), many files (>=10), or high complexity (>=7)
+- Sub-agent mode: Focused, single-domain tasks
+
 For detailed orchestration: Read workflows/moai.md
 
 ### project - Project Documentation
@@ -251,10 +270,9 @@ These markers enable automation detection of workflow state.
 - expert-testing: Test creation, test strategy, coverage improvement
 - expert-refactoring: Code refactoring, architecture improvement
 
-### Builder Agents (4)
+### Builder Agents (3)
 
 - builder-agent: Create new agent definitions
-- builder-command: Create new slash commands
 - builder-skill: Create new skills
 - builder-plugin: Create new plugins
 
@@ -319,7 +337,7 @@ For detailed workflow orchestration steps, read the corresponding workflow file:
 - workflows/team-run.md: Team-based parallel implementation for run phase
 - workflows/team-sync.md: Sync phase rationale (always sub-agent mode)
 - workflows/team-debug.md: Competing hypothesis investigation team
-- workflows/team-review.md: Multi-perspective code review team
+
 
 For SPEC workflow overview: See .claude/rules/moai/workflow/spec-workflow.md
 For quality standards: See .claude/rules/moai/core/moai-constitution.md
@@ -331,10 +349,29 @@ For quality standards: See .claude/rules/moai/core/moai-constitution.md
 When this skill is activated, execute the following steps in order:
 
 Step 1 - Parse Arguments:
-Extract subcommand keywords and flags from $ARGUMENTS. Recognized global flags: --resume [ID], --seq, --ultrathink, --team, --solo, --auto. Workflow-specific flags: --loop, --max N, --worktree, --branch, --pr, --merge, --dry, --level N, --security. When --ultrathink is detected, activate Sequential Thinking MCP (mcp__sequential-thinking__sequentialthinking) for deep analysis before execution.
+Extract subcommand keywords and flags from the Raw User Input (defined in the Intent Router section). Recognized global flags: --resume [ID], --seq, --ultrathink, --team, --solo. Workflow-specific flags: --loop, --max N, --worktree, --branch, --pr, --merge, --dry, --level N, --auto-fix, --security. When --ultrathink is detected, activate Sequential Thinking MCP (mcp__sequential-thinking__sequentialthinking) for deep analysis before execution.
 
 Step 2 - Route to Workflow:
 Apply the Intent Router (Priority 1 through Priority 4) to determine the target workflow. If ambiguous, use AskUserQuestion to clarify with the user.
+
+Step 2.5 - Project Documentation Check:
+Before executing plan, run, sync, fix, loop, or default workflows, verify project documentation exists by checking for `.moai/project/product.md`. If product.md does NOT exist, use AskUserQuestion to ask the user (in their conversation_language):
+
+Question: Project documentation not found. Would you like to create it first?
+Options:
+- Create project documentation (Recommended): Generates product.md, structure.md, tech.md through a guided interview. This helps MoAI understand your project context for better results in all subsequent workflows. Takes a few questions to complete.
+- Skip and continue: Proceed with the original workflow without project documentation. MoAI will have less context about your project, which may reduce the quality of generated SPECs and code.
+
+This check does NOT apply to: project, feedback subcommands (project creates the docs, feedback is independent).
+
+When the user selects "Create project documentation", execute the full project workflow (Phase 0 through Phase 4) to collect requirements and generate product.md, structure.md, and tech.md. After completion, resume the originally requested workflow.
+
+[HARD] Beginner-Friendly Option Design:
+All AskUserQuestion calls throughout MoAI workflows MUST follow these rules:
+- The first option MUST always be the recommended choice, clearly marked with "(Recommended)" suffix in the label
+- Every option MUST include a detailed description explaining what it does and its implications
+- Descriptions should help users who are unfamiliar with the workflow make informed decisions
+- Use plain language without technical jargon where possible
 
 Step 3 - Load Workflow Details:
 Read the corresponding workflows/<name>.md file for detailed orchestration instructions specific to the matched workflow.
